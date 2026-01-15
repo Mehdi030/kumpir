@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
-import { generate4DigitCode } from "@/lib/code";
+import { supabase } from "../../lib/supabaseClient";
+import { generate4DigitCode } from "../../lib/code";
 
 export default function HostPage() {
     const router = useRouter();

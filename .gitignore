@@ -1,58 +1,93 @@
 # =========================
-# RELAY (Next.js + TS + Supabase)
-# .gitignore
+# Monorepo (Next.js + TS + Python + Supabase)
+# Root .gitignore
 # =========================
 
-# --- Dependencies ---
-node_modules/
+########################################
+# Dependencies (Node)
+########################################
+**/node_modules/
 .pnp
 .pnp.js
 
-# --- Next.js ---
-.next/
-out/
-build/
-.vercel/
+########################################
+# Next.js / Frontend build output
+########################################
+**/.next/
+**/out/
+**/dist/
+**/build/
+**/.vercel/
 
-# --- Production / Build Artifacts ---
-dist/
+########################################
+# Turborepo / caches
+########################################
+**/.turbo/
+**/.cache/
+**/.eslintcache
 
-# --- Environment / Secrets (NEVER COMMIT) ---
-.env
-.env.*
+########################################
+# Environment / Secrets (NEVER COMMIT)
+########################################
+**/.env
+**/.env.*
 !.env.example
 !.env.sample
 
-# --- Logs ---
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-*.log
+########################################
+# Logs
+########################################
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+**/*.log
 
-# --- TypeScript ---
-*.tsbuildinfo
-next-env.d.ts
+########################################
+# TypeScript
+########################################
+**/*.tsbuildinfo
 
-# --- Operating Systems ---
+# Hinweis: next-env.d.ts solltest du NICHT global ignorieren,
+# weil Next.js es als Datei im Projekt erwartet.
+# Falls du es ignorieren willst, nur als Generated-File in einer App:
+# apps/web/next-env.d.ts
+# (Ich empfehle: NICHT ignorieren.)
+
+########################################
+# Python (Logic)
+########################################
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/coverage.xml
+**/htmlcov/
+
+# Virtual environments
+**/venv/
+**/.venv/
+**/env/
+
+########################################
+# Supabase / local state
+########################################
+**/.supabase/
+
+########################################
+# IDEs / Editors
+########################################
+.idea/
+.vscode/
+*.iml
+
+########################################
+# OS / Misc
+########################################
 .DS_Store
 Thumbs.db
-
-# --- IDEs / Editors (LOCAL ONLY, NEVER COMMIT) ---
-.idea/          # WebStorm / IntelliJ config
-.vscode/        # VS Code config
-*.iml           # IntelliJ module files
-*.xml           # IDE XML files (workspace.xml, vcs.xml, modules.xml, etc.)
-
-# --- Cache ---
-.cache/
-.eslintcache
-.turbo/
-
-# --- Certificates / Keys ---
-*.pem
-*.key
-*.crt
-
-# --- Misc ---
-*.swp
+**/*.swp
+**/*.tmp
+**/*.orig
