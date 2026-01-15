@@ -1,16 +1,17 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 
 export default function Home() {
     return (
-        <main style={{ padding: 24, maxWidth: 720, margin: "0 auto" }}>
-            <h1 style={{ fontSize: 34, fontWeight: 800 }}>RELAY</h1>
-            <p style={{ marginTop: 8, opacity: 0.8 }}>
-                Browser‑Partyspiel mit 4‑stelligem Lobby‑Code.
-            </p>
+        <main className="container">
+            <div className="card">
+                <div className="h1">RELAY</div>
+                <p className="p">Browser‑Partyspiel mit 4‑stelligem Lobby‑Code.</p>
 
-            <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
-                <Link href="/host">Host</Link>
-                <Link href="/join">Join</Link>
+                <div className="row" style={{ marginTop: 18 }}>
+                    <Link href="/host"><Button>Host</Button></Link>
+                    <Link href="/join"><Button variant="secondary">Join</Button></Link>
+                </div>
             </div>
         </main>
     );
