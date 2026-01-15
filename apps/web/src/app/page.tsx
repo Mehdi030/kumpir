@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
+console.log(!!supabase);
 
 export default function Home() {
     return (
