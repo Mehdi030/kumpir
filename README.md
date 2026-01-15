@@ -1,74 +1,58 @@
-## 🧾 Commit‑Konvention (RELAY)
+## 🧾 RELAY Commit‑Konvention (v1)
 
-Wir nutzen eine einfache, einheitliche Commit‑Konvention auf Deutsch.  
-🎯 Ziel ist ein klarer, gut lesbarer Projektverlauf.
+Einfache Commit‑Konvention auf Deutsch.  
+Ziel: klare Commits, kein Chaos.
 
 ---
 
 ### 🧱 Format
-```text
-typ(bereich): kurze beschreibung
-🏷️ Commit‑Typen
-🧹 chore – Setup & Organisation
-Projektstruktur, Konfiguration, Tooling
+typ(bereich): beschreibung
+
 Beispiel:
+feat(lobby): lobby erstellen
+
+---
+
+### 🏷️ Commit‑Typen
+
+🧹 **chore** – Setup & Organisation  
+Beispiel:  
 chore: initiales projekt setup
 
-✨ feat – Neue Funktionen
-Neue Seiten, neue Features, neue Möglichkeiten
-Beispiele:
+✨ **feat** – Neue Funktion  
+Beispiel:  
 feat(host): lobby erstellen
-feat(join): lobby per code beitreten
 
-🧠 core – Spielkern / Spiellogik
-Alles, was das eigentliche Spiel betrifft
-Beispiele:
-core(game): grundlegende rundenlogik
-core(timer): explodierenden timer hinzufügen
+🧠 **core** – Spielkern / Spiellogik  
+Beispiel:  
+core(game): rundenlogik hinzufügen
 
-🐛 fix – Fehlerbehebungen
-Bugfixes und unerwartetes Verhalten
-Beispiele:
+🐛 **fix** – Fehler beheben  
+Beispiel:  
 fix(lobby): ungültige lobby codes abfangen
-fix(players): reconnect korrekt behandeln
 
-🧭 Bereiche (optional, aber empfohlen)
-setup
+♻️ **refactor** – Code umstrukturieren  
+Beispiel:  
+refactor(db): lobby abfragen vereinfachen
 
-db
+📝 **docs** – Dokumentation  
+Beispiel:  
+docs: commit konvention ergänzen
 
-host
+🎨 **style** – Optik / Formatierung  
+Beispiel:  
+style(ui): abstände anpassen
 
-join
+---
 
-lobby
+### 🧭 Bereiche (optional)
+setup · db · host · join · lobby · players · game · ui · realtime
 
-players
+---
 
-game
-
-ui
-
-realtime
-
-📌 Regeln
-🇩🇪 Deutsch verwenden
-
-⏱️ Präsens („hinzufügen“, nicht „hinzugefügt“)
-
-✂️ Kurz & konkret
-
-🧩 1 Commit = 1 Gedanke
-
-🚫 Keine Emojis im Commit‑Text
-
-🚫 Keine Sammel‑Commits
-
-🧠 Faustregel
-⚙️ Setup? → chore
-
-✨ Neue Funktion? → feat
-
-🎮 Spielmechanik? → core
-
-🐞 Fehler? → fix
+### 📌 Regeln
+- Deutsch
+- Präsens
+- Kurz & klar
+- 1 Commit = 1 Thema
+- Keine Emojis im Commit‑Text

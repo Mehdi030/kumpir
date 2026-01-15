@@ -1,8 +1,9 @@
 # =========================
-# RELAY (Next.js + TS + Supabase) .gitignore
+# RELAY (Next.js + TS + Supabase)
+# .gitignore
 # =========================
 
-# --- dependencies ---
+# --- Dependencies ---
 node_modules/
 .pnp
 .pnp.js
@@ -11,19 +12,18 @@ node_modules/
 .next/
 out/
 build/
-.vercel
+.vercel/
 
-# --- production/build artifacts ---
+# --- Production / Build Artifacts ---
 dist/
 
-# --- env / secrets (NEVER COMMIT) ---
+# --- Environment / Secrets (NEVER COMMIT) ---
 .env
 .env.*
 !.env.example
 !.env.sample
-!.env.local
 
-# --- logs ---
+# --- Logs ---
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -32,28 +32,27 @@ pnpm-debug.log*
 
 # --- TypeScript ---
 *.tsbuildinfo
-
-# next/ts generated types (safe to ignore)
 next-env.d.ts
 
-# --- OS ---
+# --- Operating Systems ---
 .DS_Store
 Thumbs.db
 
-# --- IDEs / editors ---
-.idea/
-.vscode/
-*.iml
+# --- IDEs / Editors (LOCAL ONLY, NEVER COMMIT) ---
+.idea/          # WebStorm / IntelliJ config
+.vscode/        # VS Code config
+*.iml           # IntelliJ module files
+*.xml           # IDE XML files (workspace.xml, vcs.xml, modules.xml, etc.)
 
-# --- cache ---
+# --- Cache ---
 .cache/
 .eslintcache
 .turbo/
 
-# --- certificates / keys ---
+# --- Certificates / Keys ---
 *.pem
 *.key
 *.crt
 
-# --- misc ---
+# --- Misc ---
 *.swp
