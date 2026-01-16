@@ -3,27 +3,16 @@
    =============================== */
 
 :root{
-    /* Background (Beige / Paper) */
     --bg: #dab590;
     --bg-2: #ccb395;
+
     --ink: rgba(37, 30, 22, 0.88);
 
-    /* Primary (Cards) */
-    --primary: #1F3C88;
-    --primary-2: #2A56B8;
-
-    /* Accent */
     --accent: #22D3EE;
     --accent-2: #A78BFA;
 
-    /* Text */
     --text: rgba(16,12,8,.92);
     --muted: rgba(16,12,8,.62);
-
-    /* Surfaces */
-    --surface: rgba(255,255,255,.62);
-    --surface-strong: rgba(255,255,255,.78);
-    --border: rgba(20,16,12,.14);
 }
 
 /* ===============================
@@ -41,16 +30,16 @@ body{
     background:
             radial-gradient(1200px 700px at 20% 10%, #FFFFFF, transparent 55%),
             linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
-    overflow: hidden;
+    overflow-x: hidden;
     position: relative;
 
-    /* Paper depth */
+    /* Depth */
     box-shadow:
             inset 0 0 0 1px rgba(0,0,0,.06),
             inset 0 40px 160px rgba(0,0,0,.06);
 }
 
-/* Cartoon blob shapes */
+/* Ambient blobs */
 body::before{
     content:"";
     position: fixed;
@@ -65,21 +54,17 @@ body::before{
     opacity: .9;
 }
 
-/* Paper grain + ink speckle */
+/* Paper grain */
 body::after{
     content:"";
     position: fixed;
     inset:0;
     pointer-events:none;
     z-index:0;
-    opacity:.22;
+    opacity:.20;
     background:
             repeating-linear-gradient(0deg, rgba(0,0,0,.015), rgba(0,0,0,.015) 1px, transparent 1px, transparent 6px),
-            repeating-linear-gradient(90deg, rgba(0,0,0,.012), rgba(0,0,0,.012) 1px, transparent 1px, transparent 7px),
-            radial-gradient(1px 1px at 18% 22%, rgba(20,16,12,.12), transparent 60%),
-            radial-gradient(1px 1px at 42% 68%, rgba(20,16,12,.10), transparent 60%),
-            radial-gradient(1px 1px at 71% 34%, rgba(20,16,12,.10), transparent 60%),
-            radial-gradient(1px 1px at 83% 76%, rgba(20,16,12,.08), transparent 60%);
+            repeating-linear-gradient(90deg, rgba(0,0,0,.012), rgba(0,0,0,.012) 1px, transparent 1px, transparent 7px);
     filter: blur(.2px);
 }
 
@@ -93,16 +78,15 @@ body::after{
     place-items: center;
     padding: 32px 18px;
     position: relative;
-    position: relative;
     z-index: 1;
 }
 
 /* ===============================
-   CARD (PRIMARY PANEL)
+   PREMIUM CARD
    =============================== */
 
 .card{
-    width: min(920px, 100%);
+    width: min(980px, 100%);
     position: relative;
 
     background: linear-gradient(
@@ -113,28 +97,19 @@ body::after{
     );
 
     border: 2px solid rgba(255,255,255,.30);
-    border-radius: 36px 36px 28px 28px;
-    padding: 30px;
-    backdrop-filter: blur(6px);
+    border-radius: 40px;
+    padding: 34px;
+    color: rgba(255,255,255,.92);
 
     box-shadow:
-            0 30px 70px rgba(0,0,0,.18),
-            0 0 0 6px rgba(255,255,255,.28) inset;
+            0 34px 90px rgba(0,0,0,.20),
+            0 0 0 6px rgba(255,255,255,.26) inset;
 
-    transition: transform .25s ease, box-shadow .25s ease;
-
-    opacity: 0;
-    transform: translateY(8px);
-    animation: cardIn .55s ease-out forwards;
-
-    color: rgba(255,255,255,.92);
+    transform: translateY(0);
+    transition: transform .22s ease, box-shadow .22s ease, filter .22s ease;
 }
 
-@keyframes cardIn{
-    to{ opacity: 1; transform: translateY(0); }
-}
-
-/* Card highlight */
+/* Premium highlight layer */
 .card::before{
     content:"";
     position:absolute;
@@ -142,32 +117,37 @@ body::after{
     border-radius: inherit;
     pointer-events:none;
     background:
-            radial-gradient(800px 240px at 20% 0%, rgba(255,255,255,.22), transparent 55%),
-            radial-gradient(700px 240px at 85% 12%, rgba(255,180,140,.18), transparent 60%);
-    opacity:.85;
+            radial-gradient(900px 280px at 18% 0%, rgba(255,255,255,.22), transparent 56%),
+            radial-gradient(700px 260px at 88% 12%, rgba(255,180,140,.18), transparent 60%);
+    opacity:.9;
 }
 
-/* Soft sticker glow */
+/* Sticker glow */
 .card::after{
     content:"";
     position:absolute;
     inset:-2px;
-    border-radius: 38px 38px 30px 30px;
+    border-radius: 42px;
     pointer-events:none;
     background:
-            radial-gradient(700px 240px at 20% 0%, rgba(167,139,250,.16), transparent 60%),
-            radial-gradient(700px 240px at 85% 0%, rgba(34,211,238,.12), transparent 60%);
-    filter: blur(10px);
+            radial-gradient(760px 260px at 18% 0%, rgba(167,139,250,.18), transparent 60%),
+            radial-gradient(760px 260px at 88% 0%, rgba(34,211,238,.14), transparent 60%);
+    filter: blur(12px);
     opacity:.55;
 }
 
-@media (hover: hover){
+@media (hover:hover){
     .card:hover{
         transform: translateY(-2px);
         box-shadow:
-                0 36px 90px rgba(0,0,0,.22),
-                0 0 0 6px rgba(255,255,255,.32) inset;
+                0 44px 110px rgba(0,0,0,.24),
+                0 0 0 6px rgba(255,255,255,.30) inset;
+        filter: saturate(1.04);
     }
+}
+
+.cardLanding{
+    /* keep everything neat + centered */
 }
 
 /* ===============================
@@ -175,48 +155,45 @@ body::after{
    =============================== */
 
 .h1{
-    font-size: 46px;
+    font-size: 54px;
     font-weight: 980;
-    letter-spacing: -0.045em;
+    letter-spacing: -0.05em;
     margin: 0;
 }
 
 .p{
     margin: 10px 0 0;
     line-height: 1.55;
-    color: rgba(255,255,255,.72);
+    color: rgba(255,255,255,.76);
+}
+
+.subline{
+    margin: 6px 0 0;
+    font-style: italic;
+    color: rgba(255,255,255,.74);
+}
+
+.heroCopy{
+    max-width: 640px;
+    margin-top: 14px;
 }
 
 /* ===============================
-   UI ELEMENTS
+   LOGO ICON (OLD)
    =============================== */
 
-.row{
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    align-items: center;
-}
-
-.pill{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding: 10px 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,.18);
-    background: rgba(255,255,255,.10);
-    color: rgba(255,255,255,.86);
-    font-size: 14px;
-    transition: background .25s ease, border-color .25s ease, transform .2s ease;
-}
-
-@media (hover: hover){
-    .pill:hover{
-        background: rgba(255,255,255,.16);
-        border-color: rgba(255,255,255,.26);
-        transform: translateY(-1px);
-    }
+.logoIcon{
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    background:
+            radial-gradient(circle at 30% 30%, rgba(167,139,250,.95), transparent 55%),
+            radial-gradient(circle at 70% 70%, rgba(34,211,238,.75), transparent 55%),
+            rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.22);
+    box-shadow:
+            0 14px 40px rgba(0,0,0,.22),
+            0 0 0 2px rgba(255,255,255,.18) inset;
 }
 
 /* ===============================
@@ -232,34 +209,25 @@ body::after{
     border: 1px solid rgba(255,255,255,.20);
     font-weight: 900;
     letter-spacing: .01em;
+    text-decoration: none;
     cursor: pointer;
     user-select: none;
-    transition: transform .15s ease, box-shadow .2s ease, background .25s ease, filter .2s ease;
+    transition: transform .15s ease, filter .2s ease, box-shadow .2s ease, background .25s ease;
 }
 
 .btnPrimary{
-    background: linear-gradient(
-            135deg,
-            #F3D1A1,
-            #E7B97E
-    );
+    background: linear-gradient(135deg, #F3D1A1, #E7B97E);
     color: #3A2410;
 }
 
 .btnSecondary{
-    background: rgba(255,255,255,.16);
+    background: rgba(0,0,0,.16);
+    border: 1px solid rgba(255,255,255,.22);
     color: rgba(255,255,255,.92);
 }
 
-.btn:hover{
-    transform: translateY(-1px);
-    filter: brightness(1.05);
-}
-
-.btn:active{
-    transform: translateY(0);
-    box-shadow: 0 8px 22px rgba(0,0,0,.35) inset;
-}
+.btn:hover{ transform: translateY(-1px); filter: brightness(1.05); }
+.btn:active{ transform: translateY(0); box-shadow: 0 10px 24px rgba(0,0,0,.26) inset; }
 
 .btn:focus-visible{
     outline: none;
@@ -269,129 +237,160 @@ body::after{
 }
 
 /* ===============================
-   DIVIDER & FOOTER
+   LANDING STRUCTURE
    =============================== */
 
-.divider{
-    width: 100%;
-    height: 1px;
-    margin: 22px 0 16px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.26), transparent);
+.heroTop{
+    position: relative;
+    z-index: 1;
 }
 
-.cardFooter{
-    display: flex;
-    align-items: center;
+.brandRow{
+    display:flex;
+    align-items:center;
     gap: 14px;
-    color: rgba(255,255,255,.60);
+}
+
+.ctaRow{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+
+.microHint{
+    margin-top: 10px;
     font-size: 13px;
+    color: rgba(255,255,255,.62);
 }
 
-.cardFooter .dot{
-    width: 4px;
-    height: 4px;
-    border-radius: 999px;
-    background: rgba(255,255,255,.45);
+.dividerSoft{
+    height: 1px;
+    margin: 22px 0 18px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.26), transparent);
+    opacity: .9;
 }
 
-.cardFooter .right{
-    margin-left: auto;
-    opacity: .7;
+/* Two panels inside the card */
+.landingGrid{
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 14px;
+    position: relative;
+    z-index: 1;
 }
+
 /* ===============================
-   INNER CARDS (Feature/Steps Panels)
+   PANELS (Premium inner cards)
    =============================== */
 
-/* generische Panel-Fläche: wirkt wie ein eigenes "Sticker"-Element */
-.panel{
-    padding: 14px;
-    border-radius: 16px;
-    border: 1px solid rgba(255,255,255,.16);
-    background:
-            linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+.stepsPanel,
+.featurePanel{
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,.18);
+    background: linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.10));
     box-shadow:
-            0 14px 30px rgba(0,0,0,.18),
-            0 0 0 1px rgba(255,255,255,.06) inset;
+            0 18px 44px rgba(0,0,0,.18),
+            0 0 0 1px rgba(255,255,255,.05) inset;
+    padding: 16px;
     position: relative;
     overflow: hidden;
 }
 
-/* cartoon highlight */
-.panel::before{
+.stepsPanel::before,
+.featurePanel::before{
     content:"";
     position:absolute;
     inset:0;
     pointer-events:none;
     background:
-            radial-gradient(420px 140px at 18% 0%, rgba(255,255,255,.16), transparent 60%),
-            radial-gradient(260px 140px at 90% 10%, rgba(34,211,238,.10), transparent 65%);
-    opacity:.9;
+            radial-gradient(560px 200px at 18% 0%, rgba(255,255,255,.14), transparent 60%),
+            radial-gradient(420px 180px at 92% 10%, rgba(34,211,238,.10), transparent 62%);
+    opacity:.85;
 }
 
-/* kleine "Ink"-Outline + Glow-Rand */
-.panel::after{
-    content:"";
-    position:absolute;
-    inset:-1px;
-    border-radius: 18px;
-    pointer-events:none;
-    background:
-            radial-gradient(320px 120px at 18% 0%, rgba(167,139,250,.16), transparent 60%),
-            radial-gradient(320px 120px at 88% 0%, rgba(34,211,238,.12), transparent 62%);
-    filter: blur(10px);
-    opacity:.55;
-}
-
-@media (hover:hover){
-    .panel:hover{
-        transform: translateY(-1px);
-        box-shadow:
-                0 18px 36px rgba(0,0,0,.22),
-                0 0 0 1px rgba(255,255,255,.08) inset;
-    }
+.stepsTitle{
+    font-weight: 900;
+    letter-spacing: .2px;
+    margin-bottom: 10px;
 }
 
 /* ===============================
-   FEATURE CARDS
+   STEPS
+   =============================== */
+
+.stepsList{ display:grid; gap: 6px; }
+
+.stepRow{
+    display:grid;
+    grid-template-columns: 28px 1fr;
+    gap: 10px;
+    align-items: start;
+    padding: 8px 0;
+}
+
+.stepBadge{
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    display:grid;
+    place-items:center;
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.16);
+    font-weight: 900;
+    font-size: 12px;
+}
+
+.stepBody{ min-width: 0; }
+
+.stepTitle{ font-weight: 900; margin-bottom: 2px; }
+
+.stepText{
+    color: rgba(255,255,255,.74);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+/* ===============================
+   FEATURES
    =============================== */
 
 .featureGrid{
-    margin-top: 18px;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
 }
 
 .featureCard{
-    padding: 14px;
-    border-radius: 16px;
-    border: 1px solid rgba(255,255,255,.18);
-    background: linear-gradient(
-            180deg,
-            rgba(255,255,255,.18),
-            rgba(255,255,255,.10)
-    );
-    box-shadow:
-            0 14px 30px rgba(0,0,0,.18),
-            0 0 0 1px rgba(255,255,255,.06) inset;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.16);
+    background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+    box-shadow: 0 14px 30px rgba(0,0,0,.16);
+    padding: 12px;
     position: relative;
     overflow: hidden;
-    transition: transform .18s ease, box-shadow .22s ease, background .22s ease;
+    transition: transform .18s ease, filter .18s ease;
 }
 
-/* stärkerer cartoon sheen, damit sie "rauspoppen" */
 .featureCard::before{
     content:"";
     position:absolute;
     inset:0;
     pointer-events:none;
     background:
-            radial-gradient(520px 180px at 20% 0%, rgba(255,255,255,.18), transparent 58%),
-            linear-gradient(90deg, rgba(34,211,238,.08), transparent 40%, rgba(167,139,250,.08));
-    opacity:.85;
+            radial-gradient(520px 180px at 20% 0%, rgba(255,255,255,.16), transparent 58%),
+            linear-gradient(90deg, rgba(34,211,238,.08), transparent 45%, rgba(167,139,250,.08));
+    opacity:.75;
 }
 
-.featureCardHeader{
+@media (hover:hover){
+    .featureCard:hover{
+        transform: translateY(-2px);
+        filter: brightness(1.03);
+    }
+}
+
+.featureHead{
     display:flex;
     align-items:center;
     gap: 10px;
@@ -405,7 +404,6 @@ body::after{
     border-radius: 12px;
     display:grid;
     place-items:center;
-
     background: rgba(0,0,0,.18);
     border: 1px solid rgba(255,255,255,.16);
     box-shadow: 0 10px 20px rgba(0,0,0,.18);
@@ -425,70 +423,29 @@ body::after{
     z-index: 1;
 }
 
-@media (hover:hover){
-    .featureCard:hover{
-        transform: translateY(-2px);
-        background:
-                linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.08));
-        box-shadow:
-                0 20px 44px rgba(0,0,0,.24),
-                0 0 0 1px rgba(255,255,255,.10) inset;
-    }
+.comingRow{
+    display:flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.tagPill{
+    display:inline-flex;
+    align-items:center;
+    padding: 8px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.16);
+    background: rgba(0,0,0,.16);
+    color: rgba(255,255,255,.82);
+    font-size: 12px;
+    font-weight: 800;
 }
 
 /* ===============================
-   HOW IT WORKS BOX
+   META FLOAT (outside card)
    =============================== */
 
-.stepsBox{
-    padding: 16px;
-    border-radius: 16px;
-    border: 1px solid rgba(255,255,255,.18);
-    background:
-            linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.12));
-    box-shadow:
-            0 18px 40px rgba(0,0,0,.20),
-            0 0 0 1px rgba(255,255,255,.05) inset;
-}
-
-.stepsTitle{
-    font-weight: 900;
-    letter-spacing: .2px;
-    margin-bottom: 10px;
-}
-
-.stepRow{
-    display:grid;
-    grid-template-columns: 26px 1fr;
-    gap: 10px;
-    align-items: start;
-    padding: 8px 0;
-}
-
-.stepBadge{
-    width: 26px;
-    height: 26px;
-    border-radius: 10px;
-    display:grid;
-    place-items:center;
-    background: rgba(255,255,255,.10);
-    border: 1px solid rgba(255,255,255,.16);
-    font-weight: 900;
-    font-size: 12px;
-}
-
-.stepTitle{
-    font-weight: 900;
-    margin-bottom: 2px;
-}
-
-.stepText{
-    color: rgba(255,255,255,.74);
-    font-size: 13px;
-    line-height: 1.45;
-}
-
-/* ===== Landing "Meta" außerhalb der Card ===== */
 .metaFloat{
     position: fixed;
     top: 18px;
@@ -497,7 +454,7 @@ body::after{
     gap: 10px;
     flex-wrap: wrap;
     align-items: center;
-    pointer-events: none; /* rein visuell */
+    pointer-events: none;
 }
 
 .metaLeft{ left: 18px; }
@@ -510,30 +467,18 @@ body::after{
     gap: 8px;
     padding: 10px 12px;
     border-radius: 999px;
-    background: rgba(255,255,255,.35);
-    border: 1px solid rgba(37,30,22,.14);
+    background: rgba(255,255,255,.34);
+    border: 1px solid rgba(37,30,22,.12);
     color: rgba(37,30,22,.82);
     font-size: 13px;
     box-shadow: 0 10px 24px rgba(0,0,0,.08);
     backdrop-filter: blur(6px);
 }
 
-/* ===== Logo Icon (wie vorher, aber als Klasse) ===== */
-.logoIcon{
-    width: 56px;
-    height: 56px;
-    border-radius: 18px;
-    background:
-            radial-gradient(circle at 30% 30%, rgba(167,139,250,.95), transparent 55%),
-            radial-gradient(circle at 70% 70%, rgba(34,211,238,.75), transparent 55%),
-            rgba(255,255,255,.10);
-    border: 1px solid rgba(255,255,255,.22);
-    box-shadow:
-            0 14px 40px rgba(0,0,0,.22),
-            0 0 0 2px rgba(255,255,255,.18) inset;
+/* Mobile: stack panels */
+@media (max-width: 860px){
+    .landingGrid{ grid-template-columns: 1fr; }
 }
-
-/* Mobile: meta pills nicht im Weg */
 @media (max-width: 720px){
     .metaFloat{
         position: static;
