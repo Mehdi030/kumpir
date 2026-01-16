@@ -487,3 +487,43 @@ body::after{
     }
     .metaLeft, .metaRight{ justify-content: flex-start; }
 }
+.brandLogo{
+    position: fixed;
+    top: 28px;
+    left: 28px;
+    z-index: 80;
+
+    width: 88px;
+    height: 88px;
+
+    display: grid;
+    place-items: center;
+
+    /* BLANK – nur das PNG */
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+
+    cursor: pointer;
+    transition: transform .18s ease, opacity .18s ease;
+}
+
+@media (hover:hover){
+    .brandLogo:hover{
+        transform: translateY(-2px);
+        opacity: .95;
+    }
+}
+
+/* Mobile */
+@media (max-width: 720px){
+    .brandLogo{
+        width: 64px;
+        height: 64px;
+        top: 16px;
+        left: 16px;
+    }
+}
+
