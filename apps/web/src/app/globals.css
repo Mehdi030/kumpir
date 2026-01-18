@@ -85,66 +85,6 @@ body::after{
    PREMIUM CARD
    =============================== */
 
-.card{
-    width: min(980px, 100%);
-    position: relative;
-
-    background: linear-gradient(
-            165deg,
-            rgba(191, 121, 78, .96) 0%,
-            rgba(168, 104, 68, .96) 55%,
-            rgba(140, 86, 56, .96) 100%
-    );
-
-    border: 2px solid rgba(255,255,255,.30);
-    border-radius: 40px;
-    padding: 34px;
-    color: rgba(255,255,255,.92);
-
-    box-shadow:
-            0 34px 90px rgba(0,0,0,.20),
-            0 0 0 6px rgba(255,255,255,.26) inset;
-
-    transform: translateY(0);
-    transition: transform .22s ease, box-shadow .22s ease, filter .22s ease;
-}
-
-/* Premium highlight layer */
-.card::before{
-    content:"";
-    position:absolute;
-    inset:0;
-    border-radius: inherit;
-    pointer-events:none;
-    background:
-            radial-gradient(900px 280px at 18% 0%, rgba(255,255,255,.22), transparent 56%),
-            radial-gradient(700px 260px at 88% 12%, rgba(255,180,140,.18), transparent 60%);
-    opacity:.9;
-}
-
-/* Sticker glow */
-.card::after{
-    content:"";
-    position:absolute;
-    inset:-2px;
-    border-radius: 42px;
-    pointer-events:none;
-    background:
-            radial-gradient(760px 260px at 18% 0%, rgba(167,139,250,.18), transparent 60%),
-            radial-gradient(760px 260px at 88% 0%, rgba(34,211,238,.14), transparent 60%);
-    filter: blur(12px);
-    opacity:.55;
-}
-
-@media (hover:hover){
-    .card:hover{
-        transform: translateY(-2px);
-        box-shadow:
-                0 44px 110px rgba(0,0,0,.24),
-                0 0 0 6px rgba(255,255,255,.30) inset;
-        filter: saturate(1.04);
-    }
-}
 
 .cardLanding{
     /* keep everything neat + centered */
