@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+
 
 type Privacy = "private" | "public";
 
@@ -25,6 +26,8 @@ export default function HostPage() {
     const [maxPlayers, setMaxPlayers] = useState(8);
     const [roundSeconds, setRoundSeconds] = useState(25);
     const [creating, setCreating] = useState(false);
+    const hostNameRef = useRef<HTMLInputElement | null>(null);
+    const [shakeName, setShakeName] = useState(false);
 
     const lobbyCode = useMemo(() => makeCode(6), []);
 
@@ -46,6 +49,11 @@ export default function HostPage() {
         if (!isNameValid) return "Mindestens 2 Zeichen.";
         return "";
     }, [hostName, isNameValid]);
+
+    // ✅ READY VALIDATION (Badge)
+    const isReady = isNameValid && !creating;
+    const readyLabel = isReady ? "Bereit" : "Nicht bereit";
+    const readyHint = isReady ? "Du kannst die Lobby jetzt erstellen." : "Bitte gib mindestens 2 Zeichen beim Namen ein.";
 
     async function onCreate() {
         if (!isNameValid || creating) return;
@@ -88,11 +96,26 @@ export default function HostPage() {
                     <header className="hostHeader">
                         <div className="hostTitleRow">
                             <h1 className="h1">Lobby hosten</h1>
-                            <span className="chip">
-                                <span className="chipDot" aria-hidden />
-                                Ready
+
+                            {/* ✅ Validiertes Status-Badge */}
+                            <span
+                                className="chip"
+                                title={readyHint}
+                                aria-live="polite"
+                                aria-label={`Status: ${readyLabel}. ${readyHint}`}
+                            >
+                                <span
+                                    className="chipDot"
+                                    aria-hidden
+                                    style={{
+                                        background: isReady ? "rgba(34,211,238,.92)" : "rgba(255,255,255,.35)",
+                                        boxShadow: isReady ? "0 0 0 3px rgba(34,211,238,.18)" : "0 0 0 3px rgba(255,255,255,.10)",
+                                    }}
+                                />
+                                {readyLabel}
                             </span>
                         </div>
+
                         <p className="p hostSub">
                             Erstelle eine Lobby, teile den Code und starte später im Lobby-Screen.
                         </p>
@@ -102,13 +125,13 @@ export default function HostPage() {
                         {/* LEFT: FORM */}
                         <div className="panel">
                             <div className="panelHead">
-                                <div className="panelTitle">Host-Details</div>
+                                <div className="panelTitle">Spieler-Details</div>
                                 <div className="panelHint">Du kannst das später ändern.</div>
                             </div>
 
                             <div className="fieldRow">
                                 <label className="fieldLabel" htmlFor="hostName">
-                                    Host-Name
+                                    Dein Name
                                 </label>
 
                                 <div className="fieldControl">
@@ -133,7 +156,7 @@ export default function HostPage() {
                                 </div>
 
                                 <div className={`fieldHelp ${nameError ? "fieldHelpError" : ""}`}>
-                                    {nameError || "Wird in der Lobby angezeigt."}
+                                    {nameError || "So sehen dich andere Spieler."}
                                 </div>
                             </div>
 
@@ -230,15 +253,10 @@ export default function HostPage() {
                                     {creating ? "Erstelle Lobby…" : "Lobby erstellen"}
                                 </button>
 
-                                {/* statt "Lieber beitreten": Zurück (später global auf allen Seiten) */}
                                 <Link href="/" className="btn btnSecondary">
                                     Zurück
                                 </Link>
                             </div>
-
-                            <p className="trustLine">
-                                Kein Account nötig. Später kannst du Auth hinzufügen – die UI bleibt kompatibel.
-                            </p>
                         </div>
 
                         {/* RIGHT: PREVIEW (kompakt) */}
@@ -254,7 +272,7 @@ export default function HostPage() {
                                         {hostName.trim().slice(0, 1).toUpperCase() || "H"}
                                     </div>
                                     <div className="previewMeta">
-                                        <div className="previewName">{hostName.trim() || "Host-Name"}</div>
+                                        <div className="previewName">{hostName.trim() || "Dein Name"}</div>
                                         <div className="previewSub">
                                             🔒 Privat • 👥 2–{maxPlayers} • ⏱️ {roundSeconds}s
                                         </div>
