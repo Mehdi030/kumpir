@@ -53,8 +53,17 @@ body{
     color: var(--text);
 
     background:
-            radial-gradient(1200px 700px at 20% 10%, rgba(255,255,255,.92), transparent 58%),
-            linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+            radial-gradient(
+                    900px 520px at 50% 28%,
+                    rgba(255,238,210,0.55),
+                    rgba(120,145,200,0.25) 45%,
+                    rgb(47, 79, 158) 100%
+            ),
+            linear-gradient(
+                    180deg,
+                    #5b78b8 0%,
+                    #3f5fa8 100%
+            );
 
     overflow-x: hidden;
     position: relative;
@@ -84,16 +93,12 @@ body::before{
 
 /* Grain */
 body::after{
-    content:"";
-    position: fixed;
-    inset:0;
-    pointer-events:none;
-    z-index:0;
-    opacity:.18;
     background:
-            repeating-linear-gradient(0deg, rgba(0,0,0,.015), rgba(0,0,0,.015) 1px, transparent 1px, transparent 6px),
-            repeating-linear-gradient(90deg, rgba(0,0,0,.012), rgba(0,0,0,.012) 1px, transparent 1px, transparent 7px);
-    filter: blur(.2px);
+            radial-gradient(
+                    1200px 700px at 50% 35%,
+                    transparent 60%,
+                    rgba(0,0,0,0.15) 100%
+            );
 }
 
 /* Respect reduced motion */
@@ -171,8 +176,6 @@ body::after{
     box-shadow:
             0 34px 90px rgba(0,0,0,.20),
             0 0 0 6px rgba(255,255,255,.26) inset;
-
-    transition: transform .22s var(--ease), box-shadow .22s var(--ease), filter .22s var(--ease);
 }
 
 .card::before{
@@ -198,16 +201,6 @@ body::after{
             radial-gradient(760px 260px at 88% 0%, rgba(34,211,238,.10), transparent 60%);
     filter: blur(12px);
     opacity:.45;
-}
-
-@media (hover:hover){
-    .card:hover{
-        transform: translateY(-2px);
-        box-shadow:
-                0 44px 110px rgba(0,0,0,.24),
-                0 0 0 6px rgba(255,255,255,.30) inset;
-        filter: saturate(1.04);
-    }
 }
 
 /* ===============================

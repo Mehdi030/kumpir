@@ -2,8 +2,24 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabaseClient";
-import { generate4DigitCode } from "../../lib/code";
+import type { PostgrestError } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabaseClient";
+import { generate4DigitCode } from "@/lib/code";
+
+function getErrorMessage(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "object" && err !== null && "message" in err) {
+        const m = (err as { message?: unknown }).message;
+        if (typeof m === "string") return m;
+    }
+    return "Unbekannter Fehler.";
+}
+
+function isDuplicateError(err: PostgrestError): boolean {
+    const code = err.code ?? "";
+    const msg = (err.message ?? "").toLowerCase();
+    return code === "23505" || msg.includes("duplicate") || msg.includes("unique");
+}
 
 export default function HostPage() {
     const router = useRouter();
@@ -27,59 +43,86 @@ export default function HostPage() {
                     .insert([{ code, host_name: hostName.trim(), status: "lobby" }]);
 
                 if (!insertError) {
-                    // optional: game_state direkt anlegen (für später)
-                    await supabase.from("game_state").insert([{ lobby_code: code }]).throwOnError();
+                    const { error: gsErr } = await supabase
+                        .from("game_state")
+                        .insert([{ lobby_code: code }]);
+
+                    if (gsErr) {
+                        setError(`Lobby erstellt, aber game_state fehlgeschlagen: ${gsErr.message}`);
+                        return;
+                    }
 
                     router.push(`/lobby/${code}`);
                     return;
                 }
 
                 // Duplicate PK -> neuen Code probieren, sonst echter Fehler
-                const pgCode = (insertError as any)?.code;
-                const msg = ((insertError as any)?.message ?? "").toLowerCase();
-                const isDuplicate = pgCode === "23505" || msg.includes("duplicate") || msg.includes("unique");
-
-                if (!isDuplicate) throw insertError;
+                if (!isDuplicateError(insertError)) {
+                    setError(insertError.message);
+                    return;
+                }
             }
 
             setError("Konnte keinen freien Code finden. Bitte nochmal versuchen.");
-        } catch (e: any) {
-            setError(e?.message ?? "Unbekannter Fehler beim Erstellen der Lobby.");
+        } catch (err: unknown) {
+            setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
     }
 
     return (
-        <main style={{ padding: 24, maxWidth: 720, margin: "0 auto" }}>
-            <h1 style={{ fontSize: 28, fontWeight: 800 }}>Host</h1>
-            <p style={{ marginTop: 8, opacity: 0.8 }}>
-                Erstelle eine Lobby. Starten passiert später manuell im Lobby‑Screen.
-            </p>
+        <main className="container">
+            <div className="landingWrap">
+                <section className="card">
+                    <h1 className="h1">Lobby hosten</h1>
+                    <p className="p subline">Erstelle eine Lobby und starte später im Lobby-Screen.</p>
 
-            <div style={{ marginTop: 18, display: "grid", gap: 10 }}>
-                <label style={{ display: "grid", gap: 6 }}>
-                    Host‑Name
-                    <input
-                        value={hostName}
-                        onChange={(e) => setHostName(e.target.value)}
-                        placeholder="z.B. Medo"
-                        style={{ padding: 10, width: "100%" }}
-                    />
-                </label>
+                    <div className="stepsWrap">
+                        <div className="stepsBox">
+                            <div className="stepsTitle">Host-Details</div>
 
-                <button
-                    onClick={createLobby}
-                    disabled={!canCreate || loading}
-                    style={{
-                        padding: 12,
-                        cursor: !canCreate || loading ? "not-allowed" : "pointer",
-                    }}
-                >
-                    {loading ? "Erstelle…" : "Lobby erstellen"}
-                </button>
+                            <div className="formGrid">
+                                <label className="fieldLabel">
+                                    Host-Name
+                                    <input
+                                        className="textInput"
+                                        value={hostName}
+                                        onChange={(e) => setHostName(e.target.value)}
+                                        placeholder="z.B. Medo"
+                                        autoComplete="nickname"
+                                        maxLength={24}
+                                    />
+                                    <span className="helperText">Mindestens 2 Zeichen.</span>
+                                </label>
 
-                {error && <p style={{ color: "crimson" }}>{error}</p>}
+                                <div className="ctaRow">
+                                    <button
+                                        type="button"
+                                        className="btn btnPrimary"
+                                        onClick={createLobby}
+                                        disabled={!canCreate || loading}
+                                        aria-disabled={!canCreate || loading}
+                                    >
+                                        {loading ? "Erstelle…" : "Lobby erstellen"}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className="btn btnSecondary"
+                                        onClick={() => router.push("/join")}
+                                        disabled={loading}
+                                        aria-disabled={loading}
+                                    >
+                                        Lieber beitreten
+                                    </button>
+                                </div>
+
+                                {error && <p className="errorText">{error}</p>}
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
         </main>
     );

@@ -2,11 +2,27 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabaseClient";
+import type { PostgrestError } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabaseClient";
 
 function normalizeCode(input: string) {
-    // nur Ziffern, max 4
+    // nur Ziffern, maximal 4
     return input.replace(/\D/g, "").slice(0, 4);
+}
+
+function getErrorMessage(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "object" && err !== null && "message" in err) {
+        const m = (err as { message?: unknown }).message;
+        if (typeof m === "string") return m;
+    }
+    return "Unbekannter Fehler.";
+}
+
+function isDuplicateError(err: PostgrestError): boolean {
+    const code = err.code ?? "";
+    const msg = (err.message ?? "").toLowerCase();
+    return code === "23505" || msg.includes("duplicate") || msg.includes("unique");
 }
 
 export default function JoinPage() {
@@ -36,11 +52,16 @@ export default function JoinPage() {
                 .eq("code", lobbyCode)
                 .maybeSingle();
 
-            if (lobbyErr) throw lobbyErr;
+            if (lobbyErr) {
+                setError(lobbyErr.message);
+                return;
+            }
+
             if (!lobby) {
                 setError("Lobby nicht gefunden. Prüfe den Code.");
                 return;
             }
+
             if (lobby.status !== "lobby") {
                 setError("Diese Lobby ist schon gestartet oder beendet.");
                 return;
@@ -57,69 +78,88 @@ export default function JoinPage() {
             ]);
 
             if (insertErr) {
-                const msg = (insertErr as any)?.message?.toLowerCase?.() ?? "";
-                const isDuplicate =
-                    (insertErr as any)?.code === "23505" ||
-                    msg.includes("duplicate") ||
-                    msg.includes("unique");
-
-                if (isDuplicate) {
+                if (isDuplicateError(insertErr)) {
                     setError("Name ist in dieser Lobby schon vergeben. Nimm einen anderen.");
                     return;
                 }
-                throw insertErr;
+                setError(insertErr.message);
+                return;
             }
 
             // 3) Weiter zur Lobby
             router.push(`/lobby/${lobbyCode}`);
-        } catch (e: any) {
-            setError(e?.message ?? "Unbekannter Fehler beim Beitreten.");
+        } catch (err: unknown) {
+            setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
     }
 
     return (
-        <main style={{ padding: 24, maxWidth: 720, margin: "0 auto" }}>
-            <h1 style={{ fontSize: 28, fontWeight: 800 }}>Join</h1>
-            <p style={{ marginTop: 8, opacity: 0.8 }}>
-                Tritt einer Lobby mit 4‑stelligem Code bei.
-            </p>
+        <main className="container">
+            <div className="landingWrap">
+                <section className="card">
+                    <h1 className="h1">Lobby beitreten</h1>
+                    <p className="p subline">Mitspielen ohne Account. Code rein und los.</p>
 
-            <div style={{ marginTop: 18, display: "grid", gap: 10 }}>
-                <label style={{ display: "grid", gap: 6 }}>
-                    Lobby‑Code
-                    <input
-                        value={code}
-                        onChange={(e) => setCode(normalizeCode(e.target.value))}
-                        placeholder="z.B. 8977"
-                        inputMode="numeric"
-                        style={{ padding: 10, width: "100%" }}
-                    />
-                </label>
+                    <div className="stepsWrap">
+                        <div className="stepsBox">
+                            <div className="stepsTitle">Beitritt</div>
 
-                <label style={{ display: "grid", gap: 6 }}>
-                    Dein Name
-                    <input
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="z.B. Sero"
-                        style={{ padding: 10, width: "100%" }}
-                    />
-                </label>
+                            <div className="formGrid">
+                                <label className="fieldLabel">
+                                    Lobby-Code
+                                    <input
+                                        className="textInput"
+                                        value={code}
+                                        onChange={(e) => setCode(normalizeCode(e.target.value))}
+                                        placeholder="z.B. 8977"
+                                        inputMode="numeric"
+                                        autoComplete="one-time-code"
+                                    />
+                                    <span className="helperText">4 Ziffern.</span>
+                                </label>
 
-                <button
-                    onClick={joinLobby}
-                    disabled={!canJoin || loading}
-                    style={{
-                        padding: 12,
-                        cursor: !canJoin || loading ? "not-allowed" : "pointer",
-                    }}
-                >
-                    {loading ? "Trete bei…" : "Beitreten"}
-                </button>
+                                <label className="fieldLabel">
+                                    Dein Name
+                                    <input
+                                        className="textInput"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        placeholder="z.B. Sero"
+                                        autoComplete="nickname"
+                                        maxLength={24}
+                                    />
+                                    <span className="helperText">Mindestens 2 Zeichen.</span>
+                                </label>
 
-                {error && <p style={{ color: "crimson" }}>{error}</p>}
+                                <div className="ctaRow">
+                                    <button
+                                        type="button"
+                                        className="btn btnPrimary"
+                                        onClick={joinLobby}
+                                        disabled={!canJoin || loading}
+                                        aria-disabled={!canJoin || loading}
+                                    >
+                                        {loading ? "Trete bei…" : "Beitreten"}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className="btn btnSecondary"
+                                        onClick={() => router.push("/")}
+                                        disabled={loading}
+                                        aria-disabled={loading}
+                                    >
+                                        Zurück
+                                    </button>
+                                </div>
+
+                                {error && <p className="errorText">{error}</p>}
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
         </main>
     );
