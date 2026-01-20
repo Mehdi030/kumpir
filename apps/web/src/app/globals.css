@@ -1,18 +1,22 @@
 /* ===============================
-   GLOBAL VARIABLES (Option B + Premium)
+   GLOBAL VARIABLES (Premium)
    =============================== */
 
 :root{
-    /* Background (neutral/tech-warm) */
+    /* Fonts (werden via layout.tsx als CSS-Variablen gesetzt) */
+    --font-body: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    --font-display: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
+    /* Background */
     --bg: #cdbfae;
     --bg-2: #bdb2a6;
 
-    /* Ink / text */
+    /* Text */
     --ink: rgba(37, 30, 22, 0.88);
     --text: rgba(16,12,8,.92);
     --muted: rgba(16,12,8,.62);
 
-    /* Accents (kept) */
+    /* Accents */
     --accent: #22D3EE;
     --accent-2: #A78BFA;
 
@@ -21,10 +25,10 @@
     --glass-border: rgba(37,30,22,.12);
     --shadow-soft: 0 10px 24px rgba(0,0,0,.08);
 
-    /* Card palette (premium cocoa-caramel) */
-    --card-a: rgba(185, 114, 78, .965);
-    --card-b: rgba(160,  98, 68, .965);
-    --card-c: rgba(132,  82, 56, .965);
+    /* Card palette */
+    --card-a: rgba(214, 162, 92, 0.96);
+    --card-b: rgba(192, 132, 78, 0.96);
+    --card-c: rgba(148, 92, 54, 0.96);
 
     /* Radii */
     --r-pill: 999px;
@@ -45,10 +49,9 @@ html, body{ height: 100%; }
 
 body{
     margin: 0;
-    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    font-family: var(--font-body);
     color: var(--text);
 
-    /* Cleaner highlight + neutral gradient */
     background:
             radial-gradient(1200px 700px at 20% 10%, rgba(255,255,255,.92), transparent 58%),
             linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
@@ -64,7 +67,7 @@ body{
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* Ambient blobs (slightly more "tech", still subtle) */
+/* Ambient blobs */
 body::before{
     content:"";
     position: fixed;
@@ -79,7 +82,7 @@ body::before{
     opacity: .86;
 }
 
-/* Paper grain */
+/* Grain */
 body::after{
     content:"";
     position: fixed;
@@ -111,7 +114,6 @@ body::after{
     z-index: 1;
 }
 
-/* Align metaBar + card as one centered block */
 .landingWrap{
     width: min(980px, 100%);
     display: grid;
@@ -119,7 +121,7 @@ body::after{
 }
 
 /* ===============================
-   META BAR (über der Card)
+   META BAR
    =============================== */
 
 .metaBar{
@@ -144,39 +146,23 @@ body::after{
     gap: 8px;
     padding: 10px 12px;
     border-radius: var(--r-pill);
-
     background: var(--glass);
     border: 1px solid var(--glass-border);
     color: rgba(37,30,22,.82);
-
     font-size: 13px;
     box-shadow: var(--shadow-soft);
     backdrop-filter: blur(6px);
-
-    /* Premium: slightly crisper pill */
-    transform: translateZ(0);
-}
-
-/* Optional: slightly reduce pill padding on small screens */
-@media (max-width: 520px){
-    .metaPill{ padding: 9px 10px; font-size: 12.5px; }
 }
 
 /* ===============================
-   PREMIUM CARD
+   CARD
    =============================== */
 
 .card{
     width: 100%;
     position: relative;
 
-    background: linear-gradient(
-            165deg,
-            rgba(214, 162, 92, 0.96) 0%,
-            rgba(192, 132, 78, 0.96) 55%,
-            rgba(148, 92, 54, 0.96) 100%
-    );
-
+    background: linear-gradient(165deg, var(--card-a) 0%, var(--card-b) 55%, var(--card-c) 100%);
     border: 2px solid rgba(255,255,255,.30);
     border-radius: var(--r-card);
     padding: 34px;
@@ -189,7 +175,6 @@ body::after{
     transition: transform .22s var(--ease), box-shadow .22s var(--ease), filter .22s var(--ease);
 }
 
-/* Premium highlight layer */
 .card::before{
     content:"";
     position:absolute;
@@ -197,12 +182,11 @@ body::after{
     border-radius: inherit;
     pointer-events:none;
     background:
-    radial-gradient(760px 260px at 18% 0%, rgba(255,210,140,.18), transparent 60%),
-    radial-gradient(760px 260px at 88% 0%, rgba(255,180,120,.14), transparent 60%);
+            radial-gradient(760px 260px at 18% 0%, rgba(255,210,140,.18), transparent 60%),
+            radial-gradient(760px 260px at 88% 0%, rgba(255,180,120,.14), transparent 60%);
     opacity:.9;
 }
 
-/* Sticker glow (slightly reduced so it feels more premium, less "neon") */
 .card::after{
     content:"";
     position:absolute;
@@ -210,10 +194,10 @@ body::after{
     border-radius: calc(var(--r-card) + 2px);
     pointer-events:none;
     background:
-            radial-gradient(760px 260px at 18% 0%, rgba(167,139,250,.14), transparent 60%),
-            radial-gradient(760px 260px at 88% 0%, rgba(34,211,238,.11), transparent 60%);
+            radial-gradient(760px 260px at 18% 0%, rgba(167,139,250,.12), transparent 60%),
+            radial-gradient(760px 260px at 88% 0%, rgba(34,211,238,.10), transparent 60%);
     filter: blur(12px);
-    opacity:.50;
+    opacity:.45;
 }
 
 @media (hover:hover){
@@ -226,29 +210,28 @@ body::after{
     }
 }
 
-/* Slightly tighter padding on smaller screens */
-@media (max-width: 720px){
-    .card{ padding: 26px; border-radius: 34px; }
-}
-@media (max-width: 420px){
-    .card{ padding: 22px; border-radius: 30px; }
-}
-
 /* ===============================
    TYPOGRAPHY
    =============================== */
 
+.h1,
+.stepsTitle,
+.stepTitle,
+.btn{
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+}
+
 .h1{
     font-size: 54px;
-    font-weight: 980;
-    letter-spacing: -0.05em;
+    font-weight: 800;
     margin: 0;
 }
 
 .p{
     margin: 10px 0 0;
     line-height: 1.55;
-    color: rgba(255,255,255,.76);
+    color: rgba(255,255,255,.78);
 }
 
 .subline{
@@ -279,23 +262,8 @@ body::after{
     gap: 14px;
 }
 
-/* Logo icon (old) */
-.logoIcon{
-    width: 56px;
-    height: 56px;
-    border-radius: 18px;
-    background:
-            radial-gradient(circle at 30% 30%, rgba(167,139,250,.95), transparent 55%),
-            radial-gradient(circle at 70% 70%, rgba(34,211,238,.75), transparent 55%),
-            rgba(255,255,255,.10);
-    border: 1px solid rgba(255,255,255,.22);
-    box-shadow:
-            0 14px 40px rgba(0,0,0,.22),
-            0 0 0 2px rgba(255,255,255,.18) inset;
-}
-
 /* ===============================
-   STEPS BOX
+   STEPS
    =============================== */
 
 .stepsWrap{ margin-top: 16px; }
@@ -311,19 +279,17 @@ body::after{
 }
 
 .stepsTitle{
-    font-weight: 900;
-    letter-spacing: .2px;
+    font-weight: 800;
     margin-bottom: 10px;
 }
 
-.stepsList{ display:grid; gap: 6px; }
+.stepsList{ display:grid; gap: 10px; }
 
 .stepRow{
     display:grid;
     grid-template-columns: 28px 1fr;
     gap: 10px;
     align-items: start;
-    padding: 8px 0;
 }
 
 .stepBadge{
@@ -334,14 +300,12 @@ body::after{
     place-items:center;
     background: rgba(255,255,255,.10);
     border: 1px solid rgba(255,255,255,.16);
-    font-weight: 900;
+    font-weight: 800;
     font-size: 12px;
 }
 
 .stepBody{ min-width: 0; }
-
-.stepTitle{ font-weight: 900; margin-bottom: 2px; }
-
+.stepTitle{ font-weight: 800; margin-bottom: 2px; }
 .stepText{
     color: rgba(255,255,255,.74);
     font-size: 13px;
@@ -349,7 +313,7 @@ body::after{
 }
 
 /* ===============================
-   BUTTONS / CTA (more premium micro-interactions)
+   BUTTONS / CTA
    =============================== */
 
 .btn{
@@ -359,8 +323,7 @@ body::after{
     padding: 14px 22px;
     border-radius: 18px;
     border: 1px solid rgba(255,255,255,.20);
-    font-weight: 900;
-    letter-spacing: .01em;
+    font-weight: 800;
     text-decoration: none;
     cursor: pointer;
     user-select: none;
@@ -375,8 +338,6 @@ body::after{
 .btnPrimary{
     background: linear-gradient(135deg, #F3D1A1, #E7B97E);
     color: #3A2410;
-
-    /* Premium: subtle lift */
     box-shadow: 0 14px 30px rgba(0,0,0,.16);
 }
 
@@ -391,22 +352,33 @@ body::after{
 }
 .btn:active{ transform: translateY(0); box-shadow: 0 10px 24px rgba(0,0,0,.26) inset; }
 
-.btn:focus-visible{
-    outline: none;
-    box-shadow:
-            0 0 0 3px rgba(255,255,255,.20),
-            0 0 0 6px rgba(167,139,250,.22);
-}
-
 .ctaRow{
     display: flex;
-    gap: 10px;
+    gap: 18px;
     flex-wrap: wrap;
     margin-top: 16px;
+    align-items: flex-start;
+}
+
+.ctaStack{
+    display: grid;
+    gap: 6px;
+}
+
+.ctaHint{
+    font-size: 12.5px;
+    color: rgba(255,255,255,.72);
+    padding-left: 4px;
+}
+
+.trustLine{
+    margin: 14px 0 0;
+    font-size: 13px;
+    color: rgba(255,255,255,.70);
 }
 
 /* ===============================
-   BRAND LOGO (oben links)
+   BRAND LOGO
    =============================== */
 
 .brandLogo{
@@ -414,22 +386,13 @@ body::after{
     top: 18px;
     left: 18px;
     z-index: 80;
-
     width: 80px;
     height: 80px;
-
     display: grid;
     place-items: center;
-
     background: transparent;
-    backdrop-filter: none;
-    box-shadow: none;
-    border-radius: 0;
-
-    cursor: pointer;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
-
     transition: filter .18s ease;
 }
 
@@ -442,16 +405,15 @@ body::after{
 }
 
 @media (hover:hover){
-    .brandLogo:hover{
-        filter: saturate(1.06) contrast(1.03);
-    }
+    .brandLogo:hover{ filter: saturate(1.06) contrast(1.03); }
 }
 
 @media (max-width: 720px){
-    .brandLogo{
-        top: 12px;
-        left: 12px;
-        width: 56px;
-        height: 56px;
-    }
+    .brandLogo{ top: 12px; left: 12px; width: 56px; height: 56px; }
+    .card{ padding: 26px; border-radius: 34px; }
+    .h1{ font-size: 44px; }
+}
+@media (max-width: 420px){
+    .card{ padding: 22px; border-radius: 30px; }
+    .h1{ font-size: 40px; }
 }

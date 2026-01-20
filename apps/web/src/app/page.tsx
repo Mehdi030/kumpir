@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { supabase } from "@/lib/supabaseClient";
-console.log(!!supabase);
 
 export default function Home() {
     return (
@@ -20,11 +18,10 @@ export default function Home() {
                 />
             </Link>
 
-
             {/* Centered block: metaBar + card aligned */}
             <div className="landingWrap">
-                {/* Meta-Pills: direkt über der Card, gleiche Breite */}
-                <div className="metaBar" aria-hidden>
+                {/* Meta-Pills */}
+                <div className="metaBar">
                     <div className="metaLeft">
                         <span className="metaPill">👥 2–10 Spieler</span>
                         <span className="metaPill">⚡ Live</span>
@@ -35,7 +32,7 @@ export default function Home() {
                     </div>
                 </div>
 
-                <section className="card">
+                <section className="card" aria-label="Kumpir Landing Card">
                     <div className="heroRow">
                         <div className="brandRow">
                             <div>
@@ -66,14 +63,24 @@ export default function Home() {
                         </div>
                     </div>
 
+                    {/* CTAs (clean + conversion friendly) */}
                     <div className="ctaRow">
-                        <Link href="/host" className="btn btnPrimary">
-                            Host starten
-                        </Link>
-                        <Link href="/join" className="btn btnSecondary">
-                            Beitreten
-                        </Link>
+                        <div className="ctaStack">
+                            <Link href="/host" className="btn btnPrimary">
+                                Spiel hosten
+                            </Link>
+                            <div className="ctaHint">Erstellt eine Lobby für Freunde</div>
+                        </div>
+
+                        <div className="ctaStack">
+                            <Link href="/join" className="btn btnSecondary">
+                                Mit Code beitreten
+                            </Link>
+                            <div className="ctaHint">Ohne Account spielbar</div>
+                        </div>
                     </div>
+
+                    <p className="trustLine">Kein Download. Kein Account nötig. Läuft direkt im Browser.</p>
                 </section>
             </div>
         </main>
