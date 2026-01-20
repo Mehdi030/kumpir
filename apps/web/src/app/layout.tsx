@@ -1,17 +1,17 @@
 import "./globals.css";
-import Link from "next/link";
-import Image from "next/image";
+import { Baloo_2 } from "next/font/google";
+
+const baloo = Baloo_2({
+    subsets: ["latin"],
+    weight: ["600", "700", "800"],
+    variable: "--font-display",
+});
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="de">
-        <body>
-        <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-            <Image src="/Logo.png" alt="Kumpir" width={56} height={56} priority />
-        </Link>
-
-        {children}
-        </body>
+        <html lang="de" className={baloo.variable}>
+        <body>{children}</body>
         </html>
     );
 }
+

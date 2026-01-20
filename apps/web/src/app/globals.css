@@ -1,18 +1,38 @@
 /* ===============================
-   GLOBAL VARIABLES
+   GLOBAL VARIABLES (Option B + Premium)
    =============================== */
 
 :root{
-    --bg: #dab590;
-    --bg-2: #ccb395;
+    /* Background (neutral/tech-warm) */
+    --bg: #cdbfae;
+    --bg-2: #bdb2a6;
 
+    /* Ink / text */
     --ink: rgba(37, 30, 22, 0.88);
+    --text: rgba(16,12,8,.92);
+    --muted: rgba(16,12,8,.62);
 
+    /* Accents (kept) */
     --accent: #22D3EE;
     --accent-2: #A78BFA;
 
-    --text: rgba(16,12,8,.92);
-    --muted: rgba(16,12,8,.62);
+    /* Surfaces */
+    --glass: rgba(255,255,255,.34);
+    --glass-border: rgba(37,30,22,.12);
+    --shadow-soft: 0 10px 24px rgba(0,0,0,.08);
+
+    /* Card palette (premium cocoa-caramel) */
+    --card-a: rgba(185, 114, 78, .965);
+    --card-b: rgba(160,  98, 68, .965);
+    --card-c: rgba(132,  82, 56, .965);
+
+    /* Radii */
+    --r-pill: 999px;
+    --r-card: 40px;
+    --r-soft: 18px;
+
+    /* Motion */
+    --ease: cubic-bezier(.2,.8,.2,1);
 }
 
 /* ===============================
@@ -27,19 +47,24 @@ body{
     margin: 0;
     font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
     color: var(--text);
+
+    /* Cleaner highlight + neutral gradient */
     background:
-            radial-gradient(1200px 700px at 20% 10%, #FFFFFF, transparent 55%),
+            radial-gradient(1200px 700px at 20% 10%, rgba(255,255,255,.92), transparent 58%),
             linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+
     overflow-x: hidden;
     position: relative;
 
-    /* Depth */
     box-shadow:
             inset 0 0 0 1px rgba(0,0,0,.06),
             inset 0 40px 160px rgba(0,0,0,.06);
+
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* Ambient blobs */
+/* Ambient blobs (slightly more "tech", still subtle) */
 body::before{
     content:"";
     position: fixed;
@@ -47,11 +72,11 @@ body::before{
     pointer-events:none;
     z-index:0;
     background:
-            radial-gradient(520px 420px at 18% 22%, rgba(31,60,136,.16), transparent 62%),
-            radial-gradient(540px 440px at 78% 28%, rgba(34,211,238,.14), transparent 62%),
-            radial-gradient(560px 460px at 52% 80%, rgba(167,139,250,.12), transparent 62%);
+            radial-gradient(520px 420px at 18% 22%, rgba(31,60,136,.18), transparent 62%),
+            radial-gradient(540px 440px at 78% 28%, rgba(34,211,238,.16), transparent 62%),
+            radial-gradient(560px 460px at 52% 80%, rgba(167,139,250,.14), transparent 62%);
     filter: blur(6px);
-    opacity: .9;
+    opacity: .86;
 }
 
 /* Paper grain */
@@ -61,11 +86,16 @@ body::after{
     inset:0;
     pointer-events:none;
     z-index:0;
-    opacity:.20;
+    opacity:.18;
     background:
             repeating-linear-gradient(0deg, rgba(0,0,0,.015), rgba(0,0,0,.015) 1px, transparent 1px, transparent 6px),
             repeating-linear-gradient(90deg, rgba(0,0,0,.012), rgba(0,0,0,.012) 1px, transparent 1px, transparent 7px);
     filter: blur(.2px);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+    *{ transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
 
 /* ===============================
@@ -81,13 +111,127 @@ body::after{
     z-index: 1;
 }
 
+/* Align metaBar + card as one centered block */
+.landingWrap{
+    width: min(980px, 100%);
+    display: grid;
+    gap: 14px;
+}
+
+/* ===============================
+   META BAR (über der Card)
+   =============================== */
+
+.metaBar{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.metaLeft, .metaRight{
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.metaRight{ justify-content: flex-end; }
+
+.metaPill{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--r-pill);
+
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    color: rgba(37,30,22,.82);
+
+    font-size: 13px;
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(6px);
+
+    /* Premium: slightly crisper pill */
+    transform: translateZ(0);
+}
+
+/* Optional: slightly reduce pill padding on small screens */
+@media (max-width: 520px){
+    .metaPill{ padding: 9px 10px; font-size: 12.5px; }
+}
+
 /* ===============================
    PREMIUM CARD
    =============================== */
 
+.card{
+    width: 100%;
+    position: relative;
 
-.cardLanding{
-    /* keep everything neat + centered */
+    background: linear-gradient(
+            165deg,
+            rgba(214, 162, 92, 0.96) 0%,
+            rgba(192, 132, 78, 0.96) 55%,
+            rgba(148, 92, 54, 0.96) 100%
+    );
+
+    border: 2px solid rgba(255,255,255,.30);
+    border-radius: var(--r-card);
+    padding: 34px;
+    color: rgba(255,255,255,.92);
+
+    box-shadow:
+            0 34px 90px rgba(0,0,0,.20),
+            0 0 0 6px rgba(255,255,255,.26) inset;
+
+    transition: transform .22s var(--ease), box-shadow .22s var(--ease), filter .22s var(--ease);
+}
+
+/* Premium highlight layer */
+.card::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius: inherit;
+    pointer-events:none;
+    background:
+    radial-gradient(760px 260px at 18% 0%, rgba(255,210,140,.18), transparent 60%),
+    radial-gradient(760px 260px at 88% 0%, rgba(255,180,120,.14), transparent 60%);
+    opacity:.9;
+}
+
+/* Sticker glow (slightly reduced so it feels more premium, less "neon") */
+.card::after{
+    content:"";
+    position:absolute;
+    inset:-2px;
+    border-radius: calc(var(--r-card) + 2px);
+    pointer-events:none;
+    background:
+            radial-gradient(760px 260px at 18% 0%, rgba(167,139,250,.14), transparent 60%),
+            radial-gradient(760px 260px at 88% 0%, rgba(34,211,238,.11), transparent 60%);
+    filter: blur(12px);
+    opacity:.50;
+}
+
+@media (hover:hover){
+    .card:hover{
+        transform: translateY(-2px);
+        box-shadow:
+                0 44px 110px rgba(0,0,0,.24),
+                0 0 0 6px rgba(255,255,255,.30) inset;
+        filter: saturate(1.04);
+    }
+}
+
+/* Slightly tighter padding on smaller screens */
+@media (max-width: 720px){
+    .card{ padding: 26px; border-radius: 34px; }
+}
+@media (max-width: 420px){
+    .card{ padding: 22px; border-radius: 30px; }
 }
 
 /* ===============================
@@ -119,9 +263,23 @@ body::after{
 }
 
 /* ===============================
-   LOGO ICON (OLD)
+   HERO HELPERS
    =============================== */
 
+.heroRow{
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.brandRow{
+    display:flex;
+    align-items:center;
+    gap: 14px;
+}
+
+/* Logo icon (old) */
 .logoIcon{
     width: 56px;
     height: 56px;
@@ -137,116 +295,19 @@ body::after{
 }
 
 /* ===============================
-   BUTTONS
+   STEPS BOX
    =============================== */
 
-.btn{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    padding: 14px 22px;
-    border-radius: 18px;
-    border: 1px solid rgba(255,255,255,.20);
-    font-weight: 900;
-    letter-spacing: .01em;
-    text-decoration: none;
-    cursor: pointer;
-    user-select: none;
-    transition: transform .15s ease, filter .2s ease, box-shadow .2s ease, background .25s ease;
-}
+.stepsWrap{ margin-top: 16px; }
 
-.btnPrimary{
-    background: linear-gradient(135deg, #F3D1A1, #E7B97E);
-    color: #3A2410;
-}
-
-.btnSecondary{
-    background: rgba(0,0,0,.16);
-    border: 1px solid rgba(255,255,255,.22);
-    color: rgba(255,255,255,.92);
-}
-
-.btn:hover{ transform: translateY(-1px); filter: brightness(1.05); }
-.btn:active{ transform: translateY(0); box-shadow: 0 10px 24px rgba(0,0,0,.26) inset; }
-
-.btn:focus-visible{
-    outline: none;
-    box-shadow:
-            0 0 0 3px rgba(255,255,255,.20),
-            0 0 0 6px rgba(167,139,250,.22);
-}
-
-/* ===============================
-   LANDING STRUCTURE
-   =============================== */
-
-.heroTop{
-    position: relative;
-    z-index: 1;
-}
-
-.brandRow{
-    display:flex;
-    align-items:center;
-    gap: 14px;
-}
-
-.ctaRow{
-    display:flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 16px;
-}
-
-.microHint{
-    margin-top: 10px;
-    font-size: 13px;
-    color: rgba(255,255,255,.62);
-}
-
-.dividerSoft{
-    height: 1px;
-    margin: 22px 0 18px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.26), transparent);
-    opacity: .9;
-}
-
-/* Two panels inside the card */
-.landingGrid{
-    display: grid;
-    grid-template-columns: 1.05fr 0.95fr;
-    gap: 14px;
-    position: relative;
-    z-index: 1;
-}
-
-/* ===============================
-   PANELS (Premium inner cards)
-   =============================== */
-
-.stepsPanel,
-.featurePanel{
-    border-radius: 22px;
-    border: 1px solid rgba(255,255,255,.18);
-    background: linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.10));
-    box-shadow:
-            0 18px 44px rgba(0,0,0,.18),
-            0 0 0 1px rgba(255,255,255,.05) inset;
+.stepsBox{
     padding: 16px;
-    position: relative;
-    overflow: hidden;
-}
-
-.stepsPanel::before,
-.featurePanel::before{
-    content:"";
-    position:absolute;
-    inset:0;
-    pointer-events:none;
-    background:
-            radial-gradient(560px 200px at 18% 0%, rgba(255,255,255,.14), transparent 60%),
-            radial-gradient(420px 180px at 92% 10%, rgba(34,211,238,.10), transparent 62%);
-    opacity:.85;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.18);
+    background: linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.12));
+    box-shadow:
+            0 18px 40px rgba(0,0,0,.20),
+            0 0 0 1px rgba(255,255,255,.05) inset;
 }
 
 .stepsTitle{
@@ -254,10 +315,6 @@ body::after{
     letter-spacing: .2px;
     margin-bottom: 10px;
 }
-
-/* ===============================
-   STEPS
-   =============================== */
 
 .stepsList{ display:grid; gap: 6px; }
 
@@ -292,178 +349,109 @@ body::after{
 }
 
 /* ===============================
-   FEATURES
+   BUTTONS / CTA (more premium micro-interactions)
    =============================== */
 
-.featureGrid{
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-}
-
-.featureCard{
+.btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding: 14px 22px;
     border-radius: 18px;
-    border: 1px solid rgba(255,255,255,.16);
-    background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
-    box-shadow: 0 14px 30px rgba(0,0,0,.16);
-    padding: 12px;
-    position: relative;
-    overflow: hidden;
-    transition: transform .18s ease, filter .18s ease;
+    border: 1px solid rgba(255,255,255,.20);
+    font-weight: 900;
+    letter-spacing: .01em;
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+
+    transition:
+            transform .15s var(--ease),
+            filter .20s var(--ease),
+            box-shadow .20s var(--ease),
+            background .25s var(--ease);
 }
 
-.featureCard::before{
-    content:"";
-    position:absolute;
-    inset:0;
-    pointer-events:none;
-    background:
-            radial-gradient(520px 180px at 20% 0%, rgba(255,255,255,.16), transparent 58%),
-            linear-gradient(90deg, rgba(34,211,238,.08), transparent 45%, rgba(167,139,250,.08));
-    opacity:.75;
+.btnPrimary{
+    background: linear-gradient(135deg, #F3D1A1, #E7B97E);
+    color: #3A2410;
+
+    /* Premium: subtle lift */
+    box-shadow: 0 14px 30px rgba(0,0,0,.16);
+}
+
+.btnSecondary{
+    background: rgba(0,0,0,.16);
+    border: 1px solid rgba(255,255,255,.22);
+    color: rgba(255,255,255,.92);
 }
 
 @media (hover:hover){
-    .featureCard:hover{
-        transform: translateY(-2px);
-        filter: brightness(1.03);
-    }
+    .btn:hover{ transform: translateY(-1px); filter: brightness(1.05); }
+}
+.btn:active{ transform: translateY(0); box-shadow: 0 10px 24px rgba(0,0,0,.26) inset; }
+
+.btn:focus-visible{
+    outline: none;
+    box-shadow:
+            0 0 0 3px rgba(255,255,255,.20),
+            0 0 0 6px rgba(167,139,250,.22);
 }
 
-.featureHead{
-    display:flex;
-    align-items:center;
-    gap: 10px;
-    position: relative;
-    z-index: 1;
-}
-
-.featureIcon{
-    width: 34px;
-    height: 34px;
-    border-radius: 12px;
-    display:grid;
-    place-items:center;
-    background: rgba(0,0,0,.18);
-    border: 1px solid rgba(255,255,255,.16);
-    box-shadow: 0 10px 20px rgba(0,0,0,.18);
-}
-
-.featureTitle{
-    font-weight: 900;
-    letter-spacing: .2px;
-}
-
-.featureText{
-    margin-top: 10px;
-    color: rgba(255,255,255,.78);
-    font-size: 13px;
-    line-height: 1.45;
-    position: relative;
-    z-index: 1;
-}
-
-.comingRow{
-    display:flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 12px;
-}
-
-.tagPill{
-    display:inline-flex;
-    align-items:center;
-    padding: 8px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,.16);
-    background: rgba(0,0,0,.16);
-    color: rgba(255,255,255,.82);
-    font-size: 12px;
-    font-weight: 800;
-}
-
-/* ===============================
-   META FLOAT (outside card)
-   =============================== */
-
-.metaFloat{
-    position: fixed;
-    top: 18px;
-    z-index: 2;
+.ctaRow{
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    align-items: center;
-    pointer-events: none;
+    margin-top: 16px;
 }
 
-.metaLeft{ left: 18px; }
-.metaRight{ right: 18px; justify-content: flex-end; }
+/* ===============================
+   BRAND LOGO (oben links)
+   =============================== */
 
-.metaPill{
-    pointer-events: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 999px;
-    background: rgba(255,255,255,.34);
-    border: 1px solid rgba(37,30,22,.12);
-    color: rgba(37,30,22,.82);
-    font-size: 13px;
-    box-shadow: 0 10px 24px rgba(0,0,0,.08);
-    backdrop-filter: blur(6px);
-}
-
-/* Mobile: stack panels */
-@media (max-width: 860px){
-    .landingGrid{ grid-template-columns: 1fr; }
-}
-@media (max-width: 720px){
-    .metaFloat{
-        position: static;
-        padding: 0 18px;
-        margin-top: 12px;
-    }
-    .metaLeft, .metaRight{ justify-content: flex-start; }
-}
 .brandLogo{
     position: fixed;
-    top: 28px;
-    left: 28px;
+    top: 18px;
+    left: 18px;
     z-index: 80;
 
-    width: 88px;
-    height: 88px;
+    width: 80px;
+    height: 80px;
 
     display: grid;
     place-items: center;
 
-    /* BLANK – nur das PNG */
     background: transparent;
-    border: none;
-    box-shadow: none;
     backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    border-radius: 0;
 
     cursor: pointer;
-    transition: transform .18s ease, opacity .18s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+
+    transition: filter .18s ease;
+}
+
+.brandLogoImg{
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
 }
 
 @media (hover:hover){
     .brandLogo:hover{
-        transform: translateY(-2px);
-        opacity: .95;
+        filter: saturate(1.06) contrast(1.03);
     }
 }
 
-/* Mobile */
 @media (max-width: 720px){
     .brandLogo{
-        width: 64px;
-        height: 64px;
-        top: 16px;
-        left: 16px;
+        top: 12px;
+        left: 12px;
+        width: 56px;
+        height: 56px;
     }
 }
-

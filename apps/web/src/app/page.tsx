@@ -10,11 +10,20 @@ export default function Home() {
         <main className="container">
             {/* Brand Logo: immer zurück zur Landing Page */}
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image src="/Logo.png" alt="Kumpir Logo" width={160} height={160} priority />
+                <Image
+                    src="/logo.png"
+                    alt="Kumpir Maskottchen"
+                    width={160}
+                    height={160}
+                    priority
+                    className="brandLogoImg"
+                />
             </Link>
 
+
+            {/* Centered block: metaBar + card aligned */}
             <div className="landingWrap">
-                {/* Meta-Pills: direkt über der Card */}
+                {/* Meta-Pills: direkt über der Card, gleiche Breite */}
                 <div className="metaBar" aria-hidden>
                     <div className="metaLeft">
                         <span className="metaPill">👥 2–10 Spieler</span>
@@ -27,24 +36,17 @@ export default function Home() {
                 </div>
 
                 <section className="card">
-                    {/* HERO */}
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start" }}>
-                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                            <div className="logoIcon" aria-hidden />
+                    <div className="heroRow">
+                        <div className="brandRow">
                             <div>
-                                <h1 className="h1" style={{ lineHeight: 1.05 }}>
-                                    Kumpir
-                                </h1>
-                                <p className="p" style={{ fontStyle: "italic", marginTop: 6 }}>
-                                    Das Spiel, bei dem Geben dein Leben rettet.
-                                </p>
+                                <h1 className="h1">Kumpir</h1>
+                                <p className="p subline">Das Spiel, bei dem Geben dein Leben rettet.</p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Kurzbeschreibung */}
-                    <div style={{ marginTop: 16 }}>
-                        <p className="p" style={{ maxWidth: 640 }}>
+                    <div className="heroCopy">
+                        <p className="p">
                             Die Zeit läuft. Einer hält.
                             <br />
                             Gib weiter, bevor der Countdown endet.
@@ -53,11 +55,10 @@ export default function Home() {
                         </p>
                     </div>
 
-                    {/* So funktioniert’s */}
-                    <div style={{ marginTop: 16 }}>
+                    <div className="stepsWrap">
                         <div className="stepsBox">
                             <div className="stepsTitle">So funktioniert’s</div>
-                            <div style={{ display: "grid", gap: 6 }}>
+                            <div className="stepsList">
                                 <Step n="1" title="Starten" text="Host erstellt eine Lobby." />
                                 <Step n="2" title="Mitspielen" text="Alle treten bei und sind bereit." />
                                 <Step n="3" title="Weitergeben" text="Gib weiter – bevor es zu spät ist." />
@@ -65,8 +66,7 @@ export default function Home() {
                         </div>
                     </div>
 
-                    {/* Actions */}
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                    <div className="ctaRow">
                         <Link href="/host" className="btn btnPrimary">
                             Host starten
                         </Link>
@@ -86,7 +86,7 @@ function Step({ n, title, text }: { n: string; title: string; text: string }) {
             <div className="stepBadge" aria-hidden>
                 {n}
             </div>
-            <div>
+            <div className="stepBody">
                 <div className="stepTitle">{title}</div>
                 <div className="stepText">{text}</div>
             </div>
