@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
-
+import { useMemo, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 type Privacy = "private" | "public";
 
-function makeCode(len = 6) {
+function makeCode(len = 4) {
     const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
     let out = "";
     for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
@@ -20,16 +20,30 @@ function randomHostName() {
     return `${a[Math.floor(Math.random() * a.length)]} ${b[Math.floor(Math.random() * b.length)]}`;
 }
 
+function getOrCreatePlayerId() {
+    const key = "kumpir_player_id";
+    const existing = typeof window !== "undefined" ? localStorage.getItem(key) : null;
+    if (existing) return existing;
+
+    const id = crypto.randomUUID();
+    localStorage.setItem(key, id);
+    return id;
+}
+
+function setStoredName(name: string) {
+    localStorage.setItem("kumpir_player_name", name);
+}
+
 export default function HostPage() {
     const [hostName, setHostName] = useState("");
     const [privacy, setPrivacy] = useState<Privacy>("private");
     const [maxPlayers, setMaxPlayers] = useState(8);
     const [roundSeconds, setRoundSeconds] = useState(25);
     const [creating, setCreating] = useState(false);
-    const hostNameRef = useRef<HTMLInputElement | null>(null);
-    const [shakeName, setShakeName] = useState(false);
+    const [createError, setCreateError] = useState<string>("");
 
-    const lobbyCode = useMemo(() => makeCode(6), []);
+    // nur als Preview – der echte Code wird beim Create ggf. neu generiert (Collision-Retry)
+    const previewCode = useMemo(() => makeCode(4), []);
 
     const minRound = 10;
     const maxRound = 60;
@@ -37,10 +51,10 @@ export default function HostPage() {
 
     // Orange Fill + dunkler Track
     const sliderBg = `linear-gradient(90deg,
-        rgba(243,209,161,.95) 0%,
-        rgba(231,185,126,.95) ${fillPct}%,
-        rgba(0,0,0,.28) ${fillPct}%,
-        rgba(0,0,0,.28) 100%)`;
+    rgba(243,209,161,.95) 0%,
+    rgba(231,185,126,.95) ${fillPct}%,
+    rgba(0,0,0,.28) ${fillPct}%,
+    rgba(0,0,0,.28) 100%)`;
 
     const isNameValid = hostName.trim().length >= 2;
 
@@ -50,26 +64,85 @@ export default function HostPage() {
         return "";
     }, [hostName, isNameValid]);
 
-    // ✅ READY VALIDATION (Badge)
+    // READY Badge
     const isReady = isNameValid && !creating;
     const readyLabel = isReady ? "Bereit" : "Nicht bereit";
     const readyHint = isReady ? "Du kannst die Lobby jetzt erstellen." : "Bitte gib mindestens 2 Zeichen beim Namen ein.";
 
     async function onCreate() {
         if (!isNameValid || creating) return;
+
         setCreating(true);
+        setCreateError("");
 
         try {
-            // TODO: echtes Create-Lobby (Supabase/API)
-            await new Promise((r) => setTimeout(r, 450));
-            window.location.href = `/lobby/${lobbyCode}`;
+            const playerId = getOrCreatePlayerId();
+            const cleanName = hostName.trim();
+            setStoredName(cleanName);
+
+            // Collision-Retry: 4-stelliger Code kann kollidieren
+            let created: { id: string; code: string } | null = null;
+            let lastErr: any = null;
+
+            for (let attempt = 0; attempt < 8; attempt++) {
+                const code = attempt === 0 ? previewCode : makeCode(4);
+
+                const { data: lobby, error: lobbyError } = await supabase
+                    .from("lobbies")
+                    .insert({
+                        code,
+                        host_player_id: playerId,
+                        status: "waiting",
+                        privacy,
+                        max_players: maxPlayers,
+                        round_seconds: roundSeconds,
+                    })
+                    .select("id, code")
+                    .single();
+
+                if (!lobbyError && lobby) {
+                    created = lobby as { id: string; code: string };
+                    break;
+                }
+
+                lastErr = lobbyError;
+
+                // Unique violation (Postgres): 23505 -> neuer Code
+                if (lobbyError?.code !== "23505") break;
+            }
+
+            if (!created) {
+                console.error(lastErr);
+                setCreateError("Konnte keine Lobby erstellen. Bitte erneut versuchen.");
+                return;
+            }
+
+            // Host als Player eintragen
+            const { error: playerError } = await supabase.from("lobby_players").insert({
+                lobby_id: created.id,
+                player_id: playerId,
+                name: cleanName,
+                ready: true,
+                last_seen_at: new Date().toISOString(),
+            });
+
+            if (playerError) {
+                console.error(playerError);
+                setCreateError("Lobby erstellt, aber Host konnte nicht beitreten. Bitte neu laden.");
+                return;
+            }
+
+            window.location.href = `/lobby/${created.code}`;
+        } catch (e) {
+            console.error(e);
+            setCreateError("Unerwarteter Fehler. Bitte neu laden und erneut versuchen.");
         } finally {
             setCreating(false);
         }
     }
 
     async function copyInvite() {
-        const url = `${window.location.origin}/join?code=${lobbyCode}`;
+        const url = `${window.location.origin}/join?code=${previewCode}`;
         try {
             await navigator.clipboard.writeText(url);
         } catch {
@@ -81,14 +154,7 @@ export default function HostPage() {
         <main className="container">
             {/* Brand Logo */}
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image
-                    src="/logo.png"
-                    alt="Kumpir Maskottchen"
-                    width={160}
-                    height={160}
-                    priority
-                    className="brandLogoImg"
-                />
+                <Image src="/logo.png" alt="Kumpir Maskottchen" width={160} height={160} priority className="brandLogoImg" />
             </Link>
 
             <div className="landingWrap">
@@ -97,28 +163,20 @@ export default function HostPage() {
                         <div className="hostTitleRow">
                             <h1 className="h1">Lobby hosten</h1>
 
-                            {/* ✅ Validiertes Status-Badge */}
-                            <span
-                                className="chip"
-                                title={readyHint}
-                                aria-live="polite"
-                                aria-label={`Status: ${readyLabel}. ${readyHint}`}
-                            >
-                                <span
-                                    className="chipDot"
-                                    aria-hidden
-                                    style={{
-                                        background: isReady ? "rgba(34,211,238,.92)" : "rgba(255,255,255,.35)",
-                                        boxShadow: isReady ? "0 0 0 3px rgba(34,211,238,.18)" : "0 0 0 3px rgba(255,255,255,.10)",
-                                    }}
-                                />
+                            <span className="chip" title={readyHint} aria-live="polite" aria-label={`Status: ${readyLabel}. ${readyHint}`}>
+                <span
+                    className="chipDot"
+                    aria-hidden
+                    style={{
+                        background: isReady ? "rgba(34,211,238,.92)" : "rgba(255,255,255,.35)",
+                        boxShadow: isReady ? "0 0 0 3px rgba(34,211,238,.18)" : "0 0 0 3px rgba(255,255,255,.10)",
+                    }}
+                />
                                 {readyLabel}
-                            </span>
+              </span>
                         </div>
 
-                        <p className="p hostSub">
-                            Erstelle eine Lobby, teile den Code und starte später im Lobby-Screen.
-                        </p>
+                        <p className="p hostSub">Erstelle eine Lobby, teile den Code und starte später im Lobby-Screen.</p>
                     </header>
 
                     <div className="hostGrid">
@@ -164,7 +222,6 @@ export default function HostPage() {
 
                             {/* PRIVACY + MAX PLAYERS NEBENEINANDER */}
                             <div className="settingsRow">
-                                {/* PRIVACY (Public disabled / future) */}
                                 <div className="settingBlock">
                                     <div className="settingLabel">Privatsphäre</div>
 
@@ -177,23 +234,14 @@ export default function HostPage() {
                                             🔒 Privat
                                         </button>
 
-                                        <button
-                                            type="button"
-                                            className="segBtn"
-                                            disabled
-                                            aria-disabled="true"
-                                            title="Kommt später"
-                                        >
+                                        <button type="button" className="segBtn" disabled aria-disabled="true" title="Kommt später">
                                             🌐 Public (später)
                                         </button>
                                     </div>
 
-                                    <div className="settingHelp">
-                                        Privat = nur mit Code. Public folgt später.
-                                    </div>
+                                    <div className="settingHelp">Privat = nur mit Code. Public folgt später.</div>
                                 </div>
 
-                                {/* MAX PLAYERS */}
                                 <div className="settingBlock">
                                     <div className="settingLabel">Max. Spieler</div>
 
@@ -243,6 +291,8 @@ export default function HostPage() {
                                 <div className="settingHelp">Je kürzer, desto stressiger.</div>
                             </div>
 
+                            {createError ? <div className="fieldHelp fieldHelpError">{createError}</div> : null}
+
                             <div className="actionsRow">
                                 <button
                                     type="button"
@@ -259,7 +309,7 @@ export default function HostPage() {
                             </div>
                         </div>
 
-                        {/* RIGHT: PREVIEW (kompakt) */}
+                        {/* RIGHT: PREVIEW */}
                         <div className="panel panelAlt">
                             <div className="panelHead">
                                 <div className="panelTitle">Lobby-Preview</div>
@@ -273,15 +323,13 @@ export default function HostPage() {
                                     </div>
                                     <div className="previewMeta">
                                         <div className="previewName">{hostName.trim() || "Dein Name"}</div>
-                                        <div className="previewSub">
-                                            🔒 Privat • 👥 2–{maxPlayers} • ⏱️ {roundSeconds}s
-                                        </div>
+                                        <div className="previewSub">🔒 Privat • 👥 2–{maxPlayers} • ⏱️ {roundSeconds}s</div>
                                     </div>
                                 </div>
 
                                 <div className="codeRow">
                                     <div className="codeLabel">Code</div>
-                                    <div className="codePill">{lobbyCode}</div>
+                                    <div className="codePill">{previewCode}</div>
                                 </div>
 
                                 <div className="copyRow">

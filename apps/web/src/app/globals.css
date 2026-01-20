@@ -1005,3 +1005,402 @@ body{
 }
 .inputShake{ animation: shakeX .28s ease-in-out; }
 
+/* ===============================
+   LOBBY CARD (schmal + premium)
+   =============================== */
+
+.cardLobby{
+    width: min(760px, 100%);
+    padding: 28px;
+}
+
+.lobbyTop{
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.lobbyCodeMini{
+    display:grid;
+    justify-items:end;
+    gap: 8px;
+}
+
+.btnTiny{
+    padding: 10px 12px;
+    border-radius: 14px;
+    font-weight: 900;
+    font-size: 12.5px;
+}
+
+.lobbyBody{
+    display:grid;
+    gap: 14px;
+}
+
+/* Host card */
+.hostCard{
+    display:flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.18);
+    background: linear-gradient(180deg, rgba(0,0,0,.16), rgba(0,0,0,.10));
+    box-shadow:
+            0 18px 40px rgba(0,0,0,.18),
+            0 0 0 1px rgba(255,255,255,.05) inset;
+}
+
+.hostLeft{
+    display:flex;
+    gap: 12px;
+    align-items:center;
+    min-width: 0;
+}
+
+.avatarBig{
+    width: 52px;
+    height: 52px;
+    border-radius: 18px;
+    display:grid;
+    place-items:center;
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.16);
+    font-weight: 950;
+    color: rgba(255,255,255,.92);
+}
+
+.hostMeta{ min-width:0; }
+.hostLabel{
+    font-size: 12px;
+    font-weight: 850;
+    color: rgba(255,255,255,.72);
+    margin-bottom: 2px;
+}
+.hostName{
+    font-size: 18px;
+    font-weight: 950;
+    line-height: 1.1;
+}
+.hostSub{
+    margin-top: 4px;
+    font-size: 12.5px;
+    color: rgba(255,255,255,.74);
+}
+.statusOk{ color: rgba(34,211,238,.92); font-weight: 850; }
+.statusIdle{ color: rgba(255,255,255,.70); font-weight: 850; }
+
+/* Player list */
+.playerList{
+    padding: 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.16);
+    background: rgba(0,0,0,.10);
+}
+
+.playerListHead{
+    display:flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.playerListTitle{ font-weight: 950; }
+.playerListHint{
+    font-size: 12.5px;
+    color: rgba(255,255,255,.72);
+}
+
+.playerRows{
+    display:grid;
+    gap: 10px;
+}
+
+.playerRow{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06);
+}
+
+.playerLeft{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    min-width: 0;
+}
+.playerName{
+    font-weight: 850;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.readyPill{
+    display:inline-flex;
+    align-items:center;
+    padding: 8px 10px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 900;
+    border: 1px solid rgba(255,255,255,.16);
+    background: rgba(0,0,0,.10);
+    color: rgba(255,255,255,.88);
+}
+.readyOn{
+    background: rgba(34,211,238,.16);
+    border-color: rgba(34,211,238,.28);
+}
+.readyOff{
+    background: rgba(255,255,255,.06);
+    border-color: rgba(255,255,255,.14);
+}
+
+.emptyRow{
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px dashed rgba(255,255,255,.18);
+    color: rgba(255,255,255,.72);
+    font-size: 13px;
+}
+
+/* Bottom buttons */
+.lobbyActions{
+    display:flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+
+/* Responsive */
+@media (max-width: 520px){
+    .cardLobby{ padding: 22px; }
+    .hostCard{ align-items:flex-start; }
+    .lobbyTop{ flex-direction: column; align-items:flex-start; }
+    .lobbyCodeMini{ justify-items:start; }
+    .lobbyActions{ justify-content: stretch; }
+    .lobbyActions .btn{ width: 100%; }
+}
+/* ===== Lobby: Skeleton + Empty Slots ===== */
+
+.isSkeleton{
+    opacity: .75;
+}
+
+.skeletonLine{
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.20);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+}
+
+.playerRowEmpty .avatar{
+    background: rgba(255,255,255,.08);
+    border: 1px dashed rgba(255,255,255,.18);
+    color: rgba(255,255,255,.55);
+}
+
+.playerRowEmpty .playerName{
+    color: rgba(255,255,255,.72);
+}
+/* ===== LOBBY: Grid & Tiles ===== */
+
+.playerGrid{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+@media (max-width: 720px){
+    .playerGrid{ grid-template-columns: 1fr; }
+}
+
+.playerTile{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 12px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.10);
+    box-shadow: 0 10px 20px rgba(0,0,0,.12);
+}
+
+.playerTileEmpty{
+    opacity: .78;
+    background: rgba(0,0,0,.08);
+}
+
+.tileLeft{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.tileName{
+    font-weight: 800;
+    color: rgba(255,255,255,.92);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tileRight{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+}
+
+.dotSep{
+    margin: 0 8px;
+    opacity: .5;
+}
+
+.mutedMini{
+    color: rgba(255,255,255,.72);
+    font-size: 12.5px;
+    font-weight: 650;
+}
+
+/* Skeleton helpers (wenn du sie noch nicht hast) */
+.skeleton{
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.12);
+    color: transparent;
+}
+
+.skeletonLine{
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.12);
+    color: transparent;
+}
+/* ===============================
+   LOBBY: CODE HIGHLIGHT (Prism)
+   =============================== */
+
+.codePill{
+    position: relative;
+    isolation: isolate;
+    font-weight: 900;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+
+    /* fallback */
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.20);
+}
+
+/* Prism ring + glow */
+.codePill::before{
+    content:"";
+    position:absolute;
+    inset:-2px;
+    border-radius: inherit;
+    background: linear-gradient(
+            90deg,
+            #22d3ee,
+            #a78bfa,
+            #f472b6,
+            #f59e0b,
+            #22d3ee
+    );
+    filter: blur(10px);
+    opacity: .55;
+    z-index: -1;
+}
+
+/* Gloss overlay */
+.codePill::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,0));
+    opacity: .65;
+    pointer-events:none;
+    z-index: 0;
+}
+
+/* Animated prism sweep (optional but premium) */
+@media (prefers-reduced-motion: no-preference){
+    .codePill::before{
+        background-size: 220% 220%;
+        animation: prismShift 3.6s linear infinite;
+    }
+}
+@keyframes prismShift{
+    0%{ background-position: 0% 50%; }
+    100%{ background-position: 100% 50%; }
+}
+
+/* ===============================
+   CODE COPY BUTTON: prism border
+   =============================== */
+
+.btnPrism{
+    position: relative;
+    isolation: isolate;
+    border: 1px solid rgba(255,255,255,.18);
+    background: rgba(0,0,0,.16);
+}
+
+/* Gradient border */
+.btnPrism::before{
+    content:"";
+    position:absolute;
+    inset:-1px;
+    border-radius: inherit;
+    background: linear-gradient(
+            90deg,
+            rgba(34,211,238,.95),
+            rgba(167,139,250,.95),
+            rgba(244,114,182,.85),
+            rgba(245,158,11,.85)
+    );
+    z-index: -1;
+    opacity: .9;
+}
+
+/* Inner fill to preserve button body */
+.btnPrism::after{
+    content:"";
+    position:absolute;
+    inset:1px;
+    border-radius: calc(inherit - 2px);
+    background: rgba(0,0,0,.18);
+    z-index: -1;
+}
+
+/* Hover polish */
+@media (hover:hover){
+    .btnPrism:hover{
+        filter: brightness(1.06) saturate(1.08);
+    }
+}
+.rgbText {
+    background: linear-gradient(90deg, #dd0606, #cdca06, #14bc06, #030cc4, #c77dff);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: rgbFlow 4s linear infinite;
+}
+
+@keyframes rgbFlow {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+}
