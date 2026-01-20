@@ -6,7 +6,7 @@ import Image from "next/image";
 export default function Home() {
     return (
         <main className="container">
-            {/* Brand Logo: immer zurück zur Landing Page */}
+            {/* Brand Logo */}
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
                 <Image
                     src="/logo.png"
@@ -18,7 +18,6 @@ export default function Home() {
                 />
             </Link>
 
-            {/* Centered block: metaBar + card aligned */}
             <div className="landingWrap">
                 {/* Meta-Pills */}
                 <div className="metaBar">
@@ -33,14 +32,11 @@ export default function Home() {
                 </div>
 
                 <section className="card" aria-label="Kumpir Landing Card">
-                    <div className="heroRow">
+                    <header className="heroRow">
                         <div className="brandRow">
-                            <div>
-                                <h1 className="h1">Kumpir</h1>
-                                <p className="p subline">Das Spiel, bei dem Geben dein Leben rettet.</p>
-                            </div>
+                            <h1 className="h1">Kumpir</h1>
                         </div>
-                    </div>
+                    </header>
 
                     <div className="heroCopy">
                         <p className="p">
@@ -63,7 +59,6 @@ export default function Home() {
                         </div>
                     </div>
 
-                    {/* CTAs (clean + conversion friendly) */}
                     <div className="ctaRow">
                         <div className="ctaStack">
                             <Link href="/host" className="btn btnPrimary">
@@ -80,7 +75,9 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <p className="trustLine">Kein Download. Kein Account nötig. Läuft direkt im Browser.</p>
+                    <p className="trustLine">
+                        Kein Download. Kein Account nötig. Läuft direkt im Browser.
+                    </p>
                 </section>
             </div>
         </main>
