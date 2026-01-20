@@ -52,6 +52,15 @@ function initials(name: string) {
     return t.slice(0, 1).toUpperCase();
 }
 
+function hexToRgba(hex: string, alpha: number) {
+    const h = hex.replace("#", "").trim();
+    const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+    const r = parseInt(full.slice(0, 2), 16);
+    const g = parseInt(full.slice(2, 4), 16);
+    const b = parseInt(full.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /**
  * Feste Spielerfarben:
  * - Host bekommt eine eigene (neutralere) Farbe
@@ -64,26 +73,21 @@ const PLAYER_COLORS = [
     "#18ed07", // Spieler 3: grün
     "#0626f4", // Spieler 4: blau
     "#8407e3", // Spieler 5: lila
-    "#02ece4", // Spieler 6: orange
+    "#02ece4", // Spieler 6: türkis
 ];
-
-function hexToRgba(hex: string, alpha: number) {
-    const h = hex.replace("#", "").trim();
-    const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
-    const r = parseInt(full.slice(0, 2), 16);
-    const g = parseInt(full.slice(2, 4), 16);
-    const b = parseInt(full.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 function getPlayerColor(index: number) {
     return PLAYER_COLORS[index % PLAYER_COLORS.length];
 }
+
 export default function LobbyPage({ params }: { params: Promise<{ code: string }> }) {
     const { code: raw } = use(params);
     const code = (raw || "").toUpperCase();
 
-    const playerId = useMemo(() => (typeof window !== "undefined" ? getOrCreatePlayerId() : ""), []);
+    const playerId = useMemo(
+        () => (typeof window !== "undefined" ? getOrCreatePlayerId() : ""),
+        []
+    );
 
     const [name, setName] = useState("");
     const [nameTouched, setNameTouched] = useState(false);
@@ -106,7 +110,11 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     const readyCount = players.filter((p) => p.ready).length;
     const totalCount = players.length;
 
-    const canStart = !!lobby && lobby.status === "waiting" && totalCount >= 2 && readyCount === totalCount;
+    const canStart =
+        !!lobby &&
+        lobby.status === "waiting" &&
+        totalCount >= 2 &&
+        readyCount === totalCount;
 
     const hostRow = useMemo(() => {
         if (!lobby) return null;
@@ -124,7 +132,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         if (stored) setName(stored);
     }, []);
 
-    // 1) Load lobby by code
+    // 1) Load lobby by code (READ is fine)
     useEffect(() => {
         let alive = true;
 
@@ -132,7 +140,11 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
             setLoadingLobby(true);
             setError("");
 
-            const { data, error } = await supabase.from("lobbies").select("*").eq("code", code).single();
+            const { data, error } = await supabase
+                .from("lobbies")
+                .select("*")
+                .eq("code", code)
+                .single();
 
             if (!alive) return;
 
@@ -155,7 +167,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         };
     }, [code]);
 
-    // 2) Join / upsert player (wenn Name valid)
+    // 2) Join via RPC (keine direkten Tabellen-Writes mehr)
     useEffect(() => {
         if (!lobby) return;
         if (!isNameValid) return;
@@ -166,24 +178,19 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
             setJoining(true);
             setError("");
 
-            setStoredName(name.trim());
+            const trimmed = name.trim();
+            setStoredName(trimmed);
 
-            const { error: upsertErr } = await supabase
-                .from("lobby_players")
-                .upsert(
-                    {
-                        lobby_id: lobby.id,
-                        player_id: playerId,
-                        name: name.trim(),
-                        last_seen_at: new Date().toISOString(),
-                    },
-                    { onConflict: "lobby_id,player_id" }
-                );
+            const { error: rpcErr } = await supabase.rpc("rpc_join_lobby", {
+                p_code: code,
+                p_player_id: playerId,
+                p_name: trimmed,
+            });
 
             if (!alive) return;
 
-            if (upsertErr) {
-                setError("Konnte der Lobby nicht beitreten. Bitte neu laden.");
+            if (rpcErr) {
+                setError(rpcErr.message || "Konnte der Lobby nicht beitreten. Bitte neu laden.");
             }
 
             setJoining(false);
@@ -194,7 +201,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         return () => {
             alive = false;
         };
-    }, [lobby?.id, isNameValid, name, playerId]);
+    }, [lobby?.id, isNameValid, name, playerId, code]);
 
     // 3) Players fetch + Realtime
     useEffect(() => {
@@ -219,7 +226,12 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         }
 
         async function fetchLobby() {
-            const { data } = await supabase.from("lobbies").select("*").eq("id", lobby.id).single();
+            const { data } = await supabase
+                .from("lobbies")
+                .select("*")
+                .eq("id", lobby.id)
+                .single();
+
             if (data) setLobby(data as Lobby);
         }
 
@@ -248,31 +260,55 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     async function copyCode() {
         try {
             await navigator.clipboard.writeText(code);
-        } catch {}
+        } catch {
+            // ignore
+        }
     }
 
     async function toggleReady() {
-        if (!lobby || !myRow) return;
+        if (!lobby) return;
 
-        await supabase
-            .from("lobby_players")
-            .update({ ready: !myRow.ready, last_seen_at: new Date().toISOString() })
-            .eq("id", myRow.id);
+        const { error: rpcErr } = await supabase.rpc("rpc_toggle_ready", {
+            p_lobby_id: lobby.id,
+            p_player_id: playerId,
+            p_ready: null, // togglet automatisch
+        });
+
+        if (rpcErr) {
+            setError(rpcErr.message || "Konnte Ready-Status nicht ändern.");
+        }
     }
 
     async function startGame() {
         if (!lobby || !isHost || !canStart) return;
 
-        await supabase.from("lobbies").update({ status: "started" }).eq("id", lobby.id);
+        const { error: rpcErr } = await supabase.rpc("rpc_start_game", {
+            p_lobby_id: lobby.id,
+            p_player_id: playerId,
+        });
+
+        if (rpcErr) {
+            setError(rpcErr.message || "Konnte Spiel nicht starten.");
+            return;
+        }
+
         window.location.href = `/game/${code}`;
     }
 
-    const readyChipLabel = loadingPlayers && !totalCount ? "—/— bereit" : `${readyCount}/${totalCount || "—"} bereit`;
+    const readyChipLabel =
+        loadingPlayers && !totalCount ? "—/— bereit" : `${readyCount}/${totalCount || "—"} bereit`;
 
     return (
         <main className="container">
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image src="/logo.png" alt="Kumpir Maskottchen" width={160} height={160} priority className="brandLogoImg" />
+                <Image
+                    src="/logo.png"
+                    alt="Kumpir Maskottchen"
+                    width={160}
+                    height={160}
+                    priority
+                    className="brandLogoImg"
+                />
             </Link>
 
             <section className="card cardLobby" aria-label="Lobby">
@@ -356,11 +392,13 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                                         {hostRow ? initials(hostRow.name) : ""}
                                     </div>
 
-
                                     <div className="hostMeta">
                                         <div className="hostLabel">Host</div>
 
-                                        <div className={`hostName ${!hostRow ? "skeletonLine" : ""}`} style={hostRow ? { color: HOST_COLOR } : undefined}>
+                                        <div
+                                            className={`hostName ${!hostRow ? "skeletonLine" : ""}`}
+                                            style={hostRow ? { color: HOST_COLOR } : undefined}
+                                        >
                                             {hostRow ? hostRow.name : "Lade Host…"}
                                         </div>
 
@@ -384,9 +422,13 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                         aria-hidden
                         style={{
                             background:
-                                !loadingPlayers && totalCount > 0 && readyCount === totalCount ? "rgba(34,211,238,.92)" : "rgba(255,255,255,.35)",
+                                !loadingPlayers && totalCount > 0 && readyCount === totalCount
+                                    ? "rgba(34,211,238,.92)"
+                                    : "rgba(255,255,255,.35)",
                             boxShadow:
-                                !loadingPlayers && totalCount > 0 && readyCount === totalCount ? "0 0 0 3px rgba(34,211,238,.18)" : "0 0 0 3px rgba(255,255,255,.10)",
+                                !loadingPlayers && totalCount > 0 && readyCount === totalCount
+                                    ? "0 0 0 3px rgba(34,211,238,.18)"
+                                    : "0 0 0 3px rgba(255,255,255,.10)",
                         }}
                     />
                       {readyChipLabel}
@@ -394,7 +436,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                                 </div>
                             </div>
 
-                            {/* PLAYERS LIST (untereinander) */}
+                            {/* PLAYERS LIST */}
                             <div className="playerList">
                                 <div className="playerListHead">
                                     <div className="playerListTitle">Spieler</div>
@@ -431,15 +473,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                                         others.map((p, index) => (
                                             <div key={p.id} className="playerRow">
                                                 <div className="playerLeft">
-                                                    <div
-                                                        className="avatar"
-                                                        aria-hidden
-                                                        style={{
-                                                            background: hexToRgba(getPlayerColor(index), 0.18),
-                                                            borderColor: hexToRgba(getPlayerColor(index), 0.35),
-                                                            color: getPlayerColor(index),
-                                                        }}
-                                                    >
+                                                    <div className="avatar" aria-hidden>
                                                         {initials(p.name)}
                                                     </div>
                                                     <div className="playerName" style={{ color: getPlayerColor(index) }}>
