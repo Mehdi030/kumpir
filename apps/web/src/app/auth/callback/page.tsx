@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -8,45 +8,47 @@ export default function AuthCallbackPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
+    // Werte einmal “materialisieren”, damit Effect sauber reagiert
+    const { code, error, errorDescription } = useMemo(() => {
+        return {
+            code: searchParams.get("code"),
+            error: searchParams.get("error"),
+            errorDescription: searchParams.get("error_description"),
+        };
+    }, [searchParams]);
+
     const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
     const [message, setMessage] = useState<string>("Login wird abgeschlossen…");
 
     useEffect(() => {
+        let alive = true;
+
         const run = async () => {
             try {
-                // Supabase OAuth liefert i.d.R. ?code=... zurück (PKCE)
-                const code = searchParams.get("code");
-                const error = searchParams.get("error");
-                const errorDescription = searchParams.get("error_description");
-
-                if (error) {
-                    throw new Error(errorDescription ?? error);
-                }
-
-                if (!code) {
-                    throw new Error("Kein OAuth-Code gefunden. Prüfe Redirect URL und Provider-Setup.");
-                }
+                if (error) throw new Error(errorDescription ?? error);
+                if (!code) throw new Error("Kein OAuth-Code gefunden. Prüfe Redirect URL und Provider-Setup.");
 
                 const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
                 if (exchangeError) throw exchangeError;
 
+                if (!alive) return;
                 setStatus("success");
                 setMessage("Eingeloggt. Weiterleitung…");
-
-                // Ziel nach erfolgreichem Login (Landing Page)
                 router.replace("/");
             } catch (e: any) {
+                if (!alive) return;
                 setStatus("error");
                 setMessage(e?.message ?? "Login fehlgeschlagen.");
-
-                // Optional: Nach kurzer Zeit zurück zur Landing Page
-                setTimeout(() => router.replace("/"), 1200);
+                window.setTimeout(() => router.replace("/"), 1200);
             }
         };
 
         run();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+
+        return () => {
+            alive = false;
+        };
+    }, [code, error, errorDescription, router]);
 
     return (
         <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
