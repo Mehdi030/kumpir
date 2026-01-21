@@ -2,12 +2,29 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 
 function normalizeCode(input: string) {
-    // nur Ziffern, maximal 4
-    return input.replace(/\D/g, "").slice(0, 4);
+    // erlaubt A–Z und 2–9 (ohne 0/1), max 4, uppercase
+    return input
+        .toUpperCase()
+        .replace(/[^A-Z2-9]/g, "")
+        .slice(0, 4);
+}
+
+function getOrCreatePlayerId() {
+    const key = "kumpir_player_id";
+    const existing =
+        typeof window !== "undefined" ? localStorage.getItem(key) : null;
+    if (existing) return existing;
+
+    const id = crypto.randomUUID();
+    localStorage.setItem(key, id);
+    return id;
+}
+
+function setStoredName(name: string) {
+    localStorage.setItem("kumpir_player_name", name);
 }
 
 function getErrorMessage(err: unknown): string {
@@ -17,12 +34,6 @@ function getErrorMessage(err: unknown): string {
         if (typeof m === "string") return m;
     }
     return "Unbekannter Fehler.";
-}
-
-function isDuplicateError(err: PostgrestError): boolean {
-    const code = err.code ?? "";
-    const msg = (err.message ?? "").toLowerCase();
-    return code === "23505" || msg.includes("duplicate") || msg.includes("unique");
 }
 
 export default function JoinPage() {
@@ -44,49 +55,24 @@ export default function JoinPage() {
         try {
             const lobbyCode = normalizeCode(code);
             const playerName = name.trim();
+            const playerId = getOrCreatePlayerId();
 
-            // 1) Lobby existiert?
-            const { data: lobby, error: lobbyErr } = await supabase
-                .from("lobbies")
-                .select("code,status")
-                .eq("code", lobbyCode)
-                .maybeSingle();
+            // local speichern (für LobbyPage Autocomplete)
+            setStoredName(playerName);
 
-            if (lobbyErr) {
-                setError(lobbyErr.message);
+            // OPTION A: KEIN select/insert auf Tabellen -> nur RPC
+            const { error: rpcErr } = await supabase.rpc("rpc_join_lobby", {
+                p_code: lobbyCode,
+                p_player_id: playerId,
+                p_name: playerName,
+            });
+
+            if (rpcErr) {
+                // Typische rpcErr.message: lobby_not_found, lobby_full, lobby_not_joinable, invalid_name, ...
+                setError(rpcErr.message || "Konnte der Lobby nicht beitreten.");
                 return;
             }
 
-            if (!lobby) {
-                setError("Lobby nicht gefunden. Prüfe den Code.");
-                return;
-            }
-
-            if (lobby.status !== "lobby") {
-                setError("Diese Lobby ist schon gestartet oder beendet.");
-                return;
-            }
-
-            // 2) Spieler eintragen
-            const { error: insertErr } = await supabase.from("players").insert([
-                {
-                    lobby_code: lobbyCode,
-                    name: playerName,
-                    is_ready: false,
-                    is_connected: true,
-                },
-            ]);
-
-            if (insertErr) {
-                if (isDuplicateError(insertErr)) {
-                    setError("Name ist in dieser Lobby schon vergeben. Nimm einen anderen.");
-                    return;
-                }
-                setError(insertErr.message);
-                return;
-            }
-
-            // 3) Weiter zur Lobby
             router.push(`/lobby/${lobbyCode}`);
         } catch (err: unknown) {
             setError(getErrorMessage(err));
@@ -113,11 +99,15 @@ export default function JoinPage() {
                                         className="textInput"
                                         value={code}
                                         onChange={(e) => setCode(normalizeCode(e.target.value))}
-                                        placeholder="z.B. 8977"
-                                        inputMode="numeric"
+                                        placeholder="z.B. 5KJQ"
+                                        inputMode="text"
+                                        autoCapitalize="characters"
+                                        autoCorrect="off"
+                                        spellCheck={false}
                                         autoComplete="one-time-code"
+                                        maxLength={4}
                                     />
-                                    <span className="helperText">4 Ziffern.</span>
+                                    <span className="helperText">4 Zeichen (A–Z, 2–9).</span>
                                 </label>
 
                                 <label className="fieldLabel">
