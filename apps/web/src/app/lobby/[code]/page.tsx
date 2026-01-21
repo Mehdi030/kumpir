@@ -61,38 +61,26 @@ function hexToRgba(hex: string, alpha: number) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/**
- * Feste Spielerfarben:
- * - Host bekommt eine eigene (neutralere) Farbe
- * - Spieler 1 = rot, Spieler 2 = gelb, Spieler 3 = grün, ...
- */
 const HOST_COLOR = "#070707";
-const PLAYER_COLORS = [
-    "#e10404", // Spieler 1: rot
-    "#f3df03", // Spieler 2: gelb
-    "#18ed07", // Spieler 3: grün
-    "#0626f4", // Spieler 4: blau
-    "#8407e3", // Spieler 5: lila
-    "#02ece4", // Spieler 6: türkis
-];
+const PLAYER_COLORS = ["#e10404", "#f3df03", "#18ed07", "#0626f4", "#8407e3", "#02ece4"];
 
 function getPlayerColor(index: number) {
     return PLAYER_COLORS[index % PLAYER_COLORS.length];
 }
 
-export default function LobbyPage({ params }: { params: Promise<{ code: string }> }) {
-    const { code: raw } = use(params);
+export default function LobbyPage({ params }: { params: any }) {
+    // Robust gegen Next-Params als Promise ODER Object:
+    const { code: raw } = use(params) as { code: string };
     const code = (raw || "").toUpperCase();
 
-    const playerId = useMemo(
-        () => (typeof window !== "undefined" ? getOrCreatePlayerId() : ""),
-        []
-    );
+    const playerId = useMemo(() => (typeof window !== "undefined" ? getOrCreatePlayerId() : ""), []);
 
     const [name, setName] = useState("");
     const [nameTouched, setNameTouched] = useState(false);
 
     const [lobby, setLobby] = useState<Lobby | null>(null);
+    const lobbyId = lobby?.id ?? null;
+
     const [players, setPlayers] = useState<LobbyPlayer[]>([]);
     const [loadingLobby, setLoadingLobby] = useState(true);
     const [loadingPlayers, setLoadingPlayers] = useState(true);
@@ -100,6 +88,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     const [error, setError] = useState<string>("");
 
     const nameInputRef = useRef<HTMLInputElement | null>(null);
+    const joinedOnceRef = useRef(false);
 
     const isNameValid = name.trim().length >= 2;
     const showNameGate = !isNameValid;
@@ -110,11 +99,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     const readyCount = players.filter((p) => p.ready).length;
     const totalCount = players.length;
 
-    const canStart =
-        !!lobby &&
-        lobby.status === "waiting" &&
-        totalCount >= 2 &&
-        readyCount === totalCount;
+    const canStart = !!lobby && lobby.status === "waiting" && totalCount >= 2 && readyCount === totalCount;
 
     const hostRow = useMemo(() => {
         if (!lobby) return null;
@@ -126,13 +111,12 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         return players.filter((p) => p.player_id !== lobby.host_player_id);
     }, [players, lobby]);
 
-    // Load stored name on mount
     useEffect(() => {
         const stored = getStoredName();
         if (stored) setName(stored);
     }, []);
 
-    // 1) Load lobby by code (READ is fine)
+    // 1) Load lobby by code
     useEffect(() => {
         let alive = true;
 
@@ -140,11 +124,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
             setLoadingLobby(true);
             setError("");
 
-            const { data, error } = await supabase
-                .from("lobbies")
-                .select("*")
-                .eq("code", code)
-                .single();
+            const { data, error } = await supabase.from("lobbies").select("*").eq("code", code).single();
 
             if (!alive) return;
 
@@ -158,19 +138,23 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
 
             setLobby(data as Lobby);
             setLoadingLobby(false);
+
+            joinedOnceRef.current = false;
         }
 
-        if (code) loadLobby();
+        if (code) void loadLobby();
 
         return () => {
             alive = false;
         };
     }, [code]);
 
-    // 2) Join via RPC (keine direkten Tabellen-Writes mehr)
+    // 2) Join via RPC (nur 1x pro Lobby)
     useEffect(() => {
-        if (!lobby) return;
+        if (!lobbyId) return;
         if (!isNameValid) return;
+        if (!code) return;
+        if (joinedOnceRef.current) return;
 
         let alive = true;
 
@@ -191,32 +175,34 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
 
             if (rpcErr) {
                 setError(rpcErr.message || "Konnte der Lobby nicht beitreten. Bitte neu laden.");
+                setJoining(false);
+                return;
             }
 
+            joinedOnceRef.current = true;
             setJoining(false);
         }
 
-        join();
+        void join();
 
         return () => {
             alive = false;
         };
-    }, [lobby?.id, isNameValid, name, playerId, code]);
+    }, [lobbyId, isNameValid, name, playerId, code]);
 
     // 3) Players fetch + Realtime
     useEffect(() => {
-        if (!lobby) return;
+        if (!lobbyId) return;
 
-        let channel: ReturnType<typeof supabase.channel> | null = null;
         let alive = true;
 
-        async function fetchPlayers() {
+        async function fetchPlayers(currentLobbyId: string) {
             setLoadingPlayers(true);
 
             const { data, error } = await supabase
                 .from("lobby_players")
                 .select("*")
-                .eq("lobby_id", lobby.id)
+                .eq("lobby_id", currentLobbyId)
                 .order("joined_at", { ascending: true });
 
             if (!alive) return;
@@ -225,37 +211,31 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
             setLoadingPlayers(false);
         }
 
-        async function fetchLobby() {
-            const { data } = await supabase
-                .from("lobbies")
-                .select("*")
-                .eq("id", lobby.id)
-                .single();
-
+        async function fetchLobby(currentLobbyId: string) {
+            const { data } = await supabase.from("lobbies").select("*").eq("id", currentLobbyId).single();
+            if (!alive) return;
             if (data) setLobby(data as Lobby);
         }
 
-        fetchPlayers();
+        void fetchPlayers(lobbyId);
 
-        channel = supabase
-            .channel(`lobby:${lobby.id}`)
+        const channel = supabase
+            .channel(`lobby:${lobbyId}`)
             .on(
                 "postgres_changes",
-                { event: "*", schema: "public", table: "lobby_players", filter: `lobby_id=eq.${lobby.id}` },
-                () => fetchPlayers()
+                { event: "*", schema: "public", table: "lobby_players", filter: `lobby_id=eq.${lobbyId}` },
+                () => void fetchPlayers(lobbyId)
             )
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "lobbies", filter: `id=eq.${lobby.id}` },
-                () => fetchLobby()
+            .on("postgres_changes", { event: "*", schema: "public", table: "lobbies", filter: `id=eq.${lobbyId}` }, () =>
+                void fetchLobby(lobbyId)
             )
             .subscribe();
 
         return () => {
             alive = false;
-            if (channel) supabase.removeChannel(channel);
+            void supabase.removeChannel(channel);
         };
-    }, [lobby?.id]);
+    }, [lobbyId]);
 
     async function copyCode() {
         try {
@@ -266,24 +246,26 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     }
 
     async function toggleReady() {
-        if (!lobby) return;
+        if (!lobbyId) return;
+
+        setError("");
 
         const { error: rpcErr } = await supabase.rpc("rpc_toggle_ready", {
-            p_lobby_id: lobby.id,
+            p_lobby_id: lobbyId,
             p_player_id: playerId,
-            p_ready: null, // togglet automatisch
+            p_ready: null,
         });
 
-        if (rpcErr) {
-            setError(rpcErr.message || "Konnte Ready-Status nicht ändern.");
-        }
+        if (rpcErr) setError(rpcErr.message || "Konnte Ready-Status nicht ändern.");
     }
 
     async function startGame() {
-        if (!lobby || !isHost || !canStart) return;
+        if (!lobbyId || !isHost || !canStart) return;
+
+        setError("");
 
         const { error: rpcErr } = await supabase.rpc("rpc_start_game", {
-            p_lobby_id: lobby.id,
+            p_lobby_id: lobbyId,
             p_player_id: playerId,
         });
 
@@ -295,31 +277,21 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         window.location.href = `/game/${code}`;
     }
 
-    const readyChipLabel =
-        loadingPlayers && !totalCount ? "—/— bereit" : `${readyCount}/${totalCount || "—"} bereit`;
+    const readyChipLabel = loadingPlayers && !totalCount ? "—/— bereit" : `${readyCount}/${totalCount || "—"} bereit`;
 
     return (
         <main className="container">
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image
-                    src="/logo.png"
-                    alt="Kumpir Maskottchen"
-                    width={160}
-                    height={160}
-                    priority
-                    className="brandLogoImg"
-                />
+                <Image src="/logo.png" alt="Kumpir Maskottchen" width={160} height={160} priority className="brandLogoImg" />
             </Link>
 
             <section className="card cardLobby" aria-label="Lobby">
-                {/* HEADER */}
                 <header className="lobbyTop">
                     <div>
                         <h1 className="h1">Kumpir</h1>
                         <p className="subline">Das Spiel, bei dem Geben dein Leben rettet.</p>
                     </div>
 
-                    {/* Code bleibt grau – nur Text RGB */}
                     <div className="codePill">
                         <span className="rgbText">{code}</span>
                     </div>
@@ -329,7 +301,6 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                     </button>
                 </header>
 
-                {/* ERROR / LOBBY LOADING */}
                 {error ? (
                     <div className="playerList">
                         <div className="emptyRow">{error}</div>
@@ -344,7 +315,6 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
 
                 {!loadingLobby && lobby ? (
                     <>
-                        {/* NAME GATE */}
                         {showNameGate ? (
                             <div className="playerList">
                                 <div className="playerListHead">
@@ -371,9 +341,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                             </div>
                         ) : null}
 
-                        {/* BODY */}
                         <div className="lobbyBody">
-                            {/* HOST CARD */}
                             <div className="hostCard">
                                 <div className="hostLeft">
                                     <div
@@ -395,18 +363,12 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                                     <div className="hostMeta">
                                         <div className="hostLabel">Host</div>
 
-                                        <div
-                                            className={`hostName ${!hostRow ? "skeletonLine" : ""}`}
-                                            style={hostRow ? { color: HOST_COLOR } : undefined}
-                                        >
+                                        <div className={`hostName ${!hostRow ? "skeletonLine" : ""}`} style={hostRow ? { color: HOST_COLOR } : undefined}>
                                             {hostRow ? hostRow.name : "Lade Host…"}
                                         </div>
 
                                         <div className="hostSub">
-                                            Status:{" "}
-                                            <span className={hostRow?.ready ? "statusOk" : "statusIdle"}>
-                        {hostRow ? (hostRow.ready ? "Bereit" : "Nicht bereit") : "—"}
-                      </span>
+                                            Status: <span className={hostRow?.ready ? "statusOk" : "statusIdle"}>{hostRow ? (hostRow.ready ? "Bereit" : "Nicht bereit") : "—"}</span>
                                             <span className="dotSep">•</span>
                                             <span className="mutedMini">{lobby.privacy === "private" ? "🔒 Privat" : "🌐 Public"}</span>
                                             <span className="dotSep">•</span>
@@ -421,14 +383,8 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                         className="chipDot"
                         aria-hidden
                         style={{
-                            background:
-                                !loadingPlayers && totalCount > 0 && readyCount === totalCount
-                                    ? "rgba(34,211,238,.92)"
-                                    : "rgba(255,255,255,.35)",
-                            boxShadow:
-                                !loadingPlayers && totalCount > 0 && readyCount === totalCount
-                                    ? "0 0 0 3px rgba(34,211,238,.18)"
-                                    : "0 0 0 3px rgba(255,255,255,.10)",
+                            background: !loadingPlayers && totalCount > 0 && readyCount === totalCount ? "rgba(34,211,238,.92)" : "rgba(255,255,255,.35)",
+                            boxShadow: !loadingPlayers && totalCount > 0 && readyCount === totalCount ? "0 0 0 3px rgba(34,211,238,.18)" : "0 0 0 3px rgba(255,255,255,.10)",
                         }}
                     />
                       {readyChipLabel}
@@ -436,13 +392,10 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                                 </div>
                             </div>
 
-                            {/* PLAYERS LIST */}
                             <div className="playerList">
                                 <div className="playerListHead">
                                     <div className="playerListTitle">Spieler</div>
-                                    <div className="playerListHint">
-                                        {loadingPlayers ? "Lade Spieler…" : joining ? "Verbinde…" : "Warte bis alle bereit sind."}
-                                    </div>
+                                    <div className="playerListHint">{loadingPlayers ? "Lade Spieler…" : joining ? "Verbinde…" : "Warte bis alle bereit sind."}</div>
                                 </div>
 
                                 <div className="playerRows">
@@ -482,9 +435,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                                                 </div>
 
                                                 <div className="playerRight">
-                          <span className={`readyPill ${p.ready ? "readyOn" : "readyOff"}`}>
-                            {p.ready ? "Bereit" : "Wartet"}
-                          </span>
+                                                    <span className={`readyPill ${p.ready ? "readyOn" : "readyOff"}`}>{p.ready ? "Bereit" : "Wartet"}</span>
                                                 </div>
                                             </div>
                                         ))
@@ -493,18 +444,29 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
                             </div>
                         </div>
 
-                        {/* ACTIONS */}
                         <footer className="lobbyActions">
                             {isHost ? (
-                                <button
-                                    type="button"
-                                    className={`btn btnPrimary ${!canStart ? "btnDisabled" : ""}`}
-                                    onClick={startGame}
-                                    disabled={!canStart || showNameGate}
-                                    title={!canStart ? "Mindestens 2 Spieler und alle bereit." : ""}
-                                >
-                                    Spiel starten
-                                </button>
+                                !myRow?.ready ? (
+                                    <button
+                                        type="button"
+                                        className={`btn btnPrimary ${showNameGate ? "btnDisabled" : ""}`}
+                                        onClick={toggleReady}
+                                        disabled={showNameGate || !myRow}
+                                        title={showNameGate ? "Bitte erst Name setzen." : ""}
+                                    >
+                                        Bereit
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className={`btn btnPrimary ${!canStart ? "btnDisabled" : ""}`}
+                                        onClick={startGame}
+                                        disabled={!canStart || showNameGate}
+                                        title={!canStart ? "Warte bis alle bereit sind (inkl. dir)." : ""}
+                                    >
+                                        Spiel starten
+                                    </button>
+                                )
                             ) : (
                                 <button
                                     type="button"

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Privacy = "private" | "public";
@@ -42,14 +42,16 @@ export default function HostPage() {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string>("");
 
-    // nur als Preview – der echte Code wird beim Create ggf. neu generiert (Collision-Retry)
-    const previewCode = useMemo(() => makeCode(4), []);
+    // SSR-sicher: erst placeholder, dann client-only Code
+    const [previewCode, setPreviewCode] = useState("----");
+    useEffect(() => {
+        setPreviewCode(makeCode(4));
+    }, []);
 
     const minRound = 10;
     const maxRound = 60;
     const fillPct = Math.round(((roundSeconds - minRound) / (maxRound - minRound)) * 100);
 
-    // Orange Fill + dunkler Track
     const sliderBg = `linear-gradient(90deg,
     rgba(243,209,161,.95) 0%,
     rgba(231,185,126,.95) ${fillPct}%,
@@ -64,7 +66,6 @@ export default function HostPage() {
         return "";
     }, [hostName, isNameValid]);
 
-    // READY Badge
     const isReady = isNameValid && !creating;
     const readyLabel = isReady ? "Bereit" : "Nicht bereit";
     const readyHint = isReady ? "Du kannst die Lobby jetzt erstellen." : "Bitte gib mindestens 2 Zeichen beim Namen ein.";
@@ -80,79 +81,59 @@ export default function HostPage() {
             const cleanName = hostName.trim();
             setStoredName(cleanName);
 
-            // Collision-Retry: 4-stelliger Code kann kollidieren
-            let created: { id: string; code: string } | null = null;
-            let lastErr: any = null;
+            const payload = {
+                p_player_id: playerId,
+                p_name: cleanName,
+                p_max_players: maxPlayers,
+                p_round_seconds: roundSeconds,
+                // nur drin lassen, wenn dein RPC das wirklich erwartet:
+                // p_privacy: privacy,
+            };
 
-            for (let attempt = 0; attempt < 8; attempt++) {
-                const code = attempt === 0 ? previewCode : makeCode(4);
+            const res = await supabase.rpc("rpc_create_lobby", payload);
 
-                const { data: lobby, error: lobbyError } = await supabase
-                    .from("lobbies")
-                    .insert({
-                        code,
-                        host_player_id: playerId,
-                        status: "waiting",
-                        privacy,
-                        max_players: maxPlayers,
-                        round_seconds: roundSeconds,
-                    })
-                    .select("id, code")
-                    .single();
+            // HARTE Debug-Ausgabe (damit nie wieder {} im Overlay steht)
+            console.log("[rpc_create_lobby] payload:", payload);
+            console.log("[rpc_create_lobby] data:", res.data);
+            console.log("[rpc_create_lobby] error:", res.error);
 
-                if (!lobbyError && lobby) {
-                    created = lobby as { id: string; code: string };
-                    break;
-                }
-
-                lastErr = lobbyError;
-
-                // Unique violation (Postgres): 23505 -> neuer Code
-                if (lobbyError?.code !== "23505") break;
-            }
-
-            if (!created) {
-                console.error(lastErr);
-                setCreateError("Konnte keine Lobby erstellen. Bitte erneut versuchen.");
+            if (res.error) {
+                setCreateError(res.error.message || "RPC Fehler: Lobby konnte nicht erstellt werden.");
                 return;
             }
 
-            // Host als Player eintragen
-            const { error: playerError } = await supabase.from("lobby_players").insert({
-                lobby_id: created.id,
-                player_id: playerId,
-                name: cleanName,
-                ready: true,
-                last_seen_at: new Date().toISOString(),
-            });
+            // Je nach RPC Return-Shape:
+            // Variante A: res.data ist ein Objekt {id, code}
+            // Variante B: res.data ist ein Array [{id, code}]
+            const created =
+                Array.isArray(res.data) ? res.data[0] : res.data;
 
-            if (playerError) {
-                console.error(playerError);
-                setCreateError("Lobby erstellt, aber Host konnte nicht beitreten. Bitte neu laden.");
+            if (!created?.code) {
+                setCreateError("RPC Return ungültig (kein code). Prüfe SQL Return von rpc_create_lobby.");
                 return;
             }
 
             window.location.href = `/lobby/${created.code}`;
-        } catch (e) {
-            console.error(e);
-            setCreateError("Unerwarteter Fehler. Bitte neu laden und erneut versuchen.");
+        } catch (e: any) {
+            console.error("[onCreate] unexpected:", e);
+            setCreateError(e?.message || "Unerwarteter Fehler. Bitte neu laden und erneut versuchen.");
         } finally {
             setCreating(false);
         }
     }
 
     async function copyInvite() {
+        // wichtig: window gibt’s nur im Client, aber diese Funktion läuft nur per Buttonclick
         const url = `${window.location.origin}/join?code=${previewCode}`;
         try {
             await navigator.clipboard.writeText(url);
         } catch {
-            // optional: toast/snackbar
+            // ignore
         }
     }
 
     return (
         <main className="container">
-            {/* Brand Logo */}
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
                 <Image src="/logo.png" alt="Kumpir Maskottchen" width={160} height={160} priority className="brandLogoImg" />
             </Link>
@@ -180,7 +161,6 @@ export default function HostPage() {
                     </header>
 
                     <div className="hostGrid">
-                        {/* LEFT: FORM */}
                         <div className="panel">
                             <div className="panelHead">
                                 <div className="panelTitle">Spieler-Details</div>
@@ -220,7 +200,6 @@ export default function HostPage() {
 
                             <div className="divider" />
 
-                            {/* PRIVACY + MAX PLAYERS NEBENEINANDER */}
                             <div className="settingsRow">
                                 <div className="settingBlock">
                                     <div className="settingLabel">Privatsphäre</div>
@@ -269,7 +248,6 @@ export default function HostPage() {
                                 </div>
                             </div>
 
-                            {/* ROUND DURATION */}
                             <div className="settingBlock">
                                 <div className="settingLabel">Rundendauer</div>
 
@@ -309,7 +287,6 @@ export default function HostPage() {
                             </div>
                         </div>
 
-                        {/* RIGHT: PREVIEW */}
                         <div className="panel panelAlt">
                             <div className="panelHead">
                                 <div className="panelTitle">Lobby-Preview</div>
@@ -340,7 +317,7 @@ export default function HostPage() {
                                 </div>
                             </div>
 
-                            {/* QR absichtlich entfernt (kommt später) */}
+                            {/* QR kommt später */}
                         </div>
                     </div>
                 </section>
