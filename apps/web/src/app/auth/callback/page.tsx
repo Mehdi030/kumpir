@@ -5,60 +5,85 @@ export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+type Status = "loading" | "success" | "error";
+
 export default function AuthCallbackPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const { code, error, errorDescription } = useMemo(() => {
+    const { code, oauthError, errorDescription } = useMemo(() => {
         return {
             code: searchParams.get("code"),
-            error: searchParams.get("error"),
+            oauthError: searchParams.get("error"),
             errorDescription: searchParams.get("error_description"),
         };
     }, [searchParams]);
 
-    const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
-    const [message, setMessage] = useState("Login wird abgeschlossen…");
+    const [status, setStatus] = useState<Status>("loading");
+    const [message, setMessage] = useState<string>("Login wird abgeschlossen…");
 
     useEffect(() => {
         let alive = true;
 
-        const run = async () => {
+        const run = async (): Promise<void> => {
+            if (typeof window === "undefined") return;
+
             try {
-                // ⛔ absoluter Guard: niemals beim Build
-                if (typeof window === "undefined") return;
+                const { getSupabaseClient } = await import("@/lib/supabaseClient");
+                const supabase = getSupabaseClient();
 
-                // ✅ Supabase NUR IM BROWSER importieren
-                const { supabase } = await import("@/lib/supabaseClient");
+                if (oauthError) {
+                    setStatus("error");
+                    setMessage(errorDescription ?? oauthError);
+                    return;
+                }
 
-                if (error) throw new Error(errorDescription ?? error);
-                if (!code) throw new Error("Kein OAuth-Code gefunden.");
+                if (!code) {
+                    setStatus("error");
+                    setMessage("Kein OAuth-Code gefunden.");
+                    return;
+                }
 
-                const { error: exchangeError } =
-                    await supabase.auth.exchangeCodeForSession(code);
+                const { error } = await supabase.auth.exchangeCodeForSession(code);
+                if (error) {
+                    setStatus("error");
+                    setMessage(error.message);
+                    return;
+                }
 
-                if (exchangeError) throw exchangeError;
                 if (!alive) return;
 
                 setStatus("success");
                 setMessage("Eingeloggt. Weiterleitung…");
                 router.replace("/");
-            } catch (e: any) {
+            } catch (err: unknown) {
                 if (!alive) return;
+
+                const message =
+                    err instanceof Error ? err.message : "Login fehlgeschlagen.";
+
                 setStatus("error");
-                setMessage(e?.message ?? "Login fehlgeschlagen.");
-                setTimeout(() => router.replace("/"), 1200);
+                setMessage(message);
+                window.setTimeout(() => router.replace("/"), 1200);
             }
         };
 
-        run();
+        void run(); // ✅ ESLint-konform
+
         return () => {
             alive = false;
         };
-    }, [code, error, errorDescription, router]);
+    }, [code, oauthError, errorDescription, router]);
 
     return (
-        <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+        <main
+            style={{
+                minHeight: "100vh",
+                display: "grid",
+                placeItems: "center",
+                padding: 24,
+            }}
+        >
             <div
                 style={{
                     maxWidth: 520,
