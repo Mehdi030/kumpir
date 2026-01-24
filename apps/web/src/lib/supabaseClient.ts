@@ -1,12 +1,17 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-export function getSupabaseClient(): SupabaseClient {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+let client: SupabaseClient | null = null;
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error("Supabase env vars missing at runtime");
+export function getSupabaseClient(): SupabaseClient {
+    if (client) return client;
+
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!url || !anonKey) {
+        throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
     }
 
-    return createClient(supabaseUrl, supabaseAnonKey);
+    client = createClient(url, anonKey);
+    return client;
 }

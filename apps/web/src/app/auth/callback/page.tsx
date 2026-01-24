@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Status = "loading" | "success" | "error";
 

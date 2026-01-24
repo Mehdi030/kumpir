@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 function normalizeCode(input: string) {
     // erlaubt A–Z und 2–9 (ohne 0/1), max 4, uppercase
