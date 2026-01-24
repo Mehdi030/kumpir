@@ -11,16 +11,14 @@ export default function AuthCallbackPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const { code, oauthError, errorDescription } = useMemo(() => {
-        return {
-            code: searchParams.get("code"),
-            oauthError: searchParams.get("error"),
-            errorDescription: searchParams.get("error_description"),
-        };
-    }, [searchParams]);
+    const { code, oauthError, errorDescription } = useMemo(() => ({
+        code: searchParams.get("code"),
+        oauthError: searchParams.get("error"),
+        errorDescription: searchParams.get("error_description"),
+    }), [searchParams]);
 
     const [status, setStatus] = useState<Status>("loading");
-    const [message, setMessage] = useState<string>("Login wird abgeschlossen…");
+    const [message, setMessage] = useState("Login wird abgeschlossen…");
 
     useEffect(() => {
         let alive = true;
@@ -59,16 +57,16 @@ export default function AuthCallbackPage() {
             } catch (err: unknown) {
                 if (!alive) return;
 
-                const message =
+                const msg =
                     err instanceof Error ? err.message : "Login fehlgeschlagen.";
 
                 setStatus("error");
-                setMessage(message);
-                window.setTimeout(() => router.replace("/"), 1200);
+                setMessage(msg);
+                setTimeout(() => router.replace("/"), 1200);
             }
         };
 
-        void run(); // ✅ ESLint-konform
+        void run();
 
         return () => {
             alive = false;
@@ -76,32 +74,10 @@ export default function AuthCallbackPage() {
     }, [code, oauthError, errorDescription, router]);
 
     return (
-        <main
-            style={{
-                minHeight: "100vh",
-                display: "grid",
-                placeItems: "center",
-                padding: 24,
-            }}
-        >
-            <div
-                style={{
-                    maxWidth: 520,
-                    width: "100%",
-                    borderRadius: 16,
-                    padding: 16,
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    background: "rgba(0,0,0,0.12)",
-                    color: "white",
-                }}
-            >
-                <div style={{ fontWeight: 900, fontSize: 18 }}>
-                    {status === "loading" && "Anmeldung"}
-                    {status === "success" && "Erfolg"}
-                    {status === "error" && "Fehler"}
-                </div>
-
-                <div style={{ marginTop: 8, opacity: 0.9 }}>{message}</div>
+        <main style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+            <div style={{ color: "white" }}>
+                <strong>{status}</strong>
+                <div>{message}</div>
             </div>
         </main>
     );
