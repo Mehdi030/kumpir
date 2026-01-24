@@ -17,7 +17,7 @@ export function getSupabaseClient(): SupabaseClient {
             throw new Error("Supabase env vars missing in runtime.");
         }
         // Auf Server/Build: gib einen Client mit leeren Werten NICHT zurück
-        // -> hier bewusst Error vermeiden, weil Seite ggf. client-only ist
+        // → hier bewusst Error vermeiden, weil Seite ggf. client-only ist
     }
 
     client = createClient(supabaseUrl ?? "", supabaseAnonKey ?? "");
