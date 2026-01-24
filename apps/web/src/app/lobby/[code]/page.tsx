@@ -3,7 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Lobby = {
     id: string;

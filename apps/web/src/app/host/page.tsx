@@ -35,6 +35,7 @@ function setStoredName(name: string) {
 }
 
 export default function HostPage() {
+    const supabase = getSupabaseClient();
     const [hostName, setHostName] = useState("");
     const [privacy, setPrivacy] = useState<Privacy>("private");
     const [maxPlayers, setMaxPlayers] = useState(8);

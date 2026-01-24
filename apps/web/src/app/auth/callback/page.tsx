@@ -11,6 +11,7 @@ type Status = "loading" | "success" | "error";
 export default function AuthCallbackPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const supabase = getSupabaseClient();
 
     const { code, oauthError, errorDescription } = useMemo(() => ({
         code: searchParams.get("code"),
@@ -22,57 +23,29 @@ export default function AuthCallbackPage() {
     const [message, setMessage] = useState("Login wird abgeschlossen…");
 
     useEffect(() => {
-        let alive = true;
+        if (!code && !oauthError) return;
 
-        const run = async (): Promise<void> => {
-            if (typeof window === "undefined") return;
-
-            try {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
-                const supabase = getSupabaseClient();
-
-                if (oauthError) {
-                    setStatus("error");
-                    setMessage(errorDescription ?? oauthError);
-                    return;
-                }
-
-                if (!code) {
-                    setStatus("error");
-                    setMessage("Kein OAuth-Code gefunden.");
-                    return;
-                }
-
-                const { error } = await supabase.auth.exchangeCodeForSession(code);
-                if (error) {
-                    setStatus("error");
-                    setMessage(error.message);
-                    return;
-                }
-
-                if (!alive) return;
-
-                setStatus("success");
-                setMessage("Eingeloggt. Weiterleitung…");
-                router.replace("/");
-            } catch (err: unknown) {
-                if (!alive) return;
-
-                const msg =
-                    err instanceof Error ? err.message : "Login fehlgeschlagen.";
-
+        const run = async () => {
+            if (oauthError) {
                 setStatus("error");
-                setMessage(msg);
-                setTimeout(() => router.replace("/"), 1200);
+                setMessage(errorDescription ?? oauthError);
+                return;
             }
+
+            const { error } = await supabase.auth.exchangeCodeForSession(code!);
+            if (error) {
+                setStatus("error");
+                setMessage(error.message);
+                return;
+            }
+
+            setStatus("success");
+            setMessage("Eingeloggt. Weiterleitung…");
+            router.replace("/");
         };
 
         void run();
-
-        return () => {
-            alive = false;
-        };
-    }, [code, oauthError, errorDescription, router]);
+    }, [code, oauthError, errorDescription, router, supabase]);
 
     return (
         <main style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>

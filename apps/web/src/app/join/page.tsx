@@ -37,6 +37,7 @@ function getErrorMessage(err: unknown): string {
 }
 
 export default function JoinPage() {
+    const supabase = getSupabaseClient();
     const router = useRouter();
     const [code, setCode] = useState("");
     const [name, setName] = useState("");
