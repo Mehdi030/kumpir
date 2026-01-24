@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic"; // ⬅️ WICHTIG: verhindert Prerendering
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -8,7 +10,7 @@ export default function AuthCallbackPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    // Werte einmal “materialisieren”, damit Effect sauber reagiert
+    // Werte einmal materialisieren (Next.js-sicher)
     const { code, error, errorDescription } = useMemo(() => {
         return {
             code: searchParams.get("code"),
@@ -18,28 +20,41 @@ export default function AuthCallbackPage() {
     }, [searchParams]);
 
     const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
-    const [message, setMessage] = useState<string>("Login wird abgeschlossen…");
+    const [message, setMessage] = useState("Login wird abgeschlossen…");
 
     useEffect(() => {
         let alive = true;
 
         const run = async () => {
             try {
-                if (error) throw new Error(errorDescription ?? error);
-                if (!code) throw new Error("Kein OAuth-Code gefunden. Prüfe Redirect URL und Provider-Setup.");
+                // 🔒 Guard: Supabase darf NUR im Browser laufen
+                if (typeof window === "undefined") return;
 
-                const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+                if (error) {
+                    throw new Error(errorDescription ?? error);
+                }
+
+                if (!code) {
+                    throw new Error("Kein OAuth-Code gefunden. Prüfe Redirect URL.");
+                }
+
+                const { error: exchangeError } =
+                    await supabase.auth.exchangeCodeForSession(code);
+
                 if (exchangeError) throw exchangeError;
-
                 if (!alive) return;
+
                 setStatus("success");
                 setMessage("Eingeloggt. Weiterleitung…");
+
                 router.replace("/");
             } catch (e: any) {
                 if (!alive) return;
+
                 setStatus("error");
                 setMessage(e?.message ?? "Login fehlgeschlagen.");
-                window.setTimeout(() => router.replace("/"), 1200);
+
+                setTimeout(() => router.replace("/"), 1200);
             }
         };
 
@@ -51,7 +66,14 @@ export default function AuthCallbackPage() {
     }, [code, error, errorDescription, router]);
 
     return (
-        <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+        <main
+            style={{
+                minHeight: "100vh",
+                display: "grid",
+                placeItems: "center",
+                padding: 24,
+            }}
+        >
             <div
                 style={{
                     maxWidth: 520,
@@ -73,7 +95,7 @@ export default function AuthCallbackPage() {
                 <div style={{ marginTop: 8, opacity: 0.9 }}>{message}</div>
 
                 <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-                    Wenn du hier hängen bleibst: Prüfe Supabase Redirect URL und Google OAuth Redirect URI.
+                    Falls es hängt: Prüfe Supabase Redirect URL & OAuth Provider Settings.
                 </div>
             </div>
         </main>
