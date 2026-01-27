@@ -1,6 +1,6 @@
-# 🎮 RELAY
+# 🎮 KUMPIR
 
-RELAY ist ein browserbasiertes Partyspiel nach dem Prinzip der „heißen Kartoffel“.
+KUMPIR ist ein browserbasiertes Partyspiel nach dem Prinzip der „heißen Kartoffel“.
 Eine Lobby, mehrere Spieler, ein unsichtbarer Timer – wer die Kartoffel beim Explodieren hält, verliert die Runde.
 
 Fokus: **einfach erklärt, gemeinsam gespielt, schnell gestartet**.
