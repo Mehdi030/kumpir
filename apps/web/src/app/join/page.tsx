@@ -5,26 +5,18 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 function normalizeCode(input: string) {
-    // erlaubt A–Z und 2–9 (ohne 0/1), max 4, uppercase
     return input
         .toUpperCase()
         .replace(/[^A-Z2-9]/g, "")
         .slice(0, 4);
 }
 
-function getOrCreatePlayerId() {
-    const key = "kumpir_player_id";
-    const existing =
-        typeof window !== "undefined" ? localStorage.getItem(key) : null;
-    if (existing) return existing;
-
-    const id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-    return id;
-}
-
 function setStoredName(name: string) {
     localStorage.setItem("kumpir_player_name", name);
+}
+
+function setStoredPlayerId(id: string) {
+    localStorage.setItem("kumpir_player_id", id);
 }
 
 function getErrorMessage(err: unknown): string {
@@ -39,6 +31,7 @@ function getErrorMessage(err: unknown): string {
 export default function JoinPage() {
     const supabase = getSupabaseClient();
     const router = useRouter();
+
     const [code, setCode] = useState("");
     const [name, setName] = useState("");
     const [loading, setLoading] = useState(false);
@@ -56,23 +49,22 @@ export default function JoinPage() {
         try {
             const lobbyCode = normalizeCode(code);
             const playerName = name.trim();
-            const playerId = getOrCreatePlayerId();
 
-            // local speichern (für LobbyPage Autocomplete)
             setStoredName(playerName);
 
-            // OPTION A: KEIN select/insert auf Tabellen -> nur RPC
-            const { error: rpcErr } = await supabase.rpc("rpc_join_lobby", {
-                p_code: lobbyCode,
-                p_player_id: playerId,
+            // ✅ NEW RPC: join_lobby(p_lobby_code, p_name) -> uuid
+            const { data, error: rpcErr } = await supabase.rpc("join_lobby", {
+                p_lobby_code: lobbyCode,
                 p_name: playerName,
             });
 
             if (rpcErr) {
-                // Typische rpcErr.message: lobby_not_found, lobby_full, lobby_not_joinable, invalid_name, ...
                 setError(rpcErr.message || "Konnte der Lobby nicht beitreten.");
                 return;
             }
+
+            // ✅ store returned uuid
+            setStoredPlayerId(String(data));
 
             router.push(`/lobby/${lobbyCode}`);
         } catch (err: unknown) {

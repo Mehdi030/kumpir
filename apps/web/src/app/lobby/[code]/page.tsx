@@ -2,48 +2,37 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
-/* =======================
-   Types
-======================= */
-
-type LobbyStatus = "waiting" | "started" | "ended";
+type LobbyStatus = "lobby" | "in_game" | "ended";
 
 type Lobby = {
     id: string;
     code: string;
-    host_player_id: string;
+    host_player_id: string | null;
     status: LobbyStatus;
-    privacy: string;
-    max_players: number;
-    round_seconds: number;
+    privacy: string | null;
+    max_players: number | null;
+    round_seconds: number | null;
     created_at: string;
+    last_activity_at: string | null;
 };
 
-type LobbyPlayer = {
+type Player = {
     id: string;
-    lobby_id: string;
-    player_id: string;
+    lobby_code: string;
     name: string;
-    ready: boolean;
+    is_ready: boolean;
+    is_connected: boolean;
     joined_at: string;
-    last_seen_at: string;
+    last_seen_at: string | null;
 };
 
-/* =======================
-   Helpers
-======================= */
-
-function getOrCreatePlayerId(): string {
-    const key = "kumpir_player_id";
-    const existing = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-    if (existing) return existing;
-
-    const id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-    return id;
+function getPlayerId(): string | null {
+    return typeof window !== "undefined"
+        ? localStorage.getItem("kumpir_player_id")
+        : null;
 }
 
 function getStoredName(): string {
@@ -52,8 +41,8 @@ function getStoredName(): string {
         : "";
 }
 
-function setStoredName(name: string): void {
-    localStorage.setItem("kumpir_player_name", name);
+function setStoredPlayerId(id: string) {
+    localStorage.setItem("kumpir_player_id", id);
 }
 
 function initials(name: string): string {
@@ -61,238 +50,223 @@ function initials(name: string): string {
     return t ? t.slice(0, 1).toUpperCase() : "?";
 }
 
-function hexToRgba(hex: string, alpha: number): string {
-    const h = hex.replace("#", "");
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-const HOST_COLOR = "#070707";
 const PLAYER_COLORS = ["#e10404", "#f3df03", "#18ed07", "#0626f4", "#8407e3", "#02ece4"];
-
 function getPlayerColor(index: number): string {
     return PLAYER_COLORS[index % PLAYER_COLORS.length];
 }
 
-/* =======================
-   Page
-======================= */
-
 export default function LobbyPage({ params }: { params: { code: string } }) {
     const supabase = getSupabaseClient();
-
     const code = params.code.toUpperCase();
-    const playerId = useMemo(() => getOrCreatePlayerId(), []);
 
-    const [name, setName] = useState<string>("");
-    const [nameTouched, setNameTouched] = useState(false);
-
+    const [playerId, setPlayerIdState] = useState<string | null>(null);
     const [lobby, setLobby] = useState<Lobby | null>(null);
-    const [players, setPlayers] = useState<LobbyPlayer[]>([]);
+    const [players, setPlayers] = useState<Player[]>([]);
     const [loadingLobby, setLoadingLobby] = useState(true);
     const [loadingPlayers, setLoadingPlayers] = useState(true);
     const [joining, setJoining] = useState(false);
     const [error, setError] = useState("");
 
-    const nameInputRef = useRef<HTMLInputElement | null>(null);
-    const joinedOnceRef = useRef(false);
+    // ✅ set state NOT in effect sync: initialize via initializer callback
+    useEffect(() => {
+        // This is allowed; still triggers lint in some setups if you do many setStates.
+        // We do only one setState here.
+        setPlayerIdState(getPlayerId());
+    }, []);
 
-    const isNameValid = name.trim().length >= 2;
-    const showNameGate = !isNameValid;
+    const myRow = useMemo(
+        () => players.find((p) => p.id === playerId) ?? null,
+        [players, playerId]
+    );
 
-    const myRow = players.find((p) => p.player_id === playerId);
-    const isHost = lobby?.host_player_id === playerId;
+    const isHost = !!playerId && lobby?.host_player_id === playerId;
 
-    const readyCount = players.filter((p) => p.ready).length;
-    const totalCount = players.length;
+    const connectedPlayers = useMemo(
+        () => players.filter((p) => p.is_connected),
+        [players]
+    );
+
+    const readyCount = connectedPlayers.filter((p) => p.is_ready).length;
+    const totalCount = connectedPlayers.length;
 
     const canStart =
         !!lobby &&
-        lobby.status === "waiting" &&
+        lobby.status === "lobby" &&
         totalCount >= 2 &&
         readyCount === totalCount;
 
-    const hostRow = useMemo(
-        () => players.find((p) => p.player_id === lobby?.host_player_id) ?? null,
-        [players, lobby]
-    );
-
     const others = useMemo(
-        () => players.filter((p) => p.player_id !== lobby?.host_player_id),
+        () => players.filter((p) => p.id !== lobby?.host_player_id),
         [players, lobby]
     );
 
-    /* =======================
-       Effects
-    ======================= */
+    // ✅ stable fetch functions (useCallback) to satisfy exhaustive-deps
+    const fetchLobby = useCallback(async () => {
+        setLoadingLobby(true);
+        setError("");
 
-    useEffect(() => {
-        setName(getStoredName());
-    }, []);
+        const { data, error: err } = await supabase
+            .from("lobbies")
+            .select("*")
+            .eq("code", code)
+            .single();
 
-    // Load lobby
-    useEffect(() => {
-        let alive = true;
-
-        async function loadLobby(): Promise<void> {
-            setLoadingLobby(true);
-            setError("");
-
-            const { data, error: err } = await supabase
-                .from("lobbies")
-                .select("*")
-                .eq("code", code)
-                .single();
-
-            if (!alive) return;
-
-            if (err || !data) {
-                setLobby(null);
-                setPlayers([]);
-                setError("Lobby nicht gefunden.");
-                setLoadingLobby(false);
-                return;
-            }
-
-            setLobby(data as Lobby);
+        if (err || !data) {
+            setLobby(null);
+            setPlayers([]);
+            setError("Lobby nicht gefunden.");
             setLoadingLobby(false);
-            joinedOnceRef.current = false;
+            return;
         }
 
-        void loadLobby();
-        return () => {
-            alive = false;
-        };
-    }, [code, supabase]);
+        setLobby(data as Lobby);
+        setLoadingLobby(false);
+    }, [supabase, code]);
 
-    // Join lobby (RPC)
+    const fetchPlayers = useCallback(async () => {
+        setLoadingPlayers(true);
+
+        const { data } = await supabase
+            .from("players")
+            .select("*")
+            .eq("lobby_code", code)
+            .order("joined_at");
+
+        setPlayers((data ?? []) as Player[]);
+        setLoadingPlayers(false);
+    }, [supabase, code]);
+
+    // Load lobby once (and on code change)
     useEffect(() => {
-        if (!lobby?.id || !isNameValid || joinedOnceRef.current) return;
+        void fetchLobby();
+    }, [fetchLobby]);
 
-        let alive = true;
+    // Ensure joined (re-join if storage lost / player row missing)
+    useEffect(() => {
+        if (!lobby || loadingLobby) return;
 
-        async function join(): Promise<void> {
+        const pid = getPlayerId();
+
+        if (!pid) {
+            setError("Du bist nicht beigetreten. Geh zurück und tritt der Lobby bei.");
+            return;
+        }
+
+        // store in state if different (avoid sync state cascade by checking)
+        if (playerId !== pid) {
+            setPlayerIdState(pid);
+        }
+
+        const ensureJoined = async () => {
             setJoining(true);
             setError("");
 
-            const trimmed = name.trim();
-            setStoredName(trimmed);
+            const { data: me } = await supabase
+                .from("players")
+                .select("id")
+                .eq("id", pid)
+                .maybeSingle();
 
-            const { error: rpcErr } = await supabase.rpc("rpc_join_lobby", {
-                p_code: code,
-                p_player_id: playerId,
-                p_name: trimmed,
-            });
-
-            if (!alive) return;
-
-            if (rpcErr) {
-                setError(rpcErr.message);
+            if (me?.id) {
                 setJoining(false);
                 return;
             }
 
-            joinedOnceRef.current = true;
+            const storedName = getStoredName().trim();
+            if (storedName.length < 2) {
+                setJoining(false);
+                setError("Name fehlt. Geh zurück und tritt neu bei.");
+                return;
+            }
+
+            const { data, error: rpcErr } = await supabase.rpc("join_lobby", {
+                p_lobby_code: code,
+                p_name: storedName,
+            });
+
+            if (rpcErr) {
+                setJoining(false);
+                setError(rpcErr.message);
+                return;
+            }
+
+            const newId = String(data);
+            setStoredPlayerId(newId);
+            setPlayerIdState(newId);
             setJoining(false);
-        }
-
-        void join();
-        return () => {
-            alive = false;
         };
-    }, [lobby?.id, isNameValid, name, code, playerId, supabase]);
 
-    // Players + Realtime
+        void ensureJoined();
+    }, [lobby, loadingLobby, supabase, code, playerId]);
+
+    // Load players + realtime
     useEffect(() => {
-        if (!lobby?.id) return;
-
-        let alive = true;
-
-        async function fetchPlayers(): Promise<void> {
-            setLoadingPlayers(true);
-            const { data } = await supabase
-                .from("lobby_players")
-                .select("*")
-                .eq("lobby_id", lobby.id)
-                .order("joined_at");
-
-            if (!alive) return;
-            setPlayers((data ?? []) as LobbyPlayer[]);
-            setLoadingPlayers(false);
-        }
-
-        async function fetchLobby(): Promise<void> {
-            const { data } = await supabase
-                .from("lobbies")
-                .select("*")
-                .eq("id", lobby.id)
-                .single();
-
-            if (alive && data) setLobby(data as Lobby);
-        }
+        if (!lobby) return;
 
         void fetchPlayers();
 
         const channel = supabase
-            .channel(`lobby:${lobby.id}`)
+            .channel(`lobby:${code}`)
             .on(
                 "postgres_changes",
-                { event: "*", schema: "public", table: "lobby_players", filter: `lobby_id=eq.${lobby.id}` },
+                { event: "*", schema: "public", table: "players", filter: `lobby_code=eq.${code}` },
                 () => void fetchPlayers()
             )
             .on(
                 "postgres_changes",
-                { event: "*", schema: "public", table: "lobbies", filter: `id=eq.${lobby.id}` },
+                { event: "*", schema: "public", table: "lobbies", filter: `code=eq.${code}` },
                 () => void fetchLobby()
             )
             .subscribe();
 
         return () => {
-            alive = false;
             void supabase.removeChannel(channel);
         };
-    }, [lobby?.id, supabase]);
+    }, [lobby, supabase, code, fetchPlayers, fetchLobby]);
 
-    /* =======================
-       Actions
-    ======================= */
+    // auto redirect
+    useEffect(() => {
+        if (lobby?.status === "in_game") {
+            window.location.href = `/game/${code}`;
+        }
+    }, [lobby?.status, code]);
 
     async function toggleReady(): Promise<void> {
-        if (!lobby?.id) return;
+        if (!playerId || !lobby) return;
 
-        const { error: rpcErr } = await supabase.rpc("rpc_toggle_ready", {
-            p_lobby_id: lobby.id,
+        setError("");
+        const next = !(myRow?.is_ready ?? false);
+
+        const { error: rpcErr } = await supabase.rpc("set_ready", {
             p_player_id: playerId,
-            p_ready: null,
+            p_ready: next,
         });
 
         if (rpcErr) setError(rpcErr.message);
     }
 
     async function startGame(): Promise<void> {
-        if (!lobby || !isHost || !canStart) return;
+        if (!playerId || !lobby || !isHost || !canStart) return;
 
-        const { error: rpcErr } = await supabase.rpc("rpc_start_game", {
-            p_lobby_id: lobby.id,
-            p_player_id: playerId,
+        setError("");
+        const { error: rpcErr } = await supabase.rpc("start_game", {
+            p_host_player_id: playerId,
         });
 
-        if (!rpcErr) {
-            window.location.href = `/game/${code}`;
-        } else {
-            setError(rpcErr.message);
-        }
+        if (rpcErr) setError(rpcErr.message);
     }
 
-    /* =======================
-       Render
-    ======================= */
+    async function leaveLobby(): Promise<void> {
+        if (!playerId) return;
 
-    const readyLabel = loadingPlayers
-        ? "—/— bereit"
-        : `${readyCount}/${totalCount} bereit`;
+        setError("");
+        await supabase.rpc("leave_lobby", { p_player_id: playerId });
+
+        localStorage.removeItem("kumpir_player_id");
+        window.location.href = "/join";
+    }
+
+    const readyLabel = loadingPlayers ? "—/— bereit" : `${readyCount}/${totalCount} bereit`;
 
     return (
         <main className="container">
@@ -312,42 +286,42 @@ export default function LobbyPage({ params }: { params: { code: string } }) {
 
                 {!loadingLobby && lobby && (
                     <>
-                        {showNameGate && (
-                            <div className="nameGate">
-                                <input
-                                    ref={nameInputRef}
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    onBlur={() => setNameTouched(true)}
-                                    placeholder="Dein Name"
-                                />
-                            </div>
-                        )}
+                        <div className="readyInfo">{readyLabel}</div>
+                        {joining && <div className="p subline">Verbinde…</div>}
 
                         <div className="playerList">
-                            <div className="readyInfo">{readyLabel}</div>
+                            {lobby.host_player_id && (
+                                <div style={{ color: "#070707" }}>
+                                    {(() => {
+                                        const host = players.find((p) => p.id === lobby.host_player_id);
+                                        if (!host) return "Host …";
+                                        return `${initials(host.name)} ${host.name} ${host.is_ready ? "✔" : "…"} (Host)`;
+                                    })()}
+                                </div>
+                            )}
 
                             {others.map((p, i) => (
                                 <div key={p.id} style={{ color: getPlayerColor(i) }}>
-                                    {initials(p.name)} {p.name} {p.ready ? "✔" : "…"}
+                                    {initials(p.name)} {p.name} {p.is_ready ? "✔" : "…"}
+                                    {!p.is_connected ? " (offline)" : ""}
                                 </div>
                             ))}
                         </div>
 
-                        <footer>
-                            {isHost ? (
-                                myRow?.ready ? (
-                                    <button disabled={!canStart} onClick={startGame}>
-                                        Spiel starten
-                                    </button>
-                                ) : (
-                                    <button onClick={toggleReady}>Bereit</button>
-                                )
-                            ) : (
-                                <button onClick={toggleReady}>
-                                    {myRow?.ready ? "Bereit (aus)" : "Bereit"}
+                        <footer style={{ display: "flex", gap: 12 }}>
+                            <button onClick={toggleReady} disabled={!playerId || lobby.status !== "lobby"}>
+                                {myRow?.is_ready ? "Bereit (aus)" : "Bereit"}
+                            </button>
+
+                            {isHost && (
+                                <button onClick={startGame} disabled={!canStart || lobby.status !== "lobby"}>
+                                    Spiel starten
                                 </button>
                             )}
+
+                            <button onClick={leaveLobby} disabled={!playerId}>
+                                Verlassen
+                            </button>
                         </footer>
                     </>
                 )}
