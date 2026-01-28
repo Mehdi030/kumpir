@@ -15,9 +15,17 @@ function makeCode(len = 4) {
 }
 
 function randomHostName() {
-    const a = ["Schnelle", "Crispy", "Wilde", "Freche", "Legendäre", "Heisse", "Golden", "Turbo", "Chillige", "Mutige"];
-    const b = ["Kartoffel", "Kumpir", "Lobby", "Crew", "Runde", "Gang", "Truppe", "Squad", "Clique", "Party"];
-    return `${a[Math.floor(Math.random() * a.length)]} ${b[Math.floor(Math.random() * b.length)]}`;
+    const names = [
+        "Baro", "Achi", "Medo", "Sero",
+        "Alex", "Chris", "Luca", "Noah", "Elias",
+        "Ben", "Jonas", "Max", "Tim", "Leo",
+        "Emir", "Yusuf", "Can", "Ali", "Omar",
+        "David", "Paul", "Jan", "Nico", "Tobi",
+        "Sami", "Ibrahim", "Hassan", "Amir",
+        "Rafael", "Matteo", "Milan", "Deniz"
+    ];
+
+    return names[Math.floor(Math.random() * names.length)];
 }
 
 function getOrCreatePlayerId() {
