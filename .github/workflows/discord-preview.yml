@@ -10,13 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # jq wird für JSON-Auswertung benötigt
       - name: Ensure jq is installed
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
 
-      # 1) Vercel Preview-URL exakt für DIESEN Commit holen
       - name: Get Vercel preview deployment URL for this commit (wait until READY)
         id: vercel
         env:
@@ -56,12 +54,10 @@ jobs:
           echo "❌ Timeout: No READY preview found for this commit."
           exit 1
 
-      # 2) Discord-Nachricht senden ODER aktualisieren
-      - name: Send or update preview message on Discord
+      - name: Post preview message to Discord
         env:
           DISCORD_WEBHOOK_ID: ${{ secrets.DISCORD_WEBHOOK_ID }}
           DISCORD_WEBHOOK_TOKEN: ${{ secrets.DISCORD_WEBHOOK_TOKEN }}
-          DISCORD_PREVIEW_MESSAGE_ID: ${{ secrets.DISCORD_PREVIEW_MESSAGE_ID }}
           PREVIEW_URL: ${{ steps.vercel.outputs.preview_url }}
           COMMIT_SHA: ${{ github.sha }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
@@ -76,28 +72,9 @@ jobs:
           JSON
           )
 
-          if [ -n "$DISCORD_PREVIEW_MESSAGE_ID" ]; then
-            echo "Updating existing Discord message..."
+          res=$(curl -sS -w "\nHTTP_STATUS:%{http_code}\n" -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "https://discord.com/api/webhooks/$DISCORD_WEBHOOK_ID/$DISCORD_WEBHOOK_TOKEN?wait=true")
 
-            curl -sS -w "\nHTTP_STATUS:%{http_code}\n" -X PATCH \
-              -H "Content-Type: application/json" \
-              -d "$payload" \
-              "https://discord.com/api/webhooks/$DISCORD_WEBHOOK_ID/$DISCORD_WEBHOOK_TOKEN/messages/$DISCORD_PREVIEW_MESSAGE_ID"
-
-          else
-            echo "Creating new Discord message..."
-
-            res=$(curl -sS -w "\nHTTP_STATUS:%{http_code}\n" -X POST \
-              -H "Content-Type: application/json" \
-              -d "$payload" \
-              "https://discord.com/api/webhooks/$DISCORD_WEBHOOK_ID/$DISCORD_WEBHOOK_TOKEN?wait=true")
-
-            echo "$res"
-
-            msg_id=$(echo "$res" | jq -r '.id')
-
-            echo ""
-            echo "Created message id: $msg_id"
-            echo "➡️ Setze dieses als GitHub Secret:"
-            echo "DISCORD_PREVIEW_MESSAGE_ID=$msg_id"
-          fi
+          echo "$res"
