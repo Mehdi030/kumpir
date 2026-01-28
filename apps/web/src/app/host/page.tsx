@@ -17,7 +17,7 @@ function makeCode(len = 4) {
 function randomHostName() {
     const names = [
         "Baro", "Achi", "Medo", "Sero",
-        "Alex", "Chris", "Luca", "Noah", "Elias",
+        "Sinan", "Albion", "Youssef", "Angi", "Elias",
         "Ben", "Jonas", "Max", "Tim", "Leo",
         "Emir", "Yusuf", "Can", "Ali", "Omar",
         "David", "Paul", "Jan", "Nico", "Tobi",
@@ -144,7 +144,7 @@ export default function HostPage() {
     return (
         <main className="container">
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image src="/logo.png" alt="Kumpir Maskottchen" width={160} height={160} priority className="brandLogoImg" />
+                <Image src="/logo.png" alt="Kumpir Maskottchen" width={400} height={400} priority className="brandLogoImg" />
             </Link>
 
             <div className="landingWrap">

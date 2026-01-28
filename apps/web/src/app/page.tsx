@@ -11,8 +11,8 @@ export default function Home() {
                 <Image
                     src="/logo.png"
                     alt="Kumpir Maskottchen"
-                    width={160}
-                    height={160}
+                    width={200}
+                    height={200}
                     priority
                     className="brandLogoImg"
                 />
@@ -23,8 +23,6 @@ export default function Home() {
                 <div className="metaBar">
                     <div className="metaLeft">
                         <span className="metaPill">👥 2–10 Spieler</span>
-                        <span className="metaPill">⚡ Live</span>
-                        <span className="metaPill">🔒 Privat</span>
                     </div>
                     <div className="metaRight">
                         <span className="metaPill">v0 • lokal</span>
@@ -40,9 +38,9 @@ export default function Home() {
 
                     <div className="heroCopy">
                         <p className="p">
-                            Die Zeit läuft. Einer hält.
+                            Einer hat die Kumpir in der Hand.
                             <br />
-                            Gib weiter, bevor der Countdown endet.
+                            Gib es weiter, bevor der Countdown endet.
                             <br />
                             Wer zu lange hält, ist raus.
                         </p>
