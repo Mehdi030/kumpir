@@ -96,3 +96,4 @@ jobs:
             echo "Setze dieses Message-ID als GitHub Secret:"
             echo "DISCORD_PREVIEW_MESSAGE_ID=$msg_id"
           fi
+
