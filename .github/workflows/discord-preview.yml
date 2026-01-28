@@ -68,7 +68,7 @@ jobs:
 
           payload=$(cat <<JSON
           {
-            "content": "🔗 **AKTUELLE SPIEL-VORSCHAU (KUMPIR)**\n\n👉 ${PREVIEW_URL}\n\nDas ist die **neueste Testversion** des Spiels.\nEinfach öffnen, ausprobieren und schauen, was neu ist.\n\n🧩 **Was wurde geändert?**\n• Update von ${AUTHOR}\n• Kurzinfo: ${COMMIT_MSG}\n\n⚠️ **Wichtig**\n• Das ist eine Testversion\n• Es können Fehler auftreten\n• Fortschritt oder Inhalte können sich ändern\n\n👉 Feedback einfach hier im Discord schreiben 🙌"
+            "content": "🔗 **AKTUELLE SPIEL-VORSCHAU (KUMPIR)**\n\n👉 ${PREVIEW_URL}\n\nDas ist die **neueste Testversion** des Spiels.\nEinfach öffnen, ausprobieren und schauen, was neu ist.\n\n🧩 **Was wurde geändert?**\n• Update von ${AUTHOR}\n• Kurzinfo: ${COMMIT_MSG}\n\n⚠️ **Wichtig**\n• Das ist eine Testversion\n• Es können Fehler auftreten\n• Fortschritt oder Inhalte können sich ändern"
           }
           JSON
           )
