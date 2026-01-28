@@ -9,63 +9,42 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Ensure jq is installed
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-
-      - name: Get latest Vercel preview deployment URL (wait until READY)
+      - name: Get Vercel preview deployment URL for this commit (wait until READY)
         id: vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          GIT_SHA: ${{ github.sha }}
         run: |
           set -e
 
-          for i in {1..18}; do
-            echo "Attempt $i/18: checking Vercel deployments..."
+          for i in {1..30}; do
+            echo "Attempt $i/30: checking Vercel deployments for commit $GIT_SHA..."
 
             response=$(curl -sS \
               -H "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=30")
+              "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=50")
 
-            url=$(echo "$response" | jq -r '
+            url=$(echo "$response" | jq -r --arg sha "$GIT_SHA" '
               .deployments
-              | map(select(.state=="READY"
-                           and (.target=="preview" or .target==null)
-                           and (.meta.githubCommitRef=="web")))
+              | map(select(
+                  .state=="READY"
+                  and (.target=="preview" or .target==null)
+                  and (.meta.githubCommitRef=="web")
+                  and (.meta.githubCommitSha==$sha)
+                ))
               | .[0].url
             ')
 
             if [ -n "$url" ] && [ "$url" != "null" ]; then
-              echo "Found READY preview deployment: $url"
+              echo "Found READY preview deployment for this commit: $url"
               echo "preview_url=https://$url" >> $GITHUB_OUTPUT
               exit 0
             fi
 
-            echo "No READY preview deployment yet. Sleeping 10s..."
+            echo "Not READY yet for this commit. Sleeping 10s..."
             sleep 10
           done
 
-          echo "❌ Timeout: No READY preview deployment URL found for branch web."
+          echo "❌ Timeout: No READY preview deployment found for this commit."
           exit 1
-
-      - name: Send preview message to Discord
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          PREVIEW_URL: ${{ steps.vercel.outputs.preview_url }}
-          COMMIT_SHA: ${{ github.sha }}
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-          AUTHOR: ${{ github.event.head_commit.author.name }}
-        run: |
-          payload=$(cat <<JSON
-          {
-            "content": "🔗 **AKTUELLE PREVIEW (Vercel)**\n\n${PREVIEW_URL}\n\n**Commit:** \`${COMMIT_SHA:0:7}\`\n**Von:** ${AUTHOR}\n**Msg:** ${COMMIT_MSG}\n\nFür Tests & Feedback nutzen.\nHinweis:\n• Preview pro Commit\n• Kann instabil sein"
-          }
-          JSON
-          )
-
-          curl -sS -X POST \
-            -H "Content-Type: application/json" \
-            -d "$payload" \
-            "$DISCORD_WEBHOOK_URL"
