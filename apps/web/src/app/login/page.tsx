@@ -72,8 +72,8 @@ export default function LoginPage() {
                 setLoading(false);
                 return;
             }
-            if (password.length < 6) {
-                setError("Passwort muss mindestens 6 Zeichen haben.");
+            if (password.length < 8) {
+                setError("Passwort muss mindestens 8 Zeichen haben.");
                 setLoading(false);
                 return;
             }
@@ -105,8 +105,8 @@ export default function LoginPage() {
                 setLoading(false);
                 return;
             }
-            if (password.length < 6) {
-                setError("Passwort muss mindestens 6 Zeichen haben.");
+            if (password.length < 8) {
+                setError("Passwort muss mindestens 8 Zeichen haben.");
                 setLoading(false);
                 return;
             }
@@ -236,7 +236,7 @@ export default function LoginPage() {
                                                 className="input"
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
-                                                placeholder="mind. 6 Zeichen"
+                                                placeholder="mind. 8 Zeichen"
                                                 autoComplete="current-password"
                                                 type="password"
                                             />
