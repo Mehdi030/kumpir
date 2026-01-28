@@ -7,10 +7,6 @@ export async function GET(request: Request) {
     const code = url.searchParams.get("code");
     const next = url.searchParams.get("next") ?? "/";
 
-    if (!code) {
-        return NextResponse.redirect(new URL(`/login?error=missing_code`, url.origin));
-    }
-
     const cookieStore = await cookies();
 
     const supabase = createServerClient(
@@ -18,24 +14,27 @@ export async function GET(request: Request) {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
             cookies: {
-                getAll() {
-                    return cookieStore.getAll();
+                get(name: string) {
+                    return cookieStore.get(name)?.value;
                 },
-                setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) => {
-                        cookieStore.set(name, value, options);
-                    });
+                set(name: string, value: string, options: any) {
+                    cookieStore.set({ name, value, ...options });
+                },
+                remove(name: string, options: any) {
+                    cookieStore.set({ name, value: "", ...options, maxAge: 0 });
                 },
             },
         }
     );
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (error) {
-        return NextResponse.redirect(
-            new URL(`/login?error=${encodeURIComponent(error.message)}`, url.origin)
-        );
+    if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+            const errUrl = new URL("/login", url.origin);
+            errUrl.searchParams.set("next", next);
+            errUrl.searchParams.set("error", "oauth_exchange_failed");
+            return NextResponse.redirect(errUrl);
+        }
     }
 
     return NextResponse.redirect(new URL(next, url.origin));

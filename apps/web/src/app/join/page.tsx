@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { AuthMini } from "@/components/AuthMini";
 
 function normalizeCode(input: string) {
     return input
@@ -52,7 +53,7 @@ export default function JoinPage() {
 
             setStoredName(playerName);
 
-            // ✅ NEW RPC: join_lobby(p_lobby_code, p_name) -> uuid
+            // join_lobby(p_lobby_code, p_name) -> uuid
             const { data, error: rpcErr } = await supabase.rpc("join_lobby", {
                 p_lobby_code: lobbyCode,
                 p_name: playerName,
@@ -63,9 +64,7 @@ export default function JoinPage() {
                 return;
             }
 
-            // ✅ store returned uuid
             setStoredPlayerId(String(data));
-
             router.push(`/lobby/${lobbyCode}`);
         } catch (err: unknown) {
             setError(getErrorMessage(err));
@@ -78,8 +77,15 @@ export default function JoinPage() {
         <main className="container">
             <div className="landingWrap">
                 <section className="card">
-                    <h1 className="h1">Lobby beitreten</h1>
-                    <p className="p subline">Mitspielen ohne Account. Code rein und los.</p>
+                    <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12 }}>
+                        <div>
+                            <h1 className="h1">Lobby beitreten</h1>
+                            <p className="p subline">Mitspielen ohne Account. Code rein und los.</p>
+                        </div>
+
+                        {/* ✅ optional sichtbar */}
+                        <AuthMini nextPath="/join" variant="header" />
+                    </div>
 
                     <div className="stepsWrap">
                         <div className="stepsBox">

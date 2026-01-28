@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { AuthMini } from "@/components/AuthMini";
 
 type LobbyStatus = "lobby" | "in_game" | "ended";
 
@@ -30,15 +31,11 @@ type Player = {
 };
 
 function getPlayerId(): string | null {
-    return typeof window !== "undefined"
-        ? localStorage.getItem("kumpir_player_id")
-        : null;
+    return typeof window !== "undefined" ? localStorage.getItem("kumpir_player_id") : null;
 }
 
 function getStoredName(): string {
-    return typeof window !== "undefined"
-        ? localStorage.getItem("kumpir_player_name") || ""
-        : "";
+    return typeof window !== "undefined" ? localStorage.getItem("kumpir_player_name") || "" : "";
 }
 
 function setStoredPlayerId(id: string) {
@@ -67,49 +64,28 @@ export default function LobbyPage({ params }: { params: { code: string } }) {
     const [joining, setJoining] = useState(false);
     const [error, setError] = useState("");
 
-    // ✅ set state NOT in effect sync: initialize via initializer callback
     useEffect(() => {
-        // This is allowed; still triggers lint in some setups if you do many setStates.
-        // We do only one setState here.
         setPlayerIdState(getPlayerId());
     }, []);
 
-    const myRow = useMemo(
-        () => players.find((p) => p.id === playerId) ?? null,
-        [players, playerId]
-    );
+    const myRow = useMemo(() => players.find((p) => p.id === playerId) ?? null, [players, playerId]);
 
     const isHost = !!playerId && lobby?.host_player_id === playerId;
 
-    const connectedPlayers = useMemo(
-        () => players.filter((p) => p.is_connected),
-        [players]
-    );
+    const connectedPlayers = useMemo(() => players.filter((p) => p.is_connected), [players]);
 
     const readyCount = connectedPlayers.filter((p) => p.is_ready).length;
     const totalCount = connectedPlayers.length;
 
-    const canStart =
-        !!lobby &&
-        lobby.status === "lobby" &&
-        totalCount >= 2 &&
-        readyCount === totalCount;
+    const canStart = !!lobby && lobby.status === "lobby" && totalCount >= 2 && readyCount === totalCount;
 
-    const others = useMemo(
-        () => players.filter((p) => p.id !== lobby?.host_player_id),
-        [players, lobby]
-    );
+    const others = useMemo(() => players.filter((p) => p.id !== lobby?.host_player_id), [players, lobby]);
 
-    // ✅ stable fetch functions (useCallback) to satisfy exhaustive-deps
     const fetchLobby = useCallback(async () => {
         setLoadingLobby(true);
         setError("");
 
-        const { data, error: err } = await supabase
-            .from("lobbies")
-            .select("*")
-            .eq("code", code)
-            .single();
+        const { data, error: err } = await supabase.from("lobbies").select("*").eq("code", code).single();
 
         if (err || !data) {
             setLobby(null);
@@ -126,22 +102,16 @@ export default function LobbyPage({ params }: { params: { code: string } }) {
     const fetchPlayers = useCallback(async () => {
         setLoadingPlayers(true);
 
-        const { data } = await supabase
-            .from("players")
-            .select("*")
-            .eq("lobby_code", code)
-            .order("joined_at");
+        const { data } = await supabase.from("players").select("*").eq("lobby_code", code).order("joined_at");
 
         setPlayers((data ?? []) as Player[]);
         setLoadingPlayers(false);
     }, [supabase, code]);
 
-    // Load lobby once (and on code change)
     useEffect(() => {
         void fetchLobby();
     }, [fetchLobby]);
 
-    // Ensure joined (re-join if storage lost / player row missing)
     useEffect(() => {
         if (!lobby || loadingLobby) return;
 
@@ -152,20 +122,13 @@ export default function LobbyPage({ params }: { params: { code: string } }) {
             return;
         }
 
-        // store in state if different (avoid sync state cascade by checking)
-        if (playerId !== pid) {
-            setPlayerIdState(pid);
-        }
+        if (playerId !== pid) setPlayerIdState(pid);
 
         const ensureJoined = async () => {
             setJoining(true);
             setError("");
 
-            const { data: me } = await supabase
-                .from("players")
-                .select("id")
-                .eq("id", pid)
-                .maybeSingle();
+            const { data: me } = await supabase.from("players").select("id").eq("id", pid).maybeSingle();
 
             if (me?.id) {
                 setJoining(false);
@@ -199,7 +162,6 @@ export default function LobbyPage({ params }: { params: { code: string } }) {
         void ensureJoined();
     }, [lobby, loadingLobby, supabase, code, playerId]);
 
-    // Load players + realtime
     useEffect(() => {
         if (!lobby) return;
 
@@ -207,15 +169,11 @@ export default function LobbyPage({ params }: { params: { code: string } }) {
 
         const channel = supabase
             .channel(`lobby:${code}`)
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "players", filter: `lobby_code=eq.${code}` },
-                () => void fetchPlayers()
+            .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `lobby_code=eq.${code}` }, () =>
+                void fetchPlayers()
             )
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "lobbies", filter: `code=eq.${code}` },
-                () => void fetchLobby()
+            .on("postgres_changes", { event: "*", schema: "public", table: "lobbies", filter: `code=eq.${code}` }, () =>
+                void fetchLobby()
             )
             .subscribe();
 
@@ -224,7 +182,6 @@ export default function LobbyPage({ params }: { params: { code: string } }) {
         };
     }, [lobby, supabase, code, fetchPlayers, fetchLobby]);
 
-    // auto redirect
     useEffect(() => {
         if (lobby?.status === "in_game") {
             window.location.href = `/game/${code}`;
@@ -275,13 +232,17 @@ export default function LobbyPage({ params }: { params: { code: string } }) {
             </Link>
 
             <section className="card cardLobby">
-                <header className="lobbyTop">
-                    <h1 className="h1">Kumpir</h1>
-                    <div className="codePill">{code}</div>
+                <header className="lobbyTop" style={{ justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <h1 className="h1">Kumpir</h1>
+                        <div className="codePill">{code}</div>
+                    </div>
+
+                    {/* ✅ vor Spielstart sichtbar */}
+                    <AuthMini nextPath={`/lobby/${code}`} variant="header" />
                 </header>
 
                 {error && <div className="errorBox">{error}</div>}
-
                 {loadingLobby && <div>Lade Lobby…</div>}
 
                 {!loadingLobby && lobby && (

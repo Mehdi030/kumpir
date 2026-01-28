@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 function isEmailLike(v: string) {
@@ -13,7 +13,6 @@ export default function LoginPage() {
     const supabase = getSupabaseClient();
 
     const [tab, setTab] = useState<"google" | "email">("google");
-
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
@@ -21,7 +20,6 @@ export default function LoginPage() {
     const [error, setError] = useState<string>("");
     const [info, setInfo] = useState<string>("");
 
-    // wohin nach Login (standard: /host)
     const nextPath = useMemo(() => {
         if (typeof window === "undefined") return "/host";
         const url = new URL(window.location.href);
@@ -33,27 +31,29 @@ export default function LoginPage() {
         return `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
     }, [nextPath]);
 
+    // ✅ wenn bereits eingeloggt: sofort weiter
+    useEffect(() => {
+        (async () => {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) {
+                window.location.href = nextPath;
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     async function signInWithGoogle() {
         setLoading(true);
         setError("");
         setInfo("");
 
         try {
-            console.log("[login] google -> redirectTo:", callbackUrl);
-
-            const { data, error } = await supabase.auth.signInWithOAuth({
+            const { error } = await supabase.auth.signInWithOAuth({
                 provider: "google",
-                options: {
-                    redirectTo: callbackUrl,
-                },
+                options: { redirectTo: callbackUrl },
             });
-
-            console.log("[login] google result:", { data, error });
-
             if (error) throw error;
-            // Supabase redirectet automatisch – hier passiert meist nichts mehr.
         } catch (e: any) {
-            console.error("[login] google error:", e);
             setError(e?.message ?? "Google Login fehlgeschlagen.");
             setLoading(false);
         }
@@ -78,20 +78,15 @@ export default function LoginPage() {
                 return;
             }
 
-            console.log("[login] email signIn:", { email: cleanEmail, nextPath });
-
-            const { data, error } = await supabase.auth.signInWithPassword({
+            const { error } = await supabase.auth.signInWithPassword({
                 email: cleanEmail,
                 password,
             });
-
-            console.log("[login] email result:", { data, error });
 
             if (error) throw error;
 
             window.location.href = nextPath;
         } catch (e: any) {
-            console.error("[login] email error:", e);
             setError(e?.message ?? "Login fehlgeschlagen.");
             setLoading(false);
         }
@@ -116,27 +111,19 @@ export default function LoginPage() {
                 return;
             }
 
-            console.log("[login] email signUp:", { email: cleanEmail, emailRedirect: callbackUrl });
-
-            const { data, error } = await supabase.auth.signUp({
+            const { error } = await supabase.auth.signUp({
                 email: cleanEmail,
                 password,
-                options: {
-                    emailRedirectTo: callbackUrl,
-                },
+                options: { emailRedirectTo: callbackUrl },
             });
-
-            console.log("[login] signUp result:", { data, error });
 
             if (error) throw error;
 
-            // Wenn Email-Confirm an ist: Hinweis anzeigen
             setInfo(
                 "Account erstellt. Falls E-Mail-Bestätigung aktiv ist: Bitte Mail öffnen und bestätigen, danach wirst du zurückgeleitet."
             );
             setLoading(false);
         } catch (e: any) {
-            console.error("[login] signUp error:", e);
             setError(e?.message ?? "Registrierung fehlgeschlagen.");
             setLoading(false);
         }
@@ -145,14 +132,7 @@ export default function LoginPage() {
     return (
         <main className="container">
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image
-                    src="/logo.png"
-                    alt="Kumpir Maskottchen"
-                    width={400}
-                    height={400}
-                    priority
-                    className="brandLogoImg"
-                />
+                <Image src="/logo.png" alt="Kumpir Maskottchen" width={400} height={400} priority className="brandLogoImg" />
             </Link>
 
             <div className="landingWrap">
@@ -181,7 +161,6 @@ export default function LoginPage() {
                                 <div className="panelHint">Dauert ~5 Sekunden</div>
                             </div>
 
-                            {/* Tabs */}
                             <div className="seg" style={{ marginBottom: 12 }}>
                                 <button
                                     type="button"
