@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { AuthMini } from "@/components/AuthMini";
 
-type LobbyStatus = "lobby" | "in_game" | "ended";
+type LobbyStatus = "waiting" | "started" | "ended";
 
 type Lobby = {
     id: string;
