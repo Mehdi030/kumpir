@@ -78,21 +78,26 @@ jobs:
 
           if [ -n "$DISCORD_PREVIEW_MESSAGE_ID" ]; then
             echo "Updating existing Discord message..."
-            curl -sS -X PATCH \
+
+            curl -sS -w "\nHTTP_STATUS:%{http_code}\n" -X PATCH \
               -H "Content-Type: application/json" \
               -d "$payload" \
               "https://discord.com/api/webhooks/$DISCORD_WEBHOOK_ID/$DISCORD_WEBHOOK_TOKEN/messages/$DISCORD_PREVIEW_MESSAGE_ID"
+
           else
             echo "Creating new Discord message..."
-            res=$(curl -sS -X POST \
+
+            res=$(curl -sS -w "\nHTTP_STATUS:%{http_code}\n" -X POST \
               -H "Content-Type: application/json" \
               -d "$payload" \
               "https://discord.com/api/webhooks/$DISCORD_WEBHOOK_ID/$DISCORD_WEBHOOK_TOKEN?wait=true")
 
+            echo "$res"
+
             msg_id=$(echo "$res" | jq -r '.id')
-            echo "Created message id: $msg_id"
+
             echo ""
-            echo "➡️ WICHTIG:"
-            echo "Setze dieses Message-ID als GitHub Secret:"
+            echo "Created message id: $msg_id"
+            echo "➡️ Setze dieses als GitHub Secret:"
             echo "DISCORD_PREVIEW_MESSAGE_ID=$msg_id"
           fi
