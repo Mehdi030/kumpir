@@ -9,30 +9,46 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Get latest Vercel preview deployment URL
+      - name: Ensure jq is installed
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Get latest Vercel preview deployment URL (wait until READY)
         id: vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          # Hole die letzten Deployments und nimm das neueste, das READY ist und target=preview hat
-          response=$(curl -sS \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=10")
+          set -e
 
-          url=$(echo "$response" | jq -r '
-            .deployments
-            | map(select(.state=="READY" and .target=="preview"))
-            | .[0].url
-          ')
+          for i in {1..18}; do
+            echo "Attempt $i/18: checking Vercel deployments..."
 
-          if [ -z "$url" ] || [ "$url" = "null" ]; then
-            echo "❌ Konnte keine READY preview deployment URL finden."
-            echo "$response" | jq -r '.deployments[0] // empty'
-            exit 1
-          fi
+            response=$(curl -sS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=30")
 
-          echo "preview_url=https://$url" >> $GITHUB_OUTPUT
+            url=$(echo "$response" | jq -r '
+              .deployments
+              | map(select(.state=="READY"
+                           and (.target=="preview" or .target==null)
+                           and (.meta.githubCommitRef=="web")))
+              | .[0].url
+            ')
+
+            if [ -n "$url" ] && [ "$url" != "null" ]; then
+              echo "Found READY preview deployment: $url"
+              echo "preview_url=https://$url" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            echo "No READY preview deployment yet. Sleeping 10s..."
+            sleep 10
+          done
+
+          echo "❌ Timeout: No READY preview deployment URL found for branch web."
+          exit 1
 
       - name: Send preview message to Discord
         env:
