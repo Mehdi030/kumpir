@@ -109,15 +109,19 @@ export default function HostPage() {
             setStoredName(cleanName);
 
             const payload = {
-                p_player_id: playerId,
-                p_name: cleanName,
+                p_host_player_id: playerId,
+                p_host_name: cleanName,
+                p_privacy: privacy, // "private" / "public"
                 p_max_players: maxPlayers,
                 p_round_seconds: roundSeconds,
             };
 
-            console.log("[HostPage] rpc_create_lobby payload:", payload);
-
             const res = await supabase.rpc("rpc_create_lobby", payload);
+
+            if (res.error) {
+                console.log("[HostPage] rpc error (raw):", res.error);
+                console.log("[HostPage] rpc error (json):", JSON.stringify(res.error, null, 2));
+            }
 
             console.log("[HostPage] rpc_create_lobby data:", res.data);
             console.log("[HostPage] rpc_create_lobby error:", res.error);
