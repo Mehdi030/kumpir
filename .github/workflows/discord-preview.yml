@@ -10,12 +10,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # jq wird für die Vercel-API-Auswertung benötigt
       - name: Ensure jq is installed
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Get Vercel preview deployment URL for this commit (wait until READY)
+      # 1) Vercel Preview-URL für DIESEN Commit holen (wartet bis READY)
+      - name: Get Vercel preview deployment URL (wait until READY)
         id: vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -25,7 +27,7 @@ jobs:
           set -e
 
           for i in {1..30}; do
-            echo "Attempt $i/30: checking Vercel deployments for commit $GIT_SHA..."
+            echo "Attempt $i/30: checking Vercel deployments..."
 
             response=$(curl -sS \
               -H "Authorization: Bearer $VERCEL_TOKEN" \
@@ -54,11 +56,11 @@ jobs:
           echo "❌ Timeout: No READY preview found for this commit."
           exit 1
 
+      # 2) Discord-Nachricht posten (immer neu)
       - name: Post preview message to Discord
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PREVIEW_URL: ${{ steps.vercel.outputs.preview_url }}
-          COMMIT_SHA: ${{ github.sha }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
           AUTHOR: ${{ github.event.head_commit.author.name }}
         run: |
@@ -66,7 +68,7 @@ jobs:
 
           payload=$(cat <<JSON
           {
-            "content": "🔗 **AKTUELLE PREVIEW (Vercel)**\n\n${PREVIEW_URL}\n\n**Commit:** \`${COMMIT_SHA:0:7}\`\n**Von:** ${AUTHOR}\n**Msg:** ${COMMIT_MSG}\n\nFür Tests & Feedback nutzen.\nHinweis:\n• Preview pro Commit\n• Kann instabil sein"
+            "content": "🔗 **AKTUELLE SPIEL-VORSCHAU (KUMPIR)**\n\n👉 ${PREVIEW_URL}\n\nDas ist die **neueste Testversion** des Spiels.\nEinfach öffnen, ausprobieren und schauen, was neu ist.\n\n🧩 **Was wurde geändert?**\n• Update von ${AUTHOR}\n• Kurzinfo: ${COMMIT_MSG}\n\n⚠️ **Wichtig**\n• Das ist eine Testversion\n• Es können Fehler auftreten\n• Fortschritt oder Inhalte können sich ändern\n\n👉 Feedback einfach hier im Discord schreiben 🙌"
           }
           JSON
           )
