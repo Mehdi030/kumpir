@@ -1,4 +1,4 @@
-name: Notify Discord (Preview)
+name: Post Preview Link to Discord
 
 on:
   push:
@@ -9,12 +9,20 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send Discord message
+      - name: Send preview message to Discord
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PREVIEW_URL: https://kumpir-web-git-web-mehdis-projects-40245797.vercel.app
         run: |
-          curl -H "Content-Type: application/json" \
-          -X POST \
-          -d "{\"content\":\"🚀 **Neue Preview verfügbar**\n📦 Projekt: **Kumpir Web**\n🔗 Preview: ${PREVIEW_URL}\"}" \
-          "$DISCORD_WEBHOOK_URL"
+          payload=$(cat <<'JSON'
+          {
+            "content": "🔗 **AKTUELLE PREVIEW (Vercel)**\n\n${PREVIEW_URL}\n\nDiese Umgebung zeigt immer den aktuellsten Stand.\nFür Tests & Feedback nutzen.\n\nHinweis:\n• Kann instabil sein\n• Daten können sich ändern"
+          }
+          JSON
+          )
+          payload="${payload//\$\{PREVIEW_URL\}/$PREVIEW_URL}"
+
+          curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "$DISCORD_WEBHOOK_URL"
