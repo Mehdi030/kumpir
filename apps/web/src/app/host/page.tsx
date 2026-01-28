@@ -28,16 +28,6 @@ function randomHostName() {
     return names[Math.floor(Math.random() * names.length)];
 }
 
-function getOrCreatePlayerId() {
-    const key = "kumpir_player_id";
-    const existing = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-    if (existing) return existing;
-
-    const id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-    return id;
-}
-
 function setStoredName(name: string) {
     localStorage.setItem("kumpir_player_name", name);
 }
@@ -79,6 +69,14 @@ export default function HostPage() {
     const readyLabel = isReady ? "Bereit" : "Nicht bereit";
     const readyHint = isReady ? "Du kannst die Lobby jetzt erstellen." : "Bitte gib mindestens 2 Zeichen beim Namen ein.";
 
+    useEffect(() => {
+        (async () => {
+            const { data, error } = await supabase.auth.getSession();
+            console.log("[HostPage] session:", data.session, "error:", error);
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     async function onCreate() {
         if (!isNameValid || creating) return;
 
@@ -86,7 +84,27 @@ export default function HostPage() {
         setCreateError("");
 
         try {
-            const playerId = getOrCreatePlayerId();
+            console.log("[HostPage] Checking auth session…");
+
+            const {
+                data: { user },
+                error: userErr,
+            } = await supabase.auth.getUser();
+
+            console.log("[HostPage] getUser result:", user, userErr);
+
+            if (userErr) throw userErr;
+
+            if (!user) {
+                console.warn("[HostPage] No user session found");
+                setCreateError("Du bist nicht eingeloggt. Bitte melde dich an, um eine Lobby zu erstellen.");
+                return;
+            }
+
+            // ✅ DAS ist die entscheidende ID
+            const playerId = user.id;
+            console.log("[HostPage] Auth user id (UUID):", playerId);
+
             const cleanName = hostName.trim();
             setStoredName(cleanName);
 
@@ -95,44 +113,40 @@ export default function HostPage() {
                 p_name: cleanName,
                 p_max_players: maxPlayers,
                 p_round_seconds: roundSeconds,
-                // nur drin lassen, wenn dein RPC das wirklich erwartet:
-                // p_privacy: privacy,
             };
+
+            console.log("[HostPage] rpc_create_lobby payload:", payload);
 
             const res = await supabase.rpc("rpc_create_lobby", payload);
 
-            // HARTE Debug-Ausgabe (damit nie wieder {} im Overlay steht)
-            console.log("[rpc_create_lobby] payload:", payload);
-            console.log("[rpc_create_lobby] data:", res.data);
-            console.log("[rpc_create_lobby] error:", res.error);
+            console.log("[HostPage] rpc_create_lobby data:", res.data);
+            console.log("[HostPage] rpc_create_lobby error:", res.error);
 
             if (res.error) {
                 setCreateError(res.error.message || "RPC Fehler: Lobby konnte nicht erstellt werden.");
                 return;
             }
 
-            // Je nach RPC Return-Shape:
-            // Variante A: res.data ist ein Objekt {id, code}
-            // Variante B: res.data ist ein Array [{id, code}]
-            const created =
-                Array.isArray(res.data) ? res.data[0] : res.data;
+            const created = Array.isArray(res.data) ? res.data[0] : res.data;
 
             if (!created?.code) {
                 setCreateError("RPC Return ungültig (kein code). Prüfe SQL Return von rpc_create_lobby.");
                 return;
             }
 
+            console.log("[HostPage] Lobby created with code:", created.code);
+
             window.location.href = `/lobby/${created.code}`;
         } catch (e: any) {
-            console.error("[onCreate] unexpected:", e);
+            console.error("[HostPage] unexpected error:", e);
             setCreateError(e?.message || "Unerwarteter Fehler. Bitte neu laden und erneut versuchen.");
         } finally {
             setCreating(false);
         }
     }
 
+
     async function copyInvite() {
-        // wichtig: window gibt’s nur im Client, aber diese Funktion läuft nur per Buttonclick
         const url = `${window.location.origin}/join?code=${previewCode}`;
         try {
             await navigator.clipboard.writeText(url);
@@ -144,7 +158,14 @@ export default function HostPage() {
     return (
         <main className="container">
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image src="/logo.png" alt="Kumpir Maskottchen" width={400} height={400} priority className="brandLogoImg" />
+                <Image
+                    src="/logo.png"
+                    alt="Kumpir Maskottchen"
+                    width={400}
+                    height={400}
+                    priority
+                    className="brandLogoImg"
+                />
             </Link>
 
             <div className="landingWrap">
@@ -153,7 +174,12 @@ export default function HostPage() {
                         <div className="hostTitleRow">
                             <h1 className="h1">Lobby hosten</h1>
 
-                            <span className="chip" title={readyHint} aria-live="polite" aria-label={`Status: ${readyLabel}. ${readyHint}`}>
+                            <span
+                                className="chip"
+                                title={readyHint}
+                                aria-live="polite"
+                                aria-label={`Status: ${readyLabel}. ${readyHint}`}
+                            >
                 <span
                     className="chipDot"
                     aria-hidden
@@ -309,7 +335,9 @@ export default function HostPage() {
                                     </div>
                                     <div className="previewMeta">
                                         <div className="previewName">{hostName.trim() || "Dein Name"}</div>
-                                        <div className="previewSub">🔒 Privat • 👥 2–{maxPlayers} • ⏱️ {roundSeconds}s</div>
+                                        <div className="previewSub">
+                                            🔒 Privat • 👥 2–{maxPlayers} • ⏱️ {roundSeconds}s
+                                        </div>
                                     </div>
                                 </div>
 

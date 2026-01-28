@@ -7,33 +7,36 @@ export async function GET(request: Request) {
     const code = url.searchParams.get("code");
     const next = url.searchParams.get("next") ?? "/";
 
-    // ✅ bei dir ist cookies() async → await
-    const cookieStore = await cookies();
+    if (!code) {
+        return NextResponse.redirect(new URL(`/login?error=missing_code`, url.origin));
+    }
 
-    type SetCookieParam = Parameters<typeof cookieStore.set>[0];
-    type CookieOptions = Omit<SetCookieParam, "name" | "value">;
+    const cookieStore = await cookies();
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
             cookies: {
-                get(name: string) {
-                    return cookieStore.get(name)?.value;
+                getAll() {
+                    return cookieStore.getAll();
                 },
-                set(name: string, value: string, options: CookieOptions) {
-                    cookieStore.set({ name, value, ...options });
-                },
-                remove(name: string, options: CookieOptions) {
-                    cookieStore.set({ name, value: "", ...options, maxAge: 0 });
+                setAll(cookiesToSet) {
+                    cookiesToSet.forEach(({ name, value, options }) => {
+                        cookieStore.set(name, value, options);
+                    });
                 },
             },
         }
     );
 
-    if (code) {
-        await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+        return NextResponse.redirect(
+            new URL(`/login?error=${encodeURIComponent(error.message)}`, url.origin)
+        );
     }
 
-    return NextResponse.redirect(new URL(next, url));
+    return NextResponse.redirect(new URL(next, url.origin));
 }
