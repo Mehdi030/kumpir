@@ -7,7 +7,7 @@ export default function Home() {
     return (
         <main className="container">
             <div className="landingWrap landingWrapDecor">
-                {/* BACKGROUND potato – behind the card */}
+                {/* Decor / Mascot – hangs over the card */}
                 <div className="potatoBg" aria-hidden="true">
                     <Image
                         src="/HGLogo.png"
@@ -15,6 +15,7 @@ export default function Home() {
                         width={900}
                         height={600}
                         priority
+                        quality={100}
                         className="potatoBgImg"
                     />
                 </div>
@@ -38,11 +39,11 @@ export default function Home() {
 
                     <div className="heroCopy">
                         <p className="p">
-                            Einer hat die Kumpir in der Hand.
+                            Die Kumpir wandert.
                             <br />
-                            Gib es weiter, bevor der Countdown endet.
+                            Der Timer kennt kein Mitleid.
                             <br />
-                            Wer zu lange hält, ist raus.
+                            Wer zögert verliert.
                         </p>
                     </div>
 
@@ -73,9 +74,7 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <p className="trustLine">
-                        Kein Download. Kein Account nötig. Läuft direkt im Browser.
-                    </p>
+                    <p className="trustLine">Kein Download. Kein Account nötig. Läuft direkt im Browser.</p>
                 </section>
             </div>
         </main>
