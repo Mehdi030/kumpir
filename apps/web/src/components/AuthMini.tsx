@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { useAuth } from "@/components/AuthProvider";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Props = {
@@ -10,31 +11,8 @@ type Props = {
 };
 
 export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
-    const supabase = getSupabaseClient();
-    const [email, setEmail] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        let mounted = true;
-
-        (async () => {
-            const { data } = await supabase.auth.getUser();
-            if (!mounted) return;
-            setEmail(data.user?.email ?? null);
-            setLoading(false);
-        })();
-
-        const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-            setEmail(session?.user?.email ?? null);
-            setLoading(false);
-        });
-
-        return () => {
-            mounted = false;
-            sub.subscription.unsubscribe();
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const { user, loading } = useAuth();
+    const supabase = useMemo(() => getSupabaseClient(), []);
 
     async function logout() {
         await supabase.auth.signOut();
@@ -46,7 +24,7 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
         return <span className={variant === "header" ? "chip" : "fieldHelp"}>…</span>;
     }
 
-    if (!email) {
+    if (!user?.email) {
         return (
             <div className={variant === "header" ? "seg" : "actionsRow"}>
                 <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href={loginHref}>
@@ -61,14 +39,8 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
 
     return (
         <div className={variant === "header" ? "seg" : "actionsRow"}>
-      <span className={variant === "header" ? "segBtn segActive" : "btn btnSecondary"}>
-        {email}
-      </span>
-            <button
-                type="button"
-                className={variant === "header" ? "segBtn" : "btn btnSecondary"}
-                onClick={logout}
-            >
+            <span className={variant === "header" ? "segBtn segActive" : "btn btnSecondary"}>{user.email}</span>
+            <button type="button" className={variant === "header" ? "segBtn" : "btn btnSecondary"} onClick={logout}>
                 Abmelden
             </button>
         </div>
