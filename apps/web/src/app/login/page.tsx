@@ -199,7 +199,7 @@ export default function LoginPage() {
                                             onClick={signInWithGoogle}
                                             disabled={loading}
                                         >
-                                            {loading ? "Weiterleiten…" : "Mit Google einloggen"}
+                                            {loading ? "Weiterleiten…" : "Mit Google anmelden"}
                                         </button>
 
                                         <Link href="/" className="btn btnSecondary">

@@ -4,6 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
+import { AuthMini } from "@/components/AuthMini";
 
 type Privacy = "private" | "public";
 
@@ -22,9 +24,8 @@ function randomHostName() {
         "Emir", "Yusuf", "Can", "Ali", "Omar",
         "David", "Paul", "Jan", "Nico", "Tobi",
         "Sami", "Ibrahim", "Hassan", "Amir",
-        "Rafael", "Matteo", "Milan", "Deniz"
+        "Rafael", "Matteo", "Milan", "Deniz",
     ];
-
     return names[Math.floor(Math.random() * names.length)];
 }
 
@@ -34,6 +35,8 @@ function setStoredName(name: string) {
 
 export default function HostPage() {
     const supabase = getSupabaseClient();
+    const { user, loading } = useAuth();
+
     const [hostName, setHostName] = useState("");
     const [privacy, setPrivacy] = useState<Privacy>("private");
     const [maxPlayers, setMaxPlayers] = useState(8);
@@ -41,7 +44,6 @@ export default function HostPage() {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string>("");
 
-    // SSR-sicher: erst placeholder, dann client-only Code
     const [previewCode, setPreviewCode] = useState("----");
     useEffect(() => {
         setPreviewCode(makeCode(4));
@@ -65,90 +67,65 @@ export default function HostPage() {
         return "";
     }, [hostName, isNameValid]);
 
-    const isReady = isNameValid && !creating;
-    const readyLabel = isReady ? "Bereit" : "Nicht bereit";
-    const readyHint = isReady ? "Du kannst die Lobby jetzt erstellen." : "Bitte gib mindestens 2 Zeichen beim Namen ein.";
+    const canCreate = isNameValid && !creating && !!user && !loading;
 
-    useEffect(() => {
-        (async () => {
-            const { data, error } = await supabase.auth.getSession();
-            console.log("[HostPage] session:", data.session, "error:", error);
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const readyLabel = loading
+        ? "Lade…"
+        : !user
+            ? "Login erforderlich"
+            : isNameValid
+                ? "Bereit"
+                : "Name fehlt";
+
+    const readyHint = loading
+        ? "Lade Login…"
+        : !user
+            ? "Bitte einloggen, um eine Lobby zu erstellen."
+            : isNameValid
+                ? "Du kannst die Lobby jetzt erstellen."
+                : "Bitte gib mindestens 2 Zeichen beim Namen ein.";
 
     async function onCreate() {
         if (!isNameValid || creating) return;
+
+        if (loading) return;
+        if (!user) {
+            setCreateError("Bitte einloggen, um eine Lobby zu erstellen.");
+            return;
+        }
 
         setCreating(true);
         setCreateError("");
 
         try {
-            console.log("[HostPage] Checking auth session…");
-
-            const {
-                data: { user },
-                error: userErr,
-            } = await supabase.auth.getUser();
-
-            console.log("[HostPage] getUser result:", user, userErr);
-
-            if (userErr) throw userErr;
-
-            if (!user) {
-                console.warn("[HostPage] No user session found");
-                setCreateError("Du bist nicht eingeloggt. Bitte melde dich an, um eine Lobby zu erstellen.");
-                return;
-            }
-
-            // ✅ DAS ist die entscheidende ID
-            const playerId = user.id;
-            console.log("[HostPage] Auth user id (UUID):", playerId);
-
             const cleanName = hostName.trim();
             setStoredName(cleanName);
 
-            const payload = {
-                p_host_player_id: playerId,
+            const { data, error } = await supabase.rpc("rpc_create_lobby", {
                 p_host_name: cleanName,
-                p_privacy: privacy, // "private" / "public"
+                p_privacy: privacy,
                 p_max_players: maxPlayers,
                 p_round_seconds: roundSeconds,
-            };
+            });
 
-            const res = await supabase.rpc("rpc_create_lobby", payload);
-
-            if (res.error) {
-                console.log("[HostPage] rpc error (raw):", res.error);
-                console.log("[HostPage] rpc error (json):", JSON.stringify(res.error, null, 2));
-            }
-
-            console.log("[HostPage] rpc_create_lobby data:", res.data);
-            console.log("[HostPage] rpc_create_lobby error:", res.error);
-
-            if (res.error) {
-                setCreateError(res.error.message || "RPC Fehler: Lobby konnte nicht erstellt werden.");
+            if (error) {
+                setCreateError(error.message || "Lobby konnte nicht erstellt werden.");
                 return;
             }
 
-            const created = Array.isArray(res.data) ? res.data[0] : res.data;
-
+            const created = Array.isArray(data) ? data[0] : data;
             if (!created?.code) {
-                setCreateError("RPC Return ungültig (kein code). Prüfe SQL Return von rpc_create_lobby.");
+                setCreateError("RPC Return ungültig (kein code).");
                 return;
             }
-
-            console.log("[HostPage] Lobby created with code:", created.code);
 
             window.location.href = `/lobby/${created.code}`;
         } catch (e: any) {
-            console.error("[HostPage] unexpected error:", e);
-            setCreateError(e?.message || "Unerwarteter Fehler. Bitte neu laden und erneut versuchen.");
+            setCreateError(e?.message || "Unerwarteter Fehler.");
         } finally {
             setCreating(false);
         }
     }
-
 
     async function copyInvite() {
         const url = `${window.location.origin}/join?code=${previewCode}`;
@@ -175,28 +152,40 @@ export default function HostPage() {
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby hosten">
                     <header className="hostHeader">
-                        <div className="hostTitleRow">
-                            <h1 className="h1">Lobby hosten</h1>
+                        <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                <h1 className="h1">Lobby hosten</h1>
 
-                            <span
-                                className="chip"
-                                title={readyHint}
-                                aria-live="polite"
-                                aria-label={`Status: ${readyLabel}. ${readyHint}`}
-                            >
-                <span
-                    className="chipDot"
-                    aria-hidden
-                    style={{
-                        background: isReady ? "rgba(34,211,238,.92)" : "rgba(255,255,255,.35)",
-                        boxShadow: isReady ? "0 0 0 3px rgba(34,211,238,.18)" : "0 0 0 3px rgba(255,255,255,.10)",
-                    }}
-                />
-                                {readyLabel}
-              </span>
+                                <span
+                                    className="chip"
+                                    title={readyHint}
+                                    aria-live="polite"
+                                    aria-label={`Status: ${readyLabel}. ${readyHint}`}
+                                >
+                                    <span
+                                        className="chipDot"
+                                        aria-hidden
+                                        style={{
+                                            background: canCreate ? "rgba(34,211,238,.92)" : "rgba(255,255,255,.35)",
+                                            boxShadow: canCreate
+                                                ? "0 0 0 3px rgba(34,211,238,.18)"
+                                                : "0 0 0 3px rgba(255,255,255,.10)",
+                                        }}
+                                    />
+                                    {readyLabel}
+                                </span>
+                            </div>
+
+                            <AuthMini nextPath="/host" variant="header" />
                         </div>
 
-                        <p className="p hostSub">Erstelle eine Lobby, teile den Code und starte später im Lobby-Screen.</p>
+                        <p className="p hostSub">Erstelle eine Lobby, teile den Code und spiel mit deinen Freunden!</p>
+
+                        {!loading && !user && (
+                            <div className="fieldHelp" style={{ marginTop: 10 }}>
+                                👉 <strong>Login nötig</strong>, um eine Lobby zu hosten.
+                            </div>
+                        )}
                     </header>
 
                     <div className="hostGrid">
@@ -207,9 +196,7 @@ export default function HostPage() {
                             </div>
 
                             <div className="fieldRow">
-                                <label className="fieldLabel" htmlFor="hostName">
-                                    Dein Name
-                                </label>
+                                <label className="fieldLabel" htmlFor="hostName">Dein Name</label>
 
                                 <div className="fieldControl">
                                     <input
@@ -294,8 +281,8 @@ export default function HostPage() {
                                     <input
                                         className="slider"
                                         type="range"
-                                        min={minRound}
-                                        max={maxRound}
+                                        min={10}
+                                        max={60}
                                         step={5}
                                         value={roundSeconds}
                                         onChange={(e) => setRoundSeconds(Number(e.target.value))}
@@ -310,18 +297,22 @@ export default function HostPage() {
 
                             {createError ? <div className="fieldHelp fieldHelpError">{createError}</div> : null}
 
-                            <div className="actionsRow">
+                            <div className="actionsRow" style={{ alignItems: "center" }}>
                                 <button
                                     type="button"
-                                    className={`btn btnPrimary ${(!isNameValid || creating) ? "btnDisabled" : ""}`}
                                     onClick={onCreate}
-                                    disabled={!isNameValid || creating}
+                                    disabled={!canCreate}
+                                    className={`btn btnPrimary btnXL ${canCreate ? "btnGlow" : "btnDisabled"}`}
                                 >
-                                    {creating ? "Erstelle Lobby…" : "Lobby erstellen"}
+                                    {creating
+                                        ? "⏳ Lobby wird erstellt…"
+                                        : user
+                                            ? "🚀 Lobby erstellen"
+                                            : "🔐 Einloggen & Lobby erstellen"}
                                 </button>
 
-                                <Link href="/" className="btn btnSecondary">
-                                    Zurück
+                                <Link href="/" className="btn btnSecondary btnSmall">
+                                    ← Zurück
                                 </Link>
                             </div>
                         </div>
@@ -334,14 +325,10 @@ export default function HostPage() {
 
                             <div className="previewCard">
                                 <div className="previewTop">
-                                    <div className="avatar" aria-hidden>
-                                        {hostName.trim().slice(0, 1).toUpperCase() || "H"}
-                                    </div>
+                                    <div className="avatar" aria-hidden>{hostName.trim().slice(0, 1).toUpperCase() || "H"}</div>
                                     <div className="previewMeta">
                                         <div className="previewName">{hostName.trim() || "Dein Name"}</div>
-                                        <div className="previewSub">
-                                            🔒 Privat • 👥 2–{maxPlayers} • ⏱️ {roundSeconds}s
-                                        </div>
+                                        <div className="previewSub">🔒 Privat • 👥 2–{maxPlayers} • ⏱️ {roundSeconds}s</div>
                                     </div>
                                 </div>
 
