@@ -6,30 +6,30 @@ import Image from "next/image";
 export default function Home() {
     return (
         <main className="container">
-            {/* Brand Logo */}
-            <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image
-                    src="/logo.png"
-                    alt="Kumpir Maskottchen"
-                    width={200}
-                    height={200}
-                    priority
-                    className="brandLogoImg"
-                />
-            </Link>
-
-            <div className="landingWrap">
-                {/* Meta-Pills */}
-                <div className="metaBar">
-                    <div className="metaLeft">
-                        <span className="metaPill">👥 2–10 Spieler</span>
-                    </div>
-                    <div className="metaRight">
-                        <span className="metaPill">v0 • lokal</span>
-                    </div>
+            <div className="landingWrap landingWrapDecor">
+                {/* BACKGROUND potato – behind the card */}
+                <div className="potatoBg" aria-hidden="true">
+                    <Image
+                        src="/HGLogo.png"
+                        alt=""
+                        width={900}
+                        height={600}
+                        priority
+                        className="potatoBgImg"
+                    />
                 </div>
 
+                {/* FOREGROUND card */}
                 <section className="card" aria-label="Kumpir Landing Card">
+                    <div className="metaBar metaBarInCard">
+                        <div className="metaLeft">
+                            <span className="metaPill">👥 2–10 Spieler</span>
+                        </div>
+                        <div className="metaRight">
+                            <span className="metaPill">v0 • lokal</span>
+                        </div>
+                    </div>
+
                     <header className="heroRow">
                         <div className="brandRow">
                             <h1 className="h1">Kumpir</h1>

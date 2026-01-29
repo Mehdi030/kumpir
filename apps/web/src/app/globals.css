@@ -28,9 +28,9 @@
     --shadow-soft: 0 10px 24px rgba(0,0,0,.08);
 
     /* Card palette */
-    --card-a: rgba(214, 162, 92, 0.96);
-    --card-b: rgba(192, 132, 78, 0.96);
-    --card-c: rgba(148, 92, 54, 0.96);
+    --card-a: rgba(230, 132, 4, 0.96);
+    --card-b: rgba(200, 106, 20, 0.96);
+    --card-c: rgba(230, 132, 4, 0.96);
 
     /* Radii */
     --r-pill: 999px;
@@ -187,7 +187,7 @@ body{
     position: relative;
 
     background: linear-gradient(165deg, var(--card-a) 0%, var(--card-b) 55%, var(--card-c) 100%);
-    border: 2px solid rgba(255,255,255,.30);
+    border: 2px solid rgb(128, 128, 128);
     border-radius: var(--r-card);
     padding: 34px;
     color: rgba(255,255,255,.92);
@@ -1467,5 +1467,48 @@ body{
         box-shadow:
                 0 0 0 0 rgba(56, 189, 248, 0),
                 0 14px 34px rgba(56, 189, 248, 0.32);
+    }
+}
+/* Wrapper = Layering Context */
+.landingWrapDecor {
+    position: relative;
+    isolation: isolate;
+}
+
+/* Card IMMER vorne */
+.landingWrapDecor .card {
+    position: relative;
+    z-index: 0;
+}
+
+/* Potato background layer – hanging above the card */
+.potatoBg {
+    position: absolute;
+    top: -352px;             /* WEIT GENUG nach oben */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;     /* hinter der Card */
+    pointer-events: none;
+}
+
+/* Full logo visible, large */
+.potatoBgImg {
+    width: min(900px, 120vw);
+    height: auto;
+    opacity: 1;
+    filter: drop-shadow(0 35px 70px rgba(0, 0, 0, 0.45));
+    transform: rotate(2.2deg);
+    transform-origin: center bottom;
+
+}
+
+/* Mobile */
+@media (max-width: 520px) {
+    .potatoBg {
+        top: -90px;
+    }
+
+    .potatoBgImg {
+        width: 95vw;
     }
 }
