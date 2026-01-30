@@ -1,257 +1,158 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { AuthMini } from "@/components/AuthMini";
+import { useAuth } from "@/components/AuthProvider";
 
-/* =========================
-   Typen (DB-konform)
-========================= */
-
-type LobbyStatus = "waiting" | "started" | "ended";
-
-type Lobby = {
-    id: string;
-    code: string;
-    host_player_id: string;
-    status: LobbyStatus;
-};
-
-type Player = {
-    id: string;          // row id
-    lobby_id: string;    // FK -> lobbies.id
-    player_id: string;   // DIE Player-ID
-    name: string;
-    ready: boolean;
-    joined_at: string;
-    last_seen_at: string | null;
-    user_id: string | null;
-};
-
-/* =========================
-   Helpers
-========================= */
-
-function getStoredPlayerId(): string | null {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("kumpir_player_id");
+function normalizeCode(input: string) {
+    return input
+        .toUpperCase()
+        .replace(/[^A-Z2-9]/g, "")
+        .slice(0, 4);
 }
 
-function initials(name: string): string {
-    const t = name.trim();
-    return t ? t[0].toUpperCase() : "?";
+function setStoredName(name: string) {
+    localStorage.setItem("kumpir_player_name", name);
 }
 
-/* =========================
-   Page
-========================= */
+function setStoredPlayerId(id: string) {
+    localStorage.setItem("kumpir_player_id", id);
+}
 
-export default function LobbyPage({ params }: { params: { code: string } }) {
+function getErrorMessage(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "object" && err !== null && "message" in err) {
+        const m = (err as { message?: unknown }).message;
+        if (typeof m === "string") return m;
+    }
+    return "Unbekannter Fehler.";
+}
+
+export default function JoinPage() {
     const supabase = getSupabaseClient();
-    const code = params.code.toUpperCase();
+    const router = useRouter();
+    const sp = useSearchParams();
+    const { user } = useAuth();
 
-    const [playerId, setPlayerId] = useState<string | null>(() => getStoredPlayerId());
-    const [lobby, setLobby] = useState<Lobby | null>(null);
-    const [players, setPlayers] = useState<Player[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const [code, setCode] = useState(sp.get("code") ? normalizeCode(sp.get("code")!) : "");
+    const [name, setName] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    /* =========================
-       Derived State
-    ========================= */
+    const canJoin = useMemo(() => {
+        const c = normalizeCode(code);
+        return c.length === 4 && name.trim().length >= 2;
+    }, [code, name]);
 
-    const myRow = useMemo(
-        () => players.find((p) => p.player_id === playerId) ?? null,
-        [players, playerId]
-    );
-
-    const isHost = !!playerId && lobby?.host_player_id === playerId;
-
-    const readyCount = players.filter((p) => p.ready).length;
-    const totalCount = players.length;
-
-    const canStart =
-        lobby?.status === "waiting" &&
-        isHost &&
-        totalCount >= 2 &&
-        readyCount === totalCount;
-
-    /* =========================
-       Fetch Lobby
-    ========================= */
-
-    const fetchLobby = useCallback(async () => {
+    async function joinLobby() {
+        setError(null);
         setLoading(true);
-        setError("");
 
-        const { data, error } = await supabase
-            .from("lobbies")
-            .select("id, code, host_player_id, status")
-            .eq("code", code)
-            .single();
+        try {
+            const lobbyCode = normalizeCode(code);
+            const playerName = name.trim();
 
-        if (error || !data) {
-            setError("Lobby nicht gefunden.");
-            setLobby(null);
-            setPlayers([]);
-            setLoading(false);
-            return;
-        }
+            setStoredName(playerName);
 
-        setLobby(data as Lobby);
-        setLoading(false);
-    }, [supabase, code]);
+            // join_lobby(p_lobby_code, p_name, p_user_id default null)
+            const { data, error: rpcErr } = await supabase.rpc("join_lobby", {
+                p_lobby_code: lobbyCode,
+                p_name: playerName,
+                p_user_id: user?.id ?? null,
+            });
 
-    /* =========================
-       Fetch Players
-    ========================= */
-
-    const fetchPlayers = useCallback(
-        async (lobbyId: string) => {
-            const { data } = await supabase
-                .from("players")
-                .select("*")
-                .eq("lobby_id", lobbyId)
-                .order("joined_at");
-
-            setPlayers((data ?? []) as Player[]);
-        },
-        [supabase]
-    );
-
-    /* =========================
-       Initial Load
-    ========================= */
-
-    useEffect(() => {
-        void fetchLobby();
-    }, [fetchLobby]);
-
-    useEffect(() => {
-        if (!lobby) return;
-        void fetchPlayers(lobby.id);
-    }, [lobby, fetchPlayers]);
-
-    /* =========================
-       Realtime (Players + Lobby)
-    ========================= */
-
-    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-
-    useEffect(() => {
-        if (!lobby || channelRef.current) return;
-
-        channelRef.current = supabase
-            .channel(`lobby:${lobby.id}`)
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "players", filter: `lobby_id=eq.${lobby.id}` },
-                () => void fetchPlayers(lobby.id)
-            )
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "lobbies", filter: `id=eq.${lobby.id}` },
-                () => void fetchLobby()
-            )
-            .subscribe();
-
-        return () => {
-            if (channelRef.current) {
-                void supabase.removeChannel(channelRef.current);
-                channelRef.current = null;
+            if (rpcErr) {
+                setError(rpcErr.message || "Konnte der Lobby nicht beitreten.");
+                return;
             }
-        };
-    }, [supabase, lobby, fetchPlayers, fetchLobby]);
 
-    /* =========================
-       Actions
-    ========================= */
-
-    async function toggleReady() {
-        if (!playerId || !myRow) return;
-
-        const { error } = await supabase.rpc("set_ready", {
-            p_player_id: playerId,
-            p_ready: !myRow.ready,
-        });
-
-        if (error) setError(error.message);
-    }
-
-    async function startGame() {
-        if (!playerId || !isHost || !lobby) return;
-
-        const { error } = await supabase.rpc("start_game", {
-            p_host_player_id: playerId,
-        });
-
-        if (error) setError(error.message);
-    }
-
-    /* =========================
-       Redirect to Game
-    ========================= */
-
-    useEffect(() => {
-        if (lobby?.status === "started") {
-            window.location.href = `/game/${code}`;
+            setStoredPlayerId(String(data));
+            router.push(`/lobby/${lobbyCode}`);
+        } catch (err: unknown) {
+            setError(getErrorMessage(err));
+        } finally {
+            setLoading(false);
         }
-    }, [lobby, code]);
-
-    /* =========================
-       Render
-    ========================= */
+    }
 
     return (
         <main className="container">
-            <Link href="/" className="brandLogo">
-                <Image src="/logo.png" alt="Kumpir" width={160} height={160} priority />
-            </Link>
+            <div className="landingWrap">
+                <section className="card">
+                    <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12 }}>
+                        <div>
+                            <h1 className="h1">Lobby beitreten</h1>
+                            <p className="p subline">Mitspielen ohne Account. Code rein und los.</p>
+                        </div>
 
-            <section className="card cardLobby">
-                <header className="lobbyTop" style={{ justifyContent: "space-between", gap: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <h1 className="h1">Lobby</h1>
-                        <div className="codePill">{code}</div>
+                        <AuthMini nextPath="/join" variant="header" />
                     </div>
 
-                    <AuthMini nextPath={`/lobby/${code}`} variant="header" />
-                </header>
+                    <div className="stepsWrap">
+                        <div className="stepsBox">
+                            <div className="stepsTitle">Beitritt</div>
 
-                {error && <div className="errorBox">{error}</div>}
-                {loading && <div>Lade Lobby…</div>}
+                            <div className="formGrid">
+                                <label className="fieldLabel">
+                                    Lobby-Code
+                                    <input
+                                        className="textInput"
+                                        value={code}
+                                        onChange={(e) => setCode(normalizeCode(e.target.value))}
+                                        placeholder="z.B. 5KJQ"
+                                        inputMode="text"
+                                        autoCapitalize="characters"
+                                        autoCorrect="off"
+                                        spellCheck={false}
+                                        autoComplete="one-time-code"
+                                        maxLength={4}
+                                    />
+                                    <span className="helperText">4 Zeichen (A–Z, 2–9).</span>
+                                </label>
 
-                {!loading && lobby && (
-                    <>
-                        <div className="readyInfo">
-                            {readyCount}/{totalCount} bereit
-                        </div>
+                                <label className="fieldLabel">
+                                    Dein Name
+                                    <input
+                                        className="textInput"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        placeholder="z.B. Sero"
+                                        autoComplete="nickname"
+                                        maxLength={24}
+                                    />
+                                    <span className="helperText">Mindestens 2 Zeichen.</span>
+                                </label>
 
-                        <div className="playerList">
-                            {players.map((p) => (
-                                <div key={p.id}>
-                                    {initials(p.name)} {p.name} {p.ready ? "✔" : "…"}
-                                    {p.player_id === lobby.host_player_id ? " (Host)" : ""}
+                                <div className="ctaRow">
+                                    <button
+                                        type="button"
+                                        className="btn btnPrimary"
+                                        onClick={joinLobby}
+                                        disabled={!canJoin || loading}
+                                        aria-disabled={!canJoin || loading}
+                                    >
+                                        {loading ? "Trete bei…" : "Beitreten"}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className="btn btnSecondary"
+                                        onClick={() => router.push("/")}
+                                        disabled={loading}
+                                        aria-disabled={loading}
+                                    >
+                                        Zurück
+                                    </button>
                                 </div>
-                            ))}
+
+                                {error && <p className="errorText">{error}</p>}
+                            </div>
                         </div>
-
-                        <footer style={{ display: "flex", gap: 12 }}>
-                            <button onClick={toggleReady} disabled={!playerId}>
-                                {myRow?.ready ? "Bereit (aus)" : "Bereit"}
-                            </button>
-
-                            {isHost && (
-                                <button onClick={startGame} disabled={!canStart}>
-                                    Spiel starten
-                                </button>
-                            )}
-                        </footer>
-                    </>
-                )}
-            </section>
+                    </div>
+                </section>
+            </div>
         </main>
     );
 }

@@ -8,29 +8,32 @@ import { useAuth } from "@/components/AuthProvider";
 import { AuthMini } from "@/components/AuthMini";
 
 type Privacy = "private" | "public";
+type RoundPreset = "rapid" | "classic" | "relaxed";
 
-function makeCode(len = 4) {
-    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-    let out = "";
-    for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
-    return out;
-}
+const ROUND_PRESETS: Record<RoundPreset, { label: string; seconds: number; hint: string }> = {
+    rapid: { label: "⚡ Rapid", seconds: 15, hint: "Sehr schnell, hoher Druck." },
+    classic: { label: "🎯 Classic", seconds: 25, hint: "Ausgewogenes Tempo für die meisten Runden." },
+    relaxed: { label: "🧊 Relaxed", seconds: 40, hint: "Entspanntes Tempo mit mehr Entscheidungsfreiheit." },
+};
 
 function randomHostName() {
     const names = [
-        "Baro", "Achi", "Medo", "Sero",
-        "Sinan", "Albion", "Youssef", "Angi", "Elias",
-        "Ben", "Jonas", "Max", "Tim", "Leo",
-        "Emir", "Yusuf", "Can", "Ali", "Omar",
-        "David", "Paul", "Jan", "Nico", "Tobi",
-        "Sami", "Ibrahim", "Hassan", "Amir",
-        "Rafael", "Matteo", "Milan", "Deniz",
+        "Baro","Achi","Medo","Sero",
+        "Sinan","Albion","Youssef","Angi","Elias",
+        "Ben","Jonas","Max","Tim","Leo",
+        "Emir","Yusuf","Can","Ali","Omar",
+        "David","Paul","Jan","Nico","Tobi",
+        "Sami","Ibrahim","Hassan","Amir",
+        "Rafael","Matteo","Milan","Deniz",
     ];
     return names[Math.floor(Math.random() * names.length)];
 }
 
 function setStoredName(name: string) {
     localStorage.setItem("kumpir_player_name", name);
+}
+function setStoredPlayerId(id: string) {
+    localStorage.setItem("kumpir_player_id", id);
 }
 
 export default function HostPage() {
@@ -40,24 +43,19 @@ export default function HostPage() {
     const [hostName, setHostName] = useState("");
     const [privacy, setPrivacy] = useState<Privacy>("private");
     const [maxPlayers, setMaxPlayers] = useState(8);
-    const [roundSeconds, setRoundSeconds] = useState(25);
+
+    const [roundPreset, setRoundPreset] = useState<RoundPreset>("classic");
+    const roundSeconds = ROUND_PRESETS[roundPreset].seconds;
+
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string>("");
 
-    const [previewCode, setPreviewCode] = useState("----");
+    // 🔐 Hard Gate: Host-Seite nur mit Login
     useEffect(() => {
-        setPreviewCode(makeCode(4));
-    }, []);
-
-    const minRound = 10;
-    const maxRound = 60;
-    const fillPct = Math.round(((roundSeconds - minRound) / (maxRound - minRound)) * 100);
-
-    const sliderBg = `linear-gradient(90deg,
-    rgba(243,209,161,.95) 0%,
-    rgba(231,185,126,.95) ${fillPct}%,
-    rgba(0,0,0,.28) ${fillPct}%,
-    rgba(0,0,0,.28) 100%)`;
+        if (!loading && !user) {
+            window.location.href = `/login?next=${encodeURIComponent("/host")}`;
+        }
+    }, [loading, user]);
 
     const isNameValid = hostName.trim().length >= 2;
 
@@ -69,26 +67,10 @@ export default function HostPage() {
 
     const canCreate = isNameValid && !creating && !!user && !loading;
 
-    const readyLabel = loading
-        ? "Lade…"
-        : !user
-            ? "Login erforderlich"
-            : isNameValid
-                ? "Bereit"
-                : "Name fehlt";
-
-    const readyHint = loading
-        ? "Lade Login…"
-        : !user
-            ? "Bitte einloggen, um eine Lobby zu erstellen."
-            : isNameValid
-                ? "Du kannst die Lobby jetzt erstellen."
-                : "Bitte gib mindestens 2 Zeichen beim Namen ein.";
-
     async function onCreate() {
         if (!isNameValid || creating) return;
-
         if (loading) return;
+
         if (!user) {
             setCreateError("Bitte einloggen, um eine Lobby zu erstellen.");
             return;
@@ -101,25 +83,43 @@ export default function HostPage() {
             const cleanName = hostName.trim();
             setStoredName(cleanName);
 
-            const { data, error } = await supabase.rpc("rpc_create_lobby", {
+            // 1) Lobby erstellen (nutzt Overload OHNE host-id, weil deine DB so existiert)
+            const { data: lobbyData, error: lobbyErr } = await supabase.rpc("rpc_create_lobby", {
                 p_host_name: cleanName,
                 p_privacy: privacy,
                 p_max_players: maxPlayers,
                 p_round_seconds: roundSeconds,
             });
 
-            if (error) {
-                setCreateError(error.message || "Lobby konnte nicht erstellt werden.");
+            if (lobbyErr) {
+                setCreateError(lobbyErr.message || "Lobby konnte nicht erstellt werden.");
                 return;
             }
 
-            const created = Array.isArray(data) ? data[0] : data;
-            if (!created?.code) {
+            const created = Array.isArray(lobbyData) ? lobbyData[0] : lobbyData;
+            const code = String(created?.code ?? "").toUpperCase();
+
+            if (!code || code.length !== 4) {
                 setCreateError("RPC Return ungültig (kein code).");
                 return;
             }
 
-            window.location.href = `/lobby/${created.code}`;
+            // 2) Host tritt als USER der Lobby bei (eindeutig: 3-Param Overload)
+            const { data: hostPlayerId, error: joinErr } = await supabase.rpc("join_lobby", {
+                p_lobby_code: code,
+                p_name: cleanName,
+                p_user_id: user.id, // ✅ disambiguates overload
+            });
+
+            if (joinErr) {
+                setCreateError(joinErr.message || "Host konnte der Lobby nicht beitreten.");
+                return;
+            }
+
+            // 3) Player-ID speichern -> Hostrechte & kein Loop
+            setStoredPlayerId(String(hostPlayerId));
+
+            window.location.href = `/lobby/${code}`;
         } catch (e: any) {
             setCreateError(e?.message || "Unerwarteter Fehler.");
         } finally {
@@ -127,17 +127,26 @@ export default function HostPage() {
         }
     }
 
-    async function copyInvite() {
-        const url = `${window.location.origin}/join?code=${previewCode}`;
-        try {
-            await navigator.clipboard.writeText(url);
-        } catch {
-            // ignore
-        }
+    // Während Redirect läuft: neutral
+    if (!loading && !user) {
+        return (
+            <main className="container">
+                <div className="landingWrap">
+                    <section className="card" aria-label="Weiterleitung">
+                        <h1 className="h1">Weiterleitung…</h1>
+                        <p className="p subline">Du musst dich einloggen, um eine Lobby zu hosten.</p>
+                        <Link className="btn btnPrimary" href={`/login?next=${encodeURIComponent("/host")}`}>
+                            Zum Login
+                        </Link>
+                    </section>
+                </div>
+            </main>
+        );
     }
 
     return (
         <main className="container">
+            {/* Wenn du die Kartoffel links oben entfernen willst: entferne diesen Block */}
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
                 <Image
                     src="/logo.png"
@@ -155,40 +164,15 @@ export default function HostPage() {
                         <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                                 <h1 className="h1">Lobby hosten</h1>
-
-                                <span
-                                    className="chip"
-                                    title={readyHint}
-                                    aria-live="polite"
-                                    aria-label={`Status: ${readyLabel}. ${readyHint}`}
-                                >
-                                    <span
-                                        className="chipDot"
-                                        aria-hidden
-                                        style={{
-                                            background: canCreate ? "rgba(34,211,238,.92)" : "rgba(255,255,255,.35)",
-                                            boxShadow: canCreate
-                                                ? "0 0 0 3px rgba(34,211,238,.18)"
-                                                : "0 0 0 3px rgba(255,255,255,.10)",
-                                        }}
-                                    />
-                                    {readyLabel}
-                                </span>
                             </div>
 
                             <AuthMini nextPath="/host" variant="header" />
                         </div>
 
                         <p className="p hostSub">Erstelle eine Lobby, teile den Code und spiel mit deinen Freunden!</p>
-
-                        {!loading && !user && (
-                            <div className="fieldHelp" style={{ marginTop: 10 }}>
-                                👉 <strong>Login nötig</strong>, um eine Lobby zu hosten.
-                            </div>
-                        )}
                     </header>
 
-                    <div className="hostGrid">
+                    <div className="hostGrid" style={{ gridTemplateColumns: "1fr" }}>
                         <div className="panel">
                             <div className="panelHead">
                                 <div className="panelTitle">Spieler-Details</div>
@@ -274,25 +258,34 @@ export default function HostPage() {
                                 </div>
                             </div>
 
-                            <div className="settingBlock">
+                            <div className="settingBlock" style={{ marginTop: 18 }}>
                                 <div className="settingLabel">Rundendauer</div>
 
-                                <div className="sliderRow">
-                                    <input
-                                        className="slider"
-                                        type="range"
-                                        min={10}
-                                        max={60}
-                                        step={5}
-                                        value={roundSeconds}
-                                        onChange={(e) => setRoundSeconds(Number(e.target.value))}
-                                        style={{ background: sliderBg }}
-                                        aria-label="Rundendauer"
-                                    />
-                                    <div className="sliderValue">{roundSeconds}s</div>
+                                <div
+                                    className="seg"
+                                    style={{
+                                        marginTop: 8,
+                                        display: "flex",
+                                        gap: 10,
+                                        flexWrap: "wrap",
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    {(Object.keys(ROUND_PRESETS) as RoundPreset[]).map((key) => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            className={`segBtn ${roundPreset === key ? "segActive" : ""}`}
+                                            onClick={() => setRoundPreset(key)}
+                                            aria-pressed={roundPreset === key}
+                                            style={{ minWidth: 110 }}
+                                        >
+                                            {ROUND_PRESETS[key].label}
+                                        </button>
+                                    ))}
                                 </div>
 
-                                <div className="settingHelp">Je kürzer, desto stressiger.</div>
+                                <div className="settingHelp">{ROUND_PRESETS[roundPreset].hint}</div>
                             </div>
 
                             {createError ? <div className="fieldHelp fieldHelpError">{createError}</div> : null}
@@ -304,48 +297,13 @@ export default function HostPage() {
                                     disabled={!canCreate}
                                     className={`btn btnPrimary btnXL ${canCreate ? "btnGlow" : "btnDisabled"}`}
                                 >
-                                    {creating
-                                        ? "⏳ Lobby wird erstellt…"
-                                        : user
-                                            ? "🚀 Lobby erstellen"
-                                            : "🔐 Einloggen & Lobby erstellen"}
+                                    {creating ? "⏳ Lobby wird erstellt…" : "🚀 Lobby erstellen"}
                                 </button>
 
                                 <Link href="/" className="btn btnSecondary btnSmall">
                                     ← Zurück
                                 </Link>
                             </div>
-                        </div>
-
-                        <div className="panel panelAlt">
-                            <div className="panelHead">
-                                <div className="panelTitle">Lobby-Preview</div>
-                                <div className="panelHint">Kurz & wichtig</div>
-                            </div>
-
-                            <div className="previewCard">
-                                <div className="previewTop">
-                                    <div className="avatar" aria-hidden>{hostName.trim().slice(0, 1).toUpperCase() || "H"}</div>
-                                    <div className="previewMeta">
-                                        <div className="previewName">{hostName.trim() || "Dein Name"}</div>
-                                        <div className="previewSub">🔒 Privat • 👥 2–{maxPlayers} • ⏱️ {roundSeconds}s</div>
-                                    </div>
-                                </div>
-
-                                <div className="codeRow">
-                                    <div className="codeLabel">Code</div>
-                                    <div className="codePill">{previewCode}</div>
-                                </div>
-
-                                <div className="copyRow">
-                                    <div className="copyHint">Einladung teilen:</div>
-                                    <button type="button" className="btn btnSecondary btnSmall" onClick={copyInvite}>
-                                        Link kopieren
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* QR kommt später */}
                         </div>
                     </div>
                 </section>

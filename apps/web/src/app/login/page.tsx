@@ -31,7 +31,6 @@ export default function LoginPage() {
         return `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
     }, [nextPath]);
 
-    // ✅ wenn bereits eingeloggt: sofort weiter
     useEffect(() => {
         (async () => {
             const { data } = await supabase.auth.getSession();
@@ -286,7 +285,7 @@ export default function LoginPage() {
 
                             <div className="previewCard">
                                 <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.35 }}>
-                                    <li>Damit <b>host_player_id</b> eine echte UUID ist (auth.users.id).</li>
+                                    <li>Damit <b>host_user_id</b> eine echte UUID ist (auth.users.id).</li>
                                     <li>Damit niemand “fremde” Lobbys übernimmt.</li>
                                     <li>Damit wir später Rollen/Rechte sauber erweitern können.</li>
                                 </ul>

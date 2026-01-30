@@ -18,9 +18,9 @@
     --accent-2: #A78BFA;
 
     /* Card palette (warm / potato) */
-    --card-a: rgba(255, 170, 70, 0.96);
-    --card-b: rgba(245, 140, 35, 0.96);
-    --card-c: rgba(225, 115, 15, 0.96);
+    --card-a: rgba(250, 127, 2, 0.96);
+    --card-b: rgba(200, 125, 49, 0.96);
+    --card-c: rgba(250, 127, 2, 0.96);
 
     /* Radii */
     --r-pill: 999px;
