@@ -39,10 +39,8 @@ export default function Home() {
 
                     <div className="heroCopy">
                         <p className="p">
-                            Die Kumpir wandert.
-                            <br />
-                            Der Timer kennt kein Mitleid.
-                            <br />
+                            Die Kumpir wandert.<br />
+                            Der Timer kennt kein Mitleid.<br />
                             Wer zögert verliert.
                         </p>
                     </div>
