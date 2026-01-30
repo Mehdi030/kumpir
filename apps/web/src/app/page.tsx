@@ -72,7 +72,7 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <p className="trustLine">Kein Download. Kein Account nötig. Läuft direkt im Browser.</p>
+                    <p className="trustLine">Kein Download · Kein Account · Startet in Sekunden</p>
                 </section>
             </div>
         </main>
