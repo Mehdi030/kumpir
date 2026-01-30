@@ -18,13 +18,13 @@ const ROUND_PRESETS: Record<RoundPreset, { label: string; seconds: number; hint:
 
 function randomHostName() {
     const names = [
-        "Baro","Achi","Medo","Sero",
-        "Sinan","Albion","Youssef","Angi","Elias",
-        "Ben","Jonas","Max","Tim","Leo",
-        "Emir","Yusuf","Can","Ali","Omar",
-        "David","Paul","Jan","Nico","Tobi",
-        "Sami","Ibrahim","Hassan","Amir",
-        "Rafael","Matteo","Milan","Deniz",
+        "Baro", "Achi", "Medo", "Sero",
+        "Sinan", "Albion", "Youssef", "Angi", "Elias",
+        "Ben", "Jonas", "Max", "Tim", "Leo",
+        "Emir", "Yusuf", "Can", "Ali", "Omar",
+        "David", "Paul", "Jan", "Nico", "Tobi",
+        "Sami", "Ibrahim", "Hassan", "Amir",
+        "Rafael", "Matteo", "Milan", "Deniz",
     ];
     return names[Math.floor(Math.random() * names.length)];
 }
@@ -127,17 +127,36 @@ export default function HostPage() {
         }
     }
 
-    // Während Redirect läuft: neutral
+    // Während Redirect läuft: neutral (mit „Warum Login?“ endkundig)
     if (!loading && !user) {
         return (
             <main className="container">
                 <div className="landingWrap">
                     <section className="card" aria-label="Weiterleitung">
-                        <h1 className="h1">Weiterleitung…</h1>
-                        <p className="p subline">Du musst dich einloggen, um eine Lobby zu hosten.</p>
-                        <Link className="btn btnPrimary" href={`/login?next=${encodeURIComponent("/host")}`}>
-                            Zum Login
-                        </Link>
+                        <h1 className="h1">Login erforderlich</h1>
+                        <p className="p subline">Damit du eine Lobby hosten kannst.</p>
+
+                        <div className="panel" style={{ marginTop: 14 }}>
+                            <div className="panelHead">
+                                <div className="panelTitle">Warum Login?</div>
+                                <div className="panelHint">Kurz erklärt</div>
+                            </div>
+
+                            <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.35 }}>
+                                <li><b>Kontrolle:</b> Du verwaltest deine Lobby – Start, Ablauf und Einstellungen liegen bei dir.</li>
+                                <li><b>Statistiken:</b> Später kannst du Spiele auswerten, Fortschritt sehen und Highlights tracken.</li>
+                                <li><b>Komfort:</b> Deine Einstellungen bleiben gespeichert und neue Features stehen dir automatisch zur Verfügung.</li>
+                            </ul>
+                        </div>
+
+                        <div className="actionsRow" style={{ marginTop: 14 }}>
+                            <Link className="btn btnPrimary" href={`/login?next=${encodeURIComponent("/host")}`}>
+                                Zum Login
+                            </Link>
+                            <Link href="/" className="btn btnSecondary">
+                                ← Zurück
+                            </Link>
+                        </div>
                     </section>
                 </div>
             </main>

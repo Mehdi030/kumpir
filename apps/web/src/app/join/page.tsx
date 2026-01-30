@@ -7,7 +7,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 function normalizeCode(input: string) {
+    // ✅ nur A–Z und 2–9, max 4
     return input.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 4);
+}
+
+function sanitizeName(input: string) {
+    // ✅ nur Buchstaben (inkl. Umlaute), Leerzeichen raus, max 12
+    return input.replace(/[^A-Za-zÄÖÜäöüß]/g, "").slice(0, 12);
 }
 
 function setStoredName(name: string) {
@@ -48,7 +54,16 @@ export default function JoinPage() {
 
         try {
             const lobbyCode = normalizeCode(code);
-            const playerName = name.trim();
+            const playerName = sanitizeName(name).trim();
+
+            if (lobbyCode.length !== 4) {
+                setError("Bitte einen gültigen 4-stelligen Code eingeben.");
+                return;
+            }
+            if (playerName.length < 2) {
+                setError("Name muss mindestens 2 Buchstaben haben.");
+                return;
+            }
 
             setStoredName(playerName);
 
@@ -78,110 +93,112 @@ export default function JoinPage() {
     return (
         <main className="container">
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image
-                    src="/logo.png"
-                    alt="Kumpir Maskottchen"
-                    width={400}
-                    height={400}
-                    priority
-                    className="brandLogoImg"
-                />
+                <Image src="/logo.png" alt="Kumpir Maskottchen" width={400} height={400} priority className="brandLogoImg" />
             </Link>
 
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby beitreten" style={{ maxWidth: 760, margin: "0 auto" }}>
                     <header className="hostHeader" style={{ paddingBottom: 10 }}>
-                        <div className="hostTitleRow" style={{ justifyContent: "flex-start", gap: 16, alignItems: "flex-start" }}>
-                            <div style={{ maxWidth: 520 }}>
-                                <h1 className="h1" style={{ lineHeight: 1.05 }}>
-                                    Lobby beitreten
-                                </h1>
-                                <p className="p subline" style={{ marginTop: 8 }}>
-                                    Mitspielen ohne Account. Code rein und los.
-                                </p>
-                            </div>
-                        </div>
+                        <h1 className="h1" style={{ lineHeight: 1.05 }}>
+                            Lobby beitreten
+                        </h1>
+                        <p className="p subline" style={{ marginTop: 8 }}>
+                            Schnell rein – ohne Account.
+                        </p>
                     </header>
 
-                    <div style={{ display: "flex", justifyContent: "center" }}>
-                        <div className="panel" style={{ width: "100%", maxWidth: 520, margin: "6px auto 0" }}>
-                            <div className="panelHead">
-                                <div className="panelTitle">Beitritt</div>
-                                <div className="panelHint">Dauert ~5 Sekunden</div>
-                            </div>
+                    <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, opacity: 0.95 }}>
+              <span className="chip">
+                <span className="chipDot" aria-hidden />1 Code
+              </span>
+                            <span style={{ opacity: 0.5 }}>→</span>
+                            <span className="chip">
+                <span className="chipDot" aria-hidden />2 Name
+              </span>
+                            <span style={{ opacity: 0.5 }}>→</span>
+                            <span className="chip">
+                <span className="chipDot" aria-hidden />3 Start
+              </span>
+                        </div>
 
-                            <div style={{ display: "grid", gap: 12 }}>
-                                <div className="fieldRow" style={{ margin: 0 }}>
-                                    <label className="fieldLabel" htmlFor="code">
-                                        Lobby-Code
-                                    </label>
-                                    <div className="fieldControl">
-                                        <input
-                                            id="code"
-                                            className="input"
-                                            value={code}
-                                            onChange={(e) => setCode(normalizeCode(e.target.value))}
-                                            placeholder="z.B. 5KJQ"
-                                            maxLength={4}
-                                            spellCheck={false}
-                                            autoCorrect="off"
-                                            autoCapitalize="characters"
-                                            inputMode="text"
-                                        />
-                                    </div>
-                                    <div className="fieldHelp">4 Zeichen (A–Z, 2–9).</div>
+                        <div className="divider" />
+
+                        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+                            <div className="fieldRow" style={{ margin: 0 }}>
+                                <label className="fieldLabel" htmlFor="code">
+                                    1) Lobby-Code
+                                </label>
+                                <div className="fieldControl">
+                                    <input
+                                        id="code"
+                                        className="input"
+                                        value={code}
+                                        onChange={(e) => setCode(normalizeCode(e.target.value))}
+                                        placeholder="z.B. 5KJQ"
+                                        maxLength={4}
+                                        spellCheck={false}
+                                        autoCorrect="off"
+                                        autoCapitalize="characters"
+                                        inputMode="text"
+                                    />
                                 </div>
+                                <div className="fieldHelp">4 Zeichen (A–Z, 2–9).</div>
+                            </div>
 
-                                <div className="fieldRow" style={{ margin: 0 }}>
-                                    <label className="fieldLabel" htmlFor="name">
-                                        Dein Name
-                                    </label>
-                                    <div className="fieldControl">
-                                        <input
-                                            id="name"
-                                            className="input"
-                                            value={name}
-                                            onChange={(e) => setName(e.target.value)}
-                                            placeholder="z.B. Sero"
-                                            maxLength={24}
-                                            autoComplete="nickname"
-                                        />
-                                    </div>
-                                    <div className="fieldHelp">Mindestens 2 Zeichen.</div>
+                            <div className="fieldRow" style={{ margin: 0 }}>
+                                <label className="fieldLabel" htmlFor="name">
+                                    2) Dein Name
+                                </label>
+                                <div className="fieldControl">
+                                    <input
+                                        id="name"
+                                        className="input"
+                                        value={name}
+                                        onChange={(e) => setName(sanitizeName(e.target.value))}
+                                        placeholder="z.B. Sero"
+                                        maxLength={12}
+                                        autoComplete="nickname"
+                                        inputMode="text"
+                                        spellCheck={false}
+                                        autoCorrect="off"
+                                    />
                                 </div>
+                                <div className="fieldHelp">Nur Buchstaben, max. 12 Zeichen.</div>
                             </div>
+                        </div>
 
-                            {error ? (
-                                <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
-                                    {error}
-                                </div>
-                            ) : null}
-
-                            <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-                                <button
-                                    type="button"
-                                    className={`btn btnPrimary btnXL ${canJoin && !loading ? "btnGlow" : "btnDisabled"}`}
-                                    onClick={joinLobby}
-                                    disabled={!canJoin || loading}
-                                    style={{ width: "100%" }}
-                                >
-                                    {loading ? "Trete bei…" : "Beitreten"}
-                                </button>
-
-                                <button
-                                    type="button"
-                                    className="btn btnSecondary btnSmall"
-                                    onClick={() => router.push("/")}
-                                    disabled={loading}
-                                    style={{ width: "100%" }}
-                                >
-                                    ← Zurück
-                                </button>
+                        {error ? (
+                            <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
+                                {error}
                             </div>
+                        ) : null}
 
-                            <div className="fieldHelp" style={{ marginTop: 12, opacity: 0.9 }}>
-                                Tipp: Gast reicht. Login ist optional.
-                            </div>
+                        {/* ✅ Buttons kleiner */}
+                        <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                            <button
+                                type="button"
+                                className={`btn btnPrimary btnSmall ${canJoin && !loading ? "btnGlow" : "btnDisabled"}`}
+                                onClick={joinLobby}
+                                disabled={!canJoin || loading}
+                                style={{ width: "100%", maxWidth: 360, margin: "0 auto" }}
+                            >
+                                {loading ? "Trete bei…" : "Start"}
+                            </button>
+
+                            <button
+                                type="button"
+                                className="btn btnSecondary btnSmall"
+                                onClick={() => router.push("/")}
+                                disabled={loading}
+                                style={{ width: "100%", maxWidth: 360, margin: "0 auto" }}
+                            >
+                                ← Zurück
+                            </button>
+                        </div>
+
+                        <div className="fieldHelp" style={{ marginTop: 12, opacity: 0.9 }}>
+                            Tipp: Gast reicht. Login ist optional.
                         </div>
                     </div>
                 </section>
