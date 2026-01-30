@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -28,6 +27,22 @@ export default function LoginPage() {
     const [error, setError] = useState<string>("");
     const [info, setInfo] = useState<string>("");
 
+    // ✅ account_created message handling (from /register redirect)
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        const msg = url.searchParams.get("m");
+
+        if (msg === "account_created") {
+            setTab("account");
+            setIdMode("email");
+            setInfo("Account erstellt. Bitte logge dich jetzt ein.");
+
+            // optional: URL clean-up
+            // url.searchParams.delete("m");
+            // window.history.replaceState({}, "", url.toString());
+        }
+    }, []);
+
     const [nextPath, setNextPath] = useState("/host");
     useEffect(() => {
         const url = new URL(window.location.href);
@@ -52,11 +67,7 @@ export default function LoginPage() {
         idMode === "username" ? "Benutzername" : idMode === "email" ? "E-Mail" : "Telefon";
 
     const idPlaceholder =
-        idMode === "username"
-            ? "Mehdi"
-            : idMode === "email"
-                ? "mehdi@email.de"
-                : "01761234567";
+        idMode === "username" ? "Mehdi" : idMode === "email" ? "mehdi@email.de" : "01761234567";
 
     function resetMessages() {
         setError("");
@@ -64,8 +75,10 @@ export default function LoginPage() {
     }
 
     async function signInWithGoogle() {
+        if (loading) return;
         setLoading(true);
         resetMessages();
+
         try {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: "google",
@@ -78,23 +91,23 @@ export default function LoginPage() {
         }
     }
 
-    async function resolveUsernameToPhone(usernameRaw: string) {
+    async function resolveUsernameToEmail(usernameRaw: string) {
         const u = normalizeUsername(usernameRaw);
 
         const { data, error } = await supabase
             .from("profiles")
-            .select("phone")
+            .select("email")
             .eq("username", u)
             .maybeSingle();
 
         if (error) throw error;
-        if (!data) return null;
 
-        const phone = (data.phone ?? "").trim();
-        return phone.length ? phone : null;
+        const email = (data?.email ?? "").trim();
+        return email.length ? email : null;
     }
 
     async function signInAccount() {
+        if (loading) return;
         setLoading(true);
         resetMessages();
 
@@ -136,14 +149,15 @@ export default function LoginPage() {
                 return;
             }
 
-            const phone = await resolveUsernameToPhone(id);
-            if (!phone) {
+            // username -> email -> signIn
+            const email = await resolveUsernameToEmail(id);
+            if (!email) {
                 setError("Login fehlgeschlagen.");
                 setLoading(false);
                 return;
             }
 
-            const { error } = await supabase.auth.signInWithPassword({ phone, password });
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
 
             window.location.href = nextPath;
@@ -162,6 +176,7 @@ export default function LoginPage() {
             return;
         }
 
+        if (loading) return;
         setLoading(true);
         try {
             const { error } = await supabase.auth.resetPasswordForEmail(id, {
@@ -202,17 +217,6 @@ export default function LoginPage() {
 
     return (
         <main className="container">
-            <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image
-                    src="/logo.png"
-                    alt="Kumpir Maskottchen"
-                    width={400}
-                    height={400}
-                    priority
-                    className="brandLogoImg"
-                />
-            </Link>
-
             <div className="landingWrap">
                 <section className="card" aria-label="Login">
                     <header className="hostHeader">
@@ -224,16 +228,16 @@ export default function LoginPage() {
                                 title="Für Lobby-Hosting erforderlich"
                                 style={{ animation: "metaPulse 2.8s ease-in-out infinite" }}
                             >
-                <span
-                    className="chipDot"
-                    aria-hidden
-                    style={{
-                        background: "rgba(34,211,238,.95)",
-                        boxShadow: "0 0 0 4px rgba(34,211,238,.25)",
-                    }}
-                />
-                Erforderlich
-              </span>
+                                <span
+                                    className="chipDot"
+                                    aria-hidden
+                                    style={{
+                                        background: "rgba(34,211,238,.95)",
+                                        boxShadow: "0 0 0 4px rgba(34,211,238,.25)",
+                                    }}
+                                />
+                                Erforderlich
+                            </span>
                         </div>
 
                         <p className="p hostSub">
@@ -306,7 +310,7 @@ export default function LoginPage() {
                                                 background: "#fff",
                                             }}
                                         >
-                                            <Image src="/google.svg" alt="Google" width={20} height={20} />
+                                            <img src="/google.svg" alt="Google" width={20} height={20} />
                                         </div>
 
                                         <div style={{ minWidth: 0 }}>
@@ -338,6 +342,7 @@ export default function LoginPage() {
                                         />
                                     </div>
 
+                                    {/* ✅ Nur im Google-Tab */}
                                     <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
                                         Zum <b>Mitspielen</b> brauchst du keinen Account.
                                     </div>
@@ -469,10 +474,6 @@ export default function LoginPage() {
                                         </button>
 
                                         <RegisterLink className="btn btnAccent" />
-                                    </div>
-
-                                    <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                        Zum <b>Mitspielen</b> brauchst du keinen Account.
                                     </div>
 
                                     <div style={{ marginTop: 12 }}>

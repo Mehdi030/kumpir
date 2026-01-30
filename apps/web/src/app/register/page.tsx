@@ -39,6 +39,8 @@ export default function RegisterPage() {
     }, [nextPath]);
 
     async function onSubmit() {
+        if (loading) return;
+
         setError("");
         setInfo("");
 
@@ -91,12 +93,13 @@ export default function RegisterPage() {
                 });
                 if (error) throw error;
 
-                setInfo(
-                    "Account erstellt. Bitte E-Mail bestätigen (falls aktiviert). Danach kannst du dich einloggen."
-                );
+                // ✅ redirect to login after signup
+                const loginUrl = `/login?next=${encodeURIComponent(nextPath)}&m=account_created`;
+                window.location.href = loginUrl;
                 return;
             }
 
+            // phone signup
             const { error } = await supabase.auth.signUp({
                 phone: p,
                 password,
@@ -106,7 +109,9 @@ export default function RegisterPage() {
             });
             if (error) throw error;
 
-            setInfo("Account erstellt. Bitte SMS-Verifizierung abschließen (falls aktiviert).");
+            // ✅ redirect to login after signup
+            const loginUrl = `/login?next=${encodeURIComponent(nextPath)}&m=account_created`;
+            window.location.href = loginUrl;
         } catch (e: any) {
             setError(e?.message ?? "Registrierung fehlgeschlagen.");
         } finally {
@@ -114,7 +119,6 @@ export default function RegisterPage() {
         }
     }
 
-    // Shared verification note (points to Email + Phone, not "only next to phone")
     const VerifyNote = () => (
         <div
             className="fieldHelp"
@@ -126,9 +130,7 @@ export default function RegisterPage() {
         >
             <b>Verifizierung & Wiederherstellung:</b> Wähle{" "}
             <b>E-Mail</b> <span style={{ opacity: 0.85 }}>oder</span> <b>Telefonnummer</b>.{" "}
-            <span style={{ opacity: 0.9 }}>
-        Mindestens eine Angabe ist erforderlich.
-      </span>
+            <span style={{ opacity: 0.9 }}>Mindestens eine Angabe ist erforderlich.</span>
         </div>
     );
 
@@ -149,7 +151,7 @@ export default function RegisterPage() {
                     <div className="hostGrid">
                         <div className="panel" style={{ gridColumn: "1 / -1" }}>
                             <div className="previewCard">
-                                {/* USERNAME (make input narrower so right text sits next to it) */}
+                                {/* USERNAME */}
                                 <div className="fieldRow">
                                     <label className="fieldLabel" htmlFor="username">
                                         Benutzername *
@@ -163,7 +165,6 @@ export default function RegisterPage() {
                                             width: "100%",
                                         }}
                                     >
-                                        {/* narrower input */}
                                         <div className="fieldControl" style={{ flex: "0 1 62%" }}>
                                             <input
                                                 id="username"
@@ -176,7 +177,6 @@ export default function RegisterPage() {
                                             <div className="fieldHelp"></div>
                                         </div>
 
-                                        {/* right text aligned next to username input */}
                                         <div
                                             className="fieldHelp"
                                             style={{
@@ -191,7 +191,7 @@ export default function RegisterPage() {
                                     </div>
                                 </div>
 
-                                {/* EMAIL (optional, recommended) */}
+                                {/* EMAIL */}
                                 <div className="fieldRow" style={{ marginTop: 10 }}>
                                     <label className="fieldLabel" htmlFor="email">
                                         E-Mail (empfohlen)
@@ -210,12 +210,11 @@ export default function RegisterPage() {
                                     </div>
                                 </div>
 
-                                {/* shared verification note placed between EMAIL and PHONE so it clearly refers to both */}
                                 <div style={{ marginTop: 8 }}>
                                     <VerifyNote />
                                 </div>
 
-                                {/* PHONE (optional, recommended) */}
+                                {/* PHONE */}
                                 <div className="fieldRow" style={{ marginTop: 10 }}>
                                     <label className="fieldLabel" htmlFor="phone">
                                         Telefonnummer (empfohlen)
@@ -283,19 +282,17 @@ export default function RegisterPage() {
                                     </Link>
                                 </div>
 
-                                {/* Privacy note: more visible bottom-right */}
                                 <div
                                     className="fieldHelp"
                                     style={{
                                         marginTop: 12,
                                         textAlign: "right",
-                                        opacity: 0.9,          // more visible
-                                        fontSize: 13,          // slightly larger
-                                        fontWeight: 600,       // more readable
+                                        opacity: 0.9,
+                                        fontSize: 13,
+                                        fontWeight: 600,
                                     }}
                                 >
-                                    🔐 Deine Angaben werden ausschließlich zur Verifizierung und Wiederherstellung
-                                    genutzt.
+                                    🔐 Deine Angaben werden ausschließlich zur Verifizierung und Wiederherstellung genutzt.
                                 </div>
                             </div>
                         </div>
