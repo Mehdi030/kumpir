@@ -7,20 +7,27 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 function isEmailLike(v: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
-function isPhoneLike(v: string) {
-    return /^(\+|00)?[0-9][0-9\s-]{6,}$/.test(v.trim());
-}
 function normalizeUsername(v: string) {
     return v.trim().toLowerCase();
 }
+function normalizeEmail(v: string) {
+    return v.trim().toLowerCase();
+}
+
+type Tab = "google" | "account";
+type PageMode = "normal" | "check_email";
 
 export default function LoginPage() {
     const supabase = getSupabaseClient();
 
-    const [tab, setTab] = useState<"google" | "account">("google");
-    const [idMode, setIdMode] = useState<"username" | "email" | "phone">("username");
+    const [tab, setTab] = useState<Tab>("google");
+    const [pageMode, setPageMode] = useState<PageMode>("normal");
 
-    const [identifier, setIdentifier] = useState("");
+    // ✅ Account-Login: username + email (beides Pflicht)
+    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
+
+    // Passwort bleibt
     const [password, setPassword] = useState("");
 
     const [loading, setLoading] = useState(false);
@@ -29,28 +36,10 @@ export default function LoginPage() {
 
     const [nextPath, setNextPath] = useState("/host");
 
-    function resetMessages() {
-        setError("");
-        setInfo("");
-    }
-
-    // read query params: next + account_created message
     useEffect(() => {
         const url = new URL(window.location.href);
-
         const next = url.searchParams.get("next");
         setNextPath(next && next.startsWith("/") ? next : "/host");
-
-        const msg = url.searchParams.get("m");
-        if (msg === "account_created") {
-            setTab("account");
-            setIdMode("email");
-            setInfo("Account erstellt. Bitte logge dich jetzt ein.");
-
-            // optional: URL clean-up
-            url.searchParams.delete("m");
-            window.history.replaceState({}, "", url.toString());
-        }
     }, []);
 
     const callbackUrl = useMemo(() => {
@@ -58,7 +47,44 @@ export default function LoginPage() {
         return `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
     }, [nextPath]);
 
-    // if already logged in -> redirect
+    function resetMessages() {
+        setError("");
+        setInfo("");
+    }
+
+    // ✅ Handle messages from redirects
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        const msg = url.searchParams.get("m");
+        const emailFromQuery = (url.searchParams.get("email") ?? "").trim();
+
+        if (msg === "check_email") {
+            setPageMode("check_email");
+            setTab("account");
+            setInfo(
+                "Wir haben dir eine Bestätigungs-E-Mail geschickt. Bitte klicke den Link in deinem Postfach, um deinen Account zu aktivieren. Danach wirst du automatisch eingeloggt."
+            );
+            if (emailFromQuery && isEmailLike(emailFromQuery)) {
+                setEmail(emailFromQuery);
+            }
+        } else if (msg === "account_created") {
+            // legacy fallback
+            setPageMode("normal");
+            setTab("account");
+            setInfo("Account erstellt. Bitte bestätige zuerst deine E-Mail, danach kannst du dich anmelden.");
+            if (emailFromQuery && isEmailLike(emailFromQuery)) {
+                setEmail(emailFromQuery);
+            }
+        }
+
+        if (msg) {
+            url.searchParams.delete("m");
+            if (msg !== "check_email") url.searchParams.delete("email");
+            window.history.replaceState({}, "", url.toString());
+        }
+    }, []);
+
+    // ✅ Wenn schon eingeloggt, direkt weiter
     useEffect(() => {
         (async () => {
             const { data } = await supabase.auth.getSession();
@@ -66,10 +92,6 @@ export default function LoginPage() {
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [nextPath]);
-
-    const idLabel = idMode === "username" ? "Benutzername" : idMode === "email" ? "E-Mail" : "Telefon";
-    const idPlaceholder =
-        idMode === "username" ? "Mehdi" : idMode === "email" ? "mehdi@email.de" : "+491761234567";
 
     async function signInWithGoogle() {
         if (loading) return;
@@ -89,6 +111,7 @@ export default function LoginPage() {
     }
 
     async function resolveUsernameToEmail(usernameRaw: string) {
+        // ⚠️ Hinweis: später besser per RPC/Edge (privacy).
         const u = normalizeUsername(usernameRaw);
 
         const { data, error } = await supabase
@@ -99,8 +122,8 @@ export default function LoginPage() {
 
         if (error) throw error;
 
-        const email = (data?.email ?? "").trim();
-        return email.length ? email : null;
+        const out = (data?.email ?? "").trim();
+        return out.length ? out : null;
     }
 
     async function signInAccount() {
@@ -108,11 +131,17 @@ export default function LoginPage() {
         setLoading(true);
         resetMessages();
 
-        const id = identifier.trim();
+        const u = username.trim();
+        const e = email.trim();
 
         try {
-            if (id.length < 3) {
-                setError("Bitte Wert eingeben.");
+            if (u.length < 3) {
+                setError("Bitte Benutzername eingeben (mind. 3 Zeichen).");
+                setLoading(false);
+                return;
+            }
+            if (!isEmailLike(e)) {
+                setError("Bitte eine gültige E-Mail eingeben.");
                 setLoading(false);
                 return;
             }
@@ -122,44 +151,36 @@ export default function LoginPage() {
                 return;
             }
 
-            if (idMode === "email") {
-                if (!isEmailLike(id)) {
-                    setError("Bitte eine gültige E-Mail eingeben.");
-                    setLoading(false);
-                    return;
-                }
-                const { error } = await supabase.auth.signInWithPassword({ email: id, password });
-                if (error) throw error;
-                window.location.href = nextPath;
-                return;
-            }
-
-            if (idMode === "phone") {
-                if (!isPhoneLike(id)) {
-                    setError("Bitte eine gültige Telefonnummer eingeben.");
-                    setLoading(false);
-                    return;
-                }
-                const { error } = await supabase.auth.signInWithPassword({ phone: id, password });
-                if (error) throw error;
-                window.location.href = nextPath;
-                return;
-            }
-
-            // username -> email -> signIn
-            const email = await resolveUsernameToEmail(id);
-            if (!email) {
-                setError("Login fehlgeschlagen.");
+            // ✅ Username -> Email aus DB
+            const resolvedEmail = await resolveUsernameToEmail(u);
+            if (!resolvedEmail) {
+                setError("Benutzername oder E-Mail stimmt nicht.");
                 setLoading(false);
                 return;
             }
 
-            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            // ✅ Check: eingegebene Email muss zur Username-Email passen
+            if (normalizeEmail(resolvedEmail) !== normalizeEmail(e)) {
+                setError("Benutzername und E-Mail gehören nicht zusammen.");
+                setLoading(false);
+                return;
+            }
+
+            // ✅ Login via Supabase Auth (Email + Passwort)
+            const { error } = await supabase.auth.signInWithPassword({
+                email: resolvedEmail,
+                password,
+            });
             if (error) throw error;
 
             window.location.href = nextPath;
         } catch (e: any) {
-            setError(e?.message ?? "Login fehlgeschlagen.");
+            const msg = (e?.message ?? "").toLowerCase();
+            if (msg.includes("confirm") || msg.includes("confirmed")) {
+                setError("Bitte bestätige zuerst deine E-Mail (Link im Postfach).");
+            } else {
+                setError(e?.message ?? "Login fehlgeschlagen.");
+            }
             setLoading(false);
         }
     }
@@ -167,17 +188,20 @@ export default function LoginPage() {
     async function forgotPassword() {
         resetMessages();
 
-        const id = identifier.trim();
-        if (idMode !== "email" || !isEmailLike(id)) {
-            setError("Für Passwort-Reset bitte E-Mail auswählen und eine gültige Adresse eingeben.");
+        const e = email.trim();
+        if (!isEmailLike(e)) {
+            setError("Für Passwort-Reset bitte deine E-Mail eingeben.");
             return;
         }
 
         if (loading) return;
         setLoading(true);
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(id, { redirectTo: callbackUrl });
+            const { error } = await supabase.auth.resetPasswordForEmail(e, {
+                redirectTo: callbackUrl,
+            });
             if (error) throw error;
+
             setInfo("Passwort-Reset E-Mail wurde verschickt.");
         } catch (e: any) {
             setError(e?.message ?? "Reset fehlgeschlagen.");
@@ -186,26 +210,61 @@ export default function LoginPage() {
         }
     }
 
-    const RegisterLink = ({
-                              className,
-                              style,
-                          }: {
-        className: string;
-        style?: React.CSSProperties;
-    }) => (
-        <Link
-            href={`/register?next=${encodeURIComponent(nextPath)}`}
-            className={className}
-            title="Erstellt einen neuen Account"
-            style={style}
-        >
-            Registrieren
-        </Link>
-    );
+    async function resendConfirmationEmail() {
+        resetMessages();
+
+        const e = email.trim();
+        if (!isEmailLike(e)) {
+            setError("Bitte gib deine E-Mail ein, um die Bestätigung erneut zu senden.");
+            return;
+        }
+
+        if (loading) return;
+        setLoading(true);
+        try {
+            const { error } = await supabase.auth.resend({
+                type: "signup",
+                email: e,
+                options: { emailRedirectTo: callbackUrl },
+            });
+            if (error) throw error;
+
+            setInfo("Bestätigungs-E-Mail wurde erneut verschickt.");
+        } catch (e: any) {
+            setError(e?.message ?? "Erneutes Senden fehlgeschlagen.");
+        } finally {
+            setLoading(false);
+        }
+    }
 
     const BackLink = ({ withArrow }: { withArrow?: boolean }) => (
         <Link href="/" className="btn btnSecondary">
             {withArrow ? "←Zurück" : "Zurück"}
+        </Link>
+    );
+
+    // ✅ Global sichtbarer Registrieren-Chip (rechts neben Tabs)
+    const RegisterChip = () => (
+        <Link
+            href={`/register?next=${encodeURIComponent(nextPath)}`}
+            className="chip"
+            title="Neuen Account erstellen"
+            style={{
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+            }}
+        >
+      <span
+          className="chipDot"
+          aria-hidden
+          style={{
+              background: "rgba(255, 255, 255, .85)",
+              boxShadow: "0 0 0 4px rgba(255,255,255,.14)",
+          }}
+      />
+            Registrieren
         </Link>
     );
 
@@ -234,9 +293,7 @@ export default function LoginPage() {
               </span>
                         </div>
 
-                        <p className="p hostSub">
-                            Melde dich an, damit du deine Lobby kontrollieren und speichern kannst.
-                        </p>
+                        <p className="p hostSub">Melde dich an, damit du deine Lobby kontrollieren und speichern kannst.</p>
                     </header>
 
                     <div className="hostGrid">
@@ -245,236 +302,294 @@ export default function LoginPage() {
                                 <div className="panelTitle">Anmelden</div>
                             </div>
 
-                            <div className="seg" style={{ marginBottom: 12 }}>
-                                <button
-                                    type="button"
-                                    className={`segBtn ${tab === "google" ? "segActive" : ""}`}
-                                    onClick={() => {
-                                        resetMessages();
-                                        setTab("google");
-                                    }}
-                                    disabled={loading}
-                                >
-                                    Google
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`segBtn ${tab === "account" ? "segActive" : ""}`}
-                                    onClick={() => {
-                                        resetMessages();
-                                        setTab("account");
-                                    }}
-                                    disabled={loading}
-                                >
-                                    Account
-                                </button>
-                            </div>
-
-                            {tab === "google" ? (
+                            {/* ✅ Wenn "check_email": zeige Verifizierungs-Ansicht */}
+                            {pageMode === "check_email" ? (
                                 <div className="previewCard">
                                     <div
                                         style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 14,
                                             padding: 14,
                                             borderRadius: 16,
                                             background: "rgba(255,255,255,0.06)",
                                             border: "1px solid rgba(255,255,255,0.12)",
-                                            transition: "transform .18s ease, background .18s ease",
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.075)";
-                                            (e.currentTarget as HTMLDivElement).style.transform = "scale(1.01)";
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.06)";
-                                            (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
                                         }}
                                     >
-                                        <div
-                                            style={{
-                                                width: 40,
-                                                height: 40,
-                                                borderRadius: 12,
-                                                display: "grid",
-                                                placeItems: "center",
-                                                background: "#fff",
-                                            }}
-                                        >
-                                            <img src="/google.svg" alt="Google" width={20} height={20} />
+                                        <div style={{ fontWeight: 900, fontSize: 16 }}>📧 E-Mail bestätigen</div>
+
+                                        <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.92 }}>
+                                            {info ||
+                                                "Bitte bestätige deine E-Mail über den Link im Postfach. Danach wirst du automatisch eingeloggt."}
                                         </div>
 
-                                        <div style={{ minWidth: 0 }}>
-                                            <div style={{ fontWeight: 800 }}>Google</div>
-                                            <div style={{ opacity: 0.85, fontSize: 13 }}>Schnell • Sicher • Kein Passwort bei uns</div>
-
-                                            <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.88 }}>
-                                                🔐 Wir speichern keine Passwörter • 🛡️ Standard-Login über Google
+                                        <div className="fieldRow" style={{ marginTop: 12 }}>
+                                            <label className="fieldLabel" htmlFor="email">
+                                                E-Mail
+                                            </label>
+                                            <div className="fieldControl">
+                                                <input
+                                                    id="email"
+                                                    className="input"
+                                                    value={email}
+                                                    onChange={(e) => setEmail(e.target.value)}
+                                                    placeholder="du@beispiel.de"
+                                                    autoComplete="email"
+                                                    inputMode="email"
+                                                />
+                                            </div>
+                                            <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.85 }}>
+                                                Wenn keine Mail ankam: Spam prüfen oder erneut senden.
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div className="actionsRow" style={{ marginTop: 12, gap: 10 }}>
-                                        <button
-                                            type="button"
-                                            className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
-                                            onClick={signInWithGoogle}
-                                            disabled={loading}
-                                            style={{ paddingInline: 16, paddingBlock: 10 }}
-                                        >
-                                            {loading ? "Weiterleiten…" : "Mit Google anmelden"}
-                                        </button>
+                                        <div className="actionsRow" style={{ marginTop: 14, gap: 10 }}>
+                                            <button
+                                                type="button"
+                                                className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
+                                                onClick={resendConfirmationEmail}
+                                                disabled={loading}
+                                            >
+                                                {loading ? "…" : "Bestätigungs-Mail erneut senden"}
+                                            </button>
 
-                                        <RegisterLink className="btn btnSecondary" style={{ paddingInline: 14, paddingBlock: 10 }} />
-                                    </div>
+                                            <RegisterChip />
+                                        </div>
 
-                                    <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                        Zum <b>Mitspielen</b> brauchst du keinen Account.
-                                    </div>
-
-                                    <div style={{ marginTop: 12 }}>
-                                        <BackLink />
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="previewCard">
-                                    <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-                                        <button
-                                            type="button"
-                                            className={`segBtn ${idMode === "username" ? "segActive" : ""}`}
-                                            onClick={() => {
-                                                resetMessages();
-                                                setIdMode("username");
-                                            }}
-                                            disabled={loading}
-                                            style={{ paddingInline: 12, paddingBlock: 8 }}
-                                        >
-                                            Benutzername
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            className={`segBtn ${idMode === "email" ? "segActive" : ""}`}
-                                            onClick={() => {
-                                                resetMessages();
-                                                setIdMode("email");
-                                            }}
-                                            disabled={loading}
-                                            style={{ paddingInline: 12, paddingBlock: 8 }}
-                                        >
-                                            E-Mail
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            className={`segBtn ${idMode === "phone" ? "segActive" : ""}`}
-                                            onClick={() => {
-                                                resetMessages();
-                                                setIdMode("phone");
-                                            }}
-                                            disabled={loading}
-                                            style={{ paddingInline: 12, paddingBlock: 8 }}
-                                        >
-                                            Telefon
-                                        </button>
-                                    </div>
-
-                                    <div className="fieldRow">
-                                        <label className="fieldLabel" htmlFor="identifier">
-                                            {idLabel}
-                                        </label>
-                                        <div className="fieldControl">
-                                            <input
-                                                id="identifier"
-                                                className="input"
-                                                value={identifier}
-                                                onChange={(e) => setIdentifier(e.target.value)}
-                                                placeholder={idPlaceholder}
-                                                autoComplete={idMode === "email" ? "email" : idMode === "phone" ? "tel" : "username"}
-                                                inputMode={idMode === "email" ? "email" : idMode === "phone" ? "tel" : "text"}
-                                            />
+                                        <div style={{ marginTop: 12 }}>
+                                            <BackLink withArrow />
                                         </div>
                                     </div>
 
+                                    {error && (
+                                        <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>
+                                            {error}
+                                        </div>
+                                    )}
+                                    {!error && info && (
+                                        <div className="fieldHelp" style={{ marginTop: 10 }}>
+                                            {info}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <>
+                                    {/* ✅ Tabs + Registrieren-Chip rechts */}
                                     <div
                                         style={{
                                             display: "flex",
-                                            alignItems: "flex-end",
+                                            alignItems: "center",
                                             justifyContent: "space-between",
-                                            gap: 10,
-                                            marginTop: 10,
+                                            gap: 12,
+                                            marginBottom: 12,
                                         }}
                                     >
-                                        <div style={{ flex: 1 }}>
-                                            <div className="fieldRow" style={{ margin: 0 }}>
-                                                <label className="fieldLabel" htmlFor="password">
-                                                    Passwort
-                                                </label>
-                                                <div className="fieldControl">
-                                                    <input
-                                                        id="password"
-                                                        className="input"
-                                                        type="password"
-                                                        value={password}
-                                                        onChange={(e) => setPassword(e.target.value)}
-                                                        placeholder="mind. 8 Zeichen"
-                                                        autoComplete="current-password"
-                                                    />
-                                                </div>
-                                            </div>
+                                        <div className="seg" style={{ marginBottom: 0 }}>
+                                            <button
+                                                type="button"
+                                                className={`segBtn ${tab === "google" ? "segActive" : ""}`}
+                                                onClick={() => {
+                                                    resetMessages();
+                                                    setTab("google");
+                                                }}
+                                                disabled={loading}
+                                            >
+                                                Google
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`segBtn ${tab === "account" ? "segActive" : ""}`}
+                                                onClick={() => {
+                                                    resetMessages();
+                                                    setTab("account");
+                                                }}
+                                                disabled={loading}
+                                            >
+                                                Account
+                                            </button>
                                         </div>
 
-                                        <button
-                                            type="button"
-                                            onClick={forgotPassword}
-                                            disabled={loading || idMode !== "email"}
-                                            title="Nur möglich, wenn E-Mail ausgewählt ist"
-                                            style={{
-                                                background: "transparent",
-                                                border: "none",
-                                                padding: 0,
-                                                marginBottom: 10,
-                                                cursor: loading || idMode !== "email" ? "not-allowed" : "pointer",
-                                                opacity: idMode !== "email" ? 0.55 : 0.9,
-                                                color: "rgba(255,255,255,.85)",
-                                                textDecoration: "underline",
-                                                fontSize: 12,
-                                                whiteSpace: "nowrap",
-                                            }}
-                                        >
-                                            Passwort vergessen?
-                                        </button>
+                                        <RegisterChip />
                                     </div>
 
-                                    <div className="actionsRow" style={{ marginTop: 14 }}>
-                                        <button
-                                            type="button"
-                                            className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
-                                            onClick={signInAccount}
-                                            disabled={loading}
-                                        >
-                                            Einloggen
-                                        </button>
+                                    {tab === "google" ? (
+                                        <div className="previewCard">
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 14,
+                                                    padding: 14,
+                                                    borderRadius: 16,
+                                                    background: "rgba(255,255,255,0.06)",
+                                                    border: "1px solid rgba(255,255,255,0.12)",
+                                                    transition: "transform .18s ease, background .18s ease",
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.075)";
+                                                    (e.currentTarget as HTMLDivElement).style.transform = "scale(1.01)";
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.06)";
+                                                    (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
+                                                }}
+                                            >
+                                                <div
+                                                    style={{
+                                                        width: 40,
+                                                        height: 40,
+                                                        borderRadius: 12,
+                                                        display: "grid",
+                                                        placeItems: "center",
+                                                        background: "#fff",
+                                                    }}
+                                                >
+                                                    <img src="/google.svg" alt="Google" width={20} height={20} />
+                                                </div>
 
-                                        <RegisterLink className="btn btnAccent" />
-                                    </div>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontWeight: 800 }}>Google</div>
+                                                    <div style={{ opacity: 0.85, fontSize: 13 }}>Schnell • Sicher • Kein Passwort bei uns</div>
 
-                                    <div style={{ marginTop: 12 }}>
-                                        <BackLink withArrow />
-                                    </div>
-                                </div>
-                            )}
+                                                    <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.88 }}>
+                                                        🔐 Wir speichern keine Passwörter • 🛡️ Standard-Login über Google
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                            {error && (
-                                <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>
-                                    {error}
-                                </div>
-                            )}
-                            {info && (
-                                <div className="fieldHelp" style={{ marginTop: 10 }}>
-                                    {info}
-                                </div>
+                                            <div className="actionsRow" style={{ marginTop: 12, gap: 10 }}>
+                                                <button
+                                                    type="button"
+                                                    className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
+                                                    onClick={signInWithGoogle}
+                                                    disabled={loading}
+                                                    style={{ paddingInline: 16, paddingBlock: 10 }}
+                                                >
+                                                    {loading ? "Weiterleiten…" : "Mit Google anmelden"}
+                                                </button>
+                                            </div>
+
+                                            <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
+                                                Zum <b>Mitspielen</b> brauchst du keinen Account.
+                                            </div>
+
+                                            <div style={{ marginTop: 12 }}>
+                                                <BackLink />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="previewCard">
+                                            {/* ✅ Form: Enter-Key + keine Browser-Warnung */}
+                                            <form
+                                                onSubmit={(e) => {
+                                                    e.preventDefault();
+                                                    signInAccount();
+                                                }}
+                                            >
+                                                <div className="fieldRow">
+                                                    <label className="fieldLabel" htmlFor="username">
+                                                        Benutzername
+                                                    </label>
+                                                    <div className="fieldControl">
+                                                        <input
+                                                            id="username"
+                                                            className="input"
+                                                            value={username}
+                                                            onChange={(e) => setUsername(e.target.value)}
+                                                            placeholder="z.B. Medo"
+                                                            autoComplete="username"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="fieldRow" style={{ marginTop: 10 }}>
+                                                    <label className="fieldLabel" htmlFor="email">
+                                                        E-Mail
+                                                    </label>
+                                                    <div className="fieldControl">
+                                                        <input
+                                                            id="email"
+                                                            className="input"
+                                                            value={email}
+                                                            onChange={(e) => setEmail(e.target.value)}
+                                                            placeholder="du@beispiel.de"
+                                                            autoComplete="email"
+                                                            inputMode="email"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "flex-end",
+                                                        justifyContent: "space-between",
+                                                        gap: 10,
+                                                        marginTop: 10,
+                                                    }}
+                                                >
+                                                    <div style={{ flex: 1 }}>
+                                                        <div className="fieldRow" style={{ margin: 0 }}>
+                                                            <label className="fieldLabel" htmlFor="password">
+                                                                Passwort
+                                                            </label>
+                                                            <div className="fieldControl">
+                                                                <input
+                                                                    id="password"
+                                                                    className="input"
+                                                                    type="password"
+                                                                    value={password}
+                                                                    onChange={(e) => setPassword(e.target.value)}
+                                                                    placeholder="mind. 8 Zeichen"
+                                                                    autoComplete="current-password"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={forgotPassword}
+                                                        disabled={loading}
+                                                        title="Passwort per E-Mail zurücksetzen"
+                                                        style={{
+                                                            background: "transparent",
+                                                            border: "none",
+                                                            padding: 0,
+                                                            marginBottom: 10,
+                                                            cursor: loading ? "not-allowed" : "pointer",
+                                                            opacity: 0.9,
+                                                            color: "rgba(255,255,255,.85)",
+                                                            textDecoration: "underline",
+                                                            fontSize: 12,
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                    >
+                                                        Passwort vergessen?
+                                                    </button>
+                                                </div>
+
+                                                <div className="actionsRow" style={{ marginTop: 14 }}>
+                                                    <button type="submit" className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`} disabled={loading}>
+                                                        Einloggen
+                                                    </button>
+                                                </div>
+                                            </form>
+
+                                            <div style={{ marginTop: 12 }}>
+                                                <BackLink withArrow />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {error && (
+                                        <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>
+                                            {error}
+                                        </div>
+                                    )}
+                                    {info && (
+                                        <div className="fieldHelp" style={{ marginTop: 10 }}>
+                                            {info}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
 
