@@ -7,9 +7,6 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 function isEmailLike(v: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
-function isPhoneLike(v: string) {
-    return /^(\+|00)?[0-9][0-9\s-]{6,}$/.test(v.trim());
-}
 function normalizeUsername(v: string) {
     return v.trim().toLowerCase();
 }
@@ -19,7 +16,6 @@ export default function RegisterPage() {
 
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
-    const [phone, setPhone] = useState("");
     const [password, setPassword] = useState("");
 
     const [loading, setLoading] = useState(false);
@@ -46,7 +42,6 @@ export default function RegisterPage() {
 
         const u = normalizeUsername(username);
         const e = email.trim();
-        const p = phone.trim();
 
         if (u.length < 3) {
             setError("Benutzername muss mindestens 3 Zeichen haben.");
@@ -56,61 +51,33 @@ export default function RegisterPage() {
             setError("Benutzername: nur a-z, 0-9, Punkt, Unterstrich, Minus.");
             return;
         }
+        if (!isEmailLike(e)) {
+            setError("Bitte eine gültige E-Mail eingeben.");
+            return;
+        }
         if (password.length < 8) {
             setError("Passwort muss mindestens 8 Zeichen haben.");
             return;
         }
 
-        const hasEmail = e.length > 0;
-        const hasPhone = p.length > 0;
-
-        if (!hasEmail && !hasPhone) {
-            setError("Bitte E-Mail oder Telefonnummer angeben (für Verifizierung).");
-            return;
-        }
-        if (hasEmail && !isEmailLike(e)) {
-            setError("Bitte eine gültige E-Mail eingeben.");
-            return;
-        }
-        if (hasPhone && !isPhoneLike(p)) {
-            setError("Bitte eine gültige Telefonnummer eingeben (z.B. +491...).");
-            return;
-        }
-
         setLoading(true);
         try {
-            if (hasEmail) {
-                const { error } = await supabase.auth.signUp({
-                    email: e,
-                    password,
-                    options: {
-                        emailRedirectTo: callbackUrl,
-                        data: {
-                            username: u,
-                            phone: hasPhone ? p : null,
-                        },
-                    },
-                });
-                if (error) throw error;
-
-                // ✅ redirect to login after signup
-                const loginUrl = `/login?next=${encodeURIComponent(nextPath)}&m=account_created`;
-                window.location.href = loginUrl;
-                return;
-            }
-
-            // phone signup
             const { error } = await supabase.auth.signUp({
-                phone: p,
+                email: e,
                 password,
                 options: {
+                    emailRedirectTo: callbackUrl, // ✅ nach Confirm: auto-login/redirect
                     data: { username: u },
                 },
             });
             if (error) throw error;
 
-            // ✅ redirect to login after signup
-            const loginUrl = `/login?next=${encodeURIComponent(nextPath)}&m=account_created`;
+            // ✅ direkt in den "Email bestätigen" Screen leiten (login überspringt nicht, aber flow bleibt logisch)
+            const loginUrl =
+                `/login?next=${encodeURIComponent(nextPath)}` +
+                `&m=check_email` +
+                `&email=${encodeURIComponent(e)}`;
+
             window.location.href = loginUrl;
         } catch (e: any) {
             setError(e?.message ?? "Registrierung fehlgeschlagen.");
@@ -118,21 +85,6 @@ export default function RegisterPage() {
             setLoading(false);
         }
     }
-
-    const VerifyNote = () => (
-        <div
-            className="fieldHelp"
-            style={{
-                opacity: 0.92,
-                fontSize: 12,
-                lineHeight: 1.35,
-            }}
-        >
-            <b>Verifizierung & Wiederherstellung:</b> Wähle{" "}
-            <b>E-Mail</b> <span style={{ opacity: 0.85 }}>oder</span> <b>Telefonnummer</b>.{" "}
-            <span style={{ opacity: 0.9 }}>Mindestens eine Angabe ist erforderlich.</span>
-        </div>
-    );
 
     return (
         <main className="container">
@@ -143,9 +95,7 @@ export default function RegisterPage() {
                             <h1 className="h1">Registrieren</h1>
                         </div>
 
-                        <p className="p hostSub">
-                            Erstelle deinen Account und sichere dir deinen Benutzernamen.
-                        </p>
+                        <p className="p hostSub">Erstelle deinen Account und sichere dir deinen Benutzernamen.</p>
                     </header>
 
                     <div className="hostGrid">
@@ -157,14 +107,7 @@ export default function RegisterPage() {
                                         Benutzername *
                                     </label>
 
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 14,
-                                            width: "100%",
-                                        }}
-                                    >
+                                    <div style={{ display: "flex", alignItems: "center", gap: 14, width: "100%" }}>
                                         <div className="fieldControl" style={{ flex: "0 1 62%" }}>
                                             <input
                                                 id="username"
@@ -191,10 +134,10 @@ export default function RegisterPage() {
                                     </div>
                                 </div>
 
-                                {/* EMAIL */}
+                                {/* EMAIL (Pflicht) */}
                                 <div className="fieldRow" style={{ marginTop: 10 }}>
                                     <label className="fieldLabel" htmlFor="email">
-                                        E-Mail (empfohlen)
+                                        E-Mail *
                                     </label>
 
                                     <div className="fieldControl">
@@ -208,28 +151,9 @@ export default function RegisterPage() {
                                             inputMode="email"
                                         />
                                     </div>
-                                </div>
 
-                                <div style={{ marginTop: 8 }}>
-                                    <VerifyNote />
-                                </div>
-
-                                {/* PHONE */}
-                                <div className="fieldRow" style={{ marginTop: 10 }}>
-                                    <label className="fieldLabel" htmlFor="phone">
-                                        Telefonnummer (empfohlen)
-                                    </label>
-
-                                    <div className="fieldControl">
-                                        <input
-                                            id="phone"
-                                            className="input"
-                                            value={phone}
-                                            onChange={(e) => setPhone(e.target.value)}
-                                            placeholder="+49123456789"
-                                            autoComplete="tel"
-                                            inputMode="tel"
-                                        />
+                                    <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.92, fontSize: 12, lineHeight: 1.35 }}>
+                                        <b>Verifizierung:</b> Du bekommst eine Bestätigungs-Mail. Erst danach ist dein Konto aktiv.
                                     </div>
                                 </div>
 
@@ -274,10 +198,7 @@ export default function RegisterPage() {
                                         {loading ? "…" : "Account erstellen"}
                                     </button>
 
-                                    <Link
-                                        href={`/login?next=${encodeURIComponent(nextPath)}`}
-                                        className="btn btnSecondary"
-                                    >
+                                    <Link href={`/login?next=${encodeURIComponent(nextPath)}`} className="btn btnSecondary">
                                         Zurück zum Login
                                     </Link>
                                 </div>
@@ -292,7 +213,7 @@ export default function RegisterPage() {
                                         fontWeight: 600,
                                     }}
                                 >
-                                    🔐 Deine Angaben werden ausschließlich zur Verifizierung und Wiederherstellung genutzt.
+                                    🔐 Wir nutzen deine E-Mail nur für Verifizierung und Wiederherstellung.
                                 </div>
                             </div>
                         </div>
