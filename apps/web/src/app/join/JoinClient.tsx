@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 function normalizeCode(input: string) {
@@ -33,13 +33,11 @@ function getErrorMessage(err: unknown): string {
     return "Unbekannter Fehler.";
 }
 
-export default function JoinClient() {
+export default function JoinClient({ initialCode }: { initialCode: string }) {
     const supabase = getSupabaseClient();
     const router = useRouter();
-    const params = useSearchParams();
 
-    // ✅ initialer Code kommt aus Query param ?code=....
-    const [code, setCode] = useState(() => normalizeCode(params.get("code") ?? ""));
+    const [code, setCode] = useState(() => normalizeCode(initialCode));
     const [name, setName] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -68,7 +66,6 @@ export default function JoinClient() {
 
             setStoredName(playerName);
 
-            // ✅ wenn Session existiert: join als User, sonst guest
             const { data: session } = await supabase.auth.getSession();
             const userId = session?.session?.user?.id ?? null;
 
@@ -117,20 +114,20 @@ export default function JoinClient() {
 
                     <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, opacity: 0.95 }}>
-                            <span className="chip">
-                                <span className="chipDot" aria-hidden />
-                                1 Code
-                            </span>
+              <span className="chip">
+                <span className="chipDot" aria-hidden />
+                1 Code
+              </span>
                             <span style={{ opacity: 0.5 }}>→</span>
                             <span className="chip">
-                                <span className="chipDot" aria-hidden />
-                                2 Name
-                            </span>
+                <span className="chipDot" aria-hidden />
+                2 Name
+              </span>
                             <span style={{ opacity: 0.5 }}>→</span>
                             <span className="chip">
-                                <span className="chipDot" aria-hidden />
-                                3 Start
-                            </span>
+                <span className="chipDot" aria-hidden />
+                3 Start
+              </span>
                         </div>
 
                         <div className="divider" />
