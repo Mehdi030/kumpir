@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 function normalizeCode(input: string) {
@@ -33,12 +33,17 @@ function getErrorMessage(err: unknown): string {
     return "Unbekannter Fehler.";
 }
 
-export default function JoinPage() {
+export default function JoinPage({
+                                     searchParams,
+                                 }: {
+    searchParams?: { code?: string };
+}) {
     const supabase = getSupabaseClient();
     const router = useRouter();
-    const params = useSearchParams();
 
-    const [code, setCode] = useState(() => normalizeCode(params.get("code") ?? ""));
+    const initialCode = normalizeCode((searchParams?.code ?? "").toString());
+
+    const [code, setCode] = useState(initialCode);
     const [name, setName] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -67,7 +72,6 @@ export default function JoinPage() {
 
             setStoredName(playerName);
 
-            // ✅ wenn Session existiert: 3-param-overload nutzen, sonst guest
             const { data: session } = await supabase.auth.getSession();
             const userId = session?.session?.user?.id ?? null;
 
@@ -93,7 +97,14 @@ export default function JoinPage() {
     return (
         <main className="container">
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image src="/logo.png" alt="Kumpir Maskottchen" width={400} height={400} priority className="brandLogoImg" />
+                <Image
+                    src="/logo.png"
+                    alt="Kumpir Maskottchen"
+                    width={400}
+                    height={400}
+                    priority
+                    className="brandLogoImg"
+                />
             </Link>
 
             <div className="landingWrap">
@@ -109,17 +120,20 @@ export default function JoinPage() {
 
                     <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, opacity: 0.95 }}>
-              <span className="chip">
-                <span className="chipDot" aria-hidden />1 Code
-              </span>
+                            <span className="chip">
+                                <span className="chipDot" aria-hidden />
+                                1 Code
+                            </span>
                             <span style={{ opacity: 0.5 }}>→</span>
                             <span className="chip">
-                <span className="chipDot" aria-hidden />2 Name
-              </span>
+                                <span className="chipDot" aria-hidden />
+                                2 Name
+                            </span>
                             <span style={{ opacity: 0.5 }}>→</span>
                             <span className="chip">
-                <span className="chipDot" aria-hidden />3 Start
-              </span>
+                                <span className="chipDot" aria-hidden />
+                                3 Start
+                            </span>
                         </div>
 
                         <div className="divider" />
@@ -174,7 +188,6 @@ export default function JoinPage() {
                             </div>
                         ) : null}
 
-                        {/* ✅ Buttons kleiner */}
                         <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
                             <button
                                 type="button"
