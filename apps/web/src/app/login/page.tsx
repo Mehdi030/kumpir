@@ -234,6 +234,28 @@ export default function LoginPage() {
         }
     }
 
+    // ✅ NEU: "Weiter" Button im check_email Screen
+    async function continueAfterEmailConfirm() {
+        resetMessages();
+        if (loading) return;
+        setLoading(true);
+        try {
+            const { data, error } = await supabase.auth.getSession();
+            if (error) throw error;
+
+            if (data.session) {
+                window.location.href = nextPath;
+                return;
+            }
+
+            setInfo("Noch nicht bestätigt / noch nicht eingeloggt. Bitte klicke erst den Link in der Bestätigungs-Mail und versuche es dann erneut.");
+        } catch (e: any) {
+            setError(e?.message ?? "Konnte Status nicht prüfen.");
+        } finally {
+            setLoading(false);
+        }
+    }
+
     const BackLink = ({ withArrow }: { withArrow?: boolean }) => (
         <Link href="/" className="btn btnSecondary">
             {withArrow ? "←Zurück" : "Zurück"}
@@ -283,9 +305,9 @@ export default function LoginPage() {
                                             border: "1px solid rgba(255,255,255,0.12)",
                                         }}
                                     >
+                                        {/* ✅ HIER: Registrieren entfernt */}
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                                             <div style={{ fontWeight: 900, fontSize: 16 }}>📧 E-Mail bestätigen</div>
-                                            <RegisterPill />
                                         </div>
 
                                         <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.92 }}>
@@ -298,14 +320,21 @@ export default function LoginPage() {
                                                 E-Mail
                                             </label>
                                             <div className="fieldControl">
+                                                {/* ✅ nicht editierbar */}
                                                 <input
                                                     id="email"
                                                     className="input"
                                                     value={email}
-                                                    onChange={(e) => setEmail(e.target.value)}
+                                                    readOnly
+                                                    disabled
+                                                    aria-readonly="true"
                                                     placeholder="du@beispiel.de"
                                                     autoComplete="email"
                                                     inputMode="email"
+                                                    style={{
+                                                        cursor: "not-allowed",
+                                                        opacity: 0.9,
+                                                    }}
                                                 />
                                             </div>
                                             <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.85 }}>
@@ -313,10 +342,21 @@ export default function LoginPage() {
                                             </div>
                                         </div>
 
-                                        <div className="actionsRow" style={{ marginTop: 14, gap: 10 }}>
+                                        {/* ✅ Buttons: Weiter + Resend + Zurück */}
+                                        <div className="actionsRow" style={{ marginTop: 14, gap: 10, flexWrap: "wrap" }}>
                                             <button
                                                 type="button"
                                                 className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
+                                                onClick={continueAfterEmailConfirm}
+                                                disabled={loading}
+                                                title="Prüft, ob du nach Bestätigung schon eingeloggt bist"
+                                            >
+                                                {loading ? "…" : "Weiter"}
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                className={`btn btnSecondary ${loading ? "btnDisabled" : ""}`}
                                                 onClick={resendConfirmationEmail}
                                                 disabled={loading}
                                             >
