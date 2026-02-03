@@ -33,17 +33,11 @@ function getErrorMessage(err: unknown): string {
     return "Unbekannter Fehler.";
 }
 
-export default function JoinPage({
-                                     searchParams,
-                                 }: {
-    searchParams?: { code?: string };
-}) {
+export default function JoinClient({ initialCode }: { initialCode: string }) {
     const supabase = getSupabaseClient();
     const router = useRouter();
 
-    const initialCode = normalizeCode((searchParams?.code ?? "").toString());
-
-    const [code, setCode] = useState(initialCode);
+    const [code, setCode] = useState(() => normalizeCode(initialCode));
     const [name, setName] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -120,20 +114,20 @@ export default function JoinPage({
 
                     <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, opacity: 0.95 }}>
-                            <span className="chip">
-                                <span className="chipDot" aria-hidden />
-                                1 Code
-                            </span>
+              <span className="chip">
+                <span className="chipDot" aria-hidden />
+                1 Code
+              </span>
                             <span style={{ opacity: 0.5 }}>→</span>
                             <span className="chip">
-                                <span className="chipDot" aria-hidden />
-                                2 Name
-                            </span>
+                <span className="chipDot" aria-hidden />
+                2 Name
+              </span>
                             <span style={{ opacity: 0.5 }}>→</span>
                             <span className="chip">
-                                <span className="chipDot" aria-hidden />
-                                3 Start
-                            </span>
+                <span className="chipDot" aria-hidden />
+                3 Start
+              </span>
                         </div>
 
                         <div className="divider" />

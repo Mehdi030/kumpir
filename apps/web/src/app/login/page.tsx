@@ -27,7 +27,6 @@ export default function LoginPage() {
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
 
-    // Passwort bleibt
     const [password, setPassword] = useState("");
 
     const [loading, setLoading] = useState(false);
@@ -68,7 +67,6 @@ export default function LoginPage() {
                 setEmail(emailFromQuery);
             }
         } else if (msg === "account_created") {
-            // legacy fallback
             setPageMode("normal");
             setTab("account");
             setInfo("Account erstellt. Bitte bestätige zuerst deine E-Mail, danach kannst du dich anmelden.");
@@ -111,7 +109,7 @@ export default function LoginPage() {
     }
 
     async function resolveUsernameToEmail(usernameRaw: string) {
-        // ⚠️ Hinweis: später besser per RPC/Edge (privacy).
+        // ⚠️ Wenn du "profiles.email" nicht öffentlich machen willst, später über RPC/Edge lösen.
         const u = normalizeUsername(usernameRaw);
 
         const { data, error } = await supabase
@@ -159,14 +157,13 @@ export default function LoginPage() {
                 return;
             }
 
-            // ✅ Check: eingegebene Email muss zur Username-Email passen
+            // ✅ Eingegebene Email muss zur Username-Email passen
             if (normalizeEmail(resolvedEmail) !== normalizeEmail(e)) {
                 setError("Benutzername und E-Mail gehören nicht zusammen.");
                 setLoading(false);
                 return;
             }
 
-            // ✅ Login via Supabase Auth (Email + Passwort)
             const { error } = await supabase.auth.signInWithPassword({
                 email: resolvedEmail,
                 password,
@@ -237,33 +234,42 @@ export default function LoginPage() {
         }
     }
 
+    // ✅ NEU: "Weiter" Button im check_email Screen
+    async function continueAfterEmailConfirm() {
+        resetMessages();
+        if (loading) return;
+        setLoading(true);
+        try {
+            const { data, error } = await supabase.auth.getSession();
+            if (error) throw error;
+
+            if (data.session) {
+                window.location.href = nextPath;
+                return;
+            }
+
+            setInfo("Noch nicht bestätigt / noch nicht eingeloggt. Bitte klicke erst den Link in der Bestätigungs-Mail und versuche es dann erneut.");
+        } catch (e: any) {
+            setError(e?.message ?? "Konnte Status nicht prüfen.");
+        } finally {
+            setLoading(false);
+        }
+    }
+
     const BackLink = ({ withArrow }: { withArrow?: boolean }) => (
         <Link href="/" className="btn btnSecondary">
             {withArrow ? "←Zurück" : "Zurück"}
         </Link>
     );
 
-    // ✅ Global sichtbarer Registrieren-Chip (rechts neben Tabs)
-    const RegisterChip = () => (
+    // ✅ Registrieren als MetaPill (oben rechts)
+    const RegisterPill = () => (
         <Link
             href={`/register?next=${encodeURIComponent(nextPath)}`}
-            className="chip"
+            className="metaPill"
             title="Neuen Account erstellen"
-            style={{
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-            }}
+            style={{ textDecoration: "none" }}
         >
-      <span
-          className="chipDot"
-          aria-hidden
-          style={{
-              background: "rgba(255, 255, 255, .85)",
-              boxShadow: "0 0 0 4px rgba(255,255,255,.14)",
-          }}
-      />
             Registrieren
         </Link>
     );
@@ -275,25 +281,11 @@ export default function LoginPage() {
                     <header className="hostHeader">
                         <div className="hostTitleRow">
                             <h1 className="h1">Login</h1>
-
-                            <span
-                                className="chip"
-                                title="Für Lobby-Hosting erforderlich"
-                                style={{ animation: "metaPulse 2.8s ease-in-out infinite" }}
-                            >
-                <span
-                    className="chipDot"
-                    aria-hidden
-                    style={{
-                        background: "rgba(34,211,238,.95)",
-                        boxShadow: "0 0 0 4px rgba(34,211,238,.25)",
-                    }}
-                />
-                Erforderlich
-              </span>
                         </div>
 
-                        <p className="p hostSub">Melde dich an, damit du deine Lobby kontrollieren und speichern kannst.</p>
+                        <p className="p hostSub">
+                            Melde dich an, damit du deine Lobby kontrollieren und speichern kannst.
+                        </p>
                     </header>
 
                     <div className="hostGrid">
@@ -302,7 +294,7 @@ export default function LoginPage() {
                                 <div className="panelTitle">Anmelden</div>
                             </div>
 
-                            {/* ✅ Wenn "check_email": zeige Verifizierungs-Ansicht */}
+                            {/* ✅ check_email Screen */}
                             {pageMode === "check_email" ? (
                                 <div className="previewCard">
                                     <div
@@ -313,7 +305,10 @@ export default function LoginPage() {
                                             border: "1px solid rgba(255,255,255,0.12)",
                                         }}
                                     >
-                                        <div style={{ fontWeight: 900, fontSize: 16 }}>📧 E-Mail bestätigen</div>
+                                        {/* ✅ HIER: Registrieren entfernt */}
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                                            <div style={{ fontWeight: 900, fontSize: 16 }}>📧 E-Mail bestätigen</div>
+                                        </div>
 
                                         <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.92 }}>
                                             {info ||
@@ -325,14 +320,21 @@ export default function LoginPage() {
                                                 E-Mail
                                             </label>
                                             <div className="fieldControl">
+                                                {/* ✅ nicht editierbar */}
                                                 <input
                                                     id="email"
                                                     className="input"
                                                     value={email}
-                                                    onChange={(e) => setEmail(e.target.value)}
+                                                    readOnly
+                                                    disabled
+                                                    aria-readonly="true"
                                                     placeholder="du@beispiel.de"
                                                     autoComplete="email"
                                                     inputMode="email"
+                                                    style={{
+                                                        cursor: "not-allowed",
+                                                        opacity: 0.9,
+                                                    }}
                                                 />
                                             </div>
                                             <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.85 }}>
@@ -340,20 +342,27 @@ export default function LoginPage() {
                                             </div>
                                         </div>
 
-                                        <div className="actionsRow" style={{ marginTop: 14, gap: 10 }}>
+                                        {/* ✅ Buttons: Weiter + Resend + Zurück */}
+                                        <div className="actionsRow" style={{ marginTop: 14, gap: 10, flexWrap: "wrap" }}>
                                             <button
                                                 type="button"
                                                 className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
+                                                onClick={continueAfterEmailConfirm}
+                                                disabled={loading}
+                                                title="Prüft, ob du nach Bestätigung schon eingeloggt bist"
+                                            >
+                                                {loading ? "…" : "Weiter"}
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                className={`btn btnSecondary ${loading ? "btnDisabled" : ""}`}
                                                 onClick={resendConfirmationEmail}
                                                 disabled={loading}
                                             >
                                                 {loading ? "…" : "Bestätigungs-Mail erneut senden"}
                                             </button>
 
-                                            <RegisterChip />
-                                        </div>
-
-                                        <div style={{ marginTop: 12 }}>
                                             <BackLink withArrow />
                                         </div>
                                     </div>
@@ -371,7 +380,7 @@ export default function LoginPage() {
                                 </div>
                             ) : (
                                 <>
-                                    {/* ✅ Tabs + Registrieren-Chip rechts */}
+                                    {/* ✅ Tabs + Registrieren rechts (MetaPill) */}
                                     <div
                                         style={{
                                             display: "flex",
@@ -406,7 +415,7 @@ export default function LoginPage() {
                                             </button>
                                         </div>
 
-                                        <RegisterChip />
+                                        <RegisterPill />
                                     </div>
 
                                     {tab === "google" ? (
@@ -446,7 +455,9 @@ export default function LoginPage() {
 
                                                 <div style={{ minWidth: 0 }}>
                                                     <div style={{ fontWeight: 800 }}>Google</div>
-                                                    <div style={{ opacity: 0.85, fontSize: 13 }}>Schnell • Sicher • Kein Passwort bei uns</div>
+                                                    <div style={{ opacity: 0.85, fontSize: 13 }}>
+                                                        Schnell • Sicher • Kein Passwort bei uns
+                                                    </div>
 
                                                     <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.88 }}>
                                                         🔐 Wir speichern keine Passwörter • 🛡️ Standard-Login über Google
@@ -476,7 +487,6 @@ export default function LoginPage() {
                                         </div>
                                     ) : (
                                         <div className="previewCard">
-                                            {/* ✅ Form: Enter-Key + keine Browser-Warnung */}
                                             <form
                                                 onSubmit={(e) => {
                                                     e.preventDefault();
@@ -567,7 +577,11 @@ export default function LoginPage() {
                                                 </div>
 
                                                 <div className="actionsRow" style={{ marginTop: 14 }}>
-                                                    <button type="submit" className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`} disabled={loading}>
+                                                    <button
+                                                        type="submit"
+                                                        className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
+                                                        disabled={loading}
+                                                    >
                                                         Einloggen
                                                     </button>
                                                 </div>

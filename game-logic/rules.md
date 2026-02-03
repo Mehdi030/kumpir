@@ -131,4 +131,4 @@ Technische Details gehören **nicht** hier rein.
 - **was erlaubt ist**
 - **was vermieden werden soll**
 
-ohne technische Umsetzung 🎮
+**ohne technische Umsetzung 🎮**

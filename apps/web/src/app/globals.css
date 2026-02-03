@@ -18,9 +18,9 @@
     --accent-2: #A78BFA;
 
     /* Card palette (warm / potato) */
-    --card-a: rgba(255, 170, 70, 0.96);
-    --card-b: rgba(245, 140, 35, 0.96);
-    --card-c: rgba(225, 115, 15, 0.96);
+    --card-a: rgba(250, 127, 2, 0.96);
+    --card-b: rgba(200, 125, 49, 0.96);
+    --card-c: rgba(250, 127, 2, 0.96);
 
     /* Radii */
     --r-pill: 999px;
@@ -202,6 +202,7 @@ body::after{
 .card{
     width: 100%;
     position: relative;
+    overflow: hidden; /* wichtig für Glow */
 
     /* Warm potato gradient */
     background:
@@ -229,6 +230,21 @@ body::after{
     opacity:.9;
 }
 
+.card::after{
+    content:"";
+    position:absolute;
+    inset:-40%;
+    pointer-events:none;
+    background:
+            radial-gradient(420px 260px at 50% 18%, rgba(255,255,255,.18), transparent 62%),
+            radial-gradient(560px 360px at 50% 88%, rgba(255,220,120,.16), transparent 60%),
+            radial-gradient(520px 340px at 22% 58%, rgba(255,90,40,.12), transparent 60%),
+            radial-gradient(520px 340px at 78% 58%, rgba(0,230,255,.10), transparent 60%);
+    filter: blur(18px);
+    opacity: .55;
+    z-index: 0;
+}
+
 /* ===============================
    TYPOGRAPHY
    =============================== */
@@ -241,16 +257,25 @@ body::after{
 }
 
 .h1{
-    font-size: 54px;
-    font-weight: 900;
+    text-shadow: 0 4px 18px rgba(0,0,0,.25);
+}
+
+.heroCopy{
+    margin-top: 16px;
+}
+
+
+.h1{
+    font-size: 60px;
+    font-weight: 1200;
     letter-spacing: -0.03em;
     margin: 0;
     line-height: 1.08;
 }
 
 .p{
-    font-size: 15px;
-    line-height: 1.6;
+    font-size: 16px;
+    line-height: 1.7;
     margin: 0;
     color: rgba(255,255,255,.90);
 }
@@ -267,6 +292,25 @@ body::after{
 }
 
 /* ===============================
+   HERO – Centered Title
+   =============================== */
+
+.heroRow{
+    justify-content: center;
+    text-align: center;
+}
+
+.heroCopy{
+    margin: 12px auto 0;
+    text-align: center;
+    max-width: 520px;
+}
+
+.heroCopy .p{
+    line-height: 1.55;
+}
+
+/* ===============================
    STEPS
    =============================== */
 
@@ -275,7 +319,7 @@ body::after{
 .stepsBox{
     padding: 16px;
     border-radius: 16px;
-    border: 1px solid rgba(255,255,255,.18);
+    border: 1.5px solid rgba(255,255,255,.18);
     background: rgba(0,0,0,.18);
     box-shadow:
             0 18px 40px rgba(0,0,0,.20),
@@ -287,7 +331,7 @@ body::after{
     margin-bottom: 10px;
 }
 
-.stepsList{ display:grid; gap: 10px; }
+.stepsList{ display:grid; gap: 5px; }
 
 .stepRow{
     display:grid;
@@ -339,19 +383,52 @@ body::after{
             background .25s var(--ease);
 }
 
-/* Primary = deep blue */
-.btnPrimary{
-    background: linear-gradient(135deg, #0c0483, #070465);
-    color: #ffffff;
-    box-shadow: 0 14px 30px rgba(0,0,0,.22);
+.btnAccent {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
 }
 
-/* Secondary = turquoise */
-.btnSecondary{
-    background: linear-gradient(135deg, #0ae8d5, rgba(6, 170, 220, 0.85));
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    color: rgba(0,0,0,.78);
-    box-shadow: 0 14px 30px rgba(0,0,0,.16);
+.btnAccent:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.42);
+    transform: translateY(-1px);
+}
+
+.btnAccent:active {
+    transform: translateY(0);
+}
+
+/* Primary = deep blue */
+.btnPrimary{
+    background: linear-gradient(135deg, #0b0a8a, #04045e);
+    color: #fff;
+    box-shadow:
+            0 18px 38px rgba(0,0,0,.25),
+            0 0 0 1px rgba(255,255,255,.12) inset;
+}
+
+.btnPrimary{
+    box-shadow:
+            0 18px 36px rgba(0,0,0,.28),
+            0 0 0 2px rgba(255,255,255,.08) inset;
+}
+
+
+.btnPrimary{
+    padding: 16px 26px;
+}
+
+.btnSecondary {
+    background: rgba(0, 0, 0, 0.18);
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.btnSecondary:hover {
+    background: rgba(0, 0, 0, 0.28);
 }
 
 @media (hover:hover){
@@ -365,7 +442,9 @@ body::after{
     flex-wrap: wrap;
     margin-top: 16px;
     align-items: flex-start;
+    justify-content: center; /* optional: die ganze CTA-Zeile mittig */
 }
+
 
 .ctaStack{
     display: grid;
@@ -375,13 +454,28 @@ body::after{
 .ctaHint{
     font-size: 12.5px;
     color: rgba(255,255,255,.72);
-    padding-left: 4px;
+    padding-left:0;         /* << war 4px, raus */
+    text-align: center;      /* << neu */
+    width: 100%;             /* << neu: sorgt für saubere Zentrierung */
 }
 
+
 .trustLine{
-    margin: 14px 0 0;
-    font-size: 13px;
-    color: rgba(255,255,255,.70);
+    margin: 18px 0 0;
+    font-size: 12.5px;
+    color: rgba(255,255,255,.62);
+    text-align: center;
+    letter-spacing: .01em;
+}
+
+.trustLine::before{
+    content: "✓ ";
+    color: rgba(255,255,255,.7);
+    font-weight: 800;
+}
+
+@media (max-width: 520px){
+    .trustLine{ display: none; }
 }
 
 /* ===============================
@@ -777,4 +871,28 @@ body::after{
 @media (max-width: 420px){
     .card{ padding: 22px; border-radius: 30px; }
     .h1{ font-size: 40px; }
+}
+
+@media (max-width: 420px){
+    .ctaRow{
+        justify-content: center;
+    }
+}
+
+@keyframes metaPulse {
+    0% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 rgba(34, 211, 238, 0);
+        filter: brightness(1);
+    }
+    50% {
+        transform: translateY(-1px) scale(1.02);
+        box-shadow: 0 10px 28px rgba(34, 211, 238, 0.12);
+        filter: brightness(1.05);
+    }
+    100% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 rgba(34, 211, 238, 0);
+        filter: brightness(1);
+    }
 }

@@ -29,7 +29,6 @@ export default function RegisterPage() {
         return next && next.startsWith("/") ? next : "/host";
     }, []);
 
-    // Nach Email-Confirm landet der User hier und wird (wenn callback korrekt ist) automatisch eingeloggt
     const callbackUrl = useMemo(() => {
         if (typeof window === "undefined") return "";
         return `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
@@ -52,12 +51,10 @@ export default function RegisterPage() {
             setError("Benutzername: nur a-z, 0-9, Punkt, Unterstrich, Minus.");
             return;
         }
-
         if (!isEmailLike(e)) {
             setError("Bitte eine gültige E-Mail eingeben.");
             return;
         }
-
         if (password.length < 8) {
             setError("Passwort muss mindestens 8 Zeichen haben.");
             return;
@@ -69,15 +66,13 @@ export default function RegisterPage() {
                 email: e,
                 password,
                 options: {
-                    emailRedirectTo: callbackUrl,
-                    data: {
-                        username: u,
-                    },
+                    emailRedirectTo: callbackUrl, // ✅ nach Confirm: auto-login/redirect
+                    data: { username: u },
                 },
             });
             if (error) throw error;
 
-            // Direkt in den "Email bestätigen" Screen
+            // ✅ direkt in den "Email bestätigen" Screen leiten (login überspringt nicht, aber flow bleibt logisch)
             const loginUrl =
                 `/login?next=${encodeURIComponent(nextPath)}` +
                 `&m=check_email` +
@@ -112,14 +107,7 @@ export default function RegisterPage() {
                                         Benutzername *
                                     </label>
 
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 14,
-                                            width: "100%",
-                                        }}
-                                    >
+                                    <div style={{ display: "flex", alignItems: "center", gap: 14, width: "100%" }}>
                                         <div className="fieldControl" style={{ flex: "0 1 62%" }}>
                                             <input
                                                 id="username"
