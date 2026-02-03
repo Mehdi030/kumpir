@@ -25,6 +25,8 @@ function isPasswordStrongEnough(pw: string) {
     return { ok: true, msg: "" };
 }
 
+type UsernameStatus = "idle" | "checking" | "available" | "taken" | "error";
+
 export default function RegisterPage() {
     const supabase = getSupabaseClient();
 
@@ -38,7 +40,7 @@ export default function RegisterPage() {
     const [info, setInfo] = useState("");
 
     // UX: Username availability
-    const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+    const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
     const lastUsernameChecked = useRef<string>("");
 
     const nextPath = useMemo(() => {
@@ -48,14 +50,13 @@ export default function RegisterPage() {
         return next && next.startsWith("/") ? next : "/host";
     }, []);
 
+    // ✅ Stable callback origin for email links + OAuth redirects
     const callbackUrl = useMemo(() => {
         const appUrl =
             process.env.NEXT_PUBLIC_APP_URL ||
             (typeof window !== "undefined" ? window.location.origin : "");
 
-        // Fallback: wenn appUrl leer ist, wenigstens nicht crashen
         if (!appUrl) return "";
-
         return `${appUrl}/auth/callback?next=${encodeURIComponent(nextPath)}`;
     }, [nextPath]);
 
@@ -67,8 +68,10 @@ export default function RegisterPage() {
     async function checkUsernameAvailable(uRaw: string) {
         const u = normalizeUsername(uRaw);
         const v = isUsernameValid(u);
+
         if (!v.ok) {
             setUsernameStatus("idle");
+            lastUsernameChecked.current = "";
             return;
         }
 
@@ -79,15 +82,13 @@ export default function RegisterPage() {
         setUsernameStatus("checking");
 
         try {
-            const { data, error } = await supabase.rpc("is_username_available", {
-                p_username: u,
-            });
+            const { data, error } = await supabase.rpc("is_username_available", { p_username: u });
             if (error) throw error;
 
             setUsernameStatus(data ? "available" : "taken");
         } catch {
-            // Wenn RPC mal nicht geht: nicht blocken, nur UX fallback.
-            setUsernameStatus("idle");
+            // For your requirement ("must choose another if can't verify"), treat as error
+            setUsernameStatus("error");
         }
     }
 
@@ -95,6 +96,7 @@ export default function RegisterPage() {
     useEffect(() => {
         const t = setTimeout(() => {
             if (username.trim()) checkUsernameAvailable(username);
+            else setUsernameStatus("idle");
         }, 450);
         return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,6 +105,7 @@ export default function RegisterPage() {
     function validateBeforeSubmit() {
         const u = normalizeUsername(username);
         const e = normalizeEmail(email);
+
         const vU = isUsernameValid(u);
         if (!vU.ok) return { ok: false, msg: vU.msg };
 
@@ -113,16 +116,38 @@ export default function RegisterPage() {
 
         if (password !== confirmPassword) return { ok: false, msg: "Passwörter stimmen nicht überein." };
 
-        // Optional: block if username is taken (wenn Status sicher)
-        if (usernameStatus === "taken") return { ok: false, msg: "Benutzername ist bereits vergeben." };
+        // ✅ hard requirement: must be confirmed available
+        if (usernameStatus !== "available") {
+            if (usernameStatus === "checking") return { ok: false, msg: "Benutzername wird noch geprüft…" };
+            if (usernameStatus === "taken") return { ok: false, msg: "Benutzername ist bereits vergeben." };
+            return { ok: false, msg: "Benutzername konnte nicht geprüft werden. Bitte erneut versuchen." };
+        }
 
         return { ok: true, msg: "" };
+    }
+
+    function mapSignupErrorToMessage(raw: any) {
+        const msg = String(raw?.message ?? raw ?? "").toLowerCase();
+
+        // Supabase typical message for email already exists
+        if (msg.includes("user already registered") || msg.includes("already registered")) {
+            return "Diese E-Mail ist bereits registriert. Bitte logge dich ein oder nutze eine andere E-Mail.";
+        }
+
+        // Unique constraint / duplicate username (index)
+        if (msg.includes("duplicate key") || msg.includes("profiles_username_unique")) {
+            return "Benutzername ist bereits vergeben. Bitte wähle einen anderen.";
+        }
+
+        // Generic
+        return String(raw?.message ?? "Registrierung fehlgeschlagen.");
     }
 
     async function onSubmit() {
         if (loading) return;
 
         resetMessages();
+
         const v = validateBeforeSubmit();
         if (!v.ok) {
             setError(v.msg);
@@ -134,6 +159,18 @@ export default function RegisterPage() {
 
         setLoading(true);
         try {
+            // ✅ final check right before signup (race condition protection)
+            const { data: ok, error: uErr } = await supabase.rpc("is_username_available", { p_username: u });
+            if (uErr) {
+                setError("Konnte Benutzernamen gerade nicht prüfen. Bitte erneut versuchen.");
+                return;
+            }
+            if (!ok) {
+                setUsernameStatus("taken");
+                setError("Benutzername ist bereits vergeben. Bitte wähle einen anderen.");
+                return;
+            }
+
             const { error } = await supabase.auth.signUp({
                 email: e,
                 password,
@@ -142,17 +179,18 @@ export default function RegisterPage() {
                     data: { username: u },
                 },
             });
+
             if (error) throw error;
 
-            // Weiterleitung in "check_email"
+            // ✅ go to check_email screen
             const loginUrl =
                 `/login?next=${encodeURIComponent(nextPath)}` +
                 `&m=check_email` +
                 `&email=${encodeURIComponent(e)}`;
 
             window.location.href = loginUrl;
-        } catch (e: any) {
-            setError(e?.message ?? "Registrierung fehlgeschlagen.");
+        } catch (e2: any) {
+            setError(mapSignupErrorToMessage(e2));
         } finally {
             setLoading(false);
         }
@@ -193,10 +231,7 @@ export default function RegisterPage() {
                                             />
                                         </div>
 
-                                        <div
-                                            className="fieldHelp"
-                                            style={{ flex: "1 1 auto", textAlign: "left", whiteSpace: "nowrap", opacity: 0.9 }}
-                                        >
+                                        <div className="fieldHelp" style={{ flex: "1 1 auto", textAlign: "left", whiteSpace: "nowrap", opacity: 0.9 }}>
                                             {!uValid ? (
                                                 <b>Mind. 3 Zeichen</b>
                                             ) : usernameStatus === "checking" ? (
@@ -205,6 +240,8 @@ export default function RegisterPage() {
                                                 <b style={{ opacity: 0.95 }}>✅ frei</b>
                                             ) : usernameStatus === "taken" ? (
                                                 <b style={{ opacity: 0.95 }}>❌ vergeben</b>
+                                            ) : usernameStatus === "error" ? (
+                                                <b style={{ opacity: 0.95 }}>⚠️ prüfen fehlgeschlagen</b>
                                             ) : (
                                                 <b>Mind. 3 Zeichen</b>
                                             )}
@@ -291,6 +328,7 @@ export default function RegisterPage() {
                                         className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
                                         onClick={onSubmit}
                                         disabled={loading}
+                                        title={usernameStatus !== "available" ? "Bitte freien Benutzernamen wählen" : "Account erstellen"}
                                     >
                                         {loading ? "…" : "Account erstellen"}
                                     </button>
@@ -300,10 +338,7 @@ export default function RegisterPage() {
                                     </Link>
                                 </div>
 
-                                <div
-                                    className="fieldHelp"
-                                    style={{ marginTop: 12, textAlign: "right", opacity: 0.9, fontSize: 13, fontWeight: 600 }}
-                                >
+                                <div className="fieldHelp" style={{ marginTop: 12, textAlign: "right", opacity: 0.9, fontSize: 13, fontWeight: 600 }}>
                                     🔐 Wir nutzen deine E-Mail nur für Verifizierung und Wiederherstellung.
                                 </div>
                             </div>

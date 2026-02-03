@@ -2,6 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(req: NextRequest) {
+    // ✅ Auth temporär komplett aus (keine Session-Refresh-Calls nötig)
+    if (process.env.NEXT_PUBLIC_AUTH_DISABLED === "1") {
+        return NextResponse.next();
+    }
+
     let res = NextResponse.next();
 
     const supabase = createServerClient(

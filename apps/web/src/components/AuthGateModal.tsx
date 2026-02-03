@@ -15,6 +15,9 @@ export function AuthGateModal({
     title?: string;
     text?: string;
 }) {
+    const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+    if (authDisabled) return null;
+
     if (!open) return null;
 
     const loginHref = `/login?next=${encodeURIComponent(nextPath)}`;

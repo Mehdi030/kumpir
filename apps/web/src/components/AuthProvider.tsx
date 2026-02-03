@@ -19,6 +19,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+
+        // ✅ Auth aus: sofort fertig, keine Subscriptions
+        if (authDisabled) {
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+            return;
+        }
+
         let alive = true;
 
         (async () => {

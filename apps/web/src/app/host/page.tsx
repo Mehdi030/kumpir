@@ -40,6 +40,9 @@ export default function HostPage() {
     const supabase = getSupabaseClient();
     const { user, loading } = useAuth();
 
+    // ✅ Auth Toggle (Vercel env: NEXT_PUBLIC_AUTH_DISABLED=1)
+    const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+
     const [hostName, setHostName] = useState("");
     const [privacy, setPrivacy] = useState<Privacy>("private");
     const [maxPlayers, setMaxPlayers] = useState(8);
@@ -50,12 +53,13 @@ export default function HostPage() {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string>("");
 
-    // 🔐 Hard Gate: Host-Seite nur mit Login
+    // 🔐 Hard Gate nur wenn Auth an ist
     useEffect(() => {
+        if (authDisabled) return;
         if (!loading && !user) {
             window.location.href = `/login?next=${encodeURIComponent("/host")}`;
         }
-    }, [loading, user]);
+    }, [authDisabled, loading, user]);
 
     const isNameValid = hostName.trim().length >= 2;
 
@@ -65,13 +69,16 @@ export default function HostPage() {
         return "";
     }, [hostName, isNameValid]);
 
-    const canCreate = isNameValid && !creating && !!user && !loading;
+    // ✅ Create erlaubt:
+    // - Auth disabled: Name valid & nicht creating
+    // - Auth enabled: Name valid + user vorhanden
+    const canCreate = isNameValid && !creating && (authDisabled ? true : (!!user && !loading));
 
     async function onCreate() {
         if (!isNameValid || creating) return;
-        if (loading) return;
+        if (!authDisabled && loading) return;
 
-        if (!user) {
+        if (!authDisabled && !user) {
             setCreateError("Bitte einloggen, um eine Lobby zu erstellen.");
             return;
         }
@@ -83,7 +90,7 @@ export default function HostPage() {
             const cleanName = hostName.trim();
             setStoredName(cleanName);
 
-            // 1) Lobby erstellen (nutzt Overload OHNE host-id, weil deine DB so existiert)
+            // 1) Lobby erstellen
             const { data: lobbyData, error: lobbyErr } = await supabase.rpc("rpc_create_lobby", {
                 p_host_name: cleanName,
                 p_privacy: privacy,
@@ -104,21 +111,49 @@ export default function HostPage() {
                 return;
             }
 
-            // 2) Host tritt als USER der Lobby bei (eindeutig: 3-Param Overload)
-            const { data: hostPlayerId, error: joinErr } = await supabase.rpc("join_lobby", {
-                p_lobby_code: code,
-                p_name: cleanName,
-                p_user_id: user.id, // ✅ disambiguates overload
-            });
+            // 2) Host tritt der Lobby bei (player_id speichern)
+            let hostPlayerId: string | null = null;
 
-            if (joinErr) {
-                setCreateError(joinErr.message || "Host konnte der Lobby nicht beitreten.");
+            if (!authDisabled && user?.id) {
+                // ✅ Logged in: disambiguates overload
+                const { data, error: joinErr } = await supabase.rpc("join_lobby", {
+                    p_lobby_code: code,
+                    p_name: cleanName,
+                    p_user_id: user.id,
+                });
+
+                if (joinErr) {
+                    setCreateError(joinErr.message || "Host konnte der Lobby nicht beitreten.");
+                    return;
+                }
+
+                hostPlayerId = String(data);
+            } else {
+                // ✅ Guest: NUR args ohne p_user_id senden (kein null!)
+                const { data, error: joinErr } = await supabase.rpc("join_lobby", {
+                    p_lobby_code: code,
+                    p_name: cleanName,
+                } as any);
+
+                if (joinErr) {
+                    setCreateError(
+                        "Guest-Host geht aktuell nicht, weil deine DB-Funktion join_lobby vermutlich eine user_id erwartet.\n" +
+                        "Optionen:\n" +
+                        "1) Auth wieder an\n" +
+                        "2) DB: join_lobby Overload ohne user_id (oder eigene rpc_join_lobby die player_id zurückgibt)"
+                    );
+                    return;
+                }
+
+                hostPlayerId = String(data);
+            }
+
+            if (!hostPlayerId) {
+                setCreateError("Keine player_id erhalten. DB/RPC prüfen.");
                 return;
             }
 
-            // 3) Player-ID speichern -> Hostrechte & kein Loop
-            setStoredPlayerId(String(hostPlayerId));
-
+            setStoredPlayerId(hostPlayerId);
             window.location.href = `/lobby/${code}`;
         } catch (e: any) {
             setCreateError(e?.message || "Unerwarteter Fehler.");
@@ -127,8 +162,8 @@ export default function HostPage() {
         }
     }
 
-    // Während Redirect läuft: neutral (mit „Warum Login?“ endkundig)
-    if (!loading && !user) {
+    // ✅ Wenn Auth aktiv ist und noch nicht eingeloggt: Info-Screen
+    if (!authDisabled && !loading && !user) {
         return (
             <main className="container">
                 <div className="landingWrap">
@@ -145,7 +180,7 @@ export default function HostPage() {
                             <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.35 }}>
                                 <li><b>Kontrolle:</b> Du verwaltest deine Lobby – Start, Ablauf und Einstellungen liegen bei dir.</li>
                                 <li><b>Statistiken:</b> Später kannst du Spiele auswerten, Fortschritt sehen und Highlights tracken.</li>
-                                <li><b>Komfort:</b> Deine Einstellungen bleiben gespeichert und neue Features stehen dir automatisch zur Verfügung.</li>
+                                <li><b>Komfort:</b> Einstellungen bleiben gespeichert und neue Features stehen dir automatisch zur Verfügung.</li>
                             </ul>
                         </div>
 
@@ -165,7 +200,6 @@ export default function HostPage() {
 
     return (
         <main className="container">
-            {/* Wenn du die Kartoffel links oben entfernen willst: entferne diesen Block */}
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
                 <Image
                     src="/logo.png"
@@ -185,7 +219,8 @@ export default function HostPage() {
                                 <h1 className="h1">Lobby hosten</h1>
                             </div>
 
-                            <AuthMini nextPath="/host" variant="header" />
+                            {/* ✅ nur anzeigen wenn Auth aktiv ist */}
+                            {!authDisabled ? <AuthMini nextPath="/host" variant="header" /> : null}
                         </div>
 
                         <p className="p hostSub">Erstelle eine Lobby, teile den Code und spiel mit deinen Freunden!</p>
@@ -280,16 +315,7 @@ export default function HostPage() {
                             <div className="settingBlock" style={{ marginTop: 18 }}>
                                 <div className="settingLabel">Rundendauer</div>
 
-                                <div
-                                    className="seg"
-                                    style={{
-                                        marginTop: 8,
-                                        display: "flex",
-                                        gap: 10,
-                                        flexWrap: "wrap",
-                                        alignItems: "center",
-                                    }}
-                                >
+                                <div className="seg" style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                                     {(Object.keys(ROUND_PRESETS) as RoundPreset[]).map((key) => (
                                         <button
                                             key={key}

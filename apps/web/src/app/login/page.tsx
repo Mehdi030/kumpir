@@ -39,13 +39,13 @@ export default function LoginPage() {
         setNextPath(next && next.startsWith("/") ? next : "/host");
     }, []);
 
+    // ✅ Stable callback origin
     const callbackUrl = useMemo(() => {
         const appUrl =
             process.env.NEXT_PUBLIC_APP_URL ||
             (typeof window !== "undefined" ? window.location.origin : "");
 
         if (!appUrl) return "";
-
         return `${appUrl}/auth/callback?next=${encodeURIComponent(nextPath)}`;
     }, [nextPath]);
 
@@ -63,7 +63,7 @@ export default function LoginPage() {
             setPageMode("check_email");
             setTab("account");
             setInfo(
-                "Wir haben dir eine Bestätigungs-E-Mail geschickt. Bitte klicke den Link in deinem Postfach, um deinen Account zu aktivieren. Danach wirst du automatisch eingeloggt."
+                "Wir haben dir eine Bestätigungs-E-Mail geschickt. Bitte klicke den Link in deinem Postfach, um deinen Account zu aktivieren."
             );
             if (emailFromQuery && isEmailLike(emailFromQuery)) setEmail(emailFromQuery);
         } else if (msg === "account_created") {
@@ -71,10 +71,19 @@ export default function LoginPage() {
             setTab("account");
             setInfo("Account erstellt. Bitte bestätige zuerst deine E-Mail, danach kannst du dich anmelden.");
             if (emailFromQuery && isEmailLike(emailFromQuery)) setEmail(emailFromQuery);
+        } else if (msg === "oauth_exchange_failed") {
+            setPageMode("normal");
+            setTab("account");
+            setError("Login-Weiterleitung fehlgeschlagen. Bitte versuche es erneut (oder öffne den Link im selben Browser).");
+        } else if (msg === "auth_error") {
+            setPageMode("normal");
+            setTab("account");
+            setError("Authentifizierung fehlgeschlagen. Bitte versuche es erneut.");
         }
 
         if (msg) {
             url.searchParams.delete("m");
+            // keep email only for check_email
             if (msg !== "check_email") url.searchParams.delete("email");
             window.history.replaceState({}, "", url.toString());
         }
@@ -85,13 +94,12 @@ export default function LoginPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    async function redirectIfAlreadyLoggedIn() {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) window.location.href = nextPath;
-    }
-
+    // ✅ If already logged in
     useEffect(() => {
-        redirectIfAlreadyLoggedIn();
+        (async () => {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) window.location.href = nextPath;
+        })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [nextPath]);
 
@@ -114,6 +122,7 @@ export default function LoginPage() {
 
     async function resolveUsernameToEmail(usernameRaw: string) {
         const u = normalizeUsername(usernameRaw);
+
         const { data, error } = await supabase.rpc("get_email_for_username", {
             p_username: u,
         });
@@ -180,6 +189,7 @@ export default function LoginPage() {
 
     async function forgotPassword() {
         resetMessages();
+
         const e = email.trim();
         if (!isEmailLike(e)) {
             setError("Für Passwort-Reset bitte deine E-Mail eingeben.");
@@ -195,8 +205,8 @@ export default function LoginPage() {
             if (error) throw error;
 
             setInfo("Passwort-Reset E-Mail wurde verschickt.");
-        } catch (e: any) {
-            setError(e?.message ?? "Reset fehlgeschlagen.");
+        } catch (e2: any) {
+            setError(e2?.message ?? "Reset fehlgeschlagen.");
         } finally {
             setLoading(false);
         }
@@ -204,6 +214,7 @@ export default function LoginPage() {
 
     async function resendConfirmationEmail() {
         resetMessages();
+
         const e = email.trim();
         if (!isEmailLike(e)) {
             setError("Bitte gib deine E-Mail ein, um die Bestätigung erneut zu senden.");
@@ -221,8 +232,8 @@ export default function LoginPage() {
             if (error) throw error;
 
             setInfo("Bestätigungs-E-Mail wurde erneut verschickt.");
-        } catch (e: any) {
-            setError(e?.message ?? "Erneutes Senden fehlgeschlagen.");
+        } catch (e2: any) {
+            setError(e2?.message ?? "Erneutes Senden fehlgeschlagen.");
         } finally {
             setLoading(false);
         }
@@ -232,6 +243,7 @@ export default function LoginPage() {
         resetMessages();
         if (loading) return;
         setLoading(true);
+
         try {
             const { data, error } = await supabase.auth.getSession();
             if (error) throw error;
@@ -241,9 +253,9 @@ export default function LoginPage() {
                 return;
             }
 
-            setInfo("Noch nicht bestätigt / noch nicht eingeloggt. Bitte erst den Link in der Bestätigungs-Mail klicken, dann erneut versuchen.");
-        } catch (e: any) {
-            setError(e?.message ?? "Konnte Status nicht prüfen.");
+            setInfo("Noch nicht eingeloggt. Bitte erst den Link in der Bestätigungs-Mail klicken, dann erneut versuchen.");
+        } catch (e2: any) {
+            setError(e2?.message ?? "Konnte Status nicht prüfen.");
         } finally {
             setLoading(false);
         }
@@ -402,14 +414,6 @@ export default function LoginPage() {
                                                     background: "rgba(255,255,255,0.06)",
                                                     border: "1px solid rgba(255,255,255,0.12)",
                                                     transition: "transform .18s ease, background .18s ease",
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.075)";
-                                                    (e.currentTarget as HTMLDivElement).style.transform = "scale(1.01)";
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.06)";
-                                                    (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
                                                 }}
                                             >
                                                 <div style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "#fff" }}>
