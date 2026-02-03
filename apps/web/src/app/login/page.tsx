@@ -23,10 +23,8 @@ export default function LoginPage() {
     const [tab, setTab] = useState<Tab>("google");
     const [pageMode, setPageMode] = useState<PageMode>("normal");
 
-    // ✅ Account-Login: username + email (beides Pflicht)
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
-
     const [password, setPassword] = useState("");
 
     const [loading, setLoading] = useState(false);
@@ -51,8 +49,7 @@ export default function LoginPage() {
         setInfo("");
     }
 
-    // ✅ Handle messages from redirects
-    useEffect(() => {
+    function parseRedirectMessages() {
         const url = new URL(window.location.href);
         const msg = url.searchParams.get("m");
         const emailFromQuery = (url.searchParams.get("email") ?? "").trim();
@@ -63,16 +60,12 @@ export default function LoginPage() {
             setInfo(
                 "Wir haben dir eine Bestätigungs-E-Mail geschickt. Bitte klicke den Link in deinem Postfach, um deinen Account zu aktivieren. Danach wirst du automatisch eingeloggt."
             );
-            if (emailFromQuery && isEmailLike(emailFromQuery)) {
-                setEmail(emailFromQuery);
-            }
+            if (emailFromQuery && isEmailLike(emailFromQuery)) setEmail(emailFromQuery);
         } else if (msg === "account_created") {
             setPageMode("normal");
             setTab("account");
             setInfo("Account erstellt. Bitte bestätige zuerst deine E-Mail, danach kannst du dich anmelden.");
-            if (emailFromQuery && isEmailLike(emailFromQuery)) {
-                setEmail(emailFromQuery);
-            }
+            if (emailFromQuery && isEmailLike(emailFromQuery)) setEmail(emailFromQuery);
         }
 
         if (msg) {
@@ -80,14 +73,20 @@ export default function LoginPage() {
             if (msg !== "check_email") url.searchParams.delete("email");
             window.history.replaceState({}, "", url.toString());
         }
+    }
+
+    useEffect(() => {
+        parseRedirectMessages();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ✅ Wenn schon eingeloggt, direkt weiter
+    async function redirectIfAlreadyLoggedIn() {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) window.location.href = nextPath;
+    }
+
     useEffect(() => {
-        (async () => {
-            const { data } = await supabase.auth.getSession();
-            if (data.session) window.location.href = nextPath;
-        })();
+        redirectIfAlreadyLoggedIn();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [nextPath]);
 
@@ -109,19 +108,25 @@ export default function LoginPage() {
     }
 
     async function resolveUsernameToEmail(usernameRaw: string) {
-        // ⚠️ Wenn du "profiles.email" nicht öffentlich machen willst, später über RPC/Edge lösen.
         const u = normalizeUsername(usernameRaw);
-
-        const { data, error } = await supabase
-            .from("profiles")
-            .select("email")
-            .eq("username", u)
-            .maybeSingle();
-
+        const { data, error } = await supabase.rpc("get_email_for_username", {
+            p_username: u,
+        });
         if (error) throw error;
 
-        const out = (data?.email ?? "").trim();
+        const out = (data ?? "").toString().trim();
         return out.length ? out : null;
+    }
+
+    function validateAccountInputs(uRaw: string, eRaw: string, pw: string) {
+        const u = uRaw.trim();
+        const e = eRaw.trim();
+
+        if (u.length < 3) return { ok: false, msg: "Bitte Benutzername eingeben (mind. 3 Zeichen)." };
+        if (!isEmailLike(e)) return { ok: false, msg: "Bitte eine gültige E-Mail eingeben." };
+        if (pw.length < 8) return { ok: false, msg: "Passwort muss mindestens 8 Zeichen haben." };
+
+        return { ok: true, msg: "" };
     }
 
     async function signInAccount() {
@@ -129,36 +134,22 @@ export default function LoginPage() {
         setLoading(true);
         resetMessages();
 
-        const u = username.trim();
-        const e = email.trim();
-
         try {
-            if (u.length < 3) {
-                setError("Bitte Benutzername eingeben (mind. 3 Zeichen).");
-                setLoading(false);
-                return;
-            }
-            if (!isEmailLike(e)) {
-                setError("Bitte eine gültige E-Mail eingeben.");
-                setLoading(false);
-                return;
-            }
-            if (password.length < 8) {
-                setError("Passwort muss mindestens 8 Zeichen haben.");
+            const v = validateAccountInputs(username, email, password);
+            if (!v.ok) {
+                setError(v.msg);
                 setLoading(false);
                 return;
             }
 
-            // ✅ Username -> Email aus DB
-            const resolvedEmail = await resolveUsernameToEmail(u);
+            const resolvedEmail = await resolveUsernameToEmail(username);
             if (!resolvedEmail) {
                 setError("Benutzername oder E-Mail stimmt nicht.");
                 setLoading(false);
                 return;
             }
 
-            // ✅ Eingegebene Email muss zur Username-Email passen
-            if (normalizeEmail(resolvedEmail) !== normalizeEmail(e)) {
+            if (normalizeEmail(resolvedEmail) !== normalizeEmail(email)) {
                 setError("Benutzername und E-Mail gehören nicht zusammen.");
                 setLoading(false);
                 return;
@@ -184,7 +175,6 @@ export default function LoginPage() {
 
     async function forgotPassword() {
         resetMessages();
-
         const e = email.trim();
         if (!isEmailLike(e)) {
             setError("Für Passwort-Reset bitte deine E-Mail eingeben.");
@@ -209,7 +199,6 @@ export default function LoginPage() {
 
     async function resendConfirmationEmail() {
         resetMessages();
-
         const e = email.trim();
         if (!isEmailLike(e)) {
             setError("Bitte gib deine E-Mail ein, um die Bestätigung erneut zu senden.");
@@ -234,7 +223,6 @@ export default function LoginPage() {
         }
     }
 
-    // ✅ NEU: "Weiter" Button im check_email Screen
     async function continueAfterEmailConfirm() {
         resetMessages();
         if (loading) return;
@@ -248,7 +236,7 @@ export default function LoginPage() {
                 return;
             }
 
-            setInfo("Noch nicht bestätigt / noch nicht eingeloggt. Bitte klicke erst den Link in der Bestätigungs-Mail und versuche es dann erneut.");
+            setInfo("Noch nicht bestätigt / noch nicht eingeloggt. Bitte erst den Link in der Bestätigungs-Mail klicken, dann erneut versuchen.");
         } catch (e: any) {
             setError(e?.message ?? "Konnte Status nicht prüfen.");
         } finally {
@@ -262,7 +250,6 @@ export default function LoginPage() {
         </Link>
     );
 
-    // ✅ Registrieren als MetaPill (oben rechts)
     const RegisterPill = () => (
         <Link
             href={`/register?next=${encodeURIComponent(nextPath)}`}
@@ -282,10 +269,7 @@ export default function LoginPage() {
                         <div className="hostTitleRow">
                             <h1 className="h1">Login</h1>
                         </div>
-
-                        <p className="p hostSub">
-                            Melde dich an, damit du deine Lobby kontrollieren und speichern kannst.
-                        </p>
+                        <p className="p hostSub">Melde dich an, damit du deine Lobby kontrollieren und speichern kannst.</p>
                     </header>
 
                     <div className="hostGrid">
@@ -294,7 +278,6 @@ export default function LoginPage() {
                                 <div className="panelTitle">Anmelden</div>
                             </div>
 
-                            {/* ✅ check_email Screen */}
                             {pageMode === "check_email" ? (
                                 <div className="previewCard">
                                     <div
@@ -305,14 +288,12 @@ export default function LoginPage() {
                                             border: "1px solid rgba(255,255,255,0.12)",
                                         }}
                                     >
-                                        {/* ✅ HIER: Registrieren entfernt */}
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                                             <div style={{ fontWeight: 900, fontSize: 16 }}>📧 E-Mail bestätigen</div>
                                         </div>
 
                                         <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.92 }}>
-                                            {info ||
-                                                "Bitte bestätige deine E-Mail über den Link im Postfach. Danach wirst du automatisch eingeloggt."}
+                                            {info || "Bitte bestätige deine E-Mail über den Link im Postfach. Danach wirst du automatisch eingeloggt."}
                                         </div>
 
                                         <div className="fieldRow" style={{ marginTop: 12 }}>
@@ -320,7 +301,6 @@ export default function LoginPage() {
                                                 E-Mail
                                             </label>
                                             <div className="fieldControl">
-                                                {/* ✅ nicht editierbar */}
                                                 <input
                                                     id="email"
                                                     className="input"
@@ -331,10 +311,7 @@ export default function LoginPage() {
                                                     placeholder="du@beispiel.de"
                                                     autoComplete="email"
                                                     inputMode="email"
-                                                    style={{
-                                                        cursor: "not-allowed",
-                                                        opacity: 0.9,
-                                                    }}
+                                                    style={{ cursor: "not-allowed", opacity: 0.9 }}
                                                 />
                                             </div>
                                             <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.85 }}>
@@ -342,7 +319,6 @@ export default function LoginPage() {
                                             </div>
                                         </div>
 
-                                        {/* ✅ Buttons: Weiter + Resend + Zurück */}
                                         <div className="actionsRow" style={{ marginTop: 14, gap: 10, flexWrap: "wrap" }}>
                                             <button
                                                 type="button"
@@ -380,16 +356,7 @@ export default function LoginPage() {
                                 </div>
                             ) : (
                                 <>
-                                    {/* ✅ Tabs + Registrieren rechts (MetaPill) */}
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "space-between",
-                                            gap: 12,
-                                            marginBottom: 12,
-                                        }}
-                                    >
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
                                         <div className="seg" style={{ marginBottom: 0 }}>
                                             <button
                                                 type="button"
@@ -440,25 +407,13 @@ export default function LoginPage() {
                                                     (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
                                                 }}
                                             >
-                                                <div
-                                                    style={{
-                                                        width: 40,
-                                                        height: 40,
-                                                        borderRadius: 12,
-                                                        display: "grid",
-                                                        placeItems: "center",
-                                                        background: "#fff",
-                                                    }}
-                                                >
+                                                <div style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "#fff" }}>
                                                     <img src="/google.svg" alt="Google" width={20} height={20} />
                                                 </div>
 
                                                 <div style={{ minWidth: 0 }}>
                                                     <div style={{ fontWeight: 800 }}>Google</div>
-                                                    <div style={{ opacity: 0.85, fontSize: 13 }}>
-                                                        Schnell • Sicher • Kein Passwort bei uns
-                                                    </div>
-
+                                                    <div style={{ opacity: 0.85, fontSize: 13 }}>Schnell • Sicher • Kein Passwort bei uns</div>
                                                     <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.88 }}>
                                                         🔐 Wir speichern keine Passwörter • 🛡️ Standard-Login über Google
                                                     </div>
@@ -526,15 +481,7 @@ export default function LoginPage() {
                                                     </div>
                                                 </div>
 
-                                                <div
-                                                    style={{
-                                                        display: "flex",
-                                                        alignItems: "flex-end",
-                                                        justifyContent: "space-between",
-                                                        gap: 10,
-                                                        marginTop: 10,
-                                                    }}
-                                                >
+                                                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, marginTop: 10 }}>
                                                     <div style={{ flex: 1 }}>
                                                         <div className="fieldRow" style={{ margin: 0 }}>
                                                             <label className="fieldLabel" htmlFor="password">
@@ -577,11 +524,7 @@ export default function LoginPage() {
                                                 </div>
 
                                                 <div className="actionsRow" style={{ marginTop: 14 }}>
-                                                    <button
-                                                        type="submit"
-                                                        className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
-                                                        disabled={loading}
-                                                    >
+                                                    <button type="submit" className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`} disabled={loading}>
                                                         Einloggen
                                                     </button>
                                                 </div>

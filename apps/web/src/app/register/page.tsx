@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 function isEmailLike(v: string) {
@@ -10,6 +10,20 @@ function isEmailLike(v: string) {
 function normalizeUsername(v: string) {
     return v.trim().toLowerCase();
 }
+function normalizeEmail(v: string) {
+    return v.trim().toLowerCase();
+}
+
+function isUsernameValid(u: string) {
+    if (u.length < 3) return { ok: false, msg: "Benutzername muss mindestens 3 Zeichen haben." };
+    if (!/^[a-z0-9._-]+$/.test(u)) return { ok: false, msg: "Benutzername: nur a-z, 0-9, Punkt, Unterstrich, Minus." };
+    return { ok: true, msg: "" };
+}
+
+function isPasswordStrongEnough(pw: string) {
+    if (pw.length < 8) return { ok: false, msg: "Passwort muss mindestens 8 Zeichen haben." };
+    return { ok: true, msg: "" };
+}
 
 export default function RegisterPage() {
     const supabase = getSupabaseClient();
@@ -17,10 +31,15 @@ export default function RegisterPage() {
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [info, setInfo] = useState("");
+
+    // UX: Username availability
+    const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+    const lastUsernameChecked = useRef<string>("");
 
     const nextPath = useMemo(() => {
         if (typeof window === "undefined") return "/host";
@@ -34,31 +53,78 @@ export default function RegisterPage() {
         return `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
     }, [nextPath]);
 
+    function resetMessages() {
+        setError("");
+        setInfo("");
+    }
+
+    async function checkUsernameAvailable(uRaw: string) {
+        const u = normalizeUsername(uRaw);
+        const v = isUsernameValid(u);
+        if (!v.ok) {
+            setUsernameStatus("idle");
+            return;
+        }
+
+        // avoid spamming RPC
+        if (lastUsernameChecked.current === u) return;
+
+        lastUsernameChecked.current = u;
+        setUsernameStatus("checking");
+
+        try {
+            const { data, error } = await supabase.rpc("is_username_available", {
+                p_username: u,
+            });
+            if (error) throw error;
+
+            setUsernameStatus(data ? "available" : "taken");
+        } catch {
+            // Wenn RPC mal nicht geht: nicht blocken, nur UX fallback.
+            setUsernameStatus("idle");
+        }
+    }
+
+    // Debounce: check availability after typing stops
+    useEffect(() => {
+        const t = setTimeout(() => {
+            if (username.trim()) checkUsernameAvailable(username);
+        }, 450);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [username]);
+
+    function validateBeforeSubmit() {
+        const u = normalizeUsername(username);
+        const e = normalizeEmail(email);
+        const vU = isUsernameValid(u);
+        if (!vU.ok) return { ok: false, msg: vU.msg };
+
+        if (!isEmailLike(e)) return { ok: false, msg: "Bitte eine gültige E-Mail eingeben." };
+
+        const vP = isPasswordStrongEnough(password);
+        if (!vP.ok) return { ok: false, msg: vP.msg };
+
+        if (password !== confirmPassword) return { ok: false, msg: "Passwörter stimmen nicht überein." };
+
+        // Optional: block if username is taken (wenn Status sicher)
+        if (usernameStatus === "taken") return { ok: false, msg: "Benutzername ist bereits vergeben." };
+
+        return { ok: true, msg: "" };
+    }
+
     async function onSubmit() {
         if (loading) return;
 
-        setError("");
-        setInfo("");
+        resetMessages();
+        const v = validateBeforeSubmit();
+        if (!v.ok) {
+            setError(v.msg);
+            return;
+        }
 
         const u = normalizeUsername(username);
-        const e = email.trim();
-
-        if (u.length < 3) {
-            setError("Benutzername muss mindestens 3 Zeichen haben.");
-            return;
-        }
-        if (!/^[a-z0-9._-]+$/.test(u)) {
-            setError("Benutzername: nur a-z, 0-9, Punkt, Unterstrich, Minus.");
-            return;
-        }
-        if (!isEmailLike(e)) {
-            setError("Bitte eine gültige E-Mail eingeben.");
-            return;
-        }
-        if (password.length < 8) {
-            setError("Passwort muss mindestens 8 Zeichen haben.");
-            return;
-        }
+        const e = normalizeEmail(email);
 
         setLoading(true);
         try {
@@ -66,13 +132,13 @@ export default function RegisterPage() {
                 email: e,
                 password,
                 options: {
-                    emailRedirectTo: callbackUrl, // ✅ nach Confirm: auto-login/redirect
+                    emailRedirectTo: callbackUrl,
                     data: { username: u },
                 },
             });
             if (error) throw error;
 
-            // ✅ direkt in den "Email bestätigen" Screen leiten (login überspringt nicht, aber flow bleibt logisch)
+            // Weiterleitung in "check_email"
             const loginUrl =
                 `/login?next=${encodeURIComponent(nextPath)}` +
                 `&m=check_email` +
@@ -86,6 +152,9 @@ export default function RegisterPage() {
         }
     }
 
+    const uNorm = normalizeUsername(username);
+    const uValid = isUsernameValid(uNorm).ok;
+
     return (
         <main className="container">
             <div className="landingWrap">
@@ -94,7 +163,6 @@ export default function RegisterPage() {
                         <div className="hostTitleRow">
                             <h1 className="h1">Registrieren</h1>
                         </div>
-
                         <p className="p hostSub">Erstelle deinen Account und sichere dir deinen Benutzernamen.</p>
                     </header>
 
@@ -117,24 +185,28 @@ export default function RegisterPage() {
                                                 placeholder="z.B. Medo"
                                                 autoComplete="username"
                                             />
-                                            <div className="fieldHelp"></div>
                                         </div>
 
                                         <div
                                             className="fieldHelp"
-                                            style={{
-                                                flex: "1 1 auto",
-                                                textAlign: "left",
-                                                whiteSpace: "nowrap",
-                                                opacity: 0.9,
-                                            }}
+                                            style={{ flex: "1 1 auto", textAlign: "left", whiteSpace: "nowrap", opacity: 0.9 }}
                                         >
-                                            <b>Mindestens 3 Zeichen</b>
+                                            {!uValid ? (
+                                                <b>Mind. 3 Zeichen</b>
+                                            ) : usernameStatus === "checking" ? (
+                                                <b>prüfe…</b>
+                                            ) : usernameStatus === "available" ? (
+                                                <b style={{ opacity: 0.95 }}>✅ frei</b>
+                                            ) : usernameStatus === "taken" ? (
+                                                <b style={{ opacity: 0.95 }}>❌ vergeben</b>
+                                            ) : (
+                                                <b>Mind. 3 Zeichen</b>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* EMAIL (Pflicht) */}
+                                {/* EMAIL */}
                                 <div className="fieldRow" style={{ marginTop: 10 }}>
                                     <label className="fieldLabel" htmlFor="email">
                                         E-Mail *
@@ -176,6 +248,25 @@ export default function RegisterPage() {
                                     </div>
                                 </div>
 
+                                {/* CONFIRM */}
+                                <div className="fieldRow" style={{ marginTop: 10 }}>
+                                    <label className="fieldLabel" htmlFor="confirmPassword">
+                                        Passwort wiederholen *
+                                    </label>
+
+                                    <div className="fieldControl">
+                                        <input
+                                            id="confirmPassword"
+                                            className="input"
+                                            type="password"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="nochmal eingeben"
+                                            autoComplete="new-password"
+                                        />
+                                    </div>
+                                </div>
+
                                 {error ? (
                                     <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>
                                         {error}
@@ -205,13 +296,7 @@ export default function RegisterPage() {
 
                                 <div
                                     className="fieldHelp"
-                                    style={{
-                                        marginTop: 12,
-                                        textAlign: "right",
-                                        opacity: 0.9,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                    }}
+                                    style={{ marginTop: 12, textAlign: "right", opacity: 0.9, fontSize: 13, fontWeight: 600 }}
                                 >
                                     🔐 Wir nutzen deine E-Mail nur für Verifizierung und Wiederherstellung.
                                 </div>
