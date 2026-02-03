@@ -49,7 +49,8 @@ export async function GET(request: Request) {
         });
     }
 
-    const cookieStore = cookies();
+    // ✅ Next.js 16: cookies() returns Promise<ReadonlyRequestCookies>
+    const cookieStore = await cookies();
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -84,8 +85,6 @@ export async function GET(request: Request) {
         const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
 
         if (exErr) {
-            // Safari often fails here if redirect URL not whitelisted or cookies blocked.
-            // Provide an actionable fallback screen instead of Safari "cannot open page".
             return buildRedirect(origin, "/login", {
                 m: "oauth_exchange_failed",
                 next,
@@ -96,8 +95,6 @@ export async function GET(request: Request) {
         const { data: sessionData } = await supabase.auth.getSession();
 
         if (!sessionData.session) {
-            // If cookie write was blocked, redirect to a "verified" screen where the user can continue manually.
-            // You already have /verified page.tsx, so let's use it.
             return buildRedirect(origin, "/verified", {
                 next,
                 m: "session_missing",
@@ -108,15 +105,10 @@ export async function GET(request: Request) {
     }
 
     // 3) If no code:
-    // This can happen if the user opens a link that doesn't include `code` (or it's stripped).
-    // For email confirmation flows, you can still send them to verified/login with messaging.
     if (type === "recovery") {
-        // Password reset flow should land on your reset page
         return buildRedirect(origin, "/reset", { next });
     }
 
-    // If token_hash is present but no code, you're likely using a different email verify style.
-    // We can't complete it here without an explicit verify endpoint; route user to login/verified.
     if (tokenHash) {
         return buildRedirect(origin, "/verified", {
             next,
@@ -124,7 +116,6 @@ export async function GET(request: Request) {
         });
     }
 
-    // Default fallback
     return buildRedirect(origin, "/login", {
         m: "missing_code",
         next,

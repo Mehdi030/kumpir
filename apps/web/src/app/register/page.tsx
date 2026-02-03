@@ -49,8 +49,14 @@ export default function RegisterPage() {
     }, []);
 
     const callbackUrl = useMemo(() => {
-        if (typeof window === "undefined") return "";
-        return `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
+        const appUrl =
+            process.env.NEXT_PUBLIC_APP_URL ||
+            (typeof window !== "undefined" ? window.location.origin : "");
+
+        // Fallback: wenn appUrl leer ist, wenigstens nicht crashen
+        if (!appUrl) return "";
+
+        return `${appUrl}/auth/callback?next=${encodeURIComponent(nextPath)}`;
     }, [nextPath]);
 
     function resetMessages() {

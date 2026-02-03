@@ -40,8 +40,13 @@ export default function LoginPage() {
     }, []);
 
     const callbackUrl = useMemo(() => {
-        if (typeof window === "undefined") return "";
-        return `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
+        const appUrl =
+            process.env.NEXT_PUBLIC_APP_URL ||
+            (typeof window !== "undefined" ? window.location.origin : "");
+
+        if (!appUrl) return "";
+
+        return `${appUrl}/auth/callback?next=${encodeURIComponent(nextPath)}`;
     }, [nextPath]);
 
     function resetMessages() {
