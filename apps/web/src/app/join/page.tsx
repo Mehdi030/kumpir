@@ -7,16 +7,12 @@ import { AuthMini } from "@/components/AuthMini";
 import { useAuth } from "@/components/AuthProvider";
 
 function normalizeCode(input: string) {
-    return input
-        .toUpperCase()
-        .replace(/[^A-Z2-9]/g, "")
-        .slice(0, 4);
+    return input.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 4);
 }
 
 function setStoredName(name: string) {
     localStorage.setItem("kumpir_player_name", name);
 }
-
 function setStoredPlayerId(id: string) {
     localStorage.setItem("kumpir_player_id", id);
 }
@@ -58,7 +54,7 @@ export default function JoinPage() {
 
             setStoredName(playerName);
 
-            // ✅ KEIN null senden -> args dynamisch bauen
+            // ✅ args dynamisch, KEIN null schicken
             const args: Record<string, any> = {
                 p_lobby_code: lobbyCode,
                 p_name: playerName,
@@ -93,7 +89,6 @@ export default function JoinPage() {
                             <p className="p subline">Mitspielen ohne Account. Code rein und los.</p>
                         </div>
 
-                        {/* ✅ AuthMini nur anzeigen wenn Auth aktiv */}
                         {!authDisabled ? <AuthMini nextPath="/join" variant="header" /> : null}
                     </div>
 

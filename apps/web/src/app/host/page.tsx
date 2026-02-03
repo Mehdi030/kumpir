@@ -40,7 +40,7 @@ export default function HostPage() {
     const supabase = getSupabaseClient();
     const { user, loading } = useAuth();
 
-    // ✅ Auth Toggle (Vercel env: NEXT_PUBLIC_AUTH_DISABLED=1)
+    // Vercel/Supabase: NEXT_PUBLIC_AUTH_DISABLED=1 => Login/Gates aus
     const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
     const [hostName, setHostName] = useState("");
@@ -69,9 +69,6 @@ export default function HostPage() {
         return "";
     }, [hostName, isNameValid]);
 
-    // ✅ Create erlaubt:
-    // - Auth disabled: Name valid & nicht creating
-    // - Auth enabled: Name valid + user vorhanden
     const canCreate = isNameValid && !creating && (authDisabled ? true : (!!user && !loading));
 
     async function onCreate() {
@@ -90,7 +87,9 @@ export default function HostPage() {
             const cleanName = hostName.trim();
             setStoredName(cleanName);
 
-            // 1) Lobby erstellen
+            // ✅ rpc_create_lobby erstellt bereits:
+            // - lobbies row
+            // - host player row (player_id == lobbies.host_player_id)
             const { data: lobbyData, error: lobbyErr } = await supabase.rpc("rpc_create_lobby", {
                 p_host_name: cleanName,
                 p_privacy: privacy,
@@ -111,49 +110,19 @@ export default function HostPage() {
                 return;
             }
 
-            // 2) Host tritt der Lobby bei (player_id speichern)
-            let hostPlayerId: string | null = null;
+            // ✅ host_player_id aus lobbies holen (kein join_lobby mehr!)
+            const { data: lobbyRow, error: selErr } = await supabase
+                .from("lobbies")
+                .select("host_player_id")
+                .eq("code", code)
+                .single();
 
-            if (!authDisabled && user?.id) {
-                // ✅ Logged in: disambiguates overload
-                const { data, error: joinErr } = await supabase.rpc("join_lobby", {
-                    p_lobby_code: code,
-                    p_name: cleanName,
-                    p_user_id: user.id,
-                });
-
-                if (joinErr) {
-                    setCreateError(joinErr.message || "Host konnte der Lobby nicht beitreten.");
-                    return;
-                }
-
-                hostPlayerId = String(data);
-            } else {
-                // ✅ Guest: NUR args ohne p_user_id senden (kein null!)
-                const { data, error: joinErr } = await supabase.rpc("join_lobby", {
-                    p_lobby_code: code,
-                    p_name: cleanName,
-                } as any);
-
-                if (joinErr) {
-                    setCreateError(
-                        "Guest-Host geht aktuell nicht, weil deine DB-Funktion join_lobby vermutlich eine user_id erwartet.\n" +
-                        "Optionen:\n" +
-                        "1) Auth wieder an\n" +
-                        "2) DB: join_lobby Overload ohne user_id (oder eigene rpc_join_lobby die player_id zurückgibt)"
-                    );
-                    return;
-                }
-
-                hostPlayerId = String(data);
-            }
-
-            if (!hostPlayerId) {
-                setCreateError("Keine player_id erhalten. DB/RPC prüfen.");
+            if (selErr || !lobbyRow?.host_player_id) {
+                setCreateError("Konnte host_player_id nicht laden (lobbies.select).");
                 return;
             }
 
-            setStoredPlayerId(hostPlayerId);
+            setStoredPlayerId(String(lobbyRow.host_player_id));
             window.location.href = `/lobby/${code}`;
         } catch (e: any) {
             setCreateError(e?.message || "Unerwarteter Fehler.");
@@ -162,7 +131,7 @@ export default function HostPage() {
         }
     }
 
-    // ✅ Wenn Auth aktiv ist und noch nicht eingeloggt: Info-Screen
+    // Info-Screen wenn Auth aktiv und nicht eingeloggt
     if (!authDisabled && !loading && !user) {
         return (
             <main className="container">
@@ -219,7 +188,6 @@ export default function HostPage() {
                                 <h1 className="h1">Lobby hosten</h1>
                             </div>
 
-                            {/* ✅ nur anzeigen wenn Auth aktiv ist */}
                             {!authDisabled ? <AuthMini nextPath="/host" variant="header" /> : null}
                         </div>
 
