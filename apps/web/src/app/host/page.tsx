@@ -1,40 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Privacy = "private" | "public";
 
-type ModeKey = "classic" | "teleport" | "reverse"; // ✅ hier nur Keys erweitern
+type ModeKey = "original" | "teleport" | "reverse"; // (wenn du später blitz/casual als Modus willst: hier erweitern)
+type RoundSpeed = "fast" | "normal" | "calm";
 
-type RoundPreset = "rapid" | "classic" | "relaxed";
-
-const ROUND_PRESETS: Record<RoundPreset, { label: string; seconds: number; hint: string }> = {
-    rapid: { label: "⚡ Rapid", seconds: 15, hint: "Sehr schnell, hoher Druck." },
-    classic: { label: "🎯 Classic", seconds: 25, hint: "Ausgewogenes Tempo für die meisten Runden." },
-    relaxed: { label: "🧊 Relaxed", seconds: 40, hint: "Entspanntes Tempo mit mehr Entscheidungsfreiheit." },
+// ✅ Rundendauer Labels: Fast=Blitz, Calm=Casual
+const ROUND_SPEEDS: Record<
+    RoundSpeed,
+    { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }
+> = {
+    fast: { label: "Blitz", seconds: 15, hint: "Schnell, hoher Druck.", variant: "fast" },
+    normal: { label: "Normal", seconds: 25, hint: "Ausgewogenes Tempo.", variant: "normal" },
+    calm: { label: "Casual", seconds: 40, hint: "Entspannt, mehr Zeit.", variant: "calm" },
 };
 
-// ✅ Modi zentral: leicht erweiterbar
 const MODES: Record<
     ModeKey,
     {
         label: string;
         icon: string;
         desc: string;
-        featured?: boolean; // ✅ Classic besser darstellen
-        disabled?: boolean; // optional später
-        comingSoon?: boolean; // optional später
+        featured?: boolean;
+        disabled?: boolean;
+        comingSoon?: boolean;
+        variant: "original" | "teleport" | "reverse";
     }
 > = {
-    classic: {
-        label: "Classic",
+    original: {
+        label: "Original",
         icon: "🥔",
-        desc: "Standard-Regeln. Ideal für die meisten Runden.",
+        desc: "Standard-Regeln. Beste Basis für alle.",
         featured: true,
+        variant: "original",
     },
     teleport: {
         label: "Teleport",
@@ -42,6 +45,7 @@ const MODES: Record<
         desc: "Die Kartoffel teleportiert sich in Intervallen zu einem zufälligen Spieler.",
         comingSoon: true,
         disabled: true,
+        variant: "teleport",
     },
     reverse: {
         label: "Reverse",
@@ -49,6 +53,7 @@ const MODES: Record<
         desc: "Die Richtung wechselt gelegentlich. Mehr Chaos, mehr Lacher.",
         comingSoon: true,
         disabled: true,
+        variant: "reverse",
     },
 };
 
@@ -88,12 +93,12 @@ export default function HostPage() {
     const [privacy, setPrivacy] = useState<Privacy>("private");
     const [maxPlayers, setMaxPlayers] = useState(8);
 
-    const [roundPreset, setRoundPreset] = useState<RoundPreset>("classic");
-    const roundSeconds = ROUND_PRESETS[roundPreset].seconds;
+    // ✅ keine Vorauswahl
+    const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>(null);
+    const [mode, setMode] = useState<ModeKey | null>(null);
 
-    // ✅ Mode state
-    const [mode, setMode] = useState<ModeKey>("classic");
-    const activeMode = MODES[mode];
+    const activeMode = mode ? MODES[mode] : null;
+    const activeSpeed = roundSpeed ? ROUND_SPEEDS[roundSpeed] : null;
 
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string>("");
@@ -107,25 +112,31 @@ export default function HostPage() {
         return "";
     }, [hostName, isNameValid]);
 
-    const canCreate = isNameValid && !creating;
+    const canCreate = isNameValid && !!roundSpeed && !!mode && !creating;
 
     async function onCreate() {
         setCreateError("");
         setCreatedCode("");
+
         if (!isNameValid || creating) return;
+
+        if (!roundSpeed || !mode) {
+            setCreateError("Bitte wähle Modus und Rundendauer.");
+            return;
+        }
 
         setCreating(true);
         try {
             const cleanName = hostName.trim();
             setStoredName(cleanName);
 
+            const roundSeconds = ROUND_SPEEDS[roundSpeed].seconds;
+
             const { data, error } = await supabase.rpc("rpc_create_lobby", {
                 p_host_name: cleanName,
                 p_privacy: privacy,
                 p_max_players: maxPlayers,
                 p_round_seconds: roundSeconds,
-                // ✅ optional: wenn du es DB-seitig speichern willst, musst du RPC + Schema erweitern
-                // p_mode: mode,
             });
 
             if (error) {
@@ -162,50 +173,12 @@ export default function HostPage() {
 
     return (
         <main className="container">
-            <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
-                <Image
-                    src="/logo.png"
-                    alt="Kumpir Maskottchen"
-                    width={400}
-                    height={400}
-                    priority
-                    className="brandLogoImg"
-                />
-            </Link>
-
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby hosten">
                     <header className="hostHeader">
-                        <div
-                            className="hostTitleRow"
-                            style={{ justifyContent: "space-between", gap: 12, alignItems: "center" }}
-                        >
+                        <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                             <h1 className="h1">Lobby hosten</h1>
-
-                            {createdCode ? (
-                                <div
-                                    className="metaPill"
-                                    title="Lobby-Code"
-                                    style={{
-                                        fontWeight: 900,
-                                        letterSpacing: 2,
-                                        paddingInline: 14,
-                                        paddingBlock: 8,
-                                        cursor: "pointer",
-                                        userSelect: "none",
-                                        background:
-                                            "linear-gradient(90deg, #22D3EE, #A78BFA, #F08A1A, #22D3EE)",
-                                        backgroundSize: "200% 200%",
-                                        color: "rgba(16,12,8,0.92)",
-                                        border: "1px solid rgba(255,255,255,0.22)",
-                                    }}
-                                    onClick={goLobby}
-                                >
-                                    {createdCode}
-                                </div>
-                            ) : null}
                         </div>
-
                         <p className="p hostSub">Erstelle eine Lobby, teile den Code und spiel mit deinen Freunden!</p>
                     </header>
 
@@ -216,57 +189,11 @@ export default function HostPage() {
                                 <div className="panelHint">Du kannst das später ändern.</div>
                             </div>
 
-                            {/* ✅ Preview: Rundendauer + Modus sichtbar */}
-                            <div className="previewCard" style={{ marginBottom: 12 }}>
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "space-between",
-                                        gap: 12,
-                                        marginBottom: 8,
-                                    }}
-                                >
-                                    <div style={{ fontWeight: 900 }}>Aktuelle Einstellungen</div>
-
-                                    {/* kleine Chips rechts */}
-                                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                                        <span className="metaPill" style={{ paddingInline: 12, paddingBlock: 6 }}>
-                                            ⏱️ {roundSeconds}s
-                                        </span>
-
-                                        <span
-                                            className="metaPill"
-                                            style={{
-                                                paddingInline: 12,
-                                                paddingBlock: 6,
-                                                border:
-                                                    activeMode.featured
-                                                        ? "1px solid rgba(255,255,255,0.32)"
-                                                        : "1px solid rgba(255,255,255,0.18)",
-                                                background: activeMode.featured
-                                                    ? "linear-gradient(90deg, rgba(34,211,238,0.18), rgba(167,139,250,0.18))"
-                                                    : undefined,
-                                                fontWeight: activeMode.featured ? 900 : 800,
-                                            }}
-                                            title="Modus"
-                                        >
-                                            {activeMode.icon} {activeMode.label}
-                                            {activeMode.featured ? " ✨" : ""}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="fieldHelp" style={{ opacity: 0.9 }}>
-                                    {activeMode.desc}
-                                </div>
-                            </div>
-
                             {createdCode ? (
                                 <div className="previewCard" style={{ marginBottom: 12 }}>
                                     <div style={{ fontWeight: 900, marginBottom: 8 }}>Lobby erstellt</div>
                                     <div className="fieldHelp" style={{ opacity: 0.9 }}>
-                                        Klick auf den Code oben oder geh direkt in den Warteraum.
+                                        Geh direkt in den Warteraum.
                                     </div>
 
                                     <div className="actionsRow" style={{ marginTop: 12, alignItems: "center" }}>
@@ -287,9 +214,7 @@ export default function HostPage() {
                                 </div>
 
                                 <div className="pillInputWrap">
-                                    <span className="pillIcon" aria-hidden>
-                                        👤
-                                    </span>
+                                    <span className="pillIcon" aria-hidden>👤</span>
                                     <input
                                         className="pillInput"
                                         value={hostName}
@@ -300,12 +225,7 @@ export default function HostPage() {
                                         aria-label="Host Name"
                                     />
                                     <div className="pillRight" aria-hidden>
-                                        <button
-                                            type="button"
-                                            className="pillIconBtn"
-                                            onClick={() => setHostName(randomHostName())}
-                                            title="Zufälliger Name"
-                                        >
+                                        <button type="button" className="pillIconBtn" onClick={() => setHostName(randomHostName())} title="Zufälliger Name">
                                             🎲
                                         </button>
                                         <span className="pillChip">{Math.min(hostName.trim().length, 24)}/24</span>
@@ -324,21 +244,9 @@ export default function HostPage() {
                                         <div className="pillCardHint">Empfohlen: 6–10</div>
                                     </div>
                                     <div className="pillStepper">
-                                        <button
-                                            type="button"
-                                            className="pillStepBtn"
-                                            onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}
-                                        >
-                                            −
-                                        </button>
+                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>−</button>
                                         <div className="pillStepValue">{maxPlayers}</div>
-                                        <button
-                                            type="button"
-                                            className="pillStepBtn"
-                                            onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}
-                                        >
-                                            +
-                                        </button>
+                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>+</button>
                                     </div>
                                 </div>
 
@@ -355,13 +263,7 @@ export default function HostPage() {
                                         >
                                             🔒 Privat
                                         </button>
-                                        <button
-                                            type="button"
-                                            className="pillSegBtn"
-                                            disabled
-                                            aria-disabled="true"
-                                            title="Kommt später"
-                                        >
+                                        <button type="button" className="pillSegBtn" disabled aria-disabled="true" title="Kommt später">
                                             🌐 Public
                                         </button>
                                     </div>
@@ -380,45 +282,35 @@ export default function HostPage() {
                                         const m = MODES[key];
                                         const active = mode === key;
 
-                                        const premiumStyle = m.featured
-                                            ? {
-                                                border: active
-                                                    ? "1px solid rgba(255,255,255,0.38)"
-                                                    : "1px solid rgba(255,255,255,0.22)",
-                                                background: active
-                                                    ? "linear-gradient(90deg, rgba(34,211,238,0.22), rgba(167,139,250,0.22))"
-                                                    : "linear-gradient(90deg, rgba(34,211,238,0.10), rgba(167,139,250,0.10))",
-                                                fontWeight: 900 as const,
-                                            }
-                                            : undefined;
-
                                         return (
                                             <button
                                                 key={key}
                                                 type="button"
-                                                className={`pillSegBtn ${active ? "pillSegActive" : ""}`}
+                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""} ${m.featured ? "segChoiceFeatured" : ""}`}
+                                                data-variant={m.variant}
                                                 onClick={() => setMode(key)}
                                                 aria-pressed={active}
                                                 disabled={!!m.disabled}
                                                 title={m.comingSoon ? "Kommt bald" : undefined}
-                                                style={premiumStyle}
                                             >
-                                                {m.icon} {m.label}
-                                                {m.featured ? (
-                                                    <span style={{ marginLeft: 6, opacity: 0.95 }}>✨</span>
-                                                ) : m.comingSoon ? (
-                                                    <span style={{ marginLeft: 8, opacity: 0.8, fontWeight: 900 }}>
-                                                        SOON
-                                                    </span>
-                                                ) : null}
+                                                <span className="segIcon" aria-hidden>{m.icon}</span>
+                                                <span className="segLabel">{m.label}</span>
+                                                {m.featured ? <span className="segBadge">✨</span> : null}
+                                                {m.comingSoon ? <span className="segSoon">SOON</span> : null}
                                             </button>
                                         );
                                     })}
                                 </div>
 
                                 <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                    <span style={{ fontWeight: 900 }}>{activeMode.icon} {activeMode.label}:</span>{" "}
-                                    {activeMode.desc}
+                                    {activeMode ? (
+                                        <>
+                                            <span style={{ fontWeight: 900 }}>{activeMode.icon} {activeMode.label}:</span>{" "}
+                                            {activeMode.desc}
+                                        </>
+                                    ) : (
+                                        <span style={{ fontWeight: 900 }}>Bitte Modus auswählen.</span>
+                                    )}
                                 </div>
                             </div>
 
@@ -426,39 +318,27 @@ export default function HostPage() {
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">Rundendauer</div>
-                                    <div className="pillCardHint">{ROUND_PRESETS[roundPreset].hint}</div>
+                                    <div className="pillCardHint">{activeSpeed ? activeSpeed.hint : "Bitte auswählen."}</div>
                                 </div>
+
                                 <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                    {(Object.keys(ROUND_PRESETS) as RoundPreset[]).map((key) => (
-                                        <button
-                                            key={key}
-                                            type="button"
-                                            className={`pillSegBtn ${roundPreset === key ? "pillSegActive" : ""}`}
-                                            onClick={() => setRoundPreset(key)}
-                                            aria-pressed={roundPreset === key}
-                                            style={
-                                                key === "classic"
-                                                    ? {
-                                                        border:
-                                                            roundPreset === "classic"
-                                                                ? "1px solid rgba(255,255,255,0.38)"
-                                                                : "1px solid rgba(255,255,255,0.22)",
-                                                        background:
-                                                            roundPreset === "classic"
-                                                                ? "linear-gradient(90deg, rgba(240,138,26,0.22), rgba(34,211,238,0.18))"
-                                                                : undefined,
-                                                        fontWeight: 900,
-                                                    }
-                                                    : undefined
-                                            }
-                                        >
-                                            {ROUND_PRESETS[key].label}{" "}
-                                            <span style={{ marginLeft: 6, opacity: 0.9, fontWeight: 900 }}>
-                                                {ROUND_PRESETS[key].seconds}s
-                                            </span>
-                                            {key === "classic" ? <span style={{ marginLeft: 6 }}>⭐</span> : null}
-                                        </button>
-                                    ))}
+                                    {(Object.keys(ROUND_SPEEDS) as RoundSpeed[]).map((key) => {
+                                        const s = ROUND_SPEEDS[key];
+                                        const active = roundSpeed === key;
+
+                                        return (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
+                                                data-variant={s.variant}
+                                                onClick={() => setRoundSpeed(key)}
+                                                aria-pressed={active}
+                                            >
+                                                <span className="segLabel">{s.label}</span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
