@@ -896,3 +896,243 @@ body::after{
         filter: brightness(1);
     }
 }
+
+/* ===== Join Pill Inputs ===== */
+
+.fieldBlock {
+    display: grid;
+    gap: 8px;
+}
+
+.fieldTop {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.fieldTitle {
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 0.2px;
+    opacity: 0.92;
+}
+
+.fieldHint {
+    font-size: 12px;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.pillInputWrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.pillInputWrap:focus-within {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.28);
+    transform: translateY(-1px);
+}
+
+.pillIcon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    opacity: 0.9;
+    flex: 0 0 auto;
+}
+
+.pillInput {
+    width: 100%;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.pillInput::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.pillInputCode {
+    text-transform: uppercase;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    letter-spacing: 0.45em;
+    font-weight: 900;
+    padding-left: 2px;
+}
+
+.pillRight {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.pillChip {
+    font-size: 12px;
+    font-weight: 800;
+    padding: 6px 10px;
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    opacity: 0.85;
+}
+
+.pillChipOk {
+    opacity: 1;
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* ===== Host Pill Controls ===== */
+
+.pillIconBtn {
+    height: 34px;
+    min-width: 34px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.9);
+    cursor: pointer;
+    font-weight: 800;
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.pillIconBtn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.22);
+    transform: translateY(-1px);
+}
+
+.pillGrid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 760px) {
+    .pillGrid2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.pillCard {
+    padding: 12px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.22);
+}
+
+.pillCardTop {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.pillCardTitle {
+    font-weight: 900;
+    font-size: 13px;
+    letter-spacing: 0.2px;
+    opacity: 0.92;
+}
+
+.pillCardHint {
+    font-size: 12px;
+    opacity: 0.72;
+    white-space: nowrap;
+}
+
+.pillStepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.pillStepBtn {
+    width: 44px;
+    height: 40px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.92);
+    font-size: 18px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.pillStepBtn:hover {
+    background: rgba(255,255,255,0.085);
+    border-color: rgba(255,255,255,0.22);
+    transform: translateY(-1px);
+}
+
+.pillStepValue {
+    flex: 1;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(0,0,0,0.18);
+    font-weight: 900;
+    letter-spacing: 0.2px;
+}
+
+.pillSeg {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.pillSegBtn {
+    padding: 10px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.9);
+    font-weight: 900;
+    cursor: pointer;
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.pillSegBtn:hover {
+    background: rgba(255,255,255,0.085);
+    border-color: rgba(255,255,255,0.22);
+    transform: translateY(-1px);
+}
+
+.pillSegBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.pillSegActive {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.28);
+}

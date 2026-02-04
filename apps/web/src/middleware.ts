@@ -1,33 +1,26 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export async function middleware(req: NextRequest) {
-    // ✅ Auth temporär komplett aus (keine Session-Refresh-Calls nötig)
-    if (process.env.NEXT_PUBLIC_AUTH_DISABLED === "1") {
-        return NextResponse.next();
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+
+export function middleware(req: NextRequest) {
+    if (!AUTH_DISABLED) return NextResponse.next();
+
+    const p = req.nextUrl.pathname;
+
+    if (
+        p.startsWith("/login") ||
+        p.startsWith("/register") ||
+        p.startsWith("/verified") ||
+        p.startsWith("/auth")
+    ) {
+        const url = req.nextUrl.clone();
+        url.pathname = "/";
+        url.search = "";
+        return NextResponse.redirect(url);
     }
 
-    let res = NextResponse.next();
-
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                getAll: () => req.cookies.getAll(),
-                setAll: (cookiesToSet) => {
-                    cookiesToSet.forEach((c) => res.cookies.set(c.name, c.value, c.options));
-                },
-            },
-        }
-    );
-
-    // refresh session if needed
-    await supabase.auth.getUser();
-
-    return res;
+    return NextResponse.next();
 }
 
-export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
-};
+export const config = { matcher: ["/:path*"] };
