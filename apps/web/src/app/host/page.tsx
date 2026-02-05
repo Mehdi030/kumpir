@@ -6,11 +6,9 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Privacy = "private" | "public";
-
-type ModeKey = "original" | "teleport" | "reverse"; // (wenn du später blitz/casual als Modus willst: hier erweitern)
+type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
 
-// ✅ Rundendauer Labels: Fast=Blitz, Calm=Casual
 const ROUND_SPEEDS: Record<
     RoundSpeed,
     { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }
@@ -59,10 +57,38 @@ const MODES: Record<
 
 function randomHostName() {
     const names = [
-        "Baro","Achi","Medo","Sero","Sinan","Albion","Youssef","Angi","Elias",
-        "Ben","Jonas","Max","Tim","Leo","Emir","Yusuf","Can","Ali","Omar",
-        "David","Paul","Jan","Nico","Tobi","Sami","Ibrahim","Hassan","Amir",
-        "Rafael","Matteo","Milan","Deniz",
+        "Baro",
+        "Achi",
+        "Medo",
+        "Sero",
+        "Sinan",
+        "Albion",
+        "Youssef",
+        "Angi",
+        "Elias",
+        "Ben",
+        "Jonas",
+        "Max",
+        "Tim",
+        "Leo",
+        "Emir",
+        "Yusuf",
+        "Can",
+        "Ali",
+        "Omar",
+        "David",
+        "Paul",
+        "Jan",
+        "Nico",
+        "Tobi",
+        "Sami",
+        "Ibrahim",
+        "Hassan",
+        "Amir",
+        "Rafael",
+        "Matteo",
+        "Milan",
+        "Deniz",
     ];
     return names[Math.floor(Math.random() * names.length)];
 }
@@ -71,6 +97,7 @@ function setStoredName(name: string) {
     if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_name", name);
 }
+
 function setStoredPlayerId(id: string) {
     if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_id", id);
@@ -93,7 +120,6 @@ export default function HostPage() {
     const [privacy, setPrivacy] = useState<Privacy>("private");
     const [maxPlayers, setMaxPlayers] = useState(8);
 
-    // ✅ keine Vorauswahl
     const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>(null);
     const [mode, setMode] = useState<ModeKey | null>(null);
 
@@ -101,7 +127,7 @@ export default function HostPage() {
     const activeSpeed = roundSpeed ? ROUND_SPEEDS[roundSpeed] : null;
 
     const [creating, setCreating] = useState(false);
-    const [createError, setCreateError] = useState<string>("");
+    const [createError, setCreateError] = useState("");
 
     const isNameValid = hostName.trim().length >= 2;
 
@@ -115,7 +141,6 @@ export default function HostPage() {
 
     async function onCreate() {
         setCreateError("");
-
         if (!isNameValid || creating) return;
 
         if (!roundSpeed || !mode) {
@@ -156,10 +181,7 @@ export default function HostPage() {
             }
 
             setStoredPlayerId(hostPlayerId);
-
-            // ✅ sofort in Wartelobby
             router.push(`/lobby/${code}`);
-            return;
         } catch (e: unknown) {
             setCreateError(getErrorMessage(e));
         } finally {
@@ -192,7 +214,9 @@ export default function HostPage() {
                                 </div>
 
                                 <div className="pillInputWrap">
-                                    <span className="pillIcon" aria-hidden>👤</span>
+                  <span className="pillIcon" aria-hidden>
+                    👤
+                  </span>
                                     <input
                                         className="pillInput"
                                         value={hostName}
@@ -203,7 +227,12 @@ export default function HostPage() {
                                         aria-label="Host Name"
                                     />
                                     <div className="pillRight" aria-hidden>
-                                        <button type="button" className="pillIconBtn" onClick={() => setHostName(randomHostName())} title="Zufälliger Name">
+                                        <button
+                                            type="button"
+                                            className="pillIconBtn"
+                                            onClick={() => setHostName(randomHostName())}
+                                            title="Zufälliger Name"
+                                        >
                                             🎲
                                         </button>
                                         <span className="pillChip">{Math.min(hostName.trim().length, 24)}/24</span>
@@ -222,9 +251,13 @@ export default function HostPage() {
                                         <div className="pillCardHint">Empfohlen: 6–10</div>
                                     </div>
                                     <div className="pillStepper">
-                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>−</button>
+                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>
+                                            −
+                                        </button>
                                         <div className="pillStepValue">{maxPlayers}</div>
-                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>+</button>
+                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>
+                                            +
+                                        </button>
                                     </div>
                                 </div>
 
@@ -248,7 +281,6 @@ export default function HostPage() {
                                 </div>
                             </div>
 
-                            {/* ✅ Modus */}
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">Modus</div>
@@ -264,14 +296,18 @@ export default function HostPage() {
                                             <button
                                                 key={key}
                                                 type="button"
-                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""} ${m.featured ? "segChoiceFeatured" : ""}`}
+                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""} ${
+                                                    m.featured ? "segChoiceFeatured" : ""
+                                                }`}
                                                 data-variant={m.variant}
                                                 onClick={() => setMode(key)}
                                                 aria-pressed={active}
                                                 disabled={!!m.disabled}
                                                 title={m.comingSoon ? "Kommt bald" : undefined}
                                             >
-                                                <span className="segIcon" aria-hidden>{m.icon}</span>
+                        <span className="segIcon" aria-hidden>
+                          {m.icon}
+                        </span>
                                                 <span className="segLabel">{m.label}</span>
                                                 {m.featured ? <span className="segBadge">✨</span> : null}
                                                 {m.comingSoon ? <span className="segSoon">SOON</span> : null}
@@ -283,7 +319,9 @@ export default function HostPage() {
                                 <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
                                     {activeMode ? (
                                         <>
-                                            <span style={{ fontWeight: 900 }}>{activeMode.icon} {activeMode.label}:</span>{" "}
+                      <span style={{ fontWeight: 900 }}>
+                        {activeMode.icon} {activeMode.label}:
+                      </span>{" "}
                                             {activeMode.desc}
                                         </>
                                     ) : (
@@ -292,7 +330,6 @@ export default function HostPage() {
                                 </div>
                             </div>
 
-                            {/* ✅ Rundendauer */}
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">Rundendauer</div>
