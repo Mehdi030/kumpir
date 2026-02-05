@@ -36,7 +36,6 @@ export default function LobbyPage() {
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
 
-    // ✅ nicht "einmal" memoizen → kann sonst stale sein
     const [mePlayerId, setMePlayerId] = useState<string | null>(null);
     const [meName, setMeName] = useState<string | null>(null);
 
@@ -49,12 +48,12 @@ export default function LobbyPage() {
     const [busyReady, setBusyReady] = useState(false);
 
     const autoStartedRef = useRef(false);
+    const ensuredJoinRef = useRef(false);
 
     useEffect(() => {
         setMePlayerId(readStoredPlayerId());
         setMeName(readStoredName());
 
-        // falls sich localStorage ändert (andere Tabs / flows)
         const t = window.setInterval(() => {
             setMePlayerId(readStoredPlayerId());
             setMeName(readStoredName());
@@ -75,7 +74,6 @@ export default function LobbyPage() {
     }, [players, mePlayerId]);
 
     const allReady = useMemo(() => {
-        // ✅ Auto-Start erst wenn mind. 2 Spieler (Host zählt als Spieler)
         if (players.length < 2) return false;
         return players.every((p) => !!p.ready);
     }, [players]);
@@ -98,7 +96,7 @@ export default function LobbyPage() {
         setLobby(lobbyRow);
 
         const playersRes = await supabase
-            .from("players")
+            .from("lobby_players")
             .select("player_id,name,ready,joined_at")
             .eq("lobby_id", lobbyRow.id)
             .order("joined_at", { ascending: true });
@@ -131,6 +129,36 @@ export default function LobbyPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [code]);
 
+    // ensure "ich" existiere in lobby_players (wichtig v.a. für Host)
+    useEffect(() => {
+        if (!lobby?.id) return;
+        if (!mePlayerId || !meName) return;
+        if (ensuredJoinRef.current) return;
+
+        const exists = players.some((p) => p.player_id === mePlayerId);
+        if (exists) {
+            ensuredJoinRef.current = true;
+            return;
+        }
+
+        ensuredJoinRef.current = true;
+
+        (async () => {
+            try {
+                await supabase.rpc("rpc_join_lobby", {
+                    p_code: code,
+                    p_player_id: mePlayerId,
+                    p_name: meName,
+                });
+
+                await loadLobbyAndPlayers();
+            } catch {
+                // soft fail
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lobby?.id, mePlayerId, meName, players.length]);
+
     async function copyInviteByClick() {
         try {
             const origin =
@@ -148,7 +176,7 @@ export default function LobbyPage() {
     }
 
     async function toggleReady() {
-        if (!lobby?.id || !mePlayerId) {
+        if (!mePlayerId) {
             setErr("player_id fehlt. Bitte erneut über /join beitreten.");
             return;
         }
@@ -157,16 +185,13 @@ export default function LobbyPage() {
         setErr("");
         setBusyReady(true);
         try {
-            const next = !meReady;
+            const { error } = await supabase.rpc("rpc_toggle_ready", {
+                p_lobby_code: code,
+                p_player_id: mePlayerId,
+            });
 
-            const up = await supabase
-                .from("players")
-                .update({ ready: next })
-                .eq("lobby_id", lobby.id)
-                .eq("player_id", mePlayerId);
-
-            if (up.error) {
-                setErr(up.error.message || "Ready konnte nicht gesetzt werden.");
+            if (error) {
+                setErr(error.message || "Ready konnte nicht gesetzt werden.");
                 return;
             }
 
@@ -180,7 +205,7 @@ export default function LobbyPage() {
         router.push(`/game/${code}`);
     }
 
-    // ⚡ Auto-Start (nur Host)
+    // Auto-start: NUR Host + NUR wenn alle ready
     useEffect(() => {
         if (!amIHost) return;
         if (!allReady) return;
@@ -200,22 +225,14 @@ export default function LobbyPage() {
                 <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
                         <div style={{ flex: 1 }}>
-                            <h1 className="h1" style={{ marginBottom: 10 }}>
-                                Lobby
-                            </h1>
+                            <h1 className="h1" style={{ marginBottom: 10 }}>Lobby</h1>
 
-                            {/* ✅ Code: groß, oben mittig, rainbow, klickbar (kopiert Join-Link) */}
                             <div style={{ display: "grid", placeItems: "center", marginTop: 6 }}>
                                 <button
                                     type="button"
                                     onClick={copyInviteByClick}
                                     title="Klick → Join-Link kopieren"
-                                    style={{
-                                        border: "none",
-                                        background: "transparent",
-                                        cursor: "pointer",
-                                        padding: 0,
-                                    }}
+                                    style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
                                     aria-label="Join-Link kopieren"
                                 >
                                     <div
@@ -269,7 +286,6 @@ export default function LobbyPage() {
 
                             {err ? <p className="errorText">{err}</p> : null}
 
-                            {/* ✅ Host-Spalte komplett weg. Host-Markierung über Name + Background */}
                             <div style={{ overflowX: "auto" }}>
                                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                     <thead>
@@ -283,9 +299,7 @@ export default function LobbyPage() {
                                     <tbody>
                                     {loading && players.length === 0 ? (
                                         <tr>
-                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>
-                                                Lädt…
-                                            </td>
+                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>Lädt…</td>
                                         </tr>
                                     ) : null}
 
@@ -343,45 +357,30 @@ export default function LobbyPage() {
 
                             <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.85 }}>
                                 {amIHost ? (
-                                    <>👑 Host sieht <b>Spiel starten</b>, wenn alle bereit. ⚡ Auto-Start sobald alle ready.</>
+                                    <>👑 Host kann auch auf <b>Bereit</b> gehen. Start passiert automatisch, sobald <b>alle</b> bereit sind.</>
                                 ) : (
-                                    <>Drück unten rechts <b>Bereit</b>, damit der Host starten kann.</>
+                                    <>Drück unten rechts <b>Bereit</b>. Start passiert automatisch, sobald alle bereit sind.</>
                                 )}
                             </div>
 
-                            {/* ✅ Footer: Ready Button rechts unten IN der Card */}
-                            <div
-                                style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "flex-end",
-                                    gap: 12,
-                                    marginTop: 14,
-                                }}
-                            >
-                                <Link href="/" className="btn btnSecondary btnSmall">
-                                    ← Zurück
-                                </Link>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
+                                <Link href="/" className="btn btnSecondary btnSmall">← Zurück</Link>
 
-                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    {/* ✅ klare Farblogik: nicht-ready = Primary/Glow, ready = Secondary */}
-                                    <button
-                                        type="button"
-                                        onClick={toggleReady}
-                                        disabled={busyReady || !lobby || !mePlayerId}
-                                        className={
-                                            meReady
-                                                ? `btn btnSecondary btnXL ${busyReady ? "btnDisabled" : ""}`
-                                                : `btn btnPrimary btnXL ${busyReady ? "btnDisabled" : "btnGlow"}`
-                                        }
-                                        title={!mePlayerId ? "Bitte zuerst über /join beitreten" : "Bereit-Status umschalten"}
-                                    >
-                                        {busyReady ? "…" : meReady ? "↩️ Bereit entfernen" : "✅ Bereit"}
-                                    </button>
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={toggleReady}
+                                    disabled={busyReady || !mePlayerId}
+                                    className={
+                                        meReady
+                                            ? `btn btnSecondary btnXL ${busyReady ? "btnDisabled" : ""}`
+                                            : `btn btnPrimary btnXL ${busyReady ? "btnDisabled" : "btnGlow"}`
+                                    }
+                                    title={!mePlayerId ? "Bitte zuerst über /join beitreten" : "Bereit-Status umschalten"}
+                                >
+                                    {busyReady ? "…" : meReady ? "↩️ Bereit entfernen" : "✅ Bereit"}
+                                </button>
                             </div>
 
-                            {/* 👑 Host: „Spiel starten“ (nur wenn alle ready) + Auto-Start läuft trotzdem */}
                             {amIHost && allReady ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                                     <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={startGame}>

@@ -102,7 +102,6 @@ export default function HostPage() {
 
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string>("");
-    const [createdCode, setCreatedCode] = useState<string>("");
 
     const isNameValid = hostName.trim().length >= 2;
 
@@ -116,7 +115,6 @@ export default function HostPage() {
 
     async function onCreate() {
         setCreateError("");
-        setCreatedCode("");
 
         if (!isNameValid || creating) return;
 
@@ -158,17 +156,15 @@ export default function HostPage() {
             }
 
             setStoredPlayerId(hostPlayerId);
-            setCreatedCode(code);
+
+            // ✅ sofort in Wartelobby
+            router.push(`/lobby/${code}`);
+            return;
         } catch (e: unknown) {
             setCreateError(getErrorMessage(e));
         } finally {
             setCreating(false);
         }
-    }
-
-    function goLobby() {
-        if (!createdCode) return;
-        router.push(`/lobby/${createdCode}`);
     }
 
     return (
@@ -188,24 +184,6 @@ export default function HostPage() {
                                 <div className="panelTitle">Spieler-Details</div>
                                 <div className="panelHint">Du kannst das später ändern.</div>
                             </div>
-
-                            {createdCode ? (
-                                <div className="previewCard" style={{ marginBottom: 12 }}>
-                                    <div style={{ fontWeight: 900, marginBottom: 8 }}>Lobby erstellt</div>
-                                    <div className="fieldHelp" style={{ opacity: 0.9 }}>
-                                        Geh direkt in den Warteraum.
-                                    </div>
-
-                                    <div className="actionsRow" style={{ marginTop: 12, alignItems: "center" }}>
-                                        <button type="button" className="btn btnPrimary" onClick={goLobby}>
-                                            Zur Lobby
-                                        </button>
-                                        <Link href={`/join?code=${createdCode}`} className="btn btnSecondary">
-                                            Join testen
-                                        </Link>
-                                    </div>
-                                </div>
-                            ) : null}
 
                             <div className="fieldBlock">
                                 <div className="fieldTop">
@@ -355,7 +333,7 @@ export default function HostPage() {
                                     disabled={!canCreate}
                                     className={`btn btnPrimary btnXL ${canCreate ? "btnGlow" : "btnDisabled"}`}
                                 >
-                                    {creating ? "⏳ Lobby wird erstellt…" : createdCode ? "✅ Neu erstellen" : "🚀 Lobby erstellen"}
+                                    {creating ? "⏳ Lobby wird erstellt…" : "🚀 Lobby erstellen"}
                                 </button>
 
                                 <Link href="/" className="btn btnSecondary btnSmall">

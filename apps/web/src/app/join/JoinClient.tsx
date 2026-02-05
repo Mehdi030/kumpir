@@ -7,19 +7,16 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 function normalizeCode(input: string) {
-    // ✅ nur A–Z und 2–9, max 4
     return input.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 4);
 }
 
 function sanitizeName(input: string) {
-    // ✅ nur Buchstaben (inkl. Umlaute), Leerzeichen raus, max 12
     return input.replace(/[^A-Za-zÄÖÜäöüß]/g, "").slice(0, 12);
 }
 
 function setStoredName(name: string) {
     localStorage.setItem("kumpir_player_name", name);
 }
-
 function setStoredPlayerId(id: string) {
     localStorage.setItem("kumpir_player_id", id);
 }
@@ -79,7 +76,9 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 return;
             }
 
-            setStoredPlayerId(String(data));
+            const pid = typeof data === "string" ? data : String(data);
+            setStoredPlayerId(pid);
+
             router.push(`/lobby/${lobbyCode}`);
         } catch (err: unknown) {
             setError(getErrorMessage(err));
@@ -104,39 +103,24 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby beitreten" style={{ maxWidth: 760, margin: "0 auto" }}>
                     <header className="hostHeader" style={{ paddingBottom: 10 }}>
-                        <h1 className="h1" style={{ lineHeight: 1.05 }}>
-                            Lobby beitreten
-                        </h1>
-                        <p className="p subline" style={{ marginTop: 8 }}>
-                            Schnell rein – ohne Account.
-                        </p>
+                        <h1 className="h1" style={{ lineHeight: 1.05 }}>Lobby beitreten</h1>
+                        <p className="p subline" style={{ marginTop: 8 }}>Schnell rein – ohne Account.</p>
                     </header>
 
                     <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, opacity: 0.95 }}>
-              <span className="chip">
-                <span className="chipDot" aria-hidden />
-                1 Code
-              </span>
+                            <span className="chip"><span className="chipDot" aria-hidden />1 Code</span>
                             <span style={{ opacity: 0.5 }}>→</span>
-                            <span className="chip">
-                <span className="chipDot" aria-hidden />
-                2 Name
-              </span>
+                            <span className="chip"><span className="chipDot" aria-hidden />2 Name</span>
                             <span style={{ opacity: 0.5 }}>→</span>
-                            <span className="chip">
-                <span className="chipDot" aria-hidden />
-                3 Start
-              </span>
+                            <span className="chip"><span className="chipDot" aria-hidden />3 Start</span>
                         </div>
 
                         <div className="divider" />
 
                         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
                             <div className="fieldRow" style={{ margin: 0 }}>
-                                <label className="fieldLabel" htmlFor="code">
-                                    1) Lobby-Code
-                                </label>
+                                <label className="fieldLabel" htmlFor="code">1) Lobby-Code</label>
                                 <div className="fieldControl">
                                     <input
                                         id="code"
@@ -155,9 +139,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                             </div>
 
                             <div className="fieldRow" style={{ margin: 0 }}>
-                                <label className="fieldLabel" htmlFor="name">
-                                    2) Dein Name
-                                </label>
+                                <label className="fieldLabel" htmlFor="name">2) Dein Name</label>
                                 <div className="fieldControl">
                                     <input
                                         id="name"
@@ -176,11 +158,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                             </div>
                         </div>
 
-                        {error ? (
-                            <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
-                                {error}
-                            </div>
-                        ) : null}
+                        {error ? <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>{error}</div> : null}
 
                         <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
                             <button
