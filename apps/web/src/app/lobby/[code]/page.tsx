@@ -1,9 +1,11 @@
+// src/app/lobby/[code]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getAppOrigin } from "@/lib/appOrigin";
 
 type LobbyRow = {
     id: string;
@@ -60,15 +62,21 @@ export default function LobbyPage() {
 
     const autoStartedRef = useRef(false);
 
-    // keep local identity fresh
+    // ✅ localStorage einmal sync + bei storage-events aktualisieren (kein Intervall nötig)
     useEffect(() => {
         const sync = () => {
             setMePlayerId(readStoredPlayerId());
             setMeName(readStoredName());
         };
+
         sync();
-        const t = window.setInterval(sync, 800);
-        return () => window.clearInterval(t);
+
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === "kumpir_player_id" || e.key === "kumpir_player_name") sync();
+        };
+        window.addEventListener("storage", onStorage);
+
+        return () => window.removeEventListener("storage", onStorage);
     }, []);
 
     const amIHost = useMemo(() => {
@@ -88,8 +96,6 @@ export default function LobbyPage() {
     }, [players]);
 
     async function loadLobbyAndPlayers() {
-        setErr("");
-
         const lobbyRes = await supabase
             .from("lobbies")
             .select("id,code,host_player_id")
@@ -105,7 +111,7 @@ export default function LobbyPage() {
         setLobby(lobbyRow);
 
         const playersRes = await supabase
-            .from("lobby_players")
+            .from("players")
             .select("player_id,name,ready,joined_at")
             .eq("lobby_id", lobbyRow.id)
             .order("joined_at", { ascending: true });
@@ -118,14 +124,17 @@ export default function LobbyPage() {
         setPlayers((playersRes.data ?? []) as PlayerRow[]);
     }
 
-    // polling
+    // ✅ Polling: nur lesen (kein Join!)
     useEffect(() => {
         let alive = true;
 
         (async () => {
             setLoading(true);
             try {
+                setErr("");
                 await loadLobbyAndPlayers();
+            } catch (e: unknown) {
+                setErr(getErrorMessage(e));
             } finally {
                 if (alive) setLoading(false);
             }
@@ -139,53 +148,9 @@ export default function LobbyPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [code]);
 
-    // ensure me exists in lobby_players (host created via rpc_create_lobby can be missing there)
-    useEffect(() => {
-        if (!lobby?.id) return;
-        if (!mePlayerId || !meName) return;
-
-        const exists = players.some((p) => p.player_id === mePlayerId);
-        if (exists) return;
-
-        let cancelled = false;
-
-        const ensure = async () => {
-            try {
-                const r1 = await supabase.rpc("rpc_join_lobby", {
-                    p_code: code,
-                    p_player_id: mePlayerId,
-                    p_name: meName,
-                });
-
-                if (r1.error) {
-                    const r2 = await supabase.rpc("join_lobby", {
-                        p_lobby_code: code,
-                        p_name: meName,
-                    });
-                    if (r2.error) throw r2.error;
-                }
-
-                if (!cancelled) await loadLobbyAndPlayers();
-            } catch (e: unknown) {
-                if (!cancelled) setErr((prev) => prev || getErrorMessage(e));
-            }
-        };
-
-        ensure();
-        const t = window.setTimeout(ensure, 900);
-
-        return () => {
-            cancelled = true;
-            window.clearTimeout(t);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [lobby?.id, mePlayerId, meName, players.length, code]);
-
     async function copyInviteByClick() {
         try {
-            const origin =
-                process.env.NEXT_PUBLIC_APP_URL ||
-                (typeof window !== "undefined" ? window.location.origin : "");
+            const origin = getAppOrigin();
             const link = fmtJoinLink(origin, code);
 
             await navigator.clipboard.writeText(link);
@@ -231,7 +196,6 @@ export default function LobbyPage() {
         router.push(`/game/${code}`);
     }
 
-    // auto-start
     useEffect(() => {
         if (!amIHost) return;
         if (!allReady) return;
@@ -252,7 +216,7 @@ export default function LobbyPage() {
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
                         <div style={{ flex: 1 }}>
                             <h1 className="h1" style={{ marginBottom: 10 }}>
-                               Private Lobby
+                                Private Lobby
                             </h1>
 
                             <div style={{ display: "grid", placeItems: "center", marginTop: 6 }}>
@@ -398,7 +362,6 @@ export default function LobbyPage() {
                             </div>
 
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
-                                {/* ✅ Zusatz: Zurück führt zu "Lobby erstellen" */}
                                 <Link href="/host" className="btn btnSecondary btnSmall">
                                     ← Neue Lobby
                                 </Link>
@@ -409,7 +372,7 @@ export default function LobbyPage() {
                                     disabled={busyReady || !mePlayerId}
                                     className={`btn btnXL ${busyReady ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
                                 >
-                                    {busyReady ? "…" : meReady ? "⛔ Nicht Bereit " : "✨ Bereit"}
+                                    {busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
                                 </button>
                             </div>
 

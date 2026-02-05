@@ -1,13 +1,14 @@
+// src/app/join/JoinClient.tsx
 "use client";
 
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 function normalizeCode(input: string) {
-    return input.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 4);
+    return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 }
 
 function sanitizeName(input: string) {
@@ -15,11 +16,18 @@ function sanitizeName(input: string) {
 }
 
 function setStoredName(name: string) {
+    if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_name", name);
 }
 
 function setStoredPlayerId(id: string) {
+    if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_id", id);
+}
+
+function getStoredName() {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("kumpir_player_name") || "";
 }
 
 function getErrorMessage(err: unknown): string {
@@ -35,15 +43,36 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
     const supabase = getSupabaseClient();
     const router = useRouter();
 
-    const [code, setCode] = useState(() => normalizeCode(initialCode));
+    const fixedCodeFromLink = normalizeCode(initialCode);
+    const hasFixedCode = fixedCodeFromLink.length === 4;
+
+    const [mounted, setMounted] = useState(false);
+    const [code, setCode] = useState(() => fixedCodeFromLink);
     const [name, setName] = useState("");
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [showNameModal] = useState<boolean>(hasFixedCode);
+
+    const nameInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        setMounted(true);
+        setName(getStoredName());
+    }, []);
+
+    useEffect(() => {
+        if (!showNameModal) return;
+        const t = window.setTimeout(() => nameInputRef.current?.focus(), 50);
+        return () => window.clearTimeout(t);
+    }, [showNameModal]);
+
     const canJoin = useMemo(() => {
+        if (!mounted) return false;
         const c = normalizeCode(code);
         return c.length === 4 && name.trim().length >= 2;
-    }, [code, name]);
+    }, [mounted, code, name]);
 
     async function joinLobby() {
         setError(null);
@@ -64,13 +93,11 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
 
             setStoredName(playerName);
 
-            const { data: session } = await supabase.auth.getSession();
-            const userId = session?.session?.user?.id ?? null;
-
-            const payload: any = { p_lobby_code: lobbyCode, p_name: playerName };
-            if (userId) payload.p_user_id = userId;
-
-            const { data, error: rpcErr } = await supabase.rpc("join_lobby", payload);
+            // ✅ exakt passend zu join_lobby(p_lobby_code, p_name, optional p_user_id)
+            const { data, error: rpcErr } = await supabase.rpc("join_lobby", {
+                p_lobby_code: lobbyCode,
+                p_name: playerName,
+            });
 
             if (rpcErr) {
                 setError(rpcErr.message || "Konnte der Lobby nicht beitreten.");
@@ -87,6 +114,18 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             setLoading(false);
         }
     }
+
+    function onModalKeyDown(e: React.KeyboardEvent) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            if (!loading && canJoin) joinLobby();
+        }
+        if (e.key === "Escape") {
+            e.preventDefault();
+        }
+    }
+
+    if (!mounted) return null;
 
     return (
         <main className="container">
@@ -112,102 +151,170 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                         </p>
                     </header>
 
-                    <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, opacity: 0.95 }}>
-              <span className="chip">
-                <span className="chipDot" aria-hidden />
-                1 Code
-              </span>
-                            <span style={{ opacity: 0.5 }}>→</span>
-                            <span className="chip">
-                <span className="chipDot" aria-hidden />
-                2 Name
-              </span>
-                            <span style={{ opacity: 0.5 }}>→</span>
-                            <span className="chip">
-                <span className="chipDot" aria-hidden />
-                3 Start
-              </span>
-                        </div>
-
-                        <div className="divider" />
-
-                        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-                            <div className="fieldRow" style={{ margin: 0 }}>
-                                <label className="fieldLabel" htmlFor="code">
-                                    1) Lobby-Code
-                                </label>
-                                <div className="fieldControl">
-                                    <input
-                                        id="code"
-                                        className="input"
-                                        value={code}
-                                        onChange={(e) => setCode(normalizeCode(e.target.value))}
-                                        placeholder="z.B. 5KJQ"
-                                        maxLength={4}
-                                        spellCheck={false}
-                                        autoCorrect="off"
-                                        autoCapitalize="characters"
-                                        inputMode="text"
-                                    />
+                    {!hasFixedCode ? (
+                        <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
+                            <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+                                <div className="fieldRow" style={{ margin: 0 }}>
+                                    <label className="fieldLabel" htmlFor="code">
+                                        1) Lobby-Code
+                                    </label>
+                                    <div className="fieldControl">
+                                        <input
+                                            id="code"
+                                            className="input"
+                                            value={code}
+                                            onChange={(e) => setCode(normalizeCode(e.target.value))}
+                                            placeholder="z.B. 5KJ1"
+                                            maxLength={4}
+                                            spellCheck={false}
+                                            autoCorrect="off"
+                                            autoCapitalize="characters"
+                                            inputMode="text"
+                                        />
+                                    </div>
+                                    <div className="fieldHelp">4 Zeichen (A–Z, 0–9).</div>
                                 </div>
-                                <div className="fieldHelp">4 Zeichen (A–Z, 2–9).</div>
-                            </div>
 
-                            <div className="fieldRow" style={{ margin: 0 }}>
-                                <label className="fieldLabel" htmlFor="name">
-                                    2) Dein Name
-                                </label>
-                                <div className="fieldControl">
-                                    <input
-                                        id="name"
-                                        className="input"
-                                        value={name}
-                                        onChange={(e) => setName(sanitizeName(e.target.value))}
-                                        placeholder="z.B. Sero"
-                                        maxLength={12}
-                                        autoComplete="nickname"
-                                        inputMode="text"
-                                        spellCheck={false}
-                                        autoCorrect="off"
-                                    />
+                                <div className="fieldRow" style={{ margin: 0 }}>
+                                    <label className="fieldLabel" htmlFor="name">
+                                        2) Dein Name
+                                    </label>
+                                    <div className="fieldControl">
+                                        <input
+                                            id="name"
+                                            className="input"
+                                            value={name}
+                                            onChange={(e) => setName(sanitizeName(e.target.value))}
+                                            placeholder="z.B. Sero"
+                                            maxLength={12}
+                                            autoComplete="nickname"
+                                            inputMode="text"
+                                            spellCheck={false}
+                                            autoCorrect="off"
+                                        />
+                                    </div>
+                                    <div className="fieldHelp">Nur Buchstaben, max. 12 Zeichen.</div>
                                 </div>
-                                <div className="fieldHelp">Nur Buchstaben, max. 12 Zeichen.</div>
+                            </div>
+
+                            {error ? (
+                                <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
+                                    {error}
+                                </div>
+                            ) : null}
+
+                            <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                                <button
+                                    type="button"
+                                    className={`btn btnPrimary btnSmall ${canJoin && !loading ? "btnGlow" : "btnDisabled"}`}
+                                    onClick={joinLobby}
+                                    disabled={!canJoin || loading}
+                                    style={{ width: "100%", maxWidth: 360, margin: "0 auto" }}
+                                >
+                                    {loading ? "Trete bei…" : "Start"}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    className="btn btnSecondary btnSmall"
+                                    onClick={() => router.push("/")}
+                                    disabled={loading}
+                                    style={{ width: "100%", maxWidth: 360, margin: "0 auto" }}
+                                >
+                                    ← Zurück
+                                </button>
                             </div>
                         </div>
-
-                        {error ? (
-                            <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
-                                {error}
+                    ) : (
+                        <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
+                            <div className="fieldHelp" style={{ opacity: 0.9 }}>
+                                Code erkannt: <b style={{ letterSpacing: 1 }}>{fixedCodeFromLink}</b>
                             </div>
-                        ) : null}
-
-                        <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-                            <button
-                                type="button"
-                                className={`btn btnPrimary btnSmall ${canJoin && !loading ? "btnGlow" : "btnDisabled"}`}
-                                onClick={joinLobby}
-                                disabled={!canJoin || loading}
-                                style={{ width: "100%", maxWidth: 360, margin: "0 auto" }}
-                            >
-                                {loading ? "Trete bei…" : "Start"}
-                            </button>
-
-                            <button
-                                type="button"
-                                className="btn btnSecondary btnSmall"
-                                onClick={() => router.push("/")}
-                                disabled={loading}
-                                style={{ width: "100%", maxWidth: 360, margin: "0 auto" }}
-                            >
-                                ← Zurück
-                            </button>
+                            <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.8 }}>
+                                Gib kurz deinen Namen ein, dann geht’s direkt in die Lobby.
+                            </div>
                         </div>
+                    )}
 
-                        <div className="fieldHelp" style={{ marginTop: 12, opacity: 0.9 }}>
-                            Tipp: Gast reicht. Login ist optional.
+                    {hasFixedCode && showNameModal ? (
+                        <div
+                            onKeyDown={onModalKeyDown}
+                            style={{
+                                position: "fixed",
+                                inset: 0,
+                                zIndex: 2000,
+                                display: "grid",
+                                placeItems: "center",
+                                background: "rgba(0,0,0,0.45)",
+                                backdropFilter: "blur(6px)",
+                                WebkitBackdropFilter: "blur(6px)",
+                                padding: 16,
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "min(520px, 100%)",
+                                    borderRadius: 22,
+                                    padding: 18,
+                                    border: "1px solid rgba(255,255,255,0.18)",
+                                    background: "rgba(0,0,0,0.32)",
+                                    boxShadow: "0 22px 70px rgba(0,0,0,0.45)",
+                                }}
+                            >
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                                    <div style={{ fontWeight: 950, fontSize: 18 }}>Name eingeben</div>
+                                    <div className="pillChip" style={{ height: 30, display: "flex", alignItems: "center" }}>
+                                        {fixedCodeFromLink}
+                                    </div>
+                                </div>
+
+                                <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.85 }}>
+                                    Nur kurz – dann bist du drin.
+                                </div>
+
+                                <div style={{ marginTop: 12 }}>
+                                    <label className="fieldLabel" htmlFor="modalName">
+                                        Dein Name
+                                    </label>
+                                    <div className="fieldControl" style={{ marginTop: 8 }}>
+                                        <input
+                                            id="modalName"
+                                            ref={nameInputRef}
+                                            className="input"
+                                            value={name}
+                                            onChange={(e) => setName(sanitizeName(e.target.value))}
+                                            placeholder="z.B. Medo"
+                                            maxLength={12}
+                                            autoComplete="nickname"
+                                            inputMode="text"
+                                            spellCheck={false}
+                                            autoCorrect="off"
+                                        />
+                                    </div>
+                                    <div className="fieldHelp" style={{ marginTop: 6 }}>
+                                        Enter = Join
+                                    </div>
+                                </div>
+
+                                {error ? (
+                                    <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
+                                        {error}
+                                    </div>
+                                ) : null}
+
+                                <div style={{ display: "flex", gap: 10, marginTop: 14, justifyContent: "flex-end" }}>
+                                    <button
+                                        type="button"
+                                        className={`btn btnPrimary btnSmall ${canJoin && !loading ? "btnGlow" : "btnDisabled"}`}
+                                        onClick={joinLobby}
+                                        disabled={!canJoin || loading}
+                                    >
+                                        {loading ? "Trete bei…" : "🚀 Beitreten"}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    ) : null}
                 </section>
             </div>
         </main>

@@ -1,3 +1,4 @@
+// src/app/host/page.tsx (oder dein HostPage Pfad)
 "use client";
 
 import Link from "next/link";
@@ -9,10 +10,7 @@ type Privacy = "private" | "public";
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
 
-const ROUND_SPEEDS: Record<
-    RoundSpeed,
-    { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }
-> = {
+const ROUND_SPEEDS: Record<RoundSpeed, { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }> = {
     fast: { label: "Blitz", seconds: 15, hint: "Schnell, hoher Druck.", variant: "fast" },
     normal: { label: "Normal", seconds: 25, hint: "Ausgewogenes Tempo.", variant: "normal" },
     calm: { label: "Casual", seconds: 40, hint: "Entspannt, mehr Zeit.", variant: "calm" },
@@ -57,38 +55,8 @@ const MODES: Record<
 
 function randomHostName() {
     const names = [
-        "Baro",
-        "Achi",
-        "Medo",
-        "Sero",
-        "Sinan",
-        "Albion",
-        "Youssef",
-        "Angi",
-        "Elias",
-        "Ben",
-        "Jonas",
-        "Max",
-        "Tim",
-        "Leo",
-        "Emir",
-        "Yusuf",
-        "Can",
-        "Ali",
-        "Omar",
-        "David",
-        "Paul",
-        "Jan",
-        "Nico",
-        "Tobi",
-        "Sami",
-        "Ibrahim",
-        "Hassan",
-        "Amir",
-        "Rafael",
-        "Matteo",
-        "Milan",
-        "Deniz",
+        "Baro","Achi","Medo","Sero","Sinan","Albion","Youssef","Angi","Elias","Ben","Jonas","Max","Tim","Leo","Emir","Yusuf","Can","Ali",
+        "Omar","David","Paul","Jan","Nico","Tobi","Sami","Ibrahim","Hassan","Amir","Rafael","Matteo","Milan","Deniz",
     ];
     return names[Math.floor(Math.random() * names.length)];
 }
@@ -181,6 +149,30 @@ export default function HostPage() {
             }
 
             setStoredPlayerId(hostPlayerId);
+
+            /**
+             * ✅ Wichtig für "Freund joint -> Host wird nicht ersetzt":
+             * Host muss als Member/Player in der Lobby existieren,
+             * damit spätere Joins nur weitere Members hinzufügen.
+             *
+             * Wenn du lobby_players hast: upsert host membership.
+             * Wenn nicht: silently ignore.
+             */
+            try {
+                await supabase.from("lobby_players").upsert(
+                    {
+                        lobby_code: code, // falls du lobby_id nutzt, entferne das
+                        player_id: hostPlayerId,
+                        name: cleanName,
+                        ready: true,
+                        joined_at: new Date().toISOString(),
+                    },
+                    { onConflict: "lobby_code,player_id" }
+                );
+            } catch {
+                // ignore
+            }
+
             router.push(`/lobby/${code}`);
         } catch (e: unknown) {
             setCreateError(getErrorMessage(e));
@@ -214,9 +206,7 @@ export default function HostPage() {
                                 </div>
 
                                 <div className="pillInputWrap">
-                  <span className="pillIcon" aria-hidden>
-                    👤
-                  </span>
+                                    <span className="pillIcon" aria-hidden>👤</span>
                                     <input
                                         className="pillInput"
                                         value={hostName}
@@ -251,13 +241,9 @@ export default function HostPage() {
                                         <div className="pillCardHint">Empfohlen: 6–10</div>
                                     </div>
                                     <div className="pillStepper">
-                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>
-                                            −
-                                        </button>
+                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>−</button>
                                         <div className="pillStepValue">{maxPlayers}</div>
-                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>
-                                            +
-                                        </button>
+                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>+</button>
                                     </div>
                                 </div>
 
@@ -296,18 +282,14 @@ export default function HostPage() {
                                             <button
                                                 key={key}
                                                 type="button"
-                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""} ${
-                                                    m.featured ? "segChoiceFeatured" : ""
-                                                }`}
+                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""} ${m.featured ? "segChoiceFeatured" : ""}`}
                                                 data-variant={m.variant}
                                                 onClick={() => setMode(key)}
                                                 aria-pressed={active}
                                                 disabled={!!m.disabled}
                                                 title={m.comingSoon ? "Kommt bald" : undefined}
                                             >
-                        <span className="segIcon" aria-hidden>
-                          {m.icon}
-                        </span>
+                                                <span className="segIcon" aria-hidden>{m.icon}</span>
                                                 <span className="segLabel">{m.label}</span>
                                                 {m.featured ? <span className="segBadge">✨</span> : null}
                                                 {m.comingSoon ? <span className="segSoon">SOON</span> : null}
