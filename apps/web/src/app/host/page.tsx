@@ -10,10 +10,14 @@ type Privacy = "private" | "public";
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
 
-const ROUND_SPEEDS: Record<RoundSpeed, { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }> = {
-    fast: { label: "Blitz", seconds: 15, hint: "Schnell, hoher Druck.", variant: "fast" },
-    normal: { label: "Normal", seconds: 25, hint: "Ausgewogenes Tempo.", variant: "normal" },
-    calm: { label: "Casual", seconds: 40, hint: "Entspannt, mehr Zeit.", variant: "calm" },
+
+const ROUND_SPEEDS: Record<
+    RoundSpeed,
+    { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }
+> = {
+    fast: { label: "⚡ Blitz", seconds: 15, hint: "Schnell, hoher Druck.", variant: "fast" },
+    normal: { label: "🎯 Normal", seconds: 25, hint: "Ausgewogenes Tempo.", variant: "normal" },
+    calm: { label: "🧊 Casual", seconds: 40, hint: "Entspannt, mehr Zeit.", variant: "calm" },
 };
 
 const MODES: Record<
