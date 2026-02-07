@@ -10,24 +10,40 @@ import { getAppOrigin } from "@/lib/appOrigin";
 type LobbyRow = {
     id: string;
     code: string;
-    host_player_id: string | null;
+    host_player_id: string | null; // uuid
 };
 
 type PlayerRow = {
-    player_id: string;
+    player_id: string; // uuid
     name: string;
     ready: boolean | null;
     joined_at?: string | null;
 };
 
-function readStoredPlayerId() {
+function readStoredPlayerId(): string | null {
     if (typeof window === "undefined") return null;
-    return localStorage.getItem("kumpir_player_id");
+    // ✅ safest: localStorage first
+    const a = localStorage.getItem("kumpir_player_id");
+    if (a && a.length > 0) return a;
+    // fallback (falls irgendwo noch sessionStorage genutzt wird)
+    try {
+        const b = sessionStorage.getItem("kumpir_player_id");
+        return b && b.length > 0 ? b : null;
+    } catch {
+        return null;
+    }
 }
 
-function readStoredName() {
+function readStoredName(): string | null {
     if (typeof window === "undefined") return null;
-    return localStorage.getItem("kumpir_player_name");
+    const a = localStorage.getItem("kumpir_player_name");
+    if (a && a.length > 0) return a;
+    try {
+        const b = sessionStorage.getItem("kumpir_player_name");
+        return b && b.length > 0 ? b : null;
+    } catch {
+        return null;
+    }
 }
 
 function fmtJoinLink(origin: string, code: string) {
@@ -62,11 +78,21 @@ export default function LobbyPage() {
 
     const autoStartedRef = useRef(false);
 
-    // ✅ localStorage einmal sync + bei storage-events aktualisieren (kein Intervall nötig)
+    /**
+     * ✅ Safest Identity Sync:
+     * - initial read
+     * - listen to storage events (other tabs)
+     * - also poll lightly (same tab storage has no event)
+     * - BUT: do NOT overwrite with null once we already have a value
+     *   (prevents "(du)" from flickering down)
+     */
     useEffect(() => {
         const sync = () => {
-            setMePlayerId(readStoredPlayerId());
-            setMeName(readStoredName());
+            const pid = readStoredPlayerId();
+            const nm = readStoredName();
+
+            setMePlayerId((prev) => pid ?? prev);
+            setMeName((prev) => nm ?? prev);
         };
 
         sync();
@@ -76,7 +102,18 @@ export default function LobbyPage() {
         };
         window.addEventListener("storage", onStorage);
 
-        return () => window.removeEventListener("storage", onStorage);
+        // same-tab: lightweight polling + focus/visibility
+        const t = window.setInterval(sync, 500);
+        const onFocus = () => sync();
+        window.addEventListener("focus", onFocus);
+        document.addEventListener("visibilitychange", onFocus);
+
+        return () => {
+            window.removeEventListener("storage", onStorage);
+            window.removeEventListener("focus", onFocus);
+            document.removeEventListener("visibilitychange", onFocus);
+            window.clearInterval(t);
+        };
     }, []);
 
     const amIHost = useMemo(() => {
@@ -121,10 +158,20 @@ export default function LobbyPage() {
             return;
         }
 
-        setPlayers((playersRes.data ?? []) as PlayerRow[]);
+        const rows = (playersRes.data ?? []) as PlayerRow[];
+
+        /**
+         * ✅ Stable ordering:
+         * - keep DB order, but if "me" exists, keep it pinned where it already is
+         *   (prevents "(du) shifts down" on refresh)
+         *
+         * Simplest stable behavior: host stays in DB order; "(du)" just labels correct row.
+         * The real cause of shifting was unstable mePlayerId; now fixed.
+         */
+        setPlayers(rows);
     }
 
-    // ✅ Polling: nur lesen (kein Join!)
+    // ✅ Polling: only reads
     useEffect(() => {
         let alive = true;
 
@@ -163,6 +210,7 @@ export default function LobbyPage() {
     }
 
     async function toggleReady() {
+        // ✅ hard guard: must have uuid string
         if (!mePlayerId) {
             setErr("player_id fehlt. Bitte erneut über /join beitreten.");
             return;
@@ -176,15 +224,18 @@ export default function LobbyPage() {
         setErr("");
         setBusyReady(true);
         try {
-            const { error } = await supabase.rpc("rpc_toggle_ready", {
+            const { data, error } = await supabase.rpc("rpc_toggle_ready", {
                 p_lobby_id: lobby.id,
-                p_player_id: mePlayerId,
+                p_player_id: mePlayerId, // uuid string ok
             });
 
             if (error) {
                 setErr(error.message || "Ready konnte nicht gesetzt werden.");
                 return;
             }
+
+            // optional: if RPC returns boolean you could optimistic update; safest is reload
+            void data;
 
             await loadLobbyAndPlayers();
         } finally {
@@ -298,8 +349,8 @@ export default function LobbyPage() {
                                     ) : null}
 
                                     {players.map((p, idx) => {
-                                        const isMe = mePlayerId && p.player_id === mePlayerId;
-                                        const isHostRow = lobby?.host_player_id && p.player_id === lobby.host_player_id;
+                                        const isMe = !!mePlayerId && p.player_id === mePlayerId;
+                                        const isHostRow = !!lobby?.host_player_id && p.player_id === lobby.host_player_id;
 
                                         return (
                                             <tr

@@ -1,4 +1,3 @@
-// src/app/join/JoinClient.tsx
 "use client";
 
 import Link from "next/link";
@@ -15,14 +14,21 @@ function sanitizeName(input: string) {
     return input.replace(/[^A-Za-zÄÖÜäöüß]/g, "").slice(0, 12);
 }
 
+/**
+ * ✅ FINAL: localStorage als Source of Truth
+ * (optional sessionStorage mitsetzen, damit LobbyPage auch dann korrekt bleibt,
+ * wenn du irgendwo noch sessionStorage liest)
+ */
 function setStoredName(name: string) {
     if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_name", name);
+    try { sessionStorage.setItem("kumpir_player_name", name); } catch {}
 }
 
 function setStoredPlayerId(id: string) {
     if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_id", id);
+    try { sessionStorage.setItem("kumpir_player_id", id); } catch {}
 }
 
 function getStoredName() {
@@ -56,6 +62,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
     const [showNameModal] = useState<boolean>(hasFixedCode);
 
     const nameInputRef = useRef<HTMLInputElement | null>(null);
+    const inFlightRef = useRef(false);
 
     useEffect(() => {
         setMounted(true);
@@ -65,7 +72,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
     useEffect(() => {
         if (!showNameModal) return;
         const t = window.setTimeout(() => nameInputRef.current?.focus(), 50);
-        return () => window.clearTimeout(t);
+        return () => window.clearInterval(t);
     }, [showNameModal]);
 
     const canJoin = useMemo(() => {
@@ -75,8 +82,11 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
     }, [mounted, code, name]);
 
     async function joinLobby() {
+        if (inFlightRef.current) return;
+
         setError(null);
         setLoading(true);
+        inFlightRef.current = true;
 
         try {
             const lobbyCode = normalizeCode(code);
@@ -93,7 +103,6 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
 
             setStoredName(playerName);
 
-            // ✅ exakt passend zu join_lobby(p_lobby_code, p_name, optional p_user_id)
             const { data, error: rpcErr } = await supabase.rpc("join_lobby", {
                 p_lobby_code: lobbyCode,
                 p_name: playerName,
@@ -112,6 +121,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             setError(getErrorMessage(err));
         } finally {
             setLoading(false);
+            inFlightRef.current = false;
         }
     }
 
