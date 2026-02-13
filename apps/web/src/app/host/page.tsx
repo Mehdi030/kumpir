@@ -1,8 +1,7 @@
-// src/app/host/page.tsx (oder dein HostPage Pfad)
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
@@ -10,10 +9,13 @@ type Privacy = "private" | "public";
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
 
-const ROUND_SPEEDS: Record<RoundSpeed, { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }> = {
-    fast: { label: "⚡ Blitz\n", seconds: 15, hint: "Schnell, hoher Druck.", variant: "fast" },
-    normal: { label: "🎮 Standard\n", seconds: 25, hint: "Ausgewogenes Tempo.", variant: "normal" },
-    calm: { label: "🧠 Casual\n", seconds: 40, hint: "Entspannt, mehr Zeit.", variant: "calm" },
+const ROUND_SPEEDS: Record<
+    RoundSpeed,
+    { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }
+> = {
+    fast: { label: "⚡ Blitz", seconds: 15, hint: "Schnell, hoher Druck.", variant: "fast" },
+    normal: { label: "🎯 Standard", seconds: 25, hint: "Ausgewogenes Tempo.", variant: "normal" },
+    calm: { label: "🧊 Casual", seconds: 40, hint: "Entspannt, mehr Zeit.", variant: "calm" },
 };
 
 const MODES: Record<
@@ -61,14 +63,20 @@ function randomHostName() {
     return names[Math.floor(Math.random() * names.length)];
 }
 
+/**
+ * ✅ FINAL: überall localStorage als Source of Truth
+ * (optional: sessionStorage mitsetzen, damit alte Tabs nicht hängen)
+ */
 function setStoredName(name: string) {
     if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_name", name);
+    try { sessionStorage.setItem("kumpir_player_name", name); } catch {}
 }
 
 function setStoredPlayerId(id: string) {
     if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_id", id);
+    try { sessionStorage.setItem("kumpir_player_id", id); } catch {}
 }
 
 function getErrorMessage(err: unknown): string {
@@ -97,8 +105,9 @@ export default function HostPage() {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState("");
 
-    const isNameValid = hostName.trim().length >= 2;
+    const inFlightRef = useRef(false);
 
+    const isNameValid = hostName.trim().length >= 2;
     const nameError = useMemo(() => {
         if (!hostName.length) return "";
         if (!isNameValid) return "Mindestens 2 Zeichen.";
@@ -109,19 +118,17 @@ export default function HostPage() {
 
     async function onCreate() {
         setCreateError("");
-        if (!isNameValid || creating) return;
+        if (!canCreate) return;
+        if (inFlightRef.current) return;
 
-        if (!roundSpeed || !mode) {
-            setCreateError("Bitte wähle Modus und Rundendauer.");
-            return;
-        }
-
+        inFlightRef.current = true;
         setCreating(true);
+
         try {
             const cleanName = hostName.trim();
             setStoredName(cleanName);
 
-            const roundSeconds = ROUND_SPEEDS[roundSpeed].seconds;
+            const roundSeconds = ROUND_SPEEDS[roundSpeed!].seconds;
 
             const { data, error } = await supabase.rpc("rpc_create_lobby", {
                 p_host_name: cleanName,
@@ -135,9 +142,9 @@ export default function HostPage() {
                 return;
             }
 
-            const created = Array.isArray(data) ? data[0] : data;
-            const code = String(created?.code ?? "").toUpperCase();
-            const hostPlayerId = String(created?.host_player_id ?? "");
+            const row = Array.isArray(data) ? data[0] : data;
+            const code = String(row?.code ?? "").toUpperCase();
+            const hostPlayerId = String(row?.host_player_id ?? "");
 
             if (!code || code.length !== 4) {
                 setCreateError("RPC Return ungültig (kein code).");
@@ -150,27 +157,15 @@ export default function HostPage() {
 
             setStoredPlayerId(hostPlayerId);
 
-            /**
-             * ✅ Wichtig für "Freund joint -> Host wird nicht ersetzt":
-             * Host muss als Member/Player in der Lobby existieren,
-             * damit spätere Joins nur weitere Members hinzufügen.
-             *
-             * Wenn du lobby_players hast: upsert host membership.
-             * Wenn nicht: silently ignore.
-             */
-            try {
-                await supabase.from("lobby_players").upsert(
-                    {
-                        lobby_code: code, // falls du lobby_id nutzt, entferne das
-                        player_id: hostPlayerId,
-                        name: cleanName,
-                        ready: true,
-                        joined_at: new Date().toISOString(),
-                    },
-                    { onConflict: "lobby_code,player_id" }
-                );
-            } catch {
-                // ignore
+            const ensure = await supabase.rpc("rpc_join_lobby", {
+                p_code: code,
+                p_player_id: hostPlayerId,
+                p_name: cleanName,
+            });
+
+            if (ensure.error) {
+                setCreateError(ensure.error.message || "Host konnte nicht als Spieler eingetragen werden.");
+                return;
             }
 
             router.push(`/lobby/${code}`);
@@ -178,6 +173,7 @@ export default function HostPage() {
             setCreateError(getErrorMessage(e));
         } finally {
             setCreating(false);
+            inFlightRef.current = false;
         }
     }
 
