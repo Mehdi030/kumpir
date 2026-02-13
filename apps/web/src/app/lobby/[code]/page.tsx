@@ -40,10 +40,7 @@ export default function LobbyPage() {
         return !!row?.ready;
     }, [players, mePlayerId]);
 
-    const allReady = useMemo(() => {
-        if (players.length < 2) return false;
-        return players.every((p) => !!p.ready);
-    }, [players]);
+    const allReady = players.length >= 1 && players.every((p) => !!p.ready);
 
     async function copyInviteByClick() {
         try {

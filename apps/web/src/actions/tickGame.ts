@@ -28,9 +28,8 @@ export async function tickGame(code: string) {
         .order("seat_index", { ascending: true });
 
     if (aliveErr || !alive) throw new Error("Spieler konnten nicht geladen werden.");
-    if (alive.length <= 1) {
-        await supabase.from("lobbies").update({ phase: "finished" }).eq("id", lobby.id);
-        return { ok: true, didWork: true, finished: true };
+    if (alive.length === 1) {
+        // setze neues explode_at und return
     }
 
     const loserId = lobby.holder_player_id;

@@ -26,7 +26,7 @@ export async function startGame(code: string) {
         .order("seat_index", { ascending: true });
 
     if (aliveErr || !alive) throw new Error("Spieler konnten nicht geladen werden.");
-    if (alive.length < 2) throw new Error("Mindestens 2 Spieler nötig.");
+    if (alive.length < 1) throw new Error("Mindestens 1 Spieler nötig.");
     if (!alive.every((p) => !!p.ready)) throw new Error("Nicht alle Spieler sind bereit.");
 
     // Start-Holder random
@@ -57,7 +57,7 @@ export async function startGame(code: string) {
         })
         .eq("id", lobby.id);
 
-    if (updErr) throw new Error("Start fehlgeschlagen.");
+    if (updErr) throw new Error(updErr.message || "Start fehlgeschlagen.");
 
     // optional: Ready resetten (empfohlen)
     await supabase
