@@ -1,78 +1,47 @@
 "use client";
 
-import { PlayerList } from "./PlayerList";
-import { PotatoStatus } from "./PotatoStatus";
-import { HeatIndicator } from "./HeatIndicator";
-import { PassButton } from "./PassButton";
-
 type Player = {
     player_id: string;
     name: string;
     is_alive: boolean;
 };
 
-type HeatLevel = "low" | "mid" | "high";
-
-type GameBoardProps = {
-    lobbyCode: string;
-    holderPlayerId: string | null;
+type Props = {
     players: Player[];
+    holderPlayerId: string | null;
     mePlayerId: string | null;
-    heatLevel: HeatLevel;
-    onPass: () => void;
 };
 
-export function GameBoard({
-                              lobbyCode,
-                              holderPlayerId,
-                              players,
-                              mePlayerId,
-                              heatLevel,
-                              onPass,
-                          }: GameBoardProps) {
-    const isMeHolder = !!mePlayerId && mePlayerId === holderPlayerId;
-
+export function PlayerList({
+                               players,
+                               holderPlayerId,
+                               mePlayerId,
+                           }: Props) {
     return (
-        <main className="container">
-            <div className="landingWrap">
-                <section className="card" aria-label="Game">
-                    {/* Header */}
+        <div className="flex flex-col gap-2 mt-4">
+            {players.map((p) => {
+                const isHolder = p.player_id === holderPlayerId;
+                const isMe = p.player_id === mePlayerId;
+
+                return (
                     <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: 12,
-                        }}
+                        key={p.player_id}
+                        className={`rounded-xl px-4 py-2 transition
+              ${isHolder ? "bg-orange-500/30 border border-orange-400" : "bg-black/20"}
+              ${!p.is_alive ? "opacity-40 line-through" : ""}
+            `}
                     >
-                        <div>
-                            <h1 className="h1" style={{ marginBottom: 4 }}>
-                                🥔 Kumpir
-                            </h1>
-                            <div className="opacity-70">Lobby {lobbyCode}</div>
+                        <div className="flex justify-between items-center">
+              <span className="font-semibold">
+                {p.name}
+                  {isMe && " (Du)"}
+              </span>
+
+                            {isHolder && <span>🥔</span>}
                         </div>
-
-                        <HeatIndicator level={heatLevel} />
                     </div>
-
-                    <div className="divider" />
-
-                    {/* Status */}
-                    <PotatoStatus isHolder={isMeHolder} />
-
-                    {/* Players */}
-                    <PlayerList
-                        players={players}
-                        holderPlayerId={holderPlayerId}
-                        mePlayerId={mePlayerId}
-                    />
-
-                    {/* Action */}
-                    <div style={{ display: "flex", justifyContent: "center", marginTop: 18 }}>
-                        <PassButton disabled={!isMeHolder} onClick={onPass} />
-                    </div>
-                </section>
-            </div>
-        </main>
+                );
+            })}
+        </div>
     );
 }

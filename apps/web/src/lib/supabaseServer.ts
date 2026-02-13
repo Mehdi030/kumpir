@@ -13,10 +13,12 @@ export async function createSupabaseServerClient() {
                     return cookieStore.getAll();
                 },
                 setAll(cookiesToSet) {
-                    // In Server Components sind Cookies oft readonly -> set kann fehlschlagen.
-                    // Middleware/Route Handlers übernehmen das Setzen zuverlässig.
+                    // In Server Actions kann cookieStore.set funktionieren, in manchen Contexts aber auch nicht.
+                    // Middleware / Route Handlers sind die "sicherste" Stelle fürs Setzen.
                     try {
-                        cookiesToSet.forEach((c) => (cookieStore as any).set?.(c.name, c.value, c.options));
+                        cookiesToSet.forEach(({ name, value, options }) => {
+                            cookieStore.set(name, value, options);
+                        });
                     } catch {
                         // noop
                     }
