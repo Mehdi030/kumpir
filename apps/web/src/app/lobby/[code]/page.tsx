@@ -1,15 +1,11 @@
 "use client";
 
-import { startGame } from "@/actions/startGame";
+import { startGame, type StartGameResult } from "@/actions/startGame";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
-
-type StartGameResult =
-    | { ok: true; alreadyRunning?: boolean }
-    | { ok: false; error: string; code?: string };
 
 function fmtJoinLink(origin: string, code: string) {
     return `${origin}/join?code=${encodeURIComponent(code)}`;
@@ -43,7 +39,7 @@ export default function LobbyPage() {
         },
     });
 
-    // ✅ PATCH: redirect also when lobby is already running on initial load
+    // ✅ redirect also when lobby is already running on initial load
     useEffect(() => {
         if (suppressRunningRedirectRef.current) return;
         if (lobby?.phase === "running") {
@@ -104,9 +100,7 @@ export default function LobbyPage() {
                 p_player_id: mePlayerId,
             });
 
-            if (rpcErr) {
-                showToast(`❌ ${rpcErr.message}`, 2500);
-            }
+            if (rpcErr) showToast(`❌ ${rpcErr.message}`, 2500);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2500);
         } finally {
@@ -120,7 +114,7 @@ export default function LobbyPage() {
 
         setStarting(true);
         try {
-            const res = (await startGame(code)) as StartGameResult;
+            const res: StartGameResult = await startGame(code);
 
             if (!res.ok) {
                 showToast(`❌ ${res.error ?? "Start fehlgeschlagen"}`, 2500);
@@ -128,8 +122,6 @@ export default function LobbyPage() {
             }
 
             showToast("✅ Spiel startet…", 900);
-
-            // ✅ PATCH: go immediately (no fallback timeout needed)
             router.replace(`/game/${code}`);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2500);
@@ -138,7 +130,7 @@ export default function LobbyPage() {
         }
     }, [amIHost, starting, code, router, showToast]);
 
-    // ✅ PATCH: Auto-start only if not already running
+    // ✅ Auto-start only if not already running
     useEffect(() => {
         if (!amIHost) return;
         if (!allReady) return;
@@ -316,7 +308,7 @@ export default function LobbyPage() {
                                 </button>
                             </div>
 
-                            {/* ✅ PATCH: Start only if host + allReady + not already running */}
+                            {/* ✅ Start only if host + allReady + not already running */}
                             {amIHost && allReady && lobby?.phase !== "running" ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                                     <button

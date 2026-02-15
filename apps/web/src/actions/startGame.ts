@@ -64,8 +64,7 @@ export async function startGame(code: string): Promise<StartGameResult> {
         const nowIso = new Date(now).toISOString();
         const explodeAt = new Date(now + explodeInSec * 1000).toISOString();
 
-        // ✅ Idempotent + Race-condition Schutz:
-        // Update nur wenn noch NICHT running. Mit select() prüfen wir ob wirklich upgedated wurde.
+        // idempotent update (no overwrite if already running)
         const { data: updatedLobby, error: updErr } = await supabase
             .from("lobbies")
             .update({
@@ -86,10 +85,10 @@ export async function startGame(code: string): Promise<StartGameResult> {
             return err(`Start fehlgeschlagen: ${updErr.message}`, "LOBBY_UPDATE_FAILED");
         }
 
-        // Wenn nichts upgedated wurde, hat jemand anders in der Zwischenzeit gestartet.
+        // someone else started in the meantime
         if (!updatedLobby) return { ok: true, alreadyRunning: true };
 
-        // ready reset ist "best effort"
+        // best effort: reset ready flags (ok if it fails)
         const { error: resetErr } = await supabase
             .from("players")
             .update({ ready: false })
