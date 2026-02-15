@@ -1,16 +1,28 @@
 "use client";
 
 import { startGame } from "@/actions/startGame";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { getAppOrigin } from "@/lib/appOrigin";
 
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
 
+type StartGameResult =
+    | { ok: true; alreadyRunning?: boolean }
+    | { ok: false; error: string; code?: string };
+
 function fmtJoinLink(origin: string, code: string) {
     return `${origin}/join?code=${encodeURIComponent(code)}`;
+}
+
+function getErrorMessage(e: unknown): string {
+    if (e instanceof Error) return e.message;
+    if (typeof e === "string") return e;
+    try {
+        return JSON.stringify(e);
+    } catch {
+        return "Unbekannter Fehler";
+    }
 }
 
 export default function LobbyPage() {
@@ -20,13 +32,30 @@ export default function LobbyPage() {
 
     const { mePlayerId, meName } = usePlayerIdentity();
 
+    // blocks redirect when user intentionally leaves
+    const suppressRunningRedirectRef = useRef(false);
+
     const { lobby, players, loading, error } = useLobbyState(code, {
         pollMs: 1200,
-        onPhaseRunning: () => router.replace(`/game/${code}`),
+        onPhaseRunning: () => {
+            if (suppressRunningRedirectRef.current) return;
+            router.replace(`/game/${code}`);
+        },
     });
+
+    // ✅ PATCH: redirect also when lobby is already running on initial load
+    useEffect(() => {
+        if (suppressRunningRedirectRef.current) return;
+        if (lobby?.phase === "running") {
+            router.replace(`/game/${code}`);
+        }
+    }, [lobby?.phase, code, router]);
 
     const [toast, setToast] = useState("");
     const [busyReady, setBusyReady] = useState(false);
+    const [starting, setStarting] = useState(false);
+
+    // Prevent double-autostarts (StrictMode + re-renders)
     const autoStartedRef = useRef(false);
 
     const amIHost = useMemo(() => {
@@ -40,60 +69,98 @@ export default function LobbyPage() {
         return !!row?.ready;
     }, [players, mePlayerId]);
 
-    const allReady = players.length >= 1 && players.every((p) => !!p.ready);
+    const allReady = useMemo(() => {
+        return players.length >= 1 && players.every((p) => !!p.ready);
+    }, [players]);
 
-    async function copyInviteByClick() {
+    const showToast = useCallback((msg: string, ms = 1800) => {
+        setToast(msg);
+        window.setTimeout(() => setToast(""), ms);
+    }, []);
+
+    const copyInviteByClick = useCallback(async () => {
         try {
-            const origin = getAppOrigin();
+            const origin = window.location.origin;
             const link = fmtJoinLink(origin, code);
             await navigator.clipboard.writeText(link);
-            setToast("✅ Link kopiert");
-            window.setTimeout(() => setToast(""), 1200);
+            showToast("✅ Link kopiert", 1200);
         } catch {
-            setToast("⚠️ Kopieren nicht möglich");
-            window.setTimeout(() => setToast(""), 1200);
+            showToast("⚠️ Kopieren nicht möglich", 1600);
         }
-    }
+    }, [code, showToast]);
 
-    async function toggleReady() {
+    const toggleReady = useCallback(async () => {
         if (!mePlayerId) return;
         if (!lobby?.id) return;
-        if (busyReady) return;
+        if (busyReady || starting) return;
 
         setBusyReady(true);
         try {
-            // RPC bleibt wie bei dir, du nutzt supabaseClient intern in der Hook nicht
-            // => hier brauchst du deinen bisherigen Supabase client weiterhin
-            // Wenn du willst, lagere ich das als action aus – aber nicht jetzt.
             const { getSupabaseClient } = await import("@/lib/supabaseClient");
             const supabase = getSupabaseClient();
 
-            await supabase.rpc("rpc_toggle_ready", {
+            const { error: rpcErr } = await supabase.rpc("rpc_toggle_ready", {
                 p_lobby_id: lobby.id,
                 p_player_id: mePlayerId,
             });
+
+            if (rpcErr) {
+                showToast(`❌ ${rpcErr.message}`, 2500);
+            }
+        } catch (e: unknown) {
+            showToast(`❌ ${getErrorMessage(e)}`, 2500);
         } finally {
             setBusyReady(false);
         }
-    }
+    }, [busyReady, starting, lobby?.id, mePlayerId, showToast]);
 
-    async function startGameClick() {
+    const startGameClick = useCallback(async () => {
         if (!amIHost) return;
-        await startGame(code);
-        router.push(`/game/${code}`);
-    }
+        if (starting) return;
 
+        setStarting(true);
+        try {
+            const res = (await startGame(code)) as StartGameResult;
+
+            if (!res.ok) {
+                showToast(`❌ ${res.error ?? "Start fehlgeschlagen"}`, 2500);
+                return;
+            }
+
+            showToast("✅ Spiel startet…", 900);
+
+            // ✅ PATCH: go immediately (no fallback timeout needed)
+            router.replace(`/game/${code}`);
+        } catch (e: unknown) {
+            showToast(`❌ ${getErrorMessage(e)}`, 2500);
+        } finally {
+            setStarting(false);
+        }
+    }, [amIHost, starting, code, router, showToast]);
+
+    // ✅ PATCH: Auto-start only if not already running
     useEffect(() => {
         if (!amIHost) return;
         if (!allReady) return;
+        if (lobby?.phase === "running") return;
         if (autoStartedRef.current) return;
 
         autoStartedRef.current = true;
-        const t = window.setTimeout(() => startGameClick(), 600);
-        return () => window.clearTimeout(t);
-    }, [amIHost, allReady]);
+        const t = window.setTimeout(() => {
+            void startGameClick();
+        }, 600);
 
-    const meLabel = amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
+        return () => window.clearTimeout(t);
+    }, [amIHost, allReady, lobby?.phase, startGameClick]);
+
+    const leaveLobby = useCallback(() => {
+        suppressRunningRedirectRef.current = true;
+        router.replace("/host");
+    }, [router]);
+
+    const meLabel = useMemo(() => {
+        return amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
+    }, [amIHost, meName]);
 
     return (
         <main className="container">
@@ -161,10 +228,8 @@ export default function LobbyPage() {
                     <div className="stepsWrap">
                         <div className="stepsBox">
                             <div className="stepsTitle">Spieler</div>
-
                             {error ? <p className="errorText">{error}</p> : null}
 
-                            {/* UI bleibt bei dir wie gehabt */}
                             <div style={{ overflowX: "auto" }}>
                                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                     <thead>
@@ -237,23 +302,29 @@ export default function LobbyPage() {
                             </div>
 
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
-                                <Link href="/host" className="btn btnSecondary btnSmall">
+                                <button type="button" className="btn btnSecondary btnSmall" onClick={leaveLobby} disabled={starting}>
                                     ← Neue Lobby
-                                </Link>
+                                </button>
 
                                 <button
                                     type="button"
                                     onClick={toggleReady}
-                                    disabled={busyReady || !mePlayerId}
-                                    className={`btn btnXL ${busyReady ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
+                                    disabled={busyReady || !mePlayerId || starting}
+                                    className={`btn btnXL ${busyReady || starting ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
                                 >
-                                    {busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
+                                    {starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
                                 </button>
                             </div>
 
-                            {amIHost && allReady ? (
+                            {/* ✅ PATCH: Start only if host + allReady + not already running */}
+                            {amIHost && allReady && lobby?.phase !== "running" ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-                                    <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={startGameClick}>
+                                    <button
+                                        type="button"
+                                        className="btn btnPrimary btnSmall btnGlow"
+                                        onClick={() => void startGameClick()}
+                                        disabled={starting}
+                                    >
                                         🚀 Spiel starten
                                     </button>
                                 </div>
