@@ -1,316 +1,341 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { startGame, type StartGameResult } from "@/actions/startGame";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "next/navigation";
 
-import { GameBoard } from "@/components/game/GameBoard";
-import { passPotato } from "@/actions/passPotato";
-import { tickGame } from "@/actions/tickGame";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
+import { useLobbyState } from "@/hooks/useLobbyState";
 
-type LobbyPhase = "running" | "round_end" | "finished" | string;
+function fmtJoinLink(origin: string, code: string) {
+    return `${origin}/join?code=${encodeURIComponent(code)}`;
+}
 
-type LobbyState = {
-    id: string;
-    holder_player_id: string | null;
-    phase: LobbyPhase;
-};
+function getErrorMessage(e: unknown): string {
+    if (e instanceof Error) return e.message;
+    if (typeof e === "string") return e;
+    try {
+        return JSON.stringify(e);
+    } catch {
+        return "Unbekannter Fehler";
+    }
+}
 
-type Player = {
-    player_id: string;
-    name: string;
-    is_alive: boolean;
-};
+function goGame(code: string) {
+    if (typeof window === "undefined") return;
+    window.location.replace(`/game/${code}`);
+}
 
-type IntroStage = "countdown" | "reveal" | "done";
-
-export default function GamePage() {
-    const supabase = getSupabaseClient();
-    const router = useRouter();
+export default function LobbyPage() {
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
 
-    const { mePlayerId } = usePlayerIdentity();
+    const { mePlayerId, meName } = usePlayerIdentity();
 
-    const [lobby, setLobby] = useState<LobbyState | null>(null);
-    const [players, setPlayers] = useState<Player[]>([]);
-    const inFlightTickRef = useRef(false);
+    // blocks redirect when user intentionally leaves
+    const suppressRunningRedirectRef = useRef(false);
 
-    // Intro flow
-    const [showIntro, setShowIntro] = useState(true);
-    const [introStage, setIntroStage] = useState<IntroStage>("countdown");
-    const [countdown, setCountdown] = useState(5);
+    const { lobby, players, loading, error } = useLobbyState(code, {
+        pollMs: 1200,
+        onPhaseRunning: () => {
+            if (suppressRunningRedirectRef.current) return;
+            goGame(code);
+        },
+    });
 
-    // Guards against double effects / re-inits
-    const introStartedRef = useRef(false);
+    // redirect also when lobby is already running on initial load
+    useEffect(() => {
+        if (suppressRunningRedirectRef.current) return;
+        if (lobby?.phase === "running") {
+            goGame(code);
+        }
+    }, [lobby?.phase, code]);
 
-    const meRow = useMemo(() => {
-        if (!mePlayerId) return null;
-        return players.find((p) => p.player_id === mePlayerId) ?? null;
+    const [toast, setToast] = useState("");
+    const [busyReady, setBusyReady] = useState(false);
+    const [starting, setStarting] = useState(false);
+
+    const autoStartedRef = useRef(false);
+
+    const amIHost = useMemo(() => {
+        if (!mePlayerId || !lobby?.host_player_id) return false;
+        return lobby.host_player_id === mePlayerId;
+    }, [lobby?.host_player_id, mePlayerId]);
+
+    const meReady = useMemo(() => {
+        if (!mePlayerId) return false;
+        const row = players.find((p) => p.player_id === mePlayerId);
+        return !!row?.ready;
     }, [players, mePlayerId]);
 
-    const iAmEliminated = !!meRow && !meRow.is_alive;
+    // ✅ FIX: Min. 2 Spieler nötig
+    const MIN_PLAYERS = 2;
 
-    const isMeHolder = useMemo(() => {
-        if (!mePlayerId || !lobby?.holder_player_id) return false;
-        return lobby.holder_player_id === mePlayerId;
-    }, [lobby?.holder_player_id, mePlayerId]);
+    const allReady = useMemo(() => {
+        return players.length >= MIN_PLAYERS && players.every((p) => !!p.ready);
+    }, [players]);
 
-    const holderName = useMemo(() => {
-        if (!lobby?.holder_player_id) return "…";
-        return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
-    }, [players, lobby?.holder_player_id]);
+    const showToast = useCallback((msg: string, ms = 1800) => {
+        setToast(msg);
+        window.setTimeout(() => setToast(""), ms);
+    }, []);
 
-    useEffect(() => {
-        let alive = true;
-
-        async function load() {
-            if (inFlightTickRef.current) return;
-            inFlightTickRef.current = true;
-
-            try {
-                try {
-                    await tickGame(code);
-                } catch {
-                    // ignore
-                }
-
-                const lobbyRes = await supabase
-                    .from("lobbies")
-                    .select("id, holder_player_id, phase")
-                    .eq("code", code)
-                    .single();
-
-                if (!alive) return;
-
-                if (lobbyRes.error || !lobbyRes.data) {
-                    router.replace("/");
-                    return;
-                }
-
-                setLobby({
-                    id: lobbyRes.data.id,
-                    holder_player_id: lobbyRes.data.holder_player_id,
-                    phase: lobbyRes.data.phase,
-                });
-
-                const playersRes = await supabase
-                    .from("players")
-                    .select("player_id,name,is_alive")
-                    .eq("lobby_id", lobbyRes.data.id)
-                    .order("seat_index", { ascending: true });
-
-                if (!alive) return;
-                if (playersRes.error || !playersRes.data) return;
-
-                setPlayers(playersRes.data as Player[]);
-            } finally {
-                inFlightTickRef.current = false;
-            }
+    const copyInviteByClick = useCallback(async () => {
+        try {
+            const origin = window.location.origin;
+            const link = fmtJoinLink(origin, code);
+            await navigator.clipboard.writeText(link);
+            showToast("✅ Link kopiert", 1200);
+        } catch {
+            showToast("⚠️ Kopieren nicht möglich", 1600);
         }
+    }, [code, showToast]);
 
-        load();
-        const t = window.setInterval(load, 700);
+    const toggleReady = useCallback(async () => {
+        if (!mePlayerId) return;
+        if (!lobby?.id) return;
+        if (busyReady || starting) return;
 
-        return () => {
-            alive = false;
-            window.clearInterval(t);
-        };
-    }, [code, supabase, router]);
+        setBusyReady(true);
+        try {
+            const { getSupabaseClient } = await import("@/lib/supabaseClient");
+            const supabase = getSupabaseClient();
 
-    // Init intro ONCE when lobby exists
-    useEffect(() => {
-        if (!lobby) return;
-        if (introStartedRef.current) return;
+            const { error: rpcErr } = await supabase.rpc("rpc_toggle_ready", {
+                p_lobby_id: lobby.id,
+                p_player_id: mePlayerId,
+            });
 
-        if (lobby.phase === "finished") {
-            setShowIntro(false);
-            introStartedRef.current = true;
-            return;
+            if (rpcErr) showToast(`❌ ${rpcErr.message}`, 2500);
+        } catch (e: unknown) {
+            showToast(`❌ ${getErrorMessage(e)}`, 2500);
+        } finally {
+            setBusyReady(false);
         }
+    }, [busyReady, starting, lobby?.id, mePlayerId, showToast]);
 
-        introStartedRef.current = true;
-        setShowIntro(true);
-        setIntroStage("countdown");
-        setCountdown(5);
-    }, [lobby]);
+    const startGameClick = useCallback(async () => {
+        if (!amIHost) return;
+        if (starting) return;
 
-    // Countdown ticks via setTimeout (StrictMode-safe)
-    useEffect(() => {
-        if (!showIntro) return;
+        setStarting(true);
+        try {
+            const res: StartGameResult = await startGame(code);
 
-        if (introStage === "countdown") {
-            if (countdown <= 0) {
-                setIntroStage("reveal");
+            if (!res.ok) {
+                const msg = "error" in res ? res.error : "Start fehlgeschlagen";
+                showToast(`❌ ${msg}`, 2500);
                 return;
             }
 
-            const t = window.setTimeout(() => {
-                setCountdown((c) => c - 1);
-            }, 1000);
-
-            return () => window.clearTimeout(t);
+            showToast("✅ Spiel startet…", 900);
+            goGame(code);
+        } catch (e: unknown) {
+            showToast(`❌ ${getErrorMessage(e)}`, 2500);
+        } finally {
+            setStarting(false);
         }
+    }, [amIHost, starting, code, showToast]);
 
-        if (introStage === "reveal") {
-            const t = window.setTimeout(() => {
-                setIntroStage("done");
-                setShowIntro(false);
-            }, 1200); // ✅ 1.2s reveal
+    // ✅ OPTIONAL (empfohlen): Auto-Start komplett AUS, damit Lobby immer sichtbar bleibt
+    // Wenn du Auto-Start behalten willst: lass diesen Block drin, aber er startet erst ab 2 Spielern (allReady).
+    useEffect(() => {
+        // Auto-Start auskommentieren wenn du 100% manuell starten willst:
+        // return;
 
-            return () => window.clearTimeout(t);
-        }
+        if (!amIHost) return;
+        if (!allReady) return;
+        if (lobby?.phase === "running") return;
+        if (autoStartedRef.current) return;
 
-        return;
-    }, [countdown, introStage, showIntro]);
+        autoStartedRef.current = true;
+        const t = window.setTimeout(() => {
+            void startGameClick();
+        }, 600);
 
-    async function handlePass() {
-        if (!mePlayerId) return;
-        if (iAmEliminated) return;
+        return () => window.clearTimeout(t);
+    }, [amIHost, allReady, lobby?.phase, startGameClick]);
 
-        try {
-            await passPotato(code, mePlayerId);
-        } catch {
-            // ok
-        }
-    }
+    const leaveLobby = useCallback(() => {
+        suppressRunningRedirectRef.current = true;
+        if (typeof window !== "undefined") window.location.replace("/host");
+    }, []);
 
-    if (!lobby) {
-        return <div className="p-6 opacity-70">Lade Spiel…</div>;
-    }
-
-    // Intro UI (Countdown -> Reveal)
-    if (showIntro && lobby.phase !== "finished") {
-        const bg = isMeHolder
-            ? "radial-gradient(circle at 50% 35%, rgba(255,140,70,0.55) 0%, rgba(143,15,15,0.96) 72%)"
-            : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.55) 0%, rgba(192,106,0,0.88) 80%)";
-
-        return (
-            <main
-                style={{
-                    minHeight: "100vh",
-                    width: "100vw",
-                    display: "grid",
-                    placeItems: "center",
-                    padding: 24,
-                    overflow: "hidden",
-                    background: bg,
-                    position: "relative",
-                }}
-            >
-                {introStage === "countdown" ? (
-                    <div
-                        aria-hidden
-                        style={{
-                            position: "absolute",
-                            inset: 0,
-                            backdropFilter: "blur(10px)",
-                            WebkitBackdropFilter: "blur(10px)",
-                            background: "rgba(0,0,0,0.18)",
-                        }}
-                    />
-                ) : null}
-
-                <div style={{ textAlign: "center", width: "min(920px, 96vw)", position: "relative", zIndex: 2 }}>
-                    {introStage === "countdown" ? (
-                        <>
-                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>
-                                START IN
-                            </div>
-
-                            <div
-                                style={{
-                                    marginTop: 14,
-                                    fontSize: "clamp(80px, 10vw, 140px)",
-                                    fontWeight: 950,
-                                    letterSpacing: 2,
-                                    textShadow: "0 18px 70px rgba(0,0,0,0.35)",
-                                }}
-                            >
-                                {Math.max(0, countdown)}
-                            </div>
-
-                            <div style={{ marginTop: 10, fontSize: 14, fontWeight: 800, opacity: 0.75 }}>
-                                Bereit machen…
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>
-                                READY?
-                            </div>
-
-                            <div style={{ fontSize: "clamp(44px, 6vw, 84px)", fontWeight: 950, marginTop: 12 }}>
-                                {isMeHolder ? "🔥 DU STARTERST HEISS" : "🌿 BLEIB RUHIG"}
-                            </div>
-
-                            <div style={{ marginTop: 12, fontSize: 14, fontWeight: 750, opacity: 0.78 }}>
-                                Holder: <b>{holderName}</b>
-                            </div>
-
-                            <div style={{ marginTop: 16, fontSize: 14, fontWeight: 700, opacity: 0.72 }}>
-                                Wenn du die Kartoffel hast: <b>Leertaste</b> oder Button → weitergeben.
-                            </div>
-
-                            <div style={{ marginTop: 22, opacity: 0.7, fontWeight: 800 }}>Los!</div>
-                        </>
-                    )}
-                </div>
-            </main>
-        );
-    }
-
-    // Finished screen (statt rauswerfen)
-    if (lobby.phase === "finished") {
-        const winner =
-            lobby.holder_player_id
-                ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
-                : "Unbekannt";
-
-        return (
-            <main
-                style={{
-                    minHeight: "100vh",
-                    display: "grid",
-                    placeItems: "center",
-                    padding: 24,
-                    background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.55) 0%, rgba(192,106,0,0.88) 80%)",
-                }}
-            >
-                <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>
-                        SPIEL BEENDET
-                    </div>
-
-                    <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>
-                        🏆 {winner}
-                    </div>
-
-                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>
-                        {iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}
-                    </div>
-
-                    <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
-                        <button className="btn btnPrimary btnXL" onClick={() => router.replace("/host")} type="button">
-                            Neue Lobby
-                        </button>
-                        <button className="btn btnSecondary btnXL" onClick={() => router.replace("/")} type="button">
-                            Hauptmenü
-                        </button>
-                    </div>
-                </div>
-            </main>
-        );
-    }
+    const meLabel = useMemo(() => {
+        return amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
+    }, [amIHost, meName]);
 
     return (
-        <GameBoard
-            holderPlayerId={lobby.holder_player_id}
-            players={players}
-            mePlayerId={mePlayerId}
-            onPass={handlePass}
-        />
+        <main className="container">
+            <div className="landingWrap">
+                <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                        <div style={{ flex: 1 }}>
+                            <h1 className="h1" style={{ marginBottom: 10 }}>
+                                Private Lobby
+                            </h1>
+
+                            <div style={{ display: "grid", placeItems: "center", marginTop: 6 }}>
+                                <button
+                                    type="button"
+                                    onClick={copyInviteByClick}
+                                    title="Klick → Join-Link kopieren"
+                                    style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
+                                    aria-label="Join-Link kopieren"
+                                >
+                                    <div
+                                        style={{
+                                            fontSize: 58,
+                                            fontWeight: 950,
+                                            letterSpacing: 6,
+                                            lineHeight: 1,
+                                            backgroundImage:
+                                                "linear-gradient(90deg,#ff2d55,#ff9500,#ffd60a,#34c759,#0a84ff,#bf5af2,#ff2d55)",
+                                            backgroundSize: "220% 100%",
+                                            WebkitBackgroundClip: "text",
+                                            backgroundClip: "text",
+                                            color: "transparent",
+                                            animation: "kumpir-rainbow 2.8s linear infinite",
+                                            textShadow: "0 10px 30px rgba(0,0,0,0.18)",
+                                            userSelect: "none",
+                                        }}
+                                    >
+                                        {code}
+                                    </div>
+                                </button>
+
+                                {toast ? (
+                                    <div className="fieldHelp" style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}>
+                                        {toast}
+                                    </div>
+                                ) : (
+                                    <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.85, textAlign: "center" }}>
+                                        Klick auf den Code kopiert den Join-Link.
+                                    </div>
+                                )}
+
+                                <style>{`
+                  @keyframes kumpir-rainbow {
+                    0% { background-position: 0% 50%; }
+                    100% { background-position: 100% 50%; }
+                  }
+                `}</style>
+                            </div>
+                        </div>
+
+                        <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center" }}>
+                            {meLabel}
+                        </div>
+                    </div>
+
+                    <div className="stepsWrap">
+                        <div className="stepsBox">
+                            <div className="stepsTitle">Spieler</div>
+                            {error ? <p className="errorText">{error}</p> : null}
+
+                            <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                    <thead>
+                                    <tr style={{ textAlign: "left", opacity: 0.75 }}>
+                                        <th style={{ padding: "10px 8px" }}>#</th>
+                                        <th style={{ padding: "10px 8px" }}>Name</th>
+                                        <th style={{ padding: "10px 8px", textAlign: "right" }}>Zustand</th>
+                                    </tr>
+                                    </thead>
+
+                                    <tbody>
+                                    {loading && players.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>
+                                                Lädt…
+                                            </td>
+                                        </tr>
+                                    ) : null}
+
+                                    {players.map((p, idx) => {
+                                        const isMe = !!mePlayerId && p.player_id === mePlayerId;
+                                        const isHostRow = !!lobby?.host_player_id && p.player_id === lobby.host_player_id;
+
+                                        return (
+                                            <tr
+                                                key={p.player_id}
+                                                style={{
+                                                    borderTop: "1px solid rgba(255,255,255,0.08)",
+                                                    opacity: isMe ? 1 : 0.95,
+                                                    background: isHostRow ? "rgba(255,255,255,0.07)" : "transparent",
+                                                }}
+                                            >
+                                                <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
+
+                                                <td style={{ padding: "10px 8px", fontWeight: 900 }}>
+                                                    {p.name} {isMe ? <span style={{ opacity: 0.6 }}>(du)</span> : null}
+                                                    {isHostRow ? (
+                                                        <span
+                                                            style={{
+                                                                marginLeft: 10,
+                                                                fontWeight: 950,
+                                                                opacity: 0.98,
+                                                                padding: "4px 10px",
+                                                                borderRadius: 999,
+                                                                background: "rgba(255,255,255,0.08)",
+                                                                border: "1px solid rgba(255,255,255,0.10)",
+                                                            }}
+                                                        >
+                                👑 Host
+                              </span>
+                                                    ) : null}
+                                                </td>
+
+                                                <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>
+                                                    {p.ready ? "✅ Bereit" : "⏳ nicht bereit"}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+
+                                    {!loading && players.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>
+                                                Noch niemand beigetreten.
+                                            </td>
+                                        </tr>
+                                    ) : null}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
+                                <button type="button" className="btn btnSecondary btnSmall" onClick={leaveLobby} disabled={starting}>
+                                    ← Neue Lobby
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={toggleReady}
+                                    disabled={busyReady || !mePlayerId || starting}
+                                    className={`btn btnXL ${busyReady || starting ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
+                                >
+                                    {starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
+                                </button>
+                            </div>
+
+                            {amIHost && allReady && lobby?.phase !== "running" ? (
+                                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                                    <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={() => void startGameClick()} disabled={starting}>
+                                        🚀 Spiel starten
+                                    </button>
+                                </div>
+                            ) : null}
+
+                            {!allReady ? (
+                                <div style={{ marginTop: 10, opacity: 0.75, fontWeight: 800, fontSize: 13 }}>
+                                    Mindestens {MIN_PLAYERS} Spieler müssen beitreten und bereit sein.
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
     );
 }

@@ -27,8 +27,7 @@ export async function startGame(code: string): Promise<StartGameResult> {
         }
 
         if (lobby.phase === "running") return { ok: true, alreadyRunning: true };
-        if (lobby.phase === "finished")
-            return err("Spiel ist bereits beendet.", "ALREADY_FINISHED");
+        if (lobby.phase === "finished") return err("Spiel ist bereits beendet.", "ALREADY_FINISHED");
 
         const { data: alive, error: aliveErr } = await supabase
             .from("players")
@@ -39,19 +38,17 @@ export async function startGame(code: string): Promise<StartGameResult> {
 
         if (aliveErr) {
             console.error("startGame: players load failed", aliveErr);
-            return err(
-                `Spieler konnten nicht geladen werden: ${aliveErr.message}`,
-                "PLAYERS_LOAD_FAILED"
-            );
+            return err(`Spieler konnten nicht geladen werden: ${aliveErr.message}`, "PLAYERS_LOAD_FAILED");
         }
 
         const aliveList = alive ?? [];
-        if (aliveList.length < 1) return err("Mindestens 1 Spieler nötig.", "NEED_PLAYERS");
-        if (!aliveList.every((p) => !!p.ready))
-            return err("Nicht alle Spieler sind bereit.", "NOT_ALL_READY");
 
-        const startHolder =
-            aliveList[Math.floor(Math.random() * aliveList.length)].player_id;
+        // ✅ FIX: min. 2 Spieler
+        if (aliveList.length < 2) return err("Mindestens 2 Spieler nötig.", "NEED_PLAYERS");
+
+        if (!aliveList.every((p) => !!p.ready)) return err("Nicht alle Spieler sind bereit.", "NOT_ALL_READY");
+
+        const startHolder = aliveList[Math.floor(Math.random() * aliveList.length)].player_id;
 
         const speed = (lobby.round_speed ?? "normal") as RoundSpeed;
         const explodeInSec = calculateExplodeSeconds(speed, aliveList.length, {

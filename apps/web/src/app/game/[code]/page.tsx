@@ -48,7 +48,6 @@ export default function GamePage() {
     const [introStage, setIntroStage] = useState<IntroStage>("countdown");
     const [countdown, setCountdown] = useState(5);
 
-    // Guards against double effects / re-inits
     const introStartedRef = useRef(false);
 
     const meRow = useMemo(() => {
@@ -76,7 +75,6 @@ export default function GamePage() {
             inFlightTickRef.current = true;
 
             try {
-                // optional tick (ignore failures)
                 try {
                     await tickGame(code);
                 } catch {
@@ -104,8 +102,8 @@ export default function GamePage() {
 
                 setLobby(nextLobby);
 
-                // if somehow not running anymore, go back to lobby
-                if (nextLobby.phase === "lobby") {
+                // ✅ FIX: Wenn nicht running, zurück zur Lobby (nicht im Game hängen)
+                if (nextLobby.phase !== "running" && nextLobby.phase !== "finished") {
                     goLobby(code);
                     return;
                 }
@@ -139,7 +137,6 @@ export default function GamePage() {
         };
     }, [code, supabase]);
 
-    // Init intro ONCE when lobby exists
     useEffect(() => {
         if (!lobby) return;
         if (introStartedRef.current) return;
@@ -156,7 +153,6 @@ export default function GamePage() {
         setCountdown(5);
     }, [lobby]);
 
-    // Countdown ticks via setTimeout (StrictMode-safe)
     useEffect(() => {
         if (!showIntro) return;
 
@@ -216,7 +212,6 @@ export default function GamePage() {
         return <div className="p-6 opacity-70">Lade Spiel…</div>;
     }
 
-    // Intro UI (Countdown -> Reveal)
     if (showIntro && lobby.phase !== "finished") {
         const bg = isMeHolder
             ? "radial-gradient(circle at 50% 35%, rgba(255,140,70,0.55) 0%, rgba(143,15,15,0.96) 72%)"
@@ -285,7 +280,6 @@ export default function GamePage() {
         );
     }
 
-    // Finished screen
     if (lobby.phase === "finished") {
         const winner = lobby.holder_player_id
             ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
