@@ -92,33 +92,16 @@ export default function GamePage() {
         return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
     }, [players, lobby?.holder_player_id]);
 
+    // Poll loop (non-blocking tickGame)
     useEffect(() => {
         let alive = true;
-        let timer: number | null = null;
 
-        // watchdog gegen "hängende" requests
-        const inFlight = { value: false };
-        let inFlightSince = 0;
-
-        async function loadOnce() {
-            if (!alive) return;
-
-            // Wenn ein Request > 4s hängt: Lock lösen
-            if (inFlight.value && Date.now() - inFlightSince > 4000) {
-                inFlight.value = false;
-            }
-
-            if (inFlight.value) {
-                // kurz später nochmal versuchen
-                timer = window.setTimeout(loadOnce, 250);
-                return;
-            }
-
-            inFlight.value = true;
-            inFlightSince = Date.now();
+        async function load() {
+            if (inFlightRef.current) return;
+            inFlightRef.current = true;
 
             try {
-                // tickGame darf nie das UI blockieren
+                // ✅ never block polling
                 void tickGame(code).catch(() => {});
 
                 const lobbyRes = await supabase
@@ -143,6 +126,7 @@ export default function GamePage() {
 
                 setLobby(nextLobby);
 
+                // capture anchor ONCE
                 if (nextLobby.phase === "running" && runStartedAtMs === null && nextLobby.last_activity_at) {
                     const ms = Date.parse(nextLobby.last_activity_at);
                     if (!Number.isNaN(ms)) setRunStartedAtMs(ms);
@@ -164,18 +148,16 @@ export default function GamePage() {
                 setPlayers(playersRes.data as Player[]);
                 setFatalError("");
             } finally {
-                inFlight.value = false;
-
-                // self-schedule: erst NACH completion
-                if (alive) timer = window.setTimeout(loadOnce, 650);
+                inFlightRef.current = false;
             }
         }
 
-        loadOnce();
+        load();
+        const t = window.setInterval(load, 650);
 
         return () => {
             alive = false;
-            if (timer) window.clearTimeout(timer);
+            window.clearInterval(t);
         };
     }, [code, supabase, runStartedAtMs]);
 
