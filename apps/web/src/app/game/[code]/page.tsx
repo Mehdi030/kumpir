@@ -44,8 +44,6 @@ export default function GamePage() {
 
     // Guards against double effects / re-inits
     const introStartedRef = useRef(false);
-    const countdownIntervalRef = useRef<number | null>(null);
-    const revealTimeoutRef = useRef<number | null>(null);
 
     const meRow = useMemo(() => {
         if (!mePlayerId) return null;
@@ -121,7 +119,7 @@ export default function GamePage() {
         };
     }, [code, supabase, router]);
 
-    // Start Intro ONCE when lobby is available (and not finished)
+    // Init intro ONCE when lobby exists
     useEffect(() => {
         if (!lobby) return;
         if (introStartedRef.current) return;
@@ -133,47 +131,38 @@ export default function GamePage() {
         }
 
         introStartedRef.current = true;
-
-        // Init
         setShowIntro(true);
         setIntroStage("countdown");
         setCountdown(5);
-
-        // Clear any old timers (safety)
-        if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current);
-        if (revealTimeoutRef.current) window.clearTimeout(revealTimeoutRef.current);
-
-        // Interval: decrement 1/sec
-        countdownIntervalRef.current = window.setInterval(() => {
-            setCountdown((prev) => prev - 1);
-        }, 1000);
-
-        return () => {
-            if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current);
-            if (revealTimeoutRef.current) window.clearTimeout(revealTimeoutRef.current);
-        };
     }, [lobby]);
 
-    // Transition when countdown hits 0
+    // Countdown ticks via setTimeout (StrictMode-safe)
     useEffect(() => {
         if (!showIntro) return;
-        if (introStage !== "countdown") return;
 
-        if (countdown <= 0) {
-            // stop interval
-            if (countdownIntervalRef.current) {
-                window.clearInterval(countdownIntervalRef.current);
-                countdownIntervalRef.current = null;
+        if (introStage === "countdown") {
+            if (countdown <= 0) {
+                setIntroStage("reveal");
+                return;
             }
 
-            // reveal screen
-            setIntroStage("reveal");
+            const t = window.setTimeout(() => {
+                setCountdown((c) => c - 1);
+            }, 1000);
 
-            revealTimeoutRef.current = window.setTimeout(() => {
+            return () => window.clearTimeout(t);
+        }
+
+        if (introStage === "reveal") {
+            const t = window.setTimeout(() => {
                 setIntroStage("done");
                 setShowIntro(false);
-            }, 900);
+            }, 1200); // ✅ 1.2s reveal
+
+            return () => window.clearTimeout(t);
         }
+
+        return;
     }, [countdown, introStage, showIntro]);
 
     async function handlePass() {
@@ -187,7 +176,6 @@ export default function GamePage() {
         }
     }
 
-    // Loading state
     if (!lobby) {
         return <div className="p-6 opacity-70">Lade Spiel…</div>;
     }
@@ -228,7 +216,7 @@ export default function GamePage() {
                     {introStage === "countdown" ? (
                         <>
                             <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>
-                                START IN TEST123
+                                START IN
                             </div>
 
                             <div
@@ -317,6 +305,12 @@ export default function GamePage() {
         );
     }
 
-    // Running game
-    return <GameBoard holderPlayerId={lobby.holder_player_id} players={players} mePlayerId={mePlayerId} onPass={handlePass} />;
+    return (
+        <GameBoard
+            holderPlayerId={lobby.holder_player_id}
+            players={players}
+            mePlayerId={mePlayerId}
+            onPass={handlePass}
+        />
+    );
 }
