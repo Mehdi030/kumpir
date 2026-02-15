@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
@@ -15,7 +15,7 @@ type LobbyState = {
     id: string;
     holder_player_id: string | null;
     phase: LobbyPhase;
-    last_activity_at: string | null; // ✅ used as server-anchored start timestamp
+    last_activity_at: string | null;
 };
 
 type Player = {
@@ -25,6 +25,21 @@ type Player = {
 };
 
 type IntroStage = "countdown" | "reveal" | "done";
+
+// optional: if your server action returns structured result
+type PassResult =
+    | { ok: true }
+    | { ok: false; error: string; code?: string };
+
+function getErrorMessage(e: unknown): string {
+    if (e instanceof Error) return e.message;
+    if (typeof e === "string") return e;
+    try {
+        return JSON.stringify(e);
+    } catch {
+        return "Unbekannter Fehler";
+    }
+}
 
 function goLobby(code: string) {
     if (typeof window === "undefined") return;
@@ -44,16 +59,21 @@ export default function GamePage() {
 
     const inFlightRef = useRef(false);
 
-    // Intro flow
+    // Intro
     const [showIntro, setShowIntro] = useState(false);
     const [introStage, setIntroStage] = useState<IntroStage>("countdown");
     const [countdown, setCountdown] = useState(5);
-
-    // server-anchored start time (ms)
     const [runStartedAtMs, setRunStartedAtMs] = useState<number | null>(null);
-
-    // Guard: only start intro once per running session
     const introStartedForRunRef = useRef(false);
+
+    // Pass UX
+    const [toast, setToast] = useState("");
+    const [passBusy, setPassBusy] = useState(false);
+
+    const showToast = useCallback((msg: string, ms = 1600) => {
+        setToast(msg);
+        window.setTimeout(() => setToast(""), ms);
+    }, []);
 
     const meRow = useMemo(() => {
         if (!mePlayerId) return null;
@@ -72,6 +92,7 @@ export default function GamePage() {
         return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
     }, [players, lobby?.holder_player_id]);
 
+    // Poll loop (non-blocking tickGame)
     useEffect(() => {
         let alive = true;
 
@@ -80,12 +101,8 @@ export default function GamePage() {
             inFlightRef.current = true;
 
             try {
-                // Best-effort tick (ignore failures)
-                try {
-                    await tickGame(code);
-                } catch {
-                    // ignore
-                }
+                // ✅ never block polling
+                void tickGame(code).catch(() => {});
 
                 const lobbyRes = await supabase
                     .from("lobbies")
@@ -109,8 +126,8 @@ export default function GamePage() {
 
                 setLobby(nextLobby);
 
-                // ✅ capture server start timestamp (last_activity_at is set on startGame)
-                if (nextLobby.phase === "running" && nextLobby.last_activity_at) {
+                // capture anchor ONCE
+                if (nextLobby.phase === "running" && runStartedAtMs === null && nextLobby.last_activity_at) {
                     const ms = Date.parse(nextLobby.last_activity_at);
                     if (!Number.isNaN(ms)) setRunStartedAtMs(ms);
                 }
@@ -118,7 +135,7 @@ export default function GamePage() {
                 const playersRes = await supabase
                     .from("players")
                     .select("player_id,name,is_alive")
-                    .eq("lobby_id", lobbyRes.data.id)
+                    .eq("lobby_id", nextLobby.id)
                     .order("seat_index", { ascending: true });
 
                 if (!alive) return;
@@ -136,15 +153,15 @@ export default function GamePage() {
         }
 
         load();
-        const t = window.setInterval(load, 700);
+        const t = window.setInterval(load, 650);
 
         return () => {
             alive = false;
             window.clearInterval(t);
         };
-    }, [code, supabase]);
+    }, [code, supabase, runStartedAtMs]);
 
-    // ✅ Start intro once when running begins (but render it based on server time)
+    // Start intro when running begins
     useEffect(() => {
         if (!lobby) return;
 
@@ -158,24 +175,51 @@ export default function GamePage() {
         }
 
         if (introStartedForRunRef.current) return;
-        // we need a server timestamp to sync
-        if (!runStartedAtMs) return;
 
         introStartedForRunRef.current = true;
         setShowIntro(true);
-    }, [lobby?.phase, runStartedAtMs]);
+        setIntroStage("countdown");
+        setCountdown(5);
+    }, [lobby?.phase]);
 
-    // ✅ Server-anchored intro progression (no local desync)
+    // Server-anchored countdown if we have anchor; otherwise local
     useEffect(() => {
         if (!showIntro) return;
-        if (!runStartedAtMs) return;
         if (!lobby || lobby.phase !== "running") return;
 
         const COUNTDOWN_MS = 5000;
         const REVEAL_MS = 1200;
 
+        if (!runStartedAtMs) {
+            let t1: number | null = null;
+            let t2: number | null = null;
+
+            setIntroStage("countdown");
+            setCountdown(5);
+
+            const tick = () => {
+                setCountdown((c) => {
+                    if (c <= 1) {
+                        setIntroStage("reveal");
+                        t2 = window.setTimeout(() => {
+                            setIntroStage("done");
+                            setShowIntro(false);
+                        }, 1200);
+                        return 0;
+                    }
+                    return c - 1;
+                });
+            };
+
+            t1 = window.setInterval(tick, 1000) as unknown as number;
+
+            return () => {
+                if (t1) window.clearInterval(t1);
+                if (t2) window.clearTimeout(t2);
+            };
+        }
+
         let raf = 0;
-        let t: number | null = null;
 
         const step = () => {
             const now = Date.now();
@@ -198,28 +242,65 @@ export default function GamePage() {
             raf = window.requestAnimationFrame(step);
         };
 
-        // quick start (so it reacts immediately)
-        t = window.setTimeout(() => {
-            raf = window.requestAnimationFrame(step);
-        }, 0);
-
+        raf = window.requestAnimationFrame(step);
         return () => {
-            if (t) window.clearTimeout(t);
             if (raf) window.cancelAnimationFrame(raf);
         };
     }, [showIntro, runStartedAtMs, lobby?.phase]);
 
-    async function handlePass() {
-        if (!mePlayerId) return;
-        if (iAmEliminated) return;
-
-        try {
-            await passPotato(code, mePlayerId);
-        } catch {
-            // ignore
+    // ✅ The important part: PASS handler with guards + feedback
+    const handlePass = useCallback(async () => {
+        if (!mePlayerId) {
+            showToast("⚠️ Keine Player-ID", 1800);
+            return;
         }
-    }
+        if (!lobby || lobby.phase !== "running") {
+            showToast("⏳ Noch nicht gestartet", 1400);
+            return;
+        }
+        if (iAmEliminated) {
+            showToast("💀 Du bist raus", 1400);
+            return;
+        }
+        if (!isMeHolder) {
+            showToast("🙅 Du hast die Kartoffel nicht", 1400);
+            return;
+        }
+        if (passBusy) return;
 
+        setPassBusy(true);
+        try {
+            const res = (await passPotato(code, mePlayerId)) as unknown as PassResult | void;
+
+            // If your action returns nothing, treat as ok.
+            if (res && typeof res === "object" && "ok" in res && res.ok === false) {
+                showToast(`❌ ${res.error}`, 2200);
+                console.error("passPotato failed:", res);
+                return;
+            }
+
+            showToast("✅ Weitergegeben", 900);
+        } catch (e: unknown) {
+            const msg = getErrorMessage(e);
+            showToast(`❌ ${msg}`, 2400);
+            console.error("passPotato error:", e);
+        } finally {
+            setPassBusy(false);
+        }
+    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, showToast]);
+
+    // Spacebar pass (always consistent)
+    useEffect(() => {
+        const onKeyDown = (ev: KeyboardEvent) => {
+            if (ev.code !== "Space") return;
+            ev.preventDefault();
+            void handlePass();
+        };
+        window.addEventListener("keydown", onKeyDown, { passive: false });
+        return () => window.removeEventListener("keydown", onKeyDown as any);
+    }, [handlePass]);
+
+    // UI states
     if (fatalError) {
         return (
             <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
@@ -240,7 +321,6 @@ export default function GamePage() {
         return <div className="p-6 opacity-70">Lade Spiel…</div>;
     }
 
-    // WAIT screen (before running)
     if (lobby.phase !== "running" && lobby.phase !== "finished") {
         return (
             <main
@@ -259,7 +339,6 @@ export default function GamePage() {
                     <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>
                         Der Host startet gleich das Spiel. Du bleibst automatisch hier.
                     </div>
-
                     <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 22 }}>
                         <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
                             Zur Lobby
@@ -270,7 +349,7 @@ export default function GamePage() {
         );
     }
 
-    // Intro UI (Countdown -> Reveal) — now synced via server time
+    // Intro
     if (showIntro && lobby.phase === "running") {
         const bg = isMeHolder
             ? "radial-gradient(circle at 50% 35%, rgba(255,140,70,0.55) 0%, rgba(143,15,15,0.96) 72%)"
@@ -334,14 +413,20 @@ export default function GamePage() {
                             <div style={{ marginTop: 22, opacity: 0.7, fontWeight: 800 }}>Los!</div>
                         </>
                     )}
+
+                    {toast ? (
+                        <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div>
+                    ) : null}
                 </div>
             </main>
         );
     }
 
-    // Finished screen
+    // Finished
     if (lobby.phase === "finished") {
-        const winner = lobby.holder_player_id ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt" : "Unbekannt";
+        const winner = lobby.holder_player_id
+            ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
+            : "Unbekannt";
 
         return (
             <main
@@ -357,7 +442,9 @@ export default function GamePage() {
                 <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>SPIEL BEENDET</div>
                     <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
-                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
+                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>
+                        {iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}
+                    </div>
                     <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
                         <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
                             Zur Lobby
@@ -371,5 +458,36 @@ export default function GamePage() {
         );
     }
 
-    return <GameBoard holderPlayerId={lobby.holder_player_id} players={players} mePlayerId={mePlayerId} onPass={handlePass} />;
+    // Main board (+ a small toast overlay)
+    return (
+        <>
+            {toast ? (
+                <div
+                    style={{
+                        position: "fixed",
+                        left: "50%",
+                        bottom: 22,
+                        transform: "translateX(-50%)",
+                        zIndex: 9999,
+                        padding: "10px 14px",
+                        borderRadius: 999,
+                        background: "rgba(0,0,0,0.55)",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        fontWeight: 900,
+                        backdropFilter: "blur(10px)",
+                        WebkitBackdropFilter: "blur(10px)",
+                    }}
+                >
+                    {toast}
+                </div>
+            ) : null}
+
+            <GameBoard
+                holderPlayerId={lobby.holder_player_id}
+                players={players}
+                mePlayerId={mePlayerId}
+                onPass={handlePass}
+            />
+        </>
+    );
 }
