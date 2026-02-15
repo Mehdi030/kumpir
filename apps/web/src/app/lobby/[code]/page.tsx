@@ -100,7 +100,9 @@ export default function LobbyPage() {
                 p_player_id: mePlayerId,
             });
 
-            if (rpcErr) showToast(`❌ ${rpcErr.message}`, 2500);
+            if (rpcErr) {
+                showToast(`❌ ${rpcErr.message}`, 2500);
+            }
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2500);
         } finally {
@@ -117,7 +119,9 @@ export default function LobbyPage() {
             const res: StartGameResult = await startGame(code);
 
             if (!res.ok) {
-                showToast(`❌ ${res.error ?? "Start fehlgeschlagen"}`, 2500);
+                // ✅ TS-sicher, egal wie der Union-Typ gerade aufgelöst wird
+                const msg = "error" in res ? res.error : "Start fehlgeschlagen";
+                showToast(`❌ ${msg}`, 2500);
                 return;
             }
 
@@ -270,8 +274,8 @@ export default function LobbyPage() {
                                                                 border: "1px solid rgba(255,255,255,0.10)",
                                                             }}
                                                         >
-                                👑 Host
-                              </span>
+                                                                👑 Host
+                                                            </span>
                                                     ) : null}
                                                 </td>
 
@@ -308,7 +312,7 @@ export default function LobbyPage() {
                                 </button>
                             </div>
 
-                            {/* ✅ Start only if host + allReady + not already running */}
+                            {/* Start only if host + allReady + not already running */}
                             {amIHost && allReady && lobby?.phase !== "running" ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                                     <button
