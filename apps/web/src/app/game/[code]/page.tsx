@@ -41,14 +41,15 @@ export default function GamePage() {
     const [players, setPlayers] = useState<Player[]>([]);
     const [fatalError, setFatalError] = useState<string>("");
 
-    const inFlightTickRef = useRef(false);
+    const inFlightRef = useRef(false);
 
     // Intro flow
-    const [showIntro, setShowIntro] = useState(true);
+    const [showIntro, setShowIntro] = useState(false);
     const [introStage, setIntroStage] = useState<IntroStage>("countdown");
     const [countdown, setCountdown] = useState(5);
 
-    const introStartedRef = useRef(false);
+    // Start intro only once per actual start (running)
+    const introStartedForRunRef = useRef(false);
 
     const meRow = useMemo(() => {
         if (!mePlayerId) return null;
@@ -71,10 +72,11 @@ export default function GamePage() {
         let alive = true;
 
         async function load() {
-            if (inFlightTickRef.current) return;
-            inFlightTickRef.current = true;
+            if (inFlightRef.current) return;
+            inFlightRef.current = true;
 
             try {
+                // Best-effort tick (ignore failures)
                 try {
                     await tickGame(code);
                 } catch {
@@ -102,12 +104,6 @@ export default function GamePage() {
 
                 setLobby(nextLobby);
 
-                // ✅ FIX: Wenn nicht running, zurück zur Lobby (nicht im Game hängen)
-                if (nextLobby.phase !== "running" && nextLobby.phase !== "finished") {
-                    goLobby(code);
-                    return;
-                }
-
                 const playersRes = await supabase
                     .from("players")
                     .select("player_id,name,is_alive")
@@ -124,7 +120,7 @@ export default function GamePage() {
                 setPlayers(playersRes.data as Player[]);
                 setFatalError("");
             } finally {
-                inFlightTickRef.current = false;
+                inFlightRef.current = false;
             }
         }
 
@@ -137,22 +133,26 @@ export default function GamePage() {
         };
     }, [code, supabase]);
 
+    // ✅ Start Intro ONLY when phase becomes running (prevents “early start” / desync feeling)
     useEffect(() => {
         if (!lobby) return;
-        if (introStartedRef.current) return;
 
-        if (lobby.phase === "finished") {
+        if (lobby.phase !== "running") {
+            // if game isn't running, keep intro off and allow it to start later
             setShowIntro(false);
-            introStartedRef.current = true;
+            introStartedForRunRef.current = false;
             return;
         }
 
-        introStartedRef.current = true;
+        if (introStartedForRunRef.current) return;
+
+        introStartedForRunRef.current = true;
         setShowIntro(true);
         setIntroStage("countdown");
         setCountdown(5);
-    }, [lobby]);
+    }, [lobby?.phase]);
 
+    // Countdown ticks (StrictMode-safe)
     useEffect(() => {
         if (!showIntro) return;
 
@@ -212,7 +212,40 @@ export default function GamePage() {
         return <div className="p-6 opacity-70">Lade Spiel…</div>;
     }
 
-    if (showIntro && lobby.phase !== "finished") {
+    // ✅ WAIT SCREEN instead of redirect-loop when not running yet
+    if (lobby.phase !== "running" && lobby.phase !== "finished") {
+        return (
+            <main
+                style={{
+                    minHeight: "100vh",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 24,
+                    background:
+                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
+                }}
+            >
+                <div style={{ width: "min(820px, 96vw)", textAlign: "center" }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>WARTEN</div>
+                    <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>
+                        ⏳ Warten auf Start…
+                    </div>
+                    <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>
+                        Der Host startet gleich das Spiel. Du bleibst automatisch hier.
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 22 }}>
+                        <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
+                            Zur Lobby
+                        </button>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
+    // Intro UI (Countdown -> Reveal)
+    if (showIntro && lobby.phase === "running") {
         const bg = isMeHolder
             ? "radial-gradient(circle at 50% 35%, rgba(255,140,70,0.55) 0%, rgba(143,15,15,0.96) 72%)"
             : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.55) 0%, rgba(192,106,0,0.88) 80%)";
@@ -280,6 +313,7 @@ export default function GamePage() {
         );
     }
 
+    // Finished screen
     if (lobby.phase === "finished") {
         const winner = lobby.holder_player_id
             ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
