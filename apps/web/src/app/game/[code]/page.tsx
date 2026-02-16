@@ -26,7 +26,6 @@ type Player = {
 
 type IntroStage = "countdown" | "reveal" | "done";
 
-// optional: if your server action returns structured result
 type PassResult =
     | { ok: true }
     | { ok: false; error: string; code?: string };
@@ -92,7 +91,7 @@ export default function GamePage() {
         return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
     }, [players, lobby?.holder_player_id]);
 
-    // Poll loop (non-blocking tickGame)
+    // Poll loop (tickGame must NOT block)
     useEffect(() => {
         let alive = true;
 
@@ -101,7 +100,6 @@ export default function GamePage() {
             inFlightRef.current = true;
 
             try {
-                // ✅ never block polling
                 void tickGame(code).catch(() => {});
 
                 const lobbyRes = await supabase
@@ -126,7 +124,7 @@ export default function GamePage() {
 
                 setLobby(nextLobby);
 
-                // capture anchor ONCE
+                // ✅ anchor once for this run
                 if (nextLobby.phase === "running" && runStartedAtMs === null && nextLobby.last_activity_at) {
                     const ms = Date.parse(nextLobby.last_activity_at);
                     if (!Number.isNaN(ms)) setRunStartedAtMs(ms);
@@ -182,7 +180,7 @@ export default function GamePage() {
         setCountdown(5);
     }, [lobby?.phase]);
 
-    // Server-anchored countdown if we have anchor; otherwise local
+    // ✅ 5s countdown anchored to server time (last_activity_at)
     useEffect(() => {
         if (!showIntro) return;
         if (!lobby || lobby.phase !== "running") return;
@@ -191,13 +189,14 @@ export default function GamePage() {
         const REVEAL_MS = 1200;
 
         if (!runStartedAtMs) {
+            // fallback: local countdown (rare)
             let t1: number | null = null;
             let t2: number | null = null;
 
             setIntroStage("countdown");
             setCountdown(5);
 
-            const tick = () => {
+            t1 = window.setInterval(() => {
                 setCountdown((c) => {
                     if (c <= 1) {
                         setIntroStage("reveal");
@@ -209,9 +208,7 @@ export default function GamePage() {
                     }
                     return c - 1;
                 });
-            };
-
-            t1 = window.setInterval(tick, 1000) as unknown as number;
+            }, 1000) as unknown as number;
 
             return () => {
                 if (t1) window.clearInterval(t1);
@@ -248,7 +245,6 @@ export default function GamePage() {
         };
     }, [showIntro, runStartedAtMs, lobby?.phase]);
 
-    // ✅ The important part: PASS handler with guards + feedback
     const handlePass = useCallback(async () => {
         if (!mePlayerId) {
             showToast("⚠️ Keine Player-ID", 1800);
@@ -272,7 +268,6 @@ export default function GamePage() {
         try {
             const res = (await passPotato(code, mePlayerId)) as unknown as PassResult | void;
 
-            // If your action returns nothing, treat as ok.
             if (res && typeof res === "object" && "ok" in res && res.ok === false) {
                 showToast(`❌ ${res.error}`, 2200);
                 console.error("passPotato failed:", res);
@@ -289,7 +284,7 @@ export default function GamePage() {
         }
     }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, showToast]);
 
-    // Spacebar pass (always consistent)
+    // Spacebar pass
     useEffect(() => {
         const onKeyDown = (ev: KeyboardEvent) => {
             if (ev.code !== "Space") return;
@@ -300,7 +295,6 @@ export default function GamePage() {
         return () => window.removeEventListener("keydown", onKeyDown as any);
     }, [handlePass]);
 
-    // UI states
     if (fatalError) {
         return (
             <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
@@ -317,9 +311,7 @@ export default function GamePage() {
         );
     }
 
-    if (!lobby) {
-        return <div className="p-6 opacity-70">Lade Spiel…</div>;
-    }
+    if (!lobby) return <div className="p-6 opacity-70">Lade Spiel…</div>;
 
     if (lobby.phase !== "running" && lobby.phase !== "finished") {
         return (
@@ -336,9 +328,7 @@ export default function GamePage() {
                 <div style={{ width: "min(820px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>WARTEN</div>
                     <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>⏳ Warten auf Start…</div>
-                    <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>
-                        Der Host startet gleich das Spiel. Du bleibst automatisch hier.
-                    </div>
+                    <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>Der Host startet gleich das Spiel.</div>
                     <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 22 }}>
                         <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
                             Zur Lobby
@@ -349,7 +339,6 @@ export default function GamePage() {
         );
     }
 
-    // Intro
     if (showIntro && lobby.phase === "running") {
         const bg = isMeHolder
             ? "radial-gradient(circle at 50% 35%, rgba(255,140,70,0.55) 0%, rgba(143,15,15,0.96) 72%)"
@@ -414,15 +403,12 @@ export default function GamePage() {
                         </>
                     )}
 
-                    {toast ? (
-                        <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div>
-                    ) : null}
+                    {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
                 </div>
             </main>
         );
     }
 
-    // Finished
     if (lobby.phase === "finished") {
         const winner = lobby.holder_player_id
             ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
@@ -458,7 +444,6 @@ export default function GamePage() {
         );
     }
 
-    // Main board (+ a small toast overlay)
     return (
         <>
             {toast ? (
@@ -482,12 +467,7 @@ export default function GamePage() {
                 </div>
             ) : null}
 
-            <GameBoard
-                holderPlayerId={lobby.holder_player_id}
-                players={players}
-                mePlayerId={mePlayerId}
-                onPass={handlePass}
-            />
+            <GameBoard holderPlayerId={lobby.holder_player_id} players={players} mePlayerId={mePlayerId} onPass={handlePass} />
         </>
     );
 }

@@ -39,17 +39,33 @@ export default function LobbyPage() {
         pollMs: 1200,
         onPhaseRunning: () => {
             if (suppressRunningRedirectRef.current) return;
+
+            // ✅ FIX: don't redirect unless I'm actually in the lobby players list
+            if (!mePlayerId) return;
+            const inPlayers = players.some((p) => p.player_id === mePlayerId);
+            if (!inPlayers) return;
+
             goGame(code);
         },
     });
 
-    // redirect also when lobby is already running on initial load
+    // ✅ am I actually in players?
+    const amIInPlayers = useMemo(() => {
+        if (!mePlayerId) return false;
+        return players.some((p) => p.player_id === mePlayerId);
+    }, [players, mePlayerId]);
+
+    // ✅ redirect also when lobby is already running on initial load
+    // but ONLY if I'm properly joined
     useEffect(() => {
         if (suppressRunningRedirectRef.current) return;
-        if (lobby?.phase === "running") {
-            goGame(code);
-        }
-    }, [lobby?.phase, code]);
+        if (lobby?.phase !== "running") return;
+
+        if (!mePlayerId) return;
+        if (!amIInPlayers) return;
+
+        goGame(code);
+    }, [lobby?.phase, code, mePlayerId, amIInPlayers]);
 
     const [toast, setToast] = useState("");
     const [busyReady, setBusyReady] = useState(false);
@@ -68,7 +84,7 @@ export default function LobbyPage() {
         return !!row?.ready;
     }, [players, mePlayerId]);
 
-    // ✅ FIX: Min. 2 Spieler nötig
+    // ✅ Min. 2 Spieler nötig
     const MIN_PLAYERS = 2;
 
     const allReady = useMemo(() => {
@@ -137,12 +153,12 @@ export default function LobbyPage() {
         }
     }, [amIHost, starting, code, showToast]);
 
-    // ✅ OPTIONAL (empfohlen): Auto-Start komplett AUS, damit Lobby immer sichtbar bleibt
-    // Wenn du Auto-Start behalten willst: lass diesen Block drin, aber er startet erst ab 2 Spielern (allReady).
+    // ✅ AutoStart AUS lassen (für Stabilität beim Join)
+    // Wenn du es wieder willst: entferne einfach das "return;"
     useEffect(() => {
-        // Auto-Start auskommentieren wenn du 100% manuell starten willst:
-        // return;
+        return;
 
+        // eslint-disable-next-line no-unreachable
         if (!amIHost) return;
         if (!allReady) return;
         if (lobby?.phase === "running") return;
@@ -287,7 +303,7 @@ export default function LobbyPage() {
                                                 </td>
 
                                                 <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>
-                                                    {p.ready ? "✅ bereit" : "⏳ nicht bereit"}
+                                                    {p.ready ? "✅ Bereit" : "⏳ nicht bereit"}
                                                 </td>
                                             </tr>
                                         );
