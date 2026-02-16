@@ -21,11 +21,6 @@ function getErrorMessage(e: unknown): string {
     }
 }
 
-function goGame(code: string) {
-    if (typeof window === "undefined") return;
-    window.location.replace(`/game/${code}`);
-}
-
 export default function LobbyPage() {
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
@@ -35,43 +30,38 @@ export default function LobbyPage() {
     // blocks redirect when user intentionally leaves
     const suppressRunningRedirectRef = useRef(false);
 
+    // ✅ prevents multi-redirect spam / loops
+    const redirectingRef = useRef(false);
+
+    const hardGoGame = useCallback(() => {
+        if (typeof window === "undefined") return;
+        if (redirectingRef.current) return;
+        redirectingRef.current = true;
+
+        // ✅ cache-buster helps when a device "sticks" on old state
+        const url = `/game/${encodeURIComponent(code)}?t=${Date.now()}`;
+        window.location.assign(url);
+    }, [code]);
+
     const { lobby, players, loading, error } = useLobbyState(code, {
-        pollMs: 1200,
+        pollMs: 900,
         onPhaseRunning: () => {
             if (suppressRunningRedirectRef.current) return;
-
-            // ✅ FIX: don't redirect unless I'm actually in the lobby players list
-            if (!mePlayerId) return;
-            const inPlayers = players.some((p) => p.player_id === mePlayerId);
-            if (!inPlayers) return;
-
-            goGame(code);
+            hardGoGame();
         },
     });
 
-    // ✅ am I actually in players?
-    const amIInPlayers = useMemo(() => {
-        if (!mePlayerId) return false;
-        return players.some((p) => p.player_id === mePlayerId);
-    }, [players, mePlayerId]);
-
-    // ✅ redirect also when lobby is already running on initial load
-    // but ONLY if I'm properly joined
+    // ✅ Fallback redirect (covers cases where onPhaseRunning doesn't fire)
     useEffect(() => {
         if (suppressRunningRedirectRef.current) return;
-        if (lobby?.phase !== "running") return;
-
-        if (!mePlayerId) return;
-        if (!amIInPlayers) return;
-
-        goGame(code);
-    }, [lobby?.phase, code, mePlayerId, amIInPlayers]);
+        if (lobby?.phase === "running") {
+            hardGoGame();
+        }
+    }, [lobby?.phase, hardGoGame]);
 
     const [toast, setToast] = useState("");
     const [busyReady, setBusyReady] = useState(false);
     const [starting, setStarting] = useState(false);
-
-    const autoStartedRef = useRef(false);
 
     const amIHost = useMemo(() => {
         if (!mePlayerId || !lobby?.host_player_id) return false;
@@ -84,7 +74,6 @@ export default function LobbyPage() {
         return !!row?.ready;
     }, [players, mePlayerId]);
 
-    // ✅ Min. 2 Spieler nötig
     const MIN_PLAYERS = 2;
 
     const allReady = useMemo(() => {
@@ -145,36 +134,19 @@ export default function LobbyPage() {
             }
 
             showToast("✅ Spiel startet…", 900);
-            goGame(code);
+
+            // ✅ If DB already running, go immediately (don't wait for poll)
+            hardGoGame();
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2500);
         } finally {
             setStarting(false);
         }
-    }, [amIHost, starting, code, showToast]);
-
-    // ✅ AutoStart AUS lassen (für Stabilität beim Join)
-    // Wenn du es wieder willst: entferne einfach das "return;"
-    useEffect(() => {
-        return;
-
-        // eslint-disable-next-line no-unreachable
-        if (!amIHost) return;
-        if (!allReady) return;
-        if (lobby?.phase === "running") return;
-        if (autoStartedRef.current) return;
-
-        autoStartedRef.current = true;
-        const t = window.setTimeout(() => {
-            void startGameClick();
-        }, 600);
-
-        return () => window.clearTimeout(t);
-    }, [amIHost, allReady, lobby?.phase, startGameClick]);
+    }, [amIHost, starting, code, showToast, hardGoGame]);
 
     const leaveLobby = useCallback(() => {
         suppressRunningRedirectRef.current = true;
-        if (typeof window !== "undefined") window.location.replace("/host");
+        if (typeof window !== "undefined") window.location.assign("/host");
     }, []);
 
     const meLabel = useMemo(() => {
