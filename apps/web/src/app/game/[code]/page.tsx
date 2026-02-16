@@ -26,10 +26,6 @@ type Player = {
 
 type IntroStage = "countdown" | "reveal" | "done";
 
-type PassResult =
-    | { ok: true }
-    | { ok: false; error: string; code?: string };
-
 function getErrorMessage(e: unknown): string {
     if (e instanceof Error) return e.message;
     if (typeof e === "string") return e;
@@ -62,7 +58,6 @@ export default function GamePage() {
     const [showIntro, setShowIntro] = useState(false);
     const [introStage, setIntroStage] = useState<IntroStage>("countdown");
     const [countdown, setCountdown] = useState(5);
-    const [runStartedAtMs, setRunStartedAtMs] = useState<number | null>(null);
     const introStartedForRunRef = useRef(false);
 
     // Pass UX
@@ -91,17 +86,17 @@ export default function GamePage() {
         return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
     }, [players, lobby?.holder_player_id]);
 
-    // Poll loop (tickGame must NOT block)
+    // ✅ Poll loop:
+    // - Clients lesen nur State
+    // - NUR der Holder triggert tickGame (verhindert Races zwischen Geräten)
     useEffect(() => {
         let alive = true;
 
-        async function load() {
+        const load = async () => {
             if (inFlightRef.current) return;
             inFlightRef.current = true;
 
             try {
-                void tickGame(code).catch(() => {});
-
                 const lobbyRes = await supabase
                     .from("lobbies")
                     .select("id, holder_player_id, phase, last_activity_at")
@@ -124,10 +119,9 @@ export default function GamePage() {
 
                 setLobby(nextLobby);
 
-                // ✅ anchor once for this run
-                if (nextLobby.phase === "running" && runStartedAtMs === null && nextLobby.last_activity_at) {
-                    const ms = Date.parse(nextLobby.last_activity_at);
-                    if (!Number.isNaN(ms)) setRunStartedAtMs(ms);
+                // ✅ tickGame ONLY by holder (best-effort, non-blocking)
+                if (mePlayerId && nextLobby.phase === "running" && nextLobby.holder_player_id === mePlayerId) {
+                    void tickGame(code).catch(() => {});
                 }
 
                 const playersRes = await supabase
@@ -148,27 +142,28 @@ export default function GamePage() {
             } finally {
                 inFlightRef.current = false;
             }
-        }
+        };
 
-        load();
-        const t = window.setInterval(load, 650);
+        void load();
+        const t = window.setInterval(() => void load(), 650);
 
         return () => {
             alive = false;
             window.clearInterval(t);
         };
-    }, [code, supabase, runStartedAtMs]);
+    }, [code, supabase, mePlayerId]);
 
-    // Start intro when running begins
+    // ✅ Intro startet genau einmal, wenn Phase auf running geht
+    const phase = lobby?.phase;
+
     useEffect(() => {
-        if (!lobby) return;
+        if (!phase) return;
 
-        if (lobby.phase !== "running") {
+        if (phase !== "running") {
             setShowIntro(false);
             setIntroStage("countdown");
             setCountdown(5);
             introStartedForRunRef.current = false;
-            setRunStartedAtMs(null);
             return;
         }
 
@@ -178,73 +173,33 @@ export default function GamePage() {
         setShowIntro(true);
         setIntroStage("countdown");
         setCountdown(5);
-    }, [lobby?.phase]);
+    }, [phase]);
 
-    // ✅ 5s countdown anchored to server time (last_activity_at)
+    // ✅ 5s Countdown + 1.2s Reveal
     useEffect(() => {
         if (!showIntro) return;
-        if (!lobby || lobby.phase !== "running") return;
 
-        const COUNTDOWN_MS = 5000;
-        const REVEAL_MS = 1200;
-
-        if (!runStartedAtMs) {
-            // fallback: local countdown (rare)
-            let t1: number | null = null;
-            let t2: number | null = null;
-
-            setIntroStage("countdown");
-            setCountdown(5);
-
-            t1 = window.setInterval(() => {
-                setCountdown((c) => {
-                    if (c <= 1) {
-                        setIntroStage("reveal");
-                        t2 = window.setTimeout(() => {
-                            setIntroStage("done");
-                            setShowIntro(false);
-                        }, 1200);
-                        return 0;
-                    }
-                    return c - 1;
-                });
-            }, 1000) as unknown as number;
-
-            return () => {
-                if (t1) window.clearInterval(t1);
-                if (t2) window.clearTimeout(t2);
-            };
-        }
-
-        let raf = 0;
-
-        const step = () => {
-            const now = Date.now();
-            const elapsed = now - runStartedAtMs;
-
-            if (elapsed < COUNTDOWN_MS) {
-                setIntroStage("countdown");
-                const remainingMs = COUNTDOWN_MS - elapsed;
-                const sec = Math.max(0, Math.ceil(remainingMs / 1000));
-                setCountdown(sec);
-            } else if (elapsed < COUNTDOWN_MS + REVEAL_MS) {
+        if (introStage === "countdown") {
+            if (countdown <= 0) {
                 setIntroStage("reveal");
-                setCountdown(0);
-            } else {
-                setIntroStage("done");
-                setShowIntro(false);
                 return;
             }
 
-            raf = window.requestAnimationFrame(step);
-        };
+            const t = window.setTimeout(() => setCountdown((c) => c - 1), 1000);
+            return () => window.clearTimeout(t);
+        }
 
-        raf = window.requestAnimationFrame(step);
-        return () => {
-            if (raf) window.cancelAnimationFrame(raf);
-        };
-    }, [showIntro, runStartedAtMs, lobby?.phase]);
+        if (introStage === "reveal") {
+            const t = window.setTimeout(() => {
+                setIntroStage("done");
+                setShowIntro(false);
+            }, 1200);
 
+            return () => window.clearTimeout(t);
+        }
+    }, [countdown, introStage, showIntro]);
+
+    // ✅ PASS handler (funktioniert wenn passPotato returnt ODER throwt)
     const handlePass = useCallback(async () => {
         if (!mePlayerId) {
             showToast("⚠️ Keine Player-ID", 1800);
@@ -266,19 +221,18 @@ export default function GamePage() {
 
         setPassBusy(true);
         try {
-            const res = (await passPotato(code, mePlayerId)) as unknown as PassResult | void;
+            const res = await passPotato(code, mePlayerId);
 
-            if (res && typeof res === "object" && "ok" in res && res.ok === false) {
-                showToast(`❌ ${res.error}`, 2200);
-                console.error("passPotato failed:", res);
+            // Falls du irgendwann {ok:false,...} returnst: kompatibel
+            if (res && typeof res === "object" && "ok" in res && (res as { ok: boolean }).ok === false) {
+                const maybeErr = (res as { error?: string }).error;
+                showToast(`❌ ${maybeErr ?? "Weitergabe fehlgeschlagen"}`, 2200);
                 return;
             }
 
             showToast("✅ Weitergegeben", 900);
         } catch (e: unknown) {
-            const msg = getErrorMessage(e);
-            showToast(`❌ ${msg}`, 2400);
-            console.error("passPotato error:", e);
+            showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
             setPassBusy(false);
         }
@@ -291,10 +245,12 @@ export default function GamePage() {
             ev.preventDefault();
             void handlePass();
         };
+
         window.addEventListener("keydown", onKeyDown, { passive: false });
-        return () => window.removeEventListener("keydown", onKeyDown as any);
+        return () => window.removeEventListener("keydown", onKeyDown);
     }, [handlePass]);
 
+    // UI states
     if (fatalError) {
         return (
             <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
@@ -339,6 +295,7 @@ export default function GamePage() {
         );
     }
 
+    // Intro
     if (showIntro && lobby.phase === "running") {
         const bg = isMeHolder
             ? "radial-gradient(circle at 50% 35%, rgba(255,140,70,0.55) 0%, rgba(143,15,15,0.96) 72%)"
@@ -409,10 +366,9 @@ export default function GamePage() {
         );
     }
 
+    // Finished
     if (lobby.phase === "finished") {
-        const winner = lobby.holder_player_id
-            ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
-            : "Unbekannt";
+        const winner = lobby.holder_player_id ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt" : "Unbekannt";
 
         return (
             <main
@@ -428,9 +384,7 @@ export default function GamePage() {
                 <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>SPIEL BEENDET</div>
                     <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
-                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>
-                        {iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}
-                    </div>
+                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
                     <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
                         <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
                             Zur Lobby
@@ -444,6 +398,7 @@ export default function GamePage() {
         );
     }
 
+    // Main board (+ toast overlay)
     return (
         <>
             {toast ? (
