@@ -22,13 +22,17 @@ function sanitizeName(input: string) {
 function setStoredName(name: string) {
     if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_name", name);
-    try { sessionStorage.setItem("kumpir_player_name", name); } catch {}
+    try {
+        sessionStorage.setItem("kumpir_player_name", name);
+    } catch {}
 }
 
 function setStoredPlayerId(id: string) {
     if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_id", id);
-    try { sessionStorage.setItem("kumpir_player_id", id); } catch {}
+    try {
+        sessionStorage.setItem("kumpir_player_id", id);
+    } catch {}
 }
 
 function getStoredName() {
@@ -103,6 +107,26 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
 
             setStoredName(playerName);
 
+            // ✅ NEW: Lobby-Status check (locked)
+            const { data: lobbyRow, error: lobbyErr } = await supabase
+                .from("lobbies")
+                .select("locked")
+                .eq("code", lobbyCode)
+                .maybeSingle();
+
+            if (lobbyErr) {
+                setError(lobbyErr.message || "Lobby konnte nicht geprüft werden.");
+                return;
+            }
+            if (!lobbyRow) {
+                setError("Lobby nicht gefunden.");
+                return;
+            }
+            if (lobbyRow.locked) {
+                setError("Diese Lobby ist gerade gesperrt (🔒).");
+                return;
+            }
+
             const { data, error: rpcErr } = await supabase.rpc("join_lobby", {
                 p_lobby_code: lobbyCode,
                 p_name: playerName,
@@ -151,7 +175,11 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             </Link>
 
             <div className="landingWrap">
-                <section className="card" aria-label="Lobby beitreten" style={{ maxWidth: 760, margin: "0 auto" }}>
+                <section
+                    className="card"
+                    aria-label="Lobby beitreten"
+                    style={{ maxWidth: 760, margin: "0 auto" }}
+                >
                     <header className="hostHeader" style={{ paddingBottom: 10 }}>
                         <h1 className="h1" style={{ lineHeight: 1.05 }}>
                             Lobby beitreten
@@ -162,7 +190,10 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                     </header>
 
                     {!hasFixedCode ? (
-                        <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
+                        <div
+                            className="panel"
+                            style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}
+                        >
                             <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
                                 <div className="fieldRow" style={{ margin: 0 }}>
                                     <label className="fieldLabel" htmlFor="code">
@@ -203,7 +234,9 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                             autoCorrect="off"
                                         />
                                     </div>
-                                    <div className="fieldHelp">Nur Buchstaben, max. 12 Zeichen.</div>
+                                    <div className="fieldHelp">
+                                        Nur Buchstaben, max. 12 Zeichen.
+                                    </div>
                                 </div>
                             </div>
 
@@ -216,7 +249,9 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                             <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
                                 <button
                                     type="button"
-                                    className={`btn btnPrimary btnSmall ${canJoin && !loading ? "btnGlow" : "btnDisabled"}`}
+                                    className={`btn btnPrimary btnSmall ${
+                                        canJoin && !loading ? "btnGlow" : "btnDisabled"
+                                    }`}
                                     onClick={joinLobby}
                                     disabled={!canJoin || loading}
                                     style={{ width: "100%", maxWidth: 360, margin: "0 auto" }}
@@ -236,9 +271,13 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                             </div>
                         </div>
                     ) : (
-                        <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
+                        <div
+                            className="panel"
+                            style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}
+                        >
                             <div className="fieldHelp" style={{ opacity: 0.9 }}>
-                                Code erkannt: <b style={{ letterSpacing: 1 }}>{fixedCodeFromLink}</b>
+                                Code erkannt:{" "}
+                                <b style={{ letterSpacing: 1 }}>{fixedCodeFromLink}</b>
                             </div>
                             <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.8 }}>
                                 Gib kurz deinen Namen ein, dann geht’s direkt in die Lobby.
@@ -271,9 +310,21 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                     boxShadow: "0 22px 70px rgba(0,0,0,0.45)",
                                 }}
                             >
-                                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                                    <div style={{ fontWeight: 950, fontSize: 18 }}>Name eingeben</div>
-                                    <div className="pillChip" style={{ height: 30, display: "flex", alignItems: "center" }}>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: 12,
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    <div style={{ fontWeight: 950, fontSize: 18 }}>
+                                        Name eingeben
+                                    </div>
+                                    <div
+                                        className="pillChip"
+                                        style={{ height: 30, display: "flex", alignItems: "center" }}
+                                    >
                                         {fixedCodeFromLink}
                                     </div>
                                 </div>
@@ -312,10 +363,19 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                     </div>
                                 ) : null}
 
-                                <div style={{ display: "flex", gap: 10, marginTop: 14, justifyContent: "flex-end" }}>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        gap: 10,
+                                        marginTop: 14,
+                                        justifyContent: "flex-end",
+                                    }}
+                                >
                                     <button
                                         type="button"
-                                        className={`btn btnPrimary btnSmall ${canJoin && !loading ? "btnGlow" : "btnDisabled"}`}
+                                        className={`btn btnPrimary btnSmall ${
+                                            canJoin && !loading ? "btnGlow" : "btnDisabled"
+                                        }`}
                                         onClick={joinLobby}
                                         disabled={!canJoin || loading}
                                     >

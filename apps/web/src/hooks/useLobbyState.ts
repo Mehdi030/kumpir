@@ -8,6 +8,7 @@ export type LobbyRow = {
     code: string;
     host_player_id: string | null;
     phase: string | null;
+    locked: boolean | null; // ✅ NEW
 };
 
 export type PlayerRow = {
@@ -37,7 +38,7 @@ export function useLobbyState(
 
         const lobbyRes = await supabase
             .from("lobbies")
-            .select("id,code,host_player_id,phase")
+            .select("id,code,host_player_id,phase,locked") // ✅ NEW: locked
             .eq("code", code)
             .single();
 
@@ -60,7 +61,7 @@ export function useLobbyState(
             .from("players")
             .select("player_id,name,ready,joined_at")
             .eq("lobby_id", lobbyRow.id)
-            .order("joined_at", { ascending: true });
+            .order("joined_at", {ascending: true});
 
         if (playersRes.error) {
             setError(playersRes.error.message || "Konnte Spieler nicht laden.");
