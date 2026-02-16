@@ -287,7 +287,7 @@ export default function LobbyPage() {
                                                 </td>
 
                                                 <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>
-                                                    {p.ready ? "✅ Bereit" : "⏳ nicht bereit"}
+                                                    {p.ready ? "✅ bereit" : "⏳ nicht bereit"}
                                                 </td>
                                             </tr>
                                         );
