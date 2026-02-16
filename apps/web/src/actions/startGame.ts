@@ -43,7 +43,7 @@ export async function startGame(code: string): Promise<StartGameResult> {
 
         const aliveList = alive ?? [];
 
-        // ✅ FIX: min. 2 Spieler
+        // min. 2 Spieler
         if (aliveList.length < 2) return err("Mindestens 2 Spieler nötig.", "NEED_PLAYERS");
 
         if (!aliveList.every((p) => !!p.ready)) return err("Nicht alle Spieler sind bereit.", "NOT_ALL_READY");
@@ -61,7 +61,7 @@ export async function startGame(code: string): Promise<StartGameResult> {
         const nowIso = new Date(now).toISOString();
         const explodeAt = new Date(now + explodeInSec * 1000).toISOString();
 
-        // idempotent update (no overwrite if already running)
+        // ✅ idempotent update (setzt run_started_at nur beim echten Start)
         const { data: updatedLobby, error: updErr } = await supabase
             .from("lobbies")
             .update({
@@ -71,6 +71,9 @@ export async function startGame(code: string): Promise<StartGameResult> {
                 round_number: 1,
                 last_loser_player_id: null,
                 last_activity_at: nowIso,
+
+                // ✅ NEU: server-anker für synchronen Countdown
+                run_started_at: nowIso,
             })
             .eq("id", lobby.id)
             .neq("phase", "running")
@@ -82,10 +85,10 @@ export async function startGame(code: string): Promise<StartGameResult> {
             return err(`Start fehlgeschlagen: ${updErr.message}`, "LOBBY_UPDATE_FAILED");
         }
 
-        // someone else started in the meantime
+        // jemand anders hat in der Zwischenzeit gestartet
         if (!updatedLobby) return { ok: true, alreadyRunning: true };
 
-        // best effort: reset ready flags (ok if it fails)
+        // best effort: reset ready flags
         const { error: resetErr } = await supabase
             .from("players")
             .update({ ready: false })

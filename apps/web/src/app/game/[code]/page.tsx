@@ -16,6 +16,7 @@ type LobbyState = {
     holder_player_id: string | null;
     phase: LobbyPhase;
     last_activity_at: string | null;
+    run_started_at: string | null; // ✅ for synced countdown
 };
 
 type Player = {
@@ -60,6 +61,9 @@ export default function GamePage() {
     const [countdown, setCountdown] = useState(5);
     const introStartedForRunRef = useRef(false);
 
+    // Server-anchored start (ms)
+    const [runStartedAtMs, setRunStartedAtMs] = useState<number | null>(null);
+
     // Pass UX
     const [toast, setToast] = useState("");
     const [passBusy, setPassBusy] = useState(false);
@@ -87,8 +91,8 @@ export default function GamePage() {
     }, [players, lobby?.holder_player_id]);
 
     // ✅ Poll loop:
-    // - Clients lesen nur State
-    // - NUR der Holder triggert tickGame (verhindert Races zwischen Geräten)
+    // - clients read state
+    // - ONLY the holder triggers tickGame (prevents races)
     useEffect(() => {
         let alive = true;
 
@@ -99,7 +103,7 @@ export default function GamePage() {
             try {
                 const lobbyRes = await supabase
                     .from("lobbies")
-                    .select("id, holder_player_id, phase, last_activity_at")
+                    .select("id, holder_player_id, phase, last_activity_at, run_started_at")
                     .eq("code", code)
                     .single();
 
@@ -115,11 +119,21 @@ export default function GamePage() {
                     holder_player_id: lobbyRes.data.holder_player_id,
                     phase: lobbyRes.data.phase,
                     last_activity_at: lobbyRes.data.last_activity_at ?? null,
+                    run_started_at: lobbyRes.data.run_started_at ?? null,
                 };
 
                 setLobby(nextLobby);
 
-                // ✅ tickGame ONLY by holder (best-effort, non-blocking)
+                // ✅ set runStartedAtMs once per run
+                if (nextLobby.phase === "running" && runStartedAtMs === null && nextLobby.run_started_at) {
+                    const ms = Date.parse(nextLobby.run_started_at);
+                    if (!Number.isNaN(ms)) setRunStartedAtMs(ms);
+                }
+                if (nextLobby.phase !== "running" && runStartedAtMs !== null) {
+                    setRunStartedAtMs(null);
+                }
+
+                // ✅ tickGame ONLY by holder (best-effort)
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.holder_player_id === mePlayerId) {
                     void tickGame(code).catch(() => {});
                 }
@@ -151,7 +165,7 @@ export default function GamePage() {
             alive = false;
             window.clearInterval(t);
         };
-    }, [code, supabase, mePlayerId]);
+    }, [code, supabase, mePlayerId, runStartedAtMs]);
 
     // ✅ Intro startet genau einmal, wenn Phase auf running geht
     const phase = lobby?.phase;
@@ -175,31 +189,65 @@ export default function GamePage() {
         setCountdown(5);
     }, [phase]);
 
-    // ✅ 5s Countdown + 1.2s Reveal
+    // ✅ Synced 5s countdown from run_started_at (fallback to local if missing)
     useEffect(() => {
         if (!showIntro) return;
 
-        if (introStage === "countdown") {
-            if (countdown <= 0) {
+        const COUNTDOWN_MS = 5000;
+        const REVEAL_MS = 1200;
+
+        // fallback local countdown if no anchor yet
+        if (!runStartedAtMs) {
+            if (introStage === "countdown") {
+                if (countdown <= 0) {
+                    setIntroStage("reveal");
+                    return;
+                }
+                const t = window.setTimeout(() => setCountdown((c) => c - 1), 1000);
+                return () => window.clearTimeout(t);
+            }
+
+            if (introStage === "reveal") {
+                const t = window.setTimeout(() => {
+                    setIntroStage("done");
+                    setShowIntro(false);
+                }, 1200);
+                return () => window.clearTimeout(t);
+            }
+
+            return;
+        }
+
+        let raf = 0;
+
+        const step = () => {
+            const now = Date.now();
+            const elapsed = now - runStartedAtMs;
+
+            if (elapsed < COUNTDOWN_MS) {
+                setIntroStage("countdown");
+                const remainingMs = COUNTDOWN_MS - elapsed;
+                const sec = Math.max(0, Math.min(5, Math.ceil(remainingMs / 1000)));
+                setCountdown(sec);
+            } else if (elapsed < COUNTDOWN_MS + REVEAL_MS) {
                 setIntroStage("reveal");
+                setCountdown(0);
+            } else {
+                setIntroStage("done");
+                setShowIntro(false);
                 return;
             }
 
-            const t = window.setTimeout(() => setCountdown((c) => c - 1), 1000);
-            return () => window.clearTimeout(t);
-        }
+            raf = window.requestAnimationFrame(step);
+        };
 
-        if (introStage === "reveal") {
-            const t = window.setTimeout(() => {
-                setIntroStage("done");
-                setShowIntro(false);
-            }, 1200);
+        raf = window.requestAnimationFrame(step);
+        return () => {
+            if (raf) window.cancelAnimationFrame(raf);
+        };
+    }, [showIntro, runStartedAtMs, introStage, countdown]);
 
-            return () => window.clearTimeout(t);
-        }
-    }, [countdown, introStage, showIntro]);
-
-    // ✅ PASS handler (funktioniert wenn passPotato returnt ODER throwt)
+    // ✅ PASS handler (zeigt echte Fehlermeldung zuverlässig + triggert direkt refresh)
     const handlePass = useCallback(async () => {
         if (!mePlayerId) {
             showToast("⚠️ Keine Player-ID", 1800);
@@ -214,6 +262,7 @@ export default function GamePage() {
             return;
         }
         if (!isMeHolder) {
+            // kommt oft bei minimalem Lag
             showToast("🙅 Du hast die Kartoffel nicht", 1400);
             return;
         }
@@ -221,22 +270,35 @@ export default function GamePage() {
 
         setPassBusy(true);
         try {
-            const res = await passPotato(code, mePlayerId);
-
-            // Falls du irgendwann {ok:false,...} returnst: kompatibel
-            if (res && typeof res === "object" && "ok" in res && (res as { ok: boolean }).ok === false) {
-                const maybeErr = (res as { error?: string }).error;
-                showToast(`❌ ${maybeErr ?? "Weitergabe fehlgeschlagen"}`, 2200);
-                return;
-            }
-
+            await passPotato(code, mePlayerId);
             showToast("✅ Weitergegeben", 900);
+
+            // ✅ don't wait for polling: pull lobby once quickly
+            // (best-effort; ignore errors)
+            void supabase
+                .from("lobbies")
+                .select("id, holder_player_id, phase, last_activity_at, run_started_at")
+                .eq("code", code)
+                .single()
+                .then((r) => {
+                    if (r.data) {
+                        setLobby({
+                            id: r.data.id,
+                            holder_player_id: r.data.holder_player_id,
+                            phase: r.data.phase,
+                            last_activity_at: r.data.last_activity_at ?? null,
+                            run_started_at: r.data.run_started_at ?? null,
+                        });
+                    }
+                })
+                .catch(() => {});
         } catch (e: unknown) {
+            // ✅ show the thrown error message from server action
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
             setPassBusy(false);
         }
-    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, showToast]);
+    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, showToast, supabase]);
 
     // Spacebar pass
     useEffect(() => {
