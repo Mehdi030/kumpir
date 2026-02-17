@@ -10,10 +10,7 @@ import { useHeartbeat } from "@/hooks/useHeartbeat";
 
 type ModeKey = "original" | "teleport" | "reverse";
 
-const MODES: Record<
-    ModeKey,
-    { label: string; icon: string; disabled?: boolean; comingSoon?: boolean }
-> = {
+const MODES: Record<ModeKey, { label: string; icon: string; disabled?: boolean; comingSoon?: boolean }> = {
     original: { label: "Original", icon: "🥔" },
     teleport: { label: "Teleport", icon: "🌀", disabled: true, comingSoon: true },
     reverse: { label: "Reverse", icon: "🔁", disabled: true, comingSoon: true },
@@ -70,14 +67,16 @@ export default function LobbyPage() {
         },
     });
 
+    const lobbyId = lobby?.id ?? null;
+
     const amIHost = useMemo(() => {
         if (!mePlayerId || !lobby?.host_player_id) return false;
         return lobby.host_player_id === mePlayerId;
     }, [lobby?.host_player_id, mePlayerId]);
 
-    // ✅ heartbeat + cleanup (recommended: host-only cleanup)
+    // heartbeat + cleanup (host-only cleanup)
     useHeartbeat({
-        lobbyId: lobby?.id,
+        lobbyId,
         playerId: mePlayerId,
         intervalMs: 8000,
         doCleanup: amIHost,
@@ -92,7 +91,7 @@ export default function LobbyPage() {
     // removed from lobby -> go /host with reason
     useEffect(() => {
         if (!mePlayerId) return;
-        if (!lobby?.id) return;
+        if (!lobbyId) return;
         if (loading) return;
 
         const stillInLobby = players.some((p) => p.player_id === mePlayerId);
@@ -106,7 +105,7 @@ export default function LobbyPage() {
                 const { data, error: statusErr } = await supabase
                     .from("players")
                     .select("status")
-                    .eq("lobby_id", lobby.id)
+                    .eq("lobby_id", lobbyId)
                     .eq("player_id", mePlayerId)
                     .maybeSingle();
 
@@ -122,7 +121,7 @@ export default function LobbyPage() {
                 safeRedirect(`/host`);
             }
         })();
-    }, [loading, players, mePlayerId, lobby?.id, safeRedirect]);
+    }, [loading, players, mePlayerId, lobbyId, safeRedirect]);
 
     const [toast, setToast] = useState("");
     const [busyReady, setBusyReady] = useState(false);
@@ -131,14 +130,13 @@ export default function LobbyPage() {
     const [busyKickId, setBusyKickId] = useState<string | null>(null);
     const [busyTransferId, setBusyTransferId] = useState<string | null>(null);
 
-    // ✅ host settings busy
+    // host settings busy
     const [busySettings, setBusySettings] = useState(false);
 
     // topic draft input
     const [topicDraft, setTopicDraft] = useState("");
 
     useEffect(() => {
-        // sync draft when lobby loads/changes
         setTopicDraft(lobby?.topic ?? "");
     }, [lobby?.topic]);
 
@@ -171,7 +169,7 @@ export default function LobbyPage() {
 
     const toggleReady = useCallback(async () => {
         if (!mePlayerId) return;
-        if (!lobby?.id) return;
+        if (!lobbyId) return;
         if (busyReady || starting) return;
 
         setBusyReady(true);
@@ -180,7 +178,7 @@ export default function LobbyPage() {
             const supabase = getSupabaseClient();
 
             const { error: rpcErr } = await supabase.rpc("rpc_toggle_ready", {
-                p_lobby_id: lobby.id,
+                p_lobby_id: lobbyId,
                 p_player_id: mePlayerId,
             });
 
@@ -190,7 +188,7 @@ export default function LobbyPage() {
         } finally {
             setBusyReady(false);
         }
-    }, [busyReady, starting, lobby?.id, mePlayerId, showToast]);
+    }, [busyReady, starting, lobbyId, mePlayerId, showToast]);
 
     const startGameClick = useCallback(async () => {
         if (!amIHost) return;
@@ -220,12 +218,12 @@ export default function LobbyPage() {
         suppressRunningRedirectRef.current = true;
 
         try {
-            if (mePlayerId && lobby?.id) {
+            if (mePlayerId && lobbyId) {
                 const { getSupabaseClient } = await import("@/lib/supabaseClient");
                 const supabase = getSupabaseClient();
 
                 await supabase.rpc("leave_lobby", {
-                    p_lobby_id: lobby.id,
+                    p_lobby_id: lobbyId,
                     p_player_id: mePlayerId,
                 });
             }
@@ -235,17 +233,17 @@ export default function LobbyPage() {
             clearMyIdentityStorage();
             safeRedirect("/host?left=1");
         }
-    }, [mePlayerId, lobby?.id, safeRedirect]);
+    }, [mePlayerId, lobbyId, safeRedirect]);
 
     const meLabel = useMemo(() => {
         return amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
     }, [amIHost, meName]);
 
-    // ✅ Host: set max players
+    // Host: set max players
     const setMaxPlayers = useCallback(
         async (next: number) => {
             if (!amIHost) return;
-            if (!mePlayerId || !lobby?.id) return;
+            if (!mePlayerId || !lobbyId) return;
             if (busySettings || starting) return;
 
             setBusySettings(true);
@@ -254,16 +252,13 @@ export default function LobbyPage() {
                 const supabase = getSupabaseClient();
 
                 const { error: rpcErr } = await supabase.rpc("set_max_players", {
-                    p_lobby_id: lobby.id,
+                    p_lobby_id: lobbyId,
                     p_me_player_id: mePlayerId,
                     p_max_players: next,
                 });
 
                 if (rpcErr) {
-                    const msg =
-                        rpcErr.message === "too_small_for_current_players"
-                            ? "Zu klein für aktuelle Spielerzahl."
-                            : rpcErr.message;
+                    const msg = rpcErr.message === "too_small_for_current_players" ? "Zu klein für aktuelle Spielerzahl." : rpcErr.message;
                     showToast(`❌ ${msg}`, 2500);
                     return;
                 }
@@ -275,14 +270,14 @@ export default function LobbyPage() {
                 setBusySettings(false);
             }
         },
-        [amIHost, mePlayerId, lobby?.id, busySettings, starting, showToast]
+        [amIHost, mePlayerId, lobbyId, busySettings, starting, showToast]
     );
 
-    // ✅ Host: set mode
+    // Host: set mode
     const setMode = useCallback(
         async (mode: ModeKey) => {
             if (!amIHost) return;
-            if (!mePlayerId || !lobby?.id) return;
+            if (!mePlayerId || !lobbyId) return;
             if (busySettings || starting) return;
 
             setBusySettings(true);
@@ -291,7 +286,7 @@ export default function LobbyPage() {
                 const supabase = getSupabaseClient();
 
                 const { error: rpcErr } = await supabase.rpc("set_lobby_mode", {
-                    p_lobby_id: lobby.id,
+                    p_lobby_id: lobbyId,
                     p_me_player_id: mePlayerId,
                     p_mode: mode,
                 });
@@ -308,13 +303,13 @@ export default function LobbyPage() {
                 setBusySettings(false);
             }
         },
-        [amIHost, mePlayerId, lobby?.id, busySettings, starting, showToast]
+        [amIHost, mePlayerId, lobbyId, busySettings, starting, showToast]
     );
 
-    // ✅ Host: set topic
+    // Host: set topic
     const saveTopic = useCallback(async () => {
         if (!amIHost) return;
-        if (!mePlayerId || !lobby?.id) return;
+        if (!mePlayerId || !lobbyId) return;
         if (busySettings || starting) return;
 
         setBusySettings(true);
@@ -323,7 +318,7 @@ export default function LobbyPage() {
             const supabase = getSupabaseClient();
 
             const { error: rpcErr } = await supabase.rpc("set_lobby_topic", {
-                p_lobby_id: lobby.id,
+                p_lobby_id: lobbyId,
                 p_me_player_id: mePlayerId,
                 p_topic: topicDraft,
             });
@@ -340,15 +335,15 @@ export default function LobbyPage() {
         } finally {
             setBusySettings(false);
         }
-    }, [amIHost, mePlayerId, lobby?.id, busySettings, starting, topicDraft, showToast]);
+    }, [amIHost, mePlayerId, lobbyId, busySettings, starting, topicDraft, showToast]);
 
     const kickPlayer = useCallback(
         async (targetPlayerId: string) => {
             if (!amIHost) return;
-            if (!mePlayerId || !lobby?.id) return;
+            if (!mePlayerId || !lobbyId) return;
             if (busyKickId || starting) return;
 
-            if (targetPlayerId === lobby.host_player_id) return;
+            if (targetPlayerId === lobby?.host_player_id) return;
 
             setBusyKickId(targetPlayerId);
             try {
@@ -356,7 +351,7 @@ export default function LobbyPage() {
                 const supabase = getSupabaseClient();
 
                 const { error: rpcErr } = await supabase.rpc("kick_player", {
-                    p_lobby_id: lobby.id,
+                    p_lobby_id: lobbyId,
                     p_me_player_id: mePlayerId,
                     p_target_player_id: targetPlayerId,
                 });
@@ -373,16 +368,16 @@ export default function LobbyPage() {
                 setBusyKickId(null);
             }
         },
-        [amIHost, busyKickId, starting, lobby?.id, lobby?.host_player_id, mePlayerId, showToast]
+        [amIHost, busyKickId, starting, lobbyId, lobby?.host_player_id, mePlayerId, showToast]
     );
 
     const makeHost = useCallback(
         async (newHostPlayerId: string) => {
             if (!amIHost) return;
-            if (!mePlayerId || !lobby?.id) return;
+            if (!mePlayerId || !lobbyId) return;
             if (busyTransferId || starting) return;
 
-            if (newHostPlayerId === lobby.host_player_id) return;
+            if (newHostPlayerId === lobby?.host_player_id) return;
 
             setBusyTransferId(newHostPlayerId);
             try {
@@ -390,7 +385,7 @@ export default function LobbyPage() {
                 const supabase = getSupabaseClient();
 
                 const { error: rpcErr } = await supabase.rpc("transfer_host", {
-                    p_lobby_id: lobby.id,
+                    p_lobby_id: lobbyId,
                     p_me_player_id: mePlayerId,
                     p_new_host_player_id: newHostPlayerId,
                 });
@@ -407,11 +402,11 @@ export default function LobbyPage() {
                 setBusyTransferId(null);
             }
         },
-        [amIHost, busyTransferId, starting, lobby?.id, lobby?.host_player_id, mePlayerId, showToast]
+        [amIHost, busyTransferId, starting, lobbyId, lobby?.host_player_id, mePlayerId, showToast]
     );
 
     const maxPlayers = lobby?.max_players ?? 8;
-    const mode = (lobby?.mode ?? "original") as ModeKey;
+    const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
 
     return (
         <main className="container">
@@ -476,7 +471,7 @@ export default function LobbyPage() {
                                 {meLabel}
                             </div>
 
-                            {/* ✅ Settings summary (for all) */}
+                            {/* Settings summary (for all) */}
                             <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
                                 <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8 }}>
                                     <span style={{ opacity: 0.8 }}>👥</span>
@@ -500,10 +495,9 @@ export default function LobbyPage() {
                                 ) : null}
                             </div>
 
-                            {/* ✅ Host controls */}
+                            {/* Host controls */}
                             {amIHost ? (
                                 <div style={{ display: "grid", gap: 10, justifyItems: "end" }}>
-                                    {/* max players stepper */}
                                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                                         <button
                                             type="button"
@@ -528,7 +522,6 @@ export default function LobbyPage() {
                                         </button>
                                     </div>
 
-                                    {/* mode switch */}
                                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                                         {(Object.keys(MODES) as ModeKey[]).map((k) => {
                                             const m = MODES[k];
@@ -548,7 +541,6 @@ export default function LobbyPage() {
                                         })}
                                     </div>
 
-                                    {/* topic */}
                                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                                         <input
                                             value={topicDraft}
