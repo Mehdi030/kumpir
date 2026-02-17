@@ -9,6 +9,10 @@ export type LobbyRow = {
     host_player_id: string | null;
     phase: string | null;
     locked: boolean | null;
+
+    max_players: number | null;
+    mode: string | null;
+    topic: string | null;
 };
 
 export type PlayerRow = {
@@ -26,10 +30,8 @@ type UseLobbyStateOpts = {
 
 export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
     const supabase = getSupabaseClient();
-
     const pollMs = opts?.pollMs ?? 1200;
 
-    // ✅ avoid dependency churn (opts object changes on every render in caller)
     const onPhaseRunningRef = useRef<(() => void) | undefined>(opts?.onPhaseRunning);
     useEffect(() => {
         onPhaseRunningRef.current = opts?.onPhaseRunning;
@@ -45,7 +47,7 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
 
         const lobbyRes = await supabase
             .from("lobbies")
-            .select("id,code,host_player_id,phase,locked")
+            .select("id,code,host_player_id,phase,locked,max_players,mode,topic")
             .eq("code", code)
             .single();
 
@@ -58,7 +60,6 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
 
         const lobbyRow = lobbyRes.data as LobbyRow;
 
-        // if running => let caller redirect; do not overwrite UI state unnecessarily
         if (lobbyRow.phase === "running") {
             onPhaseRunningRef.current?.();
             return;

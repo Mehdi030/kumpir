@@ -8,6 +8,17 @@ import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
 
+type ModeKey = "original" | "teleport" | "reverse";
+
+const MODES: Record<
+    ModeKey,
+    { label: string; icon: string; disabled?: boolean; comingSoon?: boolean }
+> = {
+    original: { label: "Original", icon: "🥔" },
+    teleport: { label: "Teleport", icon: "🌀", disabled: true, comingSoon: true },
+    reverse: { label: "Reverse", icon: "🔁", disabled: true, comingSoon: true },
+};
+
 function fmtJoinLink(origin: string, code: string) {
     return `${origin}/join?code=${encodeURIComponent(code)}`;
 }
@@ -37,10 +48,7 @@ export default function LobbyPage() {
 
     const { mePlayerId, meName } = usePlayerIdentity();
 
-    // blocks redirect when user intentionally leaves
     const suppressRunningRedirectRef = useRef(false);
-
-    // prevents multi-redirect spam / loops
     const redirectingRef = useRef(false);
 
     const safeRedirect = useCallback((url: string) => {
@@ -51,8 +59,7 @@ export default function LobbyPage() {
     }, []);
 
     const hardGoGame = useCallback(() => {
-        const url = `/game/${encodeURIComponent(code)}?t=${Date.now()}`;
-        safeRedirect(url);
+        safeRedirect(`/game/${encodeURIComponent(code)}?t=${Date.now()}`);
     }, [code, safeRedirect]);
 
     const { lobby, players, loading, error } = useLobbyState(code, {
@@ -63,22 +70,26 @@ export default function LobbyPage() {
         },
     });
 
-    // heartbeat + cleanup (disconnect/leaves + stale cleanup)
+    const amIHost = useMemo(() => {
+        if (!mePlayerId || !lobby?.host_player_id) return false;
+        return lobby.host_player_id === mePlayerId;
+    }, [lobby?.host_player_id, mePlayerId]);
+
+    // ✅ heartbeat + cleanup (recommended: host-only cleanup)
     useHeartbeat({
         lobbyId: lobby?.id,
         playerId: mePlayerId,
         intervalMs: 8000,
-        doCleanup: true,
+        doCleanup: amIHost,
         staleSeconds: 25,
     });
 
-    // fallback redirect
     useEffect(() => {
         if (suppressRunningRedirectRef.current) return;
         if (lobby?.phase === "running") hardGoGame();
     }, [lobby?.phase, hardGoGame]);
 
-    // ✅ if I got removed (kicked/left/stale cleaned) => go to /host with reason
+    // removed from lobby -> go /host with reason
     useEffect(() => {
         if (!mePlayerId) return;
         if (!lobby?.id) return;
@@ -104,11 +115,7 @@ export default function LobbyPage() {
                 clearMyIdentityStorage();
                 suppressRunningRedirectRef.current = true;
 
-                if (status === "kicked") {
-                    safeRedirect(`/host?kicked=1`);
-                } else {
-                    safeRedirect(`/host?left=1`);
-                }
+                safeRedirect(status === "kicked" ? `/host?kicked=1` : `/host?left=1`);
             } catch {
                 clearMyIdentityStorage();
                 suppressRunningRedirectRef.current = true;
@@ -121,26 +128,19 @@ export default function LobbyPage() {
     const [busyReady, setBusyReady] = useState(false);
     const [starting, setStarting] = useState(false);
 
-    // host action busy flags
     const [busyKickId, setBusyKickId] = useState<string | null>(null);
     const [busyTransferId, setBusyTransferId] = useState<string | null>(null);
 
-    const amIHost = useMemo(() => {
-        if (!mePlayerId || !lobby?.host_player_id) return false;
-        return lobby.host_player_id === mePlayerId;
-    }, [lobby?.host_player_id, mePlayerId]);
+    // ✅ host settings busy
+    const [busySettings, setBusySettings] = useState(false);
 
-    const meReady = useMemo(() => {
-        if (!mePlayerId) return false;
-        const row = players.find((p) => p.player_id === mePlayerId);
-        return !!row?.ready;
-    }, [players, mePlayerId]);
+    // topic draft input
+    const [topicDraft, setTopicDraft] = useState("");
 
-    const MIN_PLAYERS = 2;
-
-    const allReady = useMemo(() => {
-        return players.length >= MIN_PLAYERS && players.every((p) => !!p.ready);
-    }, [players]);
+    useEffect(() => {
+        // sync draft when lobby loads/changes
+        setTopicDraft(lobby?.topic ?? "");
+    }, [lobby?.topic]);
 
     const showToast = useCallback((msg: string, ms = 1800) => {
         setToast(msg);
@@ -157,6 +157,17 @@ export default function LobbyPage() {
             showToast("⚠️ Kopieren nicht möglich", 1600);
         }
     }, [code, showToast]);
+
+    const meReady = useMemo(() => {
+        if (!mePlayerId) return false;
+        const row = players.find((p) => p.player_id === mePlayerId);
+        return !!row?.ready;
+    }, [players, mePlayerId]);
+
+    const MIN_PLAYERS = 2;
+    const allReady = useMemo(() => {
+        return players.length >= MIN_PLAYERS && players.every((p) => !!p.ready);
+    }, [players]);
 
     const toggleReady = useCallback(async () => {
         if (!mePlayerId) return;
@@ -205,7 +216,6 @@ export default function LobbyPage() {
         }
     }, [amIHost, mePlayerId, starting, code, showToast, hardGoGame]);
 
-    // ✅ leave: server leave + local cleanup + redirect
     const leaveLobby = useCallback(async () => {
         suppressRunningRedirectRef.current = true;
 
@@ -230,6 +240,107 @@ export default function LobbyPage() {
     const meLabel = useMemo(() => {
         return amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
     }, [amIHost, meName]);
+
+    // ✅ Host: set max players
+    const setMaxPlayers = useCallback(
+        async (next: number) => {
+            if (!amIHost) return;
+            if (!mePlayerId || !lobby?.id) return;
+            if (busySettings || starting) return;
+
+            setBusySettings(true);
+            try {
+                const { getSupabaseClient } = await import("@/lib/supabaseClient");
+                const supabase = getSupabaseClient();
+
+                const { error: rpcErr } = await supabase.rpc("set_max_players", {
+                    p_lobby_id: lobby.id,
+                    p_me_player_id: mePlayerId,
+                    p_max_players: next,
+                });
+
+                if (rpcErr) {
+                    const msg =
+                        rpcErr.message === "too_small_for_current_players"
+                            ? "Zu klein für aktuelle Spielerzahl."
+                            : rpcErr.message;
+                    showToast(`❌ ${msg}`, 2500);
+                    return;
+                }
+
+                showToast("✅ Max-Spieler aktualisiert", 1200);
+            } catch (e: unknown) {
+                showToast(`❌ ${getErrorMessage(e)}`, 2500);
+            } finally {
+                setBusySettings(false);
+            }
+        },
+        [amIHost, mePlayerId, lobby?.id, busySettings, starting, showToast]
+    );
+
+    // ✅ Host: set mode
+    const setMode = useCallback(
+        async (mode: ModeKey) => {
+            if (!amIHost) return;
+            if (!mePlayerId || !lobby?.id) return;
+            if (busySettings || starting) return;
+
+            setBusySettings(true);
+            try {
+                const { getSupabaseClient } = await import("@/lib/supabaseClient");
+                const supabase = getSupabaseClient();
+
+                const { error: rpcErr } = await supabase.rpc("set_lobby_mode", {
+                    p_lobby_id: lobby.id,
+                    p_me_player_id: mePlayerId,
+                    p_mode: mode,
+                });
+
+                if (rpcErr) {
+                    showToast(`❌ ${rpcErr.message}`, 2500);
+                    return;
+                }
+
+                showToast("✅ Modus aktualisiert", 1200);
+            } catch (e: unknown) {
+                showToast(`❌ ${getErrorMessage(e)}`, 2500);
+            } finally {
+                setBusySettings(false);
+            }
+        },
+        [amIHost, mePlayerId, lobby?.id, busySettings, starting, showToast]
+    );
+
+    // ✅ Host: set topic
+    const saveTopic = useCallback(async () => {
+        if (!amIHost) return;
+        if (!mePlayerId || !lobby?.id) return;
+        if (busySettings || starting) return;
+
+        setBusySettings(true);
+        try {
+            const { getSupabaseClient } = await import("@/lib/supabaseClient");
+            const supabase = getSupabaseClient();
+
+            const { error: rpcErr } = await supabase.rpc("set_lobby_topic", {
+                p_lobby_id: lobby.id,
+                p_me_player_id: mePlayerId,
+                p_topic: topicDraft,
+            });
+
+            if (rpcErr) {
+                const msg = rpcErr.message === "topic_too_long" ? "Thema ist zu lang (max 60)." : rpcErr.message;
+                showToast(`❌ ${msg}`, 2500);
+                return;
+            }
+
+            showToast("✅ Thema gespeichert", 1200);
+        } catch (e: unknown) {
+            showToast(`❌ ${getErrorMessage(e)}`, 2500);
+        } finally {
+            setBusySettings(false);
+        }
+    }, [amIHost, mePlayerId, lobby?.id, busySettings, starting, topicDraft, showToast]);
 
     const kickPlayer = useCallback(
         async (targetPlayerId: string) => {
@@ -299,6 +410,9 @@ export default function LobbyPage() {
         [amIHost, busyTransferId, starting, lobby?.id, lobby?.host_player_id, mePlayerId, showToast]
     );
 
+    const maxPlayers = lobby?.max_players ?? 8;
+    const mode = (lobby?.mode ?? "original") as ModeKey;
+
     return (
         <main className="container">
             <div className="landingWrap">
@@ -357,10 +471,106 @@ export default function LobbyPage() {
                             </div>
                         </div>
 
-                        <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                            <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center" }}>
+                        <div style={{ display: "grid", gap: 10, justifyItems: "end", minWidth: 260 }}>
+                            <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 {meLabel}
                             </div>
+
+                            {/* ✅ Settings summary (for all) */}
+                            <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+                                <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8 }}>
+                                    <span style={{ opacity: 0.8 }}>👥</span>
+                                    <span style={{ fontWeight: 900 }}>{players.length}</span>
+                                    <span style={{ opacity: 0.8 }}>/</span>
+                                    <span style={{ fontWeight: 900 }}>{maxPlayers}</span>
+                                </div>
+
+                                <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8 }}>
+                                    <span>{MODES[mode]?.icon ?? "🥔"}</span>
+                                    <span style={{ fontWeight: 900 }}>{MODES[mode]?.label ?? mode}</span>
+                                </div>
+
+                                {lobby?.topic ? (
+                                    <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }}>
+                                        <span style={{ opacity: 0.8 }}>🏷️</span>
+                                        <span style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {lobby.topic}
+                    </span>
+                                    </div>
+                                ) : null}
+                            </div>
+
+                            {/* ✅ Host controls */}
+                            {amIHost ? (
+                                <div style={{ display: "grid", gap: 10, justifyItems: "end" }}>
+                                    {/* max players stepper */}
+                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                        <button
+                                            type="button"
+                                            className="btn btnSecondary btnSmall"
+                                            onClick={() => void setMaxPlayers(Math.max(2, maxPlayers - 1))}
+                                            disabled={busySettings || starting || maxPlayers <= 2}
+                                            title="Max-Spieler runter"
+                                        >
+                                            −
+                                        </button>
+                                        <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center" }}>
+                                            Max {maxPlayers}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="btn btnSecondary btnSmall"
+                                            onClick={() => void setMaxPlayers(Math.min(12, maxPlayers + 1))}
+                                            disabled={busySettings || starting || maxPlayers >= 12}
+                                            title="Max-Spieler hoch"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+
+                                    {/* mode switch */}
+                                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                                        {(Object.keys(MODES) as ModeKey[]).map((k) => {
+                                            const m = MODES[k];
+                                            const active = mode === k;
+                                            return (
+                                                <button
+                                                    key={k}
+                                                    type="button"
+                                                    className={`btn btnSecondary btnSmall ${active ? "btnGlow" : ""}`}
+                                                    onClick={() => void setMode(k)}
+                                                    disabled={busySettings || starting || !!m.disabled}
+                                                    title={m.comingSoon ? "Kommt bald" : "Modus setzen"}
+                                                >
+                                                    {m.icon} {m.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* topic */}
+                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                        <input
+                                            value={topicDraft}
+                                            onChange={(e) => setTopicDraft(e.target.value)}
+                                            placeholder="Thema (z.B. Filmzitate)"
+                                            maxLength={60}
+                                            className="pillInput"
+                                            style={{ width: 180 }}
+                                            aria-label="Thema"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btnPrimary btnSmall"
+                                            onClick={() => void saveTopic()}
+                                            disabled={busySettings || starting}
+                                            title="Thema speichern"
+                                        >
+                                            💾
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : null}
                         </div>
                     </div>
 
@@ -451,7 +661,7 @@ export default function LobbyPage() {
                                                                     className="btn btnSecondary btnSmall"
                                                                     onClick={() => void kickPlayer(p.player_id)}
                                                                     disabled={!!busyKickId || starting}
-                                                                    title="Kick (nur waiting)"
+                                                                    title="Kick"
                                                                 >
                                                                     {busyKickId === p.player_id ? "…" : "⛔"}
                                                                 </button>
@@ -474,7 +684,6 @@ export default function LobbyPage() {
                                 </table>
                             </div>
 
-                            {/* Buttons row */}
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
                                 <button type="button" className="btn btnSecondary btnSmall" onClick={() => void leaveLobby()} disabled={starting}>
                                     ← Hauptmenü
@@ -490,7 +699,6 @@ export default function LobbyPage() {
                                 </button>
                             </div>
 
-                            {/* Start button below */}
                             {amIHost && allReady && lobby?.phase !== "running" ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                                     <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={() => void startGameClick()} disabled={starting}>
