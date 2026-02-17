@@ -24,6 +24,10 @@ function getErrorMessage(e: unknown): string {
     }
 }
 
+function clamp(n: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, n));
+}
+
 export default function LobbyAdminPage() {
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
@@ -50,25 +54,30 @@ export default function LobbyAdminPage() {
     const [toast, setToast] = useState("");
     const [busy, setBusy] = useState(false);
 
-    const showToast = useCallback((msg: string, ms = 1600) => {
+    const showToast = useCallback((msg: string, ms = 1400) => {
         setToast(msg);
         window.setTimeout(() => setToast(""), ms);
     }, []);
 
-    // settings state
+    const activeCount = players.length;
     const maxPlayers = lobby?.max_players ?? 8;
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
 
-    const [topicDraft, setTopicDraft] = useState("");
-    useEffect(() => {
-        setTopicDraft(lobby?.topic ?? "");
-    }, [lobby?.topic]);
+    // optional quick input
+    const [maxDraft, setMaxDraft] = useState<string>(String(maxPlayers));
+    useEffect(() => setMaxDraft(String(maxPlayers)), [maxPlayers]);
 
-    const setMaxPlayers = useCallback(
-        async (next: number) => {
+    const updateMaxPlayers = useCallback(
+        async (nextRaw: number) => {
             if (!amIHost) return;
             if (!mePlayerId || !lobbyId) return;
             if (busy) return;
+
+            // cannot go below active players
+            const next = clamp(nextRaw, Math.max(2, activeCount), 12);
+
+            // no-op
+            if (next === maxPlayers) return;
 
             setBusy(true);
             try {
@@ -82,26 +91,31 @@ export default function LobbyAdminPage() {
                 });
 
                 if (rpcErr) {
-                    const msg = rpcErr.message === "too_small_for_current_players" ? "Zu klein für aktuelle Spielerzahl." : rpcErr.message;
+                    const msg =
+                        rpcErr.message === "too_small_for_current_players"
+                            ? "Zu klein für aktuelle Spielerzahl."
+                            : rpcErr.message;
                     showToast(`❌ ${msg}`, 2400);
                     return;
                 }
 
-                showToast("✅ Max-Spieler gespeichert");
+                showToast(`✅ Max = ${next}`);
             } catch (e: unknown) {
                 showToast(`❌ ${getErrorMessage(e)}`, 2400);
             } finally {
                 setBusy(false);
             }
         },
-        [amIHost, mePlayerId, lobbyId, busy, showToast]
+        [amIHost, mePlayerId, lobbyId, busy, activeCount, maxPlayers, showToast]
     );
 
-    const setMode = useCallback(
+    const updateMode = useCallback(
         async (next: ModeKey) => {
             if (!amIHost) return;
             if (!mePlayerId || !lobbyId) return;
             if (busy) return;
+
+            if (next === mode) return;
 
             setBusy(true);
             try {
@@ -119,45 +133,15 @@ export default function LobbyAdminPage() {
                     return;
                 }
 
-                showToast("✅ Modus gespeichert");
+                showToast(`✅ Modus: ${MODES[next]?.label ?? next}`);
             } catch (e: unknown) {
                 showToast(`❌ ${getErrorMessage(e)}`, 2400);
             } finally {
                 setBusy(false);
             }
         },
-        [amIHost, mePlayerId, lobbyId, busy, showToast]
+        [amIHost, mePlayerId, lobbyId, busy, mode, showToast]
     );
-
-    const saveTopic = useCallback(async () => {
-        if (!amIHost) return;
-        if (!mePlayerId || !lobbyId) return;
-        if (busy) return;
-
-        setBusy(true);
-        try {
-            const { getSupabaseClient } = await import("@/lib/supabaseClient");
-            const supabase = getSupabaseClient();
-
-            const { error: rpcErr } = await supabase.rpc("set_lobby_topic", {
-                p_lobby_id: lobbyId,
-                p_me_player_id: mePlayerId,
-                p_topic: topicDraft,
-            });
-
-            if (rpcErr) {
-                const msg = rpcErr.message === "topic_too_long" ? "Thema ist zu lang (max 60)." : rpcErr.message;
-                showToast(`❌ ${msg}`, 2400);
-                return;
-            }
-
-            showToast("✅ Thema gespeichert");
-        } catch (e: unknown) {
-            showToast(`❌ ${getErrorMessage(e)}`, 2400);
-        } finally {
-            setBusy(false);
-        }
-    }, [amIHost, mePlayerId, lobbyId, busy, topicDraft, showToast]);
 
     // admin actions
     const [busyKickId, setBusyKickId] = useState<string | null>(null);
@@ -229,8 +213,6 @@ export default function LobbyAdminPage() {
         [amIHost, mePlayerId, lobbyId, busy, busyTransferId, lobby?.host_player_id, showToast]
     );
 
-    const activeCount = players.length;
-
     return (
         <main className="container">
             <div className="landingWrap">
@@ -255,7 +237,11 @@ export default function LobbyAdminPage() {
                         </button>
                     </div>
 
-                    {error ? <p className="errorText" style={{ marginTop: 10 }}>{error}</p> : null}
+                    {error ? (
+                        <p className="errorText" style={{ marginTop: 10 }}>
+                            {error}
+                        </p>
+                    ) : null}
 
                     {toast ? (
                         <div className="pillChip" style={{ marginTop: 12, fontWeight: 950, opacity: 0.96 }}>
@@ -272,40 +258,88 @@ export default function LobbyAdminPage() {
                             <div className="pillCardHint">Nur Host</div>
                         </div>
 
-                        {/* Max players */}
+                        {/* Active / MaxPlayers */}
                         <div style={{ marginTop: 12 }}>
                             <div className="fieldHelp" style={{ opacity: 0.85 }}>
                                 👥 Aktiv: <span style={{ fontWeight: 950 }}>{activeCount}</span>
                             </div>
 
-                            <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-                                <button
-                                    type="button"
-                                    className="btn btnSecondary btnSmall"
-                                    onClick={() => void setMaxPlayers(Math.max(2, maxPlayers - 1))}
-                                    disabled={busy || maxPlayers <= 2 || maxPlayers - 1 < activeCount}
-                                    title={maxPlayers - 1 < activeCount ? "Zu klein für aktive Spieler" : "Verringern"}
-                                >
-                                    −
-                                </button>
+                            <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", marginTop: 8, flexWrap: "wrap" }}>
+                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                    <button
+                                        type="button"
+                                        className="btn btnSecondary btnSmall"
+                                        onClick={() => void updateMaxPlayers(maxPlayers - 5)}
+                                        disabled={busy || maxPlayers - 5 < Math.max(2, activeCount)}
+                                        title="-5"
+                                    >
+                                        −5
+                                    </button>
 
-                                <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center" }}>
-                                    Max {maxPlayers}
+                                    <button
+                                        type="button"
+                                        className="btn btnSecondary btnSmall"
+                                        onClick={() => void updateMaxPlayers(maxPlayers - 1)}
+                                        disabled={busy || maxPlayers - 1 < Math.max(2, activeCount)}
+                                        title="-1"
+                                    >
+                                        −
+                                    </button>
+
+                                    <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center" }}>
+                                        Max {maxPlayers}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        className="btn btnSecondary btnSmall"
+                                        onClick={() => void updateMaxPlayers(maxPlayers + 1)}
+                                        disabled={busy || maxPlayers >= 12}
+                                        title="+1"
+                                    >
+                                        +
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className="btn btnSecondary btnSmall"
+                                        onClick={() => void updateMaxPlayers(maxPlayers + 5)}
+                                        disabled={busy || maxPlayers + 5 > 12}
+                                        title="+5"
+                                    >
+                                        +5
+                                    </button>
                                 </div>
 
-                                <button
-                                    type="button"
-                                    className="btn btnSecondary btnSmall"
-                                    onClick={() => void setMaxPlayers(Math.min(12, maxPlayers + 1))}
-                                    disabled={busy || maxPlayers >= 12}
-                                    title="Erhöhen"
-                                >
-                                    +
-                                </button>
+                                {/* optional direct set */}
+                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                    <input
+                                        value={maxDraft}
+                                        onChange={(e) => setMaxDraft(e.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+                                        className="pillInput"
+                                        style={{ width: 90 }}
+                                        inputMode="numeric"
+                                        placeholder="Max"
+                                        aria-label="Max Spieler"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="btn btnPrimary btnSmall"
+                                        onClick={() => void updateMaxPlayers(Number(maxDraft || maxPlayers))}
+                                        disabled={busy}
+                                        title="Direkt setzen"
+                                    >
+                                        Setzen
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.75 }}>
+                                Min ist {Math.max(2, activeCount)} (wegen aktiven Spielern). Max ist 12.
                             </div>
                         </div>
 
-                        {/* Mode */}
+                        {/* Mode (instant, no save) */}
                         <div style={{ marginTop: 14 }}>
                             <div className="fieldHelp" style={{ opacity: 0.85 }}>
                                 🥔 Modus aktuell: <span style={{ fontWeight: 950 }}>{MODES[mode]?.label ?? mode}</span>
@@ -315,37 +349,24 @@ export default function LobbyAdminPage() {
                                 {(Object.keys(MODES) as ModeKey[]).map((k) => {
                                     const m = MODES[k];
                                     const active = mode === k;
+
                                     return (
                                         <button
                                             key={k}
                                             type="button"
                                             className={`btn btnSecondary btnSmall ${active ? "btnGlow" : ""}`}
-                                            onClick={() => void setMode(k)}
+                                            onClick={() => void updateMode(k)}
                                             disabled={busy || !!m.disabled}
-                                            title={m.comingSoon ? "Kommt bald" : "Setzen"}
+                                            title={m.comingSoon ? "Kommt bald" : "Klick = sofort ändern"}
                                         >
                                             {m.icon} {m.label}
                                         </button>
                                     );
                                 })}
                             </div>
-                        </div>
 
-                        {/* Topic */}
-                        <div style={{ marginTop: 14 }}>
-                            <div className="fieldHelp" style={{ opacity: 0.85 }}>🏷️ Thema (optional, max 60)</div>
-                            <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
-                                <input
-                                    value={topicDraft}
-                                    onChange={(e) => setTopicDraft(e.target.value)}
-                                    placeholder="z.B. Filmzitate"
-                                    maxLength={60}
-                                    className="pillInput"
-                                    style={{ flex: 1 }}
-                                />
-                                <button type="button" className="btn btnPrimary btnSmall" onClick={() => void saveTopic()} disabled={busy}>
-                                    💾 Speichern
-                                </button>
+                            <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.75 }}>
+                                Kein Speichern nötig – Klick setzt direkt per RPC.
                             </div>
                         </div>
                     </div>
@@ -368,11 +389,13 @@ export default function LobbyAdminPage() {
                                 <tbody>
                                 {players.map((p) => {
                                     const isHostRow = !!lobby?.host_player_id && p.player_id === lobby.host_player_id;
+
                                     return (
                                         <tr key={p.player_id} style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                                             <td style={{ padding: "10px 8px", fontWeight: 900 }}>
                                                 {p.name} {isHostRow ? <span style={{ opacity: 0.75 }}> (Host)</span> : null}
                                             </td>
+
                                             <td style={{ padding: "10px 8px", textAlign: "right" }}>
                                                 <div style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end" }}>
                                                     {!isHostRow ? (
@@ -403,6 +426,7 @@ export default function LobbyAdminPage() {
                                         </tr>
                                     );
                                 })}
+
                                 {!loading && players.length === 0 ? (
                                     <tr>
                                         <td colSpan={2} style={{ padding: "12px 8px", opacity: 0.75 }}>
@@ -413,10 +437,6 @@ export default function LobbyAdminPage() {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-
-                    <div className="fieldHelp" style={{ marginTop: 14, opacity: 0.8 }}>
-                        Tipp: Diese Seite ist bewusst “Admin-only”, damit Lobby clean bleibt.
                     </div>
                 </section>
             </div>
