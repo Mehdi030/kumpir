@@ -10,10 +10,10 @@ import { useHeartbeat } from "@/hooks/useHeartbeat";
 
 type ModeKey = "original" | "teleport" | "reverse";
 
-const MODES: Record<ModeKey, { label: string; icon: string; disabled?: boolean; comingSoon?: boolean }> = {
+const MODES: Record<ModeKey, { label: string; icon: string }> = {
     original: { label: "Original", icon: "🥔" },
-    teleport: { label: "Teleport", icon: "🌀", disabled: true, comingSoon: true },
-    reverse: { label: "Reverse", icon: "🔁", disabled: true, comingSoon: true },
+    teleport: { label: "Teleport", icon: "🌀" },
+    reverse: { label: "Reverse", icon: "🔁" },
 };
 
 function fmtJoinLink(origin: string, code: string) {
@@ -127,19 +127,6 @@ export default function LobbyPage() {
     const [busyReady, setBusyReady] = useState(false);
     const [starting, setStarting] = useState(false);
 
-    const [busyKickId, setBusyKickId] = useState<string | null>(null);
-    const [busyTransferId, setBusyTransferId] = useState<string | null>(null);
-
-    // host settings busy
-    const [busySettings, setBusySettings] = useState(false);
-
-    // topic draft input
-    const [topicDraft, setTopicDraft] = useState("");
-
-    useEffect(() => {
-        setTopicDraft(lobby?.topic ?? "");
-    }, [lobby?.topic]);
-
     const showToast = useCallback((msg: string, ms = 1800) => {
         setToast(msg);
         window.setTimeout(() => setToast(""), ms);
@@ -239,172 +226,6 @@ export default function LobbyPage() {
         return amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
     }, [amIHost, meName]);
 
-    // Host: set max players
-    const setMaxPlayers = useCallback(
-        async (next: number) => {
-            if (!amIHost) return;
-            if (!mePlayerId || !lobbyId) return;
-            if (busySettings || starting) return;
-
-            setBusySettings(true);
-            try {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
-                const supabase = getSupabaseClient();
-
-                const { error: rpcErr } = await supabase.rpc("set_max_players", {
-                    p_lobby_id: lobbyId,
-                    p_me_player_id: mePlayerId,
-                    p_max_players: next,
-                });
-
-                if (rpcErr) {
-                    const msg = rpcErr.message === "too_small_for_current_players" ? "Zu klein für aktuelle Spielerzahl." : rpcErr.message;
-                    showToast(`❌ ${msg}`, 2500);
-                    return;
-                }
-
-                showToast("✅ Max-Spieler aktualisiert", 1200);
-            } catch (e: unknown) {
-                showToast(`❌ ${getErrorMessage(e)}`, 2500);
-            } finally {
-                setBusySettings(false);
-            }
-        },
-        [amIHost, mePlayerId, lobbyId, busySettings, starting, showToast]
-    );
-
-    // Host: set mode
-    const setMode = useCallback(
-        async (mode: ModeKey) => {
-            if (!amIHost) return;
-            if (!mePlayerId || !lobbyId) return;
-            if (busySettings || starting) return;
-
-            setBusySettings(true);
-            try {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
-                const supabase = getSupabaseClient();
-
-                const { error: rpcErr } = await supabase.rpc("set_lobby_mode", {
-                    p_lobby_id: lobbyId,
-                    p_me_player_id: mePlayerId,
-                    p_mode: mode,
-                });
-
-                if (rpcErr) {
-                    showToast(`❌ ${rpcErr.message}`, 2500);
-                    return;
-                }
-
-                showToast("✅ Modus aktualisiert", 1200);
-            } catch (e: unknown) {
-                showToast(`❌ ${getErrorMessage(e)}`, 2500);
-            } finally {
-                setBusySettings(false);
-            }
-        },
-        [amIHost, mePlayerId, lobbyId, busySettings, starting, showToast]
-    );
-
-    // Host: set topic
-    const saveTopic = useCallback(async () => {
-        if (!amIHost) return;
-        if (!mePlayerId || !lobbyId) return;
-        if (busySettings || starting) return;
-
-        setBusySettings(true);
-        try {
-            const { getSupabaseClient } = await import("@/lib/supabaseClient");
-            const supabase = getSupabaseClient();
-
-            const { error: rpcErr } = await supabase.rpc("set_lobby_topic", {
-                p_lobby_id: lobbyId,
-                p_me_player_id: mePlayerId,
-                p_topic: topicDraft,
-            });
-
-            if (rpcErr) {
-                const msg = rpcErr.message === "topic_too_long" ? "Thema ist zu lang (max 60)." : rpcErr.message;
-                showToast(`❌ ${msg}`, 2500);
-                return;
-            }
-
-            showToast("✅ Thema gespeichert", 1200);
-        } catch (e: unknown) {
-            showToast(`❌ ${getErrorMessage(e)}`, 2500);
-        } finally {
-            setBusySettings(false);
-        }
-    }, [amIHost, mePlayerId, lobbyId, busySettings, starting, topicDraft, showToast]);
-
-    const kickPlayer = useCallback(
-        async (targetPlayerId: string) => {
-            if (!amIHost) return;
-            if (!mePlayerId || !lobbyId) return;
-            if (busyKickId || starting) return;
-
-            if (targetPlayerId === lobby?.host_player_id) return;
-
-            setBusyKickId(targetPlayerId);
-            try {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
-                const supabase = getSupabaseClient();
-
-                const { error: rpcErr } = await supabase.rpc("kick_player", {
-                    p_lobby_id: lobbyId,
-                    p_me_player_id: mePlayerId,
-                    p_target_player_id: targetPlayerId,
-                });
-
-                if (rpcErr) {
-                    showToast(`❌ ${rpcErr.message}`, 2500);
-                    return;
-                }
-
-                showToast("✅ Spieler gekickt", 1400);
-            } catch (e: unknown) {
-                showToast(`❌ ${getErrorMessage(e)}`, 2500);
-            } finally {
-                setBusyKickId(null);
-            }
-        },
-        [amIHost, busyKickId, starting, lobbyId, lobby?.host_player_id, mePlayerId, showToast]
-    );
-
-    const makeHost = useCallback(
-        async (newHostPlayerId: string) => {
-            if (!amIHost) return;
-            if (!mePlayerId || !lobbyId) return;
-            if (busyTransferId || starting) return;
-
-            if (newHostPlayerId === lobby?.host_player_id) return;
-
-            setBusyTransferId(newHostPlayerId);
-            try {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
-                const supabase = getSupabaseClient();
-
-                const { error: rpcErr } = await supabase.rpc("transfer_host", {
-                    p_lobby_id: lobbyId,
-                    p_me_player_id: mePlayerId,
-                    p_new_host_player_id: newHostPlayerId,
-                });
-
-                if (rpcErr) {
-                    showToast(`❌ ${rpcErr.message}`, 2500);
-                    return;
-                }
-
-                showToast("👑 Host übertragen", 1400);
-            } catch (e: unknown) {
-                showToast(`❌ ${getErrorMessage(e)}`, 2500);
-            } finally {
-                setBusyTransferId(null);
-            }
-        },
-        [amIHost, busyTransferId, starting, lobbyId, lobby?.host_player_id, mePlayerId, showToast]
-    );
-
     const maxPlayers = lobby?.max_players ?? 8;
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
 
@@ -471,7 +292,7 @@ export default function LobbyPage() {
                                 {meLabel}
                             </div>
 
-                            {/* Settings summary (for all) */}
+                            {/* Settings summary (all users) */}
                             <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
                                 <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8 }}>
                                     <span style={{ opacity: 0.8 }}>👥</span>
@@ -495,73 +316,17 @@ export default function LobbyPage() {
                                 ) : null}
                             </div>
 
-                            {/* Host controls */}
+                            {/* Host: Admin button */}
                             {amIHost ? (
-                                <div style={{ display: "grid", gap: 10, justifyItems: "end" }}>
-                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                        <button
-                                            type="button"
-                                            className="btn btnSecondary btnSmall"
-                                            onClick={() => void setMaxPlayers(Math.max(2, maxPlayers - 1))}
-                                            disabled={busySettings || starting || maxPlayers <= 2}
-                                            title="Max-Spieler runter"
-                                        >
-                                            −
-                                        </button>
-                                        <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center" }}>
-                                            Max {maxPlayers}
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="btn btnSecondary btnSmall"
-                                            onClick={() => void setMaxPlayers(Math.min(12, maxPlayers + 1))}
-                                            disabled={busySettings || starting || maxPlayers >= 12}
-                                            title="Max-Spieler hoch"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-
-                                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                                        {(Object.keys(MODES) as ModeKey[]).map((k) => {
-                                            const m = MODES[k];
-                                            const active = mode === k;
-                                            return (
-                                                <button
-                                                    key={k}
-                                                    type="button"
-                                                    className={`btn btnSecondary btnSmall ${active ? "btnGlow" : ""}`}
-                                                    onClick={() => void setMode(k)}
-                                                    disabled={busySettings || starting || !!m.disabled}
-                                                    title={m.comingSoon ? "Kommt bald" : "Modus setzen"}
-                                                >
-                                                    {m.icon} {m.label}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                        <input
-                                            value={topicDraft}
-                                            onChange={(e) => setTopicDraft(e.target.value)}
-                                            placeholder="Thema (z.B. Filmzitate)"
-                                            maxLength={60}
-                                            className="pillInput"
-                                            style={{ width: 180 }}
-                                            aria-label="Thema"
-                                        />
-                                        <button
-                                            type="button"
-                                            className="btn btnPrimary btnSmall"
-                                            onClick={() => void saveTopic()}
-                                            disabled={busySettings || starting}
-                                            title="Thema speichern"
-                                        >
-                                            💾
-                                        </button>
-                                    </div>
-                                </div>
+                                <button
+                                    type="button"
+                                    className="btn btnSecondary btnSmall"
+                                    onClick={() => safeRedirect(`/lobby/${encodeURIComponent(code)}/admin`)}
+                                    disabled={starting}
+                                    title="Lobby Admin"
+                                >
+                                    ⚙️ Admin
+                                </button>
                             ) : null}
                         </div>
                     </div>
@@ -578,14 +343,13 @@ export default function LobbyPage() {
                                         <th style={{ padding: "10px 8px" }}>#</th>
                                         <th style={{ padding: "10px 8px" }}>Name</th>
                                         <th style={{ padding: "10px 8px", textAlign: "right" }}>Zustand</th>
-                                        {amIHost ? <th style={{ padding: "10px 8px", textAlign: "right" }}>Aktion</th> : null}
                                     </tr>
                                     </thead>
 
                                     <tbody>
                                     {loading && players.length === 0 ? (
                                         <tr>
-                                            <td colSpan={amIHost ? 4 : 3} style={{ padding: "12px 8px", opacity: 0.75 }}>
+                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>
                                                 Lädt…
                                             </td>
                                         </tr>
@@ -594,9 +358,6 @@ export default function LobbyPage() {
                                     {players.map((p, idx) => {
                                         const isMe = !!mePlayerId && p.player_id === mePlayerId;
                                         const isHostRow = !!lobby?.host_player_id && p.player_id === lobby.host_player_id;
-
-                                        const canKick = amIHost && !isHostRow;
-                                        const canMakeHost = amIHost && !isHostRow;
 
                                         return (
                                             <tr
@@ -631,43 +392,13 @@ export default function LobbyPage() {
                                                 <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>
                                                     {p.ready ? "✅ Bereit" : "⏳ nicht bereit"}
                                                 </td>
-
-                                                {amIHost ? (
-                                                    <td style={{ padding: "10px 8px", textAlign: "right" }}>
-                                                        <div style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end" }}>
-                                                            {canMakeHost ? (
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btnSecondary btnSmall"
-                                                                    onClick={() => void makeHost(p.player_id)}
-                                                                    disabled={!!busyTransferId || starting}
-                                                                    title="Host übertragen"
-                                                                >
-                                                                    {busyTransferId === p.player_id ? "…" : "👑"}
-                                                                </button>
-                                                            ) : null}
-
-                                                            {canKick ? (
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btnSecondary btnSmall"
-                                                                    onClick={() => void kickPlayer(p.player_id)}
-                                                                    disabled={!!busyKickId || starting}
-                                                                    title="Kick"
-                                                                >
-                                                                    {busyKickId === p.player_id ? "…" : "⛔"}
-                                                                </button>
-                                                            ) : null}
-                                                        </div>
-                                                    </td>
-                                                ) : null}
                                             </tr>
                                         );
                                     })}
 
                                     {!loading && players.length === 0 ? (
                                         <tr>
-                                            <td colSpan={amIHost ? 4 : 3} style={{ padding: "12px 8px", opacity: 0.75 }}>
+                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>
                                                 Noch niemand beigetreten.
                                             </td>
                                         </tr>
