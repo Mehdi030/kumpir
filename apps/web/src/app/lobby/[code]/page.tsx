@@ -74,6 +74,8 @@ export default function LobbyPage() {
         return lobby.host_player_id === mePlayerId;
     }, [lobby?.host_player_id, mePlayerId]);
 
+    const isRunning = lobby?.phase === "running";
+
     // heartbeat + cleanup (host-only cleanup)
     useHeartbeat({
         lobbyId,
@@ -157,7 +159,7 @@ export default function LobbyPage() {
     const toggleReady = useCallback(async () => {
         if (!mePlayerId) return;
         if (!lobbyId) return;
-        if (busyReady || starting) return;
+        if (busyReady || starting || isRunning) return;
 
         setBusyReady(true);
         try {
@@ -175,12 +177,12 @@ export default function LobbyPage() {
         } finally {
             setBusyReady(false);
         }
-    }, [busyReady, starting, lobbyId, mePlayerId, showToast]);
+    }, [busyReady, starting, isRunning, lobbyId, mePlayerId, showToast]);
 
     const startGameClick = useCallback(async () => {
         if (!amIHost) return;
         if (!mePlayerId) return;
-        if (starting) return;
+        if (starting || isRunning) return;
 
         setStarting(true);
         try {
@@ -199,7 +201,7 @@ export default function LobbyPage() {
         } finally {
             setStarting(false);
         }
-    }, [amIHost, mePlayerId, starting, code, showToast, hardGoGame]);
+    }, [amIHost, mePlayerId, starting, isRunning, code, showToast, hardGoGame]);
 
     const leaveLobby = useCallback(async () => {
         suppressRunningRedirectRef.current = true;
@@ -233,6 +235,12 @@ export default function LobbyPage() {
         <main className="container">
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
+                    {isRunning ? (
+                        <div className="pillChip" style={{ marginBottom: 10, fontWeight: 950, opacity: 0.95 }}>
+                            🚀 Spiel läuft – Lobby ist read-only
+                        </div>
+                    ) : null}
+
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
                         <div style={{ flex: 1 }}>
                             <h1 className="h1" style={{ marginBottom: 10 }}>
@@ -246,6 +254,7 @@ export default function LobbyPage() {
                                     title="Klick → Join-Link kopieren"
                                     style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
                                     aria-label="Join-Link kopieren"
+                                    disabled={isRunning}
                                 >
                                     <div
                                         style={{
@@ -262,6 +271,7 @@ export default function LobbyPage() {
                                             animation: "kumpir-rainbow 2.8s linear infinite",
                                             textShadow: "0 10px 30px rgba(0,0,0,0.18)",
                                             userSelect: "none",
+                                            opacity: isRunning ? 0.75 : 1,
                                         }}
                                     >
                                         {code}
@@ -305,15 +315,6 @@ export default function LobbyPage() {
                                     <span>{MODES[mode]?.icon ?? "🥔"}</span>
                                     <span style={{ fontWeight: 900 }}>{MODES[mode]?.label ?? mode}</span>
                                 </div>
-
-                                {lobby?.topic ? (
-                                    <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }}>
-                                        <span style={{ opacity: 0.8 }}>🏷️</span>
-                                        <span style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {lobby.topic}
-                    </span>
-                                    </div>
-                                ) : null}
                             </div>
 
                             {/* Host: Admin button */}
@@ -322,7 +323,7 @@ export default function LobbyPage() {
                                     type="button"
                                     className="btn btnSecondary btnSmall"
                                     onClick={() => safeRedirect(`/lobby/${encodeURIComponent(code)}/admin`)}
-                                    disabled={starting}
+                                    disabled={starting || isRunning}
                                     title="Lobby Admin"
                                 >
                                     ⚙️ Admin
@@ -415,16 +416,16 @@ export default function LobbyPage() {
                                 <button
                                     type="button"
                                     onClick={toggleReady}
-                                    disabled={busyReady || !mePlayerId || starting}
-                                    className={`btn btnXL ${busyReady || starting ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
+                                    disabled={busyReady || !mePlayerId || starting || isRunning}
+                                    className={`btn btnXL ${busyReady || starting || isRunning ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
                                 >
-                                    {starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
+                                    {isRunning ? "🚀 Läuft" : starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
                                 </button>
                             </div>
 
                             {amIHost && allReady && lobby?.phase !== "running" ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-                                    <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={() => void startGameClick()} disabled={starting}>
+                                    <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={() => void startGameClick()} disabled={starting || isRunning}>
                                         🚀 Spiel starten
                                     </button>
                                 </div>
