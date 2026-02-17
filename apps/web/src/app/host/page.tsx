@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useRef, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { HostNotice } from "./HostNotice";
 
 type Privacy = "private" | "public";
 type ModeKey = "original" | "teleport" | "reverse";
@@ -88,27 +90,6 @@ function getErrorMessage(err: unknown): string {
 export default function HostPage() {
     const supabase = getSupabaseClient();
     const router = useRouter();
-    const sp = useSearchParams();
-
-    // ✅ persistent banner (stays until user closes it)
-    const [topToast, setTopToast] = useState<string>("");
-
-    const dismissTopToast = useCallback(() => {
-        setTopToast("");
-    }, []);
-
-    useEffect(() => {
-        const kicked = sp.get("kicked");
-        const left = sp.get("left");
-
-        if (kicked === "1") setTopToast("⛔ Du wurdest gekickt.");
-        else if (left === "1") setTopToast("ℹ️ Du hast die Lobby verlassen.");
-
-        // cleanup URL so message doesn't re-trigger on refresh
-        if (kicked === "1" || left === "1") {
-            router.replace("/host");
-        }
-    }, [sp, router]);
 
     const [hostName, setHostName] = useState("");
     const [privacy, setPrivacy] = useState<Privacy>("private");
@@ -199,35 +180,10 @@ export default function HostPage() {
         <main className="container">
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby hosten">
-                    {topToast ? (
-                        <div
-                            className="pillChip"
-                            style={{
-                                marginBottom: 12,
-                                fontWeight: 950,
-                                opacity: 0.96,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                gap: 12,
-                                padding: "10px 12px",
-                            }}
-                            role="status"
-                            aria-live="polite"
-                        >
-                            <span>{topToast}</span>
-                            <button
-                                type="button"
-                                onClick={dismissTopToast}
-                                className="btn btnSecondary btnSmall"
-                                style={{ padding: "6px 10px" }}
-                                aria-label="Hinweis schließen"
-                                title="Schließen"
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    ) : null}
+                    {/* ✅ Suspense boundary required for useSearchParams (inside HostNotice) */}
+                    <Suspense fallback={null}>
+                        <HostNotice />
+                    </Suspense>
 
                     <header className="hostHeader">
                         <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12, alignItems: "center" }}>
@@ -285,9 +241,13 @@ export default function HostPage() {
                                         <div className="pillCardHint">Empfohlen: 6–10</div>
                                     </div>
                                     <div className="pillStepper">
-                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>−</button>
+                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>
+                                            −
+                                        </button>
                                         <div className="pillStepValue">{maxPlayers}</div>
-                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>+</button>
+                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>
+                                            +
+                                        </button>
                                     </div>
                                 </div>
 
