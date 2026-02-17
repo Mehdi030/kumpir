@@ -78,26 +78,50 @@ export default function LobbyPage() {
         if (lobby?.phase === "running") hardGoGame();
     }, [lobby?.phase, hardGoGame]);
 
-    // ✅ if I got removed (kicked/left/stale cleaned) => leave lobby page
+    // ✅ if I got removed (kicked/left/stale cleaned) => go to /host with reason
     useEffect(() => {
         if (!mePlayerId) return;
         if (!lobby?.id) return;
         if (loading) return;
 
         const stillInLobby = players.some((p) => p.player_id === mePlayerId);
-        if (!stillInLobby) {
-            clearMyIdentityStorage();
-            suppressRunningRedirectRef.current = true;
-            safeRedirect(`/join?code=${encodeURIComponent(code)}`);
-        }
-    }, [loading, players, mePlayerId, lobby?.id, code, safeRedirect]);
+        if (stillInLobby) return;
+
+        (async () => {
+            try {
+                const { getSupabaseClient } = await import("@/lib/supabaseClient");
+                const supabase = getSupabaseClient();
+
+                const { data, error: statusErr } = await supabase
+                    .from("players")
+                    .select("status")
+                    .eq("lobby_id", lobby.id)
+                    .eq("player_id", mePlayerId)
+                    .maybeSingle();
+
+                const status = !statusErr ? (data?.status as string | undefined) : undefined;
+
+                clearMyIdentityStorage();
+                suppressRunningRedirectRef.current = true;
+
+                if (status === "kicked") {
+                    safeRedirect(`/host?kicked=1`);
+                } else {
+                    safeRedirect(`/host?left=1`);
+                }
+            } catch {
+                clearMyIdentityStorage();
+                suppressRunningRedirectRef.current = true;
+                safeRedirect(`/host`);
+            }
+        })();
+    }, [loading, players, mePlayerId, lobby?.id, safeRedirect]);
 
     const [toast, setToast] = useState("");
     const [busyReady, setBusyReady] = useState(false);
     const [starting, setStarting] = useState(false);
 
     // host action busy flags
-    const [busyLock, setBusyLock] = useState(false);
     const [busyKickId, setBusyKickId] = useState<string | null>(null);
     const [busyTransferId, setBusyTransferId] = useState<string | null>(null);
 
@@ -105,8 +129,6 @@ export default function LobbyPage() {
         if (!mePlayerId || !lobby?.host_player_id) return false;
         return lobby.host_player_id === mePlayerId;
     }, [lobby?.host_player_id, mePlayerId]);
-
-    const locked = !!lobby?.locked;
 
     const meReady = useMemo(() => {
         if (!mePlayerId) return false;
@@ -139,7 +161,7 @@ export default function LobbyPage() {
     const toggleReady = useCallback(async () => {
         if (!mePlayerId) return;
         if (!lobby?.id) return;
-        if (busyReady || starting || locked) return;
+        if (busyReady || starting) return;
 
         setBusyReady(true);
         try {
@@ -157,7 +179,7 @@ export default function LobbyPage() {
         } finally {
             setBusyReady(false);
         }
-    }, [busyReady, starting, locked, lobby?.id, mePlayerId, showToast]);
+    }, [busyReady, starting, lobby?.id, mePlayerId, showToast]);
 
     const startGameClick = useCallback(async () => {
         if (!amIHost) return;
@@ -183,7 +205,7 @@ export default function LobbyPage() {
         }
     }, [amIHost, mePlayerId, starting, code, showToast, hardGoGame]);
 
-    // ✅ FINAL leave: server leave + local cleanup + redirect
+    // ✅ leave: server leave + local cleanup + redirect
     const leaveLobby = useCallback(async () => {
         suppressRunningRedirectRef.current = true;
 
@@ -192,54 +214,22 @@ export default function LobbyPage() {
                 const { getSupabaseClient } = await import("@/lib/supabaseClient");
                 const supabase = getSupabaseClient();
 
-                // best effort
                 await supabase.rpc("leave_lobby", {
                     p_lobby_id: lobby.id,
                     p_player_id: mePlayerId,
                 });
             }
         } catch {
-            // ignore: leave should still redirect
+            // ignore
         } finally {
             clearMyIdentityStorage();
-            safeRedirect("/host");
+            safeRedirect("/host?left=1");
         }
     }, [mePlayerId, lobby?.id, safeRedirect]);
 
     const meLabel = useMemo(() => {
         return amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
     }, [amIHost, meName]);
-
-    const toggleLobbyLock = useCallback(async () => {
-        if (!amIHost) return;
-        if (!mePlayerId || !lobby?.id) return;
-        if (busyLock || starting) return;
-
-        setBusyLock(true);
-        try {
-            const { getSupabaseClient } = await import("@/lib/supabaseClient");
-            const supabase = getSupabaseClient();
-
-            const next = !locked;
-
-            const { error: rpcErr } = await supabase.rpc("set_lobby_lock", {
-                p_lobby_id: lobby.id,
-                p_me_player_id: mePlayerId,
-                p_locked: next,
-            });
-
-            if (rpcErr) {
-                showToast(`❌ ${rpcErr.message}`, 2500);
-                return;
-            }
-
-            showToast(next ? "🔒 Lobby gesperrt" : "🔓 Lobby offen", 1400);
-        } catch (e: unknown) {
-            showToast(`❌ ${getErrorMessage(e)}`, 2500);
-        } finally {
-            setBusyLock(false);
-        }
-    }, [amIHost, busyLock, starting, lobby?.id, locked, mePlayerId, showToast]);
 
     const kickPlayer = useCallback(
         async (targetPlayerId: string) => {
@@ -371,18 +361,6 @@ export default function LobbyPage() {
                             <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center" }}>
                                 {meLabel}
                             </div>
-
-                            {amIHost ? (
-                                <button
-                                    type="button"
-                                    className="btn btnSecondary btnSmall"
-                                    onClick={() => void toggleLobbyLock()}
-                                    disabled={busyLock || starting}
-                                    title="Lobby sperren/entsperren"
-                                >
-                                    {busyLock ? "…" : locked ? "🔒 Gesperrt" : "🔓 Offen"}
-                                </button>
-                            ) : null}
                         </div>
                     </div>
 
@@ -499,16 +477,16 @@ export default function LobbyPage() {
                             {/* Buttons row */}
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
                                 <button type="button" className="btn btnSecondary btnSmall" onClick={() => void leaveLobby()} disabled={starting}>
-                                    ← Neue Lobby
+                                    ← Hauptmenü
                                 </button>
 
                                 <button
                                     type="button"
                                     onClick={toggleReady}
-                                    disabled={busyReady || !mePlayerId || starting || locked}
-                                    className={`btn btnXL ${busyReady || starting || locked ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
+                                    disabled={busyReady || !mePlayerId || starting}
+                                    className={`btn btnXL ${busyReady || starting ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
                                 >
-                                    {locked ? "🔒 Gesperrt" : starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
+                                    {starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
                                 </button>
                             </div>
 
@@ -524,12 +502,6 @@ export default function LobbyPage() {
                             {!allReady ? (
                                 <div style={{ marginTop: 10, opacity: 0.75, fontWeight: 800, fontSize: 13 }}>
                                     Mindestens {MIN_PLAYERS} Spieler müssen beitreten und bereit sein.
-                                </div>
-                            ) : null}
-
-                            {amIHost && locked ? (
-                                <div style={{ marginTop: 10, opacity: 0.82, fontWeight: 850, fontSize: 13 }}>
-                                    🔒 Lobby ist gesperrt — niemand kann neu beitreten.
                                 </div>
                             ) : null}
                         </div>

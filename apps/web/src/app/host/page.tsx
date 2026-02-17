@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Privacy = "private" | "public";
@@ -63,10 +63,7 @@ function randomHostName() {
     return names[Math.floor(Math.random() * names.length)];
 }
 
-/**
- * ✅ FINAL: überall localStorage als Source of Truth
- * (optional: sessionStorage mitsetzen, damit alte Tabs nicht hängen)
- */
+/** localStorage as source of truth */
 function setStoredName(name: string) {
     if (typeof window === "undefined") return;
     localStorage.setItem("kumpir_player_name", name);
@@ -91,6 +88,27 @@ function getErrorMessage(err: unknown): string {
 export default function HostPage() {
     const supabase = getSupabaseClient();
     const router = useRouter();
+    const sp = useSearchParams();
+
+    // ✅ persistent banner (stays until user closes it)
+    const [topToast, setTopToast] = useState<string>("");
+
+    const dismissTopToast = useCallback(() => {
+        setTopToast("");
+    }, []);
+
+    useEffect(() => {
+        const kicked = sp.get("kicked");
+        const left = sp.get("left");
+
+        if (kicked === "1") setTopToast("⛔ Du wurdest gekickt.");
+        else if (left === "1") setTopToast("ℹ️ Du hast die Lobby verlassen.");
+
+        // cleanup URL so message doesn't re-trigger on refresh
+        if (kicked === "1" || left === "1") {
+            router.replace("/host");
+        }
+    }, [sp, router]);
 
     const [hostName, setHostName] = useState("");
     const [privacy, setPrivacy] = useState<Privacy>("private");
@@ -116,7 +134,7 @@ export default function HostPage() {
 
     const canCreate = isNameValid && !!roundSpeed && !!mode && !creating;
 
-    async function onCreate() {
+    const onCreate = useCallback(async () => {
         setCreateError("");
         if (!canCreate) return;
         if (inFlightRef.current) return;
@@ -175,12 +193,42 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }
+    }, [canCreate, hostName, roundSpeed, supabase, privacy, maxPlayers, router]);
 
     return (
         <main className="container">
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby hosten">
+                    {topToast ? (
+                        <div
+                            className="pillChip"
+                            style={{
+                                marginBottom: 12,
+                                fontWeight: 950,
+                                opacity: 0.96,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 12,
+                                padding: "10px 12px",
+                            }}
+                            role="status"
+                            aria-live="polite"
+                        >
+                            <span>{topToast}</span>
+                            <button
+                                type="button"
+                                onClick={dismissTopToast}
+                                className="btn btnSecondary btnSmall"
+                                style={{ padding: "6px 10px" }}
+                                aria-label="Hinweis schließen"
+                                title="Schließen"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    ) : null}
+
                     <header className="hostHeader">
                         <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                             <h1 className="h1">Lobby hosten</h1>
