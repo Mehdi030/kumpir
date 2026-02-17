@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 export type LobbyRow = {
@@ -8,7 +8,7 @@ export type LobbyRow = {
     code: string;
     host_player_id: string | null;
     phase: string | null;
-    locked: boolean | null; // ✅ NEW
+    locked: boolean | null;
 };
 
 export type PlayerRow = {
@@ -16,17 +16,24 @@ export type PlayerRow = {
     name: string;
     ready: boolean | null;
     joined_at?: string | null;
+    status?: "active" | "left" | "kicked" | string;
 };
 
-export function useLobbyState(
-    code: string,
-    opts?: {
-        pollMs?: number;
-        onPhaseRunning?: () => void;
-    }
-) {
+type UseLobbyStateOpts = {
+    pollMs?: number;
+    onPhaseRunning?: () => void;
+};
+
+export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
     const supabase = getSupabaseClient();
+
     const pollMs = opts?.pollMs ?? 1200;
+
+    // ✅ avoid dependency churn (opts object changes on every render in caller)
+    const onPhaseRunningRef = useRef<(() => void) | undefined>(opts?.onPhaseRunning);
+    useEffect(() => {
+        onPhaseRunningRef.current = opts?.onPhaseRunning;
+    }, [opts?.onPhaseRunning]);
 
     const [lobby, setLobby] = useState<LobbyRow | null>(null);
     const [players, setPlayers] = useState<PlayerRow[]>([]);
@@ -38,20 +45,22 @@ export function useLobbyState(
 
         const lobbyRes = await supabase
             .from("lobbies")
-            .select("id,code,host_player_id,phase,locked") // ✅ NEW: locked
+            .select("id,code,host_player_id,phase,locked")
             .eq("code", code)
             .single();
 
         if (lobbyRes.error || !lobbyRes.data) {
+            setLobby(null);
+            setPlayers([]);
             setError(lobbyRes.error?.message || "Lobby nicht gefunden.");
             return;
         }
 
         const lobbyRow = lobbyRes.data as LobbyRow;
 
-        // ✅ wenn Spiel läuft, raus aus Lobby-Page
+        // if running => let caller redirect; do not overwrite UI state unnecessarily
         if (lobbyRow.phase === "running") {
-            opts?.onPhaseRunning?.();
+            onPhaseRunningRef.current?.();
             return;
         }
 
@@ -59,17 +68,19 @@ export function useLobbyState(
 
         const playersRes = await supabase
             .from("players")
-            .select("player_id,name,ready,joined_at")
+            .select("player_id,name,ready,joined_at,status")
             .eq("lobby_id", lobbyRow.id)
-            .order("joined_at", {ascending: true});
+            .eq("status", "active")
+            .order("joined_at", { ascending: true });
 
         if (playersRes.error) {
+            setPlayers([]);
             setError(playersRes.error.message || "Konnte Spieler nicht laden.");
             return;
         }
 
         setPlayers((playersRes.data ?? []) as PlayerRow[]);
-    }, [code, supabase, opts]);
+    }, [code, supabase]);
 
     useEffect(() => {
         let alive = true;
@@ -83,18 +94,12 @@ export function useLobbyState(
             }
         })();
 
-        const t = window.setInterval(() => load(), pollMs);
+        const t = window.setInterval(() => void load(), pollMs);
         return () => {
             alive = false;
             window.clearInterval(t);
         };
     }, [load, pollMs]);
 
-    return {
-        lobby,
-        players,
-        loading,
-        error,
-        reload: load,
-    };
+    return { lobby, players, loading, error, reload: load };
 }

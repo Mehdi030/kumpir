@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
+import { useHeartbeat } from "@/hooks/useHeartbeat";
 
 function fmtJoinLink(origin: string, code: string) {
     return `${origin}/join?code=${encodeURIComponent(code)}`;
@@ -21,6 +22,15 @@ function getErrorMessage(e: unknown): string {
     }
 }
 
+function clearMyIdentityStorage() {
+    try {
+        localStorage.removeItem("kumpir_player_id");
+        sessionStorage.removeItem("kumpir_player_id");
+        localStorage.removeItem("kumpir_player_name");
+        sessionStorage.removeItem("kumpir_player_name");
+    } catch {}
+}
+
 export default function LobbyPage() {
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
@@ -33,15 +43,17 @@ export default function LobbyPage() {
     // prevents multi-redirect spam / loops
     const redirectingRef = useRef(false);
 
-    const hardGoGame = useCallback(() => {
+    const safeRedirect = useCallback((url: string) => {
         if (typeof window === "undefined") return;
         if (redirectingRef.current) return;
         redirectingRef.current = true;
-
-        // cache-buster helps when a device "sticks" on old state
-        const url = `/game/${encodeURIComponent(code)}?t=${Date.now()}`;
         window.location.assign(url);
-    }, [code]);
+    }, []);
+
+    const hardGoGame = useCallback(() => {
+        const url = `/game/${encodeURIComponent(code)}?t=${Date.now()}`;
+        safeRedirect(url);
+    }, [code, safeRedirect]);
 
     const { lobby, players, loading, error } = useLobbyState(code, {
         pollMs: 900,
@@ -51,11 +63,34 @@ export default function LobbyPage() {
         },
     });
 
+    // heartbeat + cleanup (disconnect/leaves + stale cleanup)
+    useHeartbeat({
+        lobbyId: lobby?.id,
+        playerId: mePlayerId,
+        intervalMs: 8000,
+        doCleanup: true,
+        staleSeconds: 25,
+    });
+
     // fallback redirect
     useEffect(() => {
         if (suppressRunningRedirectRef.current) return;
         if (lobby?.phase === "running") hardGoGame();
     }, [lobby?.phase, hardGoGame]);
+
+    // ✅ if I got removed (kicked/left/stale cleaned) => leave lobby page
+    useEffect(() => {
+        if (!mePlayerId) return;
+        if (!lobby?.id) return;
+        if (loading) return;
+
+        const stillInLobby = players.some((p) => p.player_id === mePlayerId);
+        if (!stillInLobby) {
+            clearMyIdentityStorage();
+            suppressRunningRedirectRef.current = true;
+            safeRedirect(`/join?code=${encodeURIComponent(code)}`);
+        }
+    }, [loading, players, mePlayerId, lobby?.id, code, safeRedirect]);
 
     const [toast, setToast] = useState("");
     const [busyReady, setBusyReady] = useState(false);
@@ -148,10 +183,28 @@ export default function LobbyPage() {
         }
     }, [amIHost, mePlayerId, starting, code, showToast, hardGoGame]);
 
-    const leaveLobby = useCallback(() => {
+    // ✅ FINAL leave: server leave + local cleanup + redirect
+    const leaveLobby = useCallback(async () => {
         suppressRunningRedirectRef.current = true;
-        if (typeof window !== "undefined") window.location.assign("/host");
-    }, []);
+
+        try {
+            if (mePlayerId && lobby?.id) {
+                const { getSupabaseClient } = await import("@/lib/supabaseClient");
+                const supabase = getSupabaseClient();
+
+                // best effort
+                await supabase.rpc("leave_lobby", {
+                    p_lobby_id: lobby.id,
+                    p_player_id: mePlayerId,
+                });
+            }
+        } catch {
+            // ignore: leave should still redirect
+        } finally {
+            clearMyIdentityStorage();
+            safeRedirect("/host");
+        }
+    }, [mePlayerId, lobby?.id, safeRedirect]);
 
     const meLabel = useMemo(() => {
         return amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
@@ -443,9 +496,9 @@ export default function LobbyPage() {
                                 </table>
                             </div>
 
-                            {/* ✅ Buttons row */}
+                            {/* Buttons row */}
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
-                                <button type="button" className="btn btnSecondary btnSmall" onClick={leaveLobby} disabled={starting}>
+                                <button type="button" className="btn btnSecondary btnSmall" onClick={() => void leaveLobby()} disabled={starting}>
                                     ← Neue Lobby
                                 </button>
 
@@ -459,7 +512,7 @@ export default function LobbyPage() {
                                 </button>
                             </div>
 
-                            {/* ✅ Start button below (not inside the row) */}
+                            {/* Start button below */}
                             {amIHost && allReady && lobby?.phase !== "running" ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                                     <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={() => void startGameClick()} disabled={starting}>
