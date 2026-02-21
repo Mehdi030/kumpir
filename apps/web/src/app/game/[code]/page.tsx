@@ -5,19 +5,37 @@ import { useParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 import { GameBoard } from "@/components/game/GameBoard";
+import { PlayerRing } from "@/components/game/PlayerRing";
+
 import { passPotato } from "@/actions/passPotato";
 import { tickGame } from "@/actions/tickGame";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 
-type LobbyPhase = "lobby" | "running" | "round_end" | "finished" | string;
+type LobbyPhase = "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
 
 type LobbyState = {
     id: string;
-    holder_player_id: string | null;
+
     phase: LobbyPhase;
-    explode_at: string | null; // ✅ used to trigger tick only when due
+    holder_player_id: string | null;
+
+    explode_at: string | null;
+    run_started_at: string | null;
     last_activity_at: string | null;
-    run_started_at: string | null; // ✅ for synced countdown
+
+    // Topic voting
+    topic_a: string | null;
+    topic_b: string | null;
+    topic_selected: string | null;
+    topic_vote_ends_at: string | null;
+
+    // Countdown (synced)
+    countdown_ends_at: string | null;
+    countdown_started_at: string | null;
+
+    // Tie visualization
+    topic_tie_choices: number[] | null; // [1,2,3] subset
+    topic_tie_pick: number | null; // 1|2|3
 };
 
 type Player = {
@@ -26,7 +44,7 @@ type Player = {
     is_alive: boolean;
 };
 
-type IntroStage = "countdown" | "reveal" | "done";
+type VoteCounts = { a: number; b: number; r: number };
 
 function getErrorMessage(e: unknown): string {
     if (e instanceof Error) return e.message;
@@ -43,12 +61,23 @@ function goLobby(code: string) {
     window.location.replace(`/lobby/${code}`);
 }
 
+function clamp(n: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, n));
+}
+
+function msUntil(ts: string | null): number | null {
+    if (!ts) return null;
+    const ms = Date.parse(ts);
+    if (Number.isNaN(ms)) return null;
+    return ms - Date.now();
+}
+
 export default function GamePage() {
     const supabase = getSupabaseClient();
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
 
-    const {mePlayerId} = usePlayerIdentity();
+    const { mePlayerId } = usePlayerIdentity();
 
     const [lobby, setLobby] = useState<LobbyState | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
@@ -56,14 +85,14 @@ export default function GamePage() {
 
     const inFlightRef = useRef(false);
 
-    // Intro
-    const [showIntro, setShowIntro] = useState(false);
-    const [introStage, setIntroStage] = useState<IntroStage>("countdown");
-    const [countdown, setCountdown] = useState(5);
-    const introStartedForRunRef = useRef(false);
+    // Topic vote state
+    const [voteCounts, setVoteCounts] = useState<VoteCounts>({ a: 0, b: 0, r: 0 });
+    const [myVote, setMyVote] = useState<1 | 2 | 3 | null>(null);
+    const [voteBusy, setVoteBusy] = useState(false);
 
-    // Server-anchored start (ms)
-    const [runStartedAtMs, setRunStartedAtMs] = useState<number | null>(null);
+    // Synced timers (display only)
+    const [voteSecondsLeft, setVoteSecondsLeft] = useState<number | null>(null);
+    const [countdownSecondsLeft, setCountdownSecondsLeft] = useState<number | null>(null);
 
     // Pass UX
     const [toast, setToast] = useState("");
@@ -91,9 +120,9 @@ export default function GamePage() {
         return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
     }, [players, lobby?.holder_player_id]);
 
-    // ✅ Poll loop:
-    // - clients read state
-    // - any alive client may trigger tickGame *when explode_at is due* (prevents freeze when holder is offline)
+    // -----------------------------
+    // Poll loop (Lobby + Players + Votes)
+    // -----------------------------
     useEffect(() => {
         let alive = true;
 
@@ -104,7 +133,24 @@ export default function GamePage() {
             try {
                 const lobbyRes = await supabase
                     .from("lobbies")
-                    .select("id, holder_player_id, phase, explode_at, last_activity_at, run_started_at")
+                    .select(
+                        [
+                            "id",
+                            "phase",
+                            "holder_player_id",
+                            "explode_at",
+                            "last_activity_at",
+                            "run_started_at",
+                            "topic_a",
+                            "topic_b",
+                            "topic_selected",
+                            "topic_vote_ends_at",
+                            "countdown_started_at",
+                            "countdown_ends_at",
+                            "topic_tie_choices",
+                            "topic_tie_pick",
+                        ].join(",")
+                    )
                     .eq("code", code)
                     .single();
 
@@ -117,29 +163,32 @@ export default function GamePage() {
 
                 const nextLobby: LobbyState = {
                     id: lobbyRes.data.id,
-                    holder_player_id: lobbyRes.data.holder_player_id,
                     phase: lobbyRes.data.phase,
+                    holder_player_id: lobbyRes.data.holder_player_id ?? null,
                     explode_at: lobbyRes.data.explode_at ?? null,
                     last_activity_at: lobbyRes.data.last_activity_at ?? null,
                     run_started_at: lobbyRes.data.run_started_at ?? null,
+
+                    topic_a: lobbyRes.data.topic_a ?? null,
+                    topic_b: lobbyRes.data.topic_b ?? null,
+                    topic_selected: lobbyRes.data.topic_selected ?? null,
+                    topic_vote_ends_at: lobbyRes.data.topic_vote_ends_at ?? null,
+
+                    countdown_started_at: lobbyRes.data.countdown_started_at ?? null,
+                    countdown_ends_at: lobbyRes.data.countdown_ends_at ?? null,
+
+                    topic_tie_choices: (lobbyRes.data.topic_tie_choices as number[] | null) ?? null,
+                    topic_tie_pick: (lobbyRes.data.topic_tie_pick as number | null) ?? null,
                 };
 
                 setLobby(nextLobby);
 
-                // ✅ set runStartedAtMs once per run
-                if (nextLobby.phase === "running" && runStartedAtMs === null && nextLobby.run_started_at) {
-                    const ms = Date.parse(nextLobby.run_started_at);
-                    if (!Number.isNaN(ms)) setRunStartedAtMs(ms);
-                }
-                if (nextLobby.phase !== "running" && runStartedAtMs !== null) {
-                    setRunStartedAtMs(null);
-                }
-
                 const playersRes = await supabase
                     .from("players")
-                    .select("player_id,name,is_alive")
+                    .select("player_id,name,is_alive,status,seat_index")
                     .eq("lobby_id", nextLobby.id)
-                    .order("seat_index", {ascending: true});
+                    .eq("status", "active")
+                    .order("seat_index", { ascending: true });
 
                 if (!alive) return;
 
@@ -148,20 +197,65 @@ export default function GamePage() {
                     return;
                 }
 
-                const nextPlayers = playersRes.data as Player[];
+                const nextPlayers = playersRes.data as unknown as Player[];
                 setPlayers(nextPlayers);
                 setFatalError("");
 
-                // ✅ tick best-effort by ANY alive client, but only when explode_at is due (reduces spam)
+                // ---- Topic vote counts (only when needed)
+                if (nextLobby.phase === "topic_vote") {
+                    const votesRes = await supabase
+                        .from("topic_votes")
+                        .select("choice,player_id")
+                        .eq("lobby_id", nextLobby.id);
+
+                    if (!alive) return;
+
+                    if (!votesRes.error && votesRes.data) {
+                        let a = 0,
+                            b = 0,
+                            r = 0;
+
+                        let mine: 1 | 2 | 3 | null = null;
+                        for (const row of votesRes.data as Array<{ choice: number; player_id: string }>) {
+                            if (row.choice === 1) a++;
+                            else if (row.choice === 2) b++;
+                            else if (row.choice === 3) r++;
+
+                            if (mePlayerId && row.player_id === mePlayerId) {
+                                if (row.choice === 1 || row.choice === 2 || row.choice === 3) mine = row.choice as 1 | 2 | 3;
+                            }
+                        }
+                        setVoteCounts({ a, b, r });
+                        setMyVote(mine);
+                    }
+                } else {
+                    // cleanup
+                    setVoteCounts({ a: 0, b: 0, r: 0 });
+                    setMyVote(null);
+                }
+
+                // ---- Best-effort “advance” calls (prevents freeze)
+                // 1) running: tickGame due
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
                     const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
-
                     const explodeMs = Date.parse(nextLobby.explode_at);
                     const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
+                    if (meAlive && due) void tickGame(code).catch(() => {});
+                }
 
-                    if (meAlive && due) {
-                        void tickGame(code).catch(() => {
-                        });
+                // 2) topic_vote: finalize when due (fallback if nobody triggers early finish)
+                if (nextLobby.phase === "topic_vote" && nextLobby.topic_vote_ends_at) {
+                    const dueMs = msUntil(nextLobby.topic_vote_ends_at);
+                    if (dueMs !== null && dueMs <= 0) {
+                        void supabase.rpc("rpc_finalize_topic_vote", { p_lobby_id: nextLobby.id }).catch(() => {});
+                    }
+                }
+
+                // 3) countdown: advance to running when due
+                if (nextLobby.phase === "countdown" && nextLobby.countdown_ends_at) {
+                    const dueMs = msUntil(nextLobby.countdown_ends_at);
+                    if (dueMs !== null && dueMs <= 0) {
+                        void supabase.rpc("rpc_advance_from_countdown", { p_lobby_id: nextLobby.id }).catch(() => {});
                     }
                 }
             } finally {
@@ -176,77 +270,36 @@ export default function GamePage() {
             alive = false;
             window.clearInterval(t);
         };
-    }, [code, supabase, mePlayerId, runStartedAtMs]);
+    }, [code, supabase, mePlayerId]);
 
-    // ✅ Intro startet genau einmal, wenn Phase auf running geht
-    const phase = lobby?.phase;
-
+    // -----------------------------
+    // Synced timers (vote + countdown)
+    // -----------------------------
     useEffect(() => {
-        if (!phase) return;
-
-        if (phase !== "running") {
-            setShowIntro(false);
-            setIntroStage("countdown");
-            setCountdown(5);
-            introStartedForRunRef.current = false;
-            return;
-        }
-
-        if (introStartedForRunRef.current) return;
-
-        introStartedForRunRef.current = true;
-        setShowIntro(true);
-        setIntroStage("countdown");
-        setCountdown(5);
-    }, [phase]);
-
-    // ✅ Synced 5s countdown from run_started_at (fallback to local if missing)
-    useEffect(() => {
-        if (!showIntro) return;
-
-        const COUNTDOWN_MS = 5000;
-        const REVEAL_MS = 1200;
-
-        // fallback local countdown if no anchor yet
-        if (!runStartedAtMs) {
-            if (introStage === "countdown") {
-                if (countdown <= 0) {
-                    setIntroStage("reveal");
-                    return;
-                }
-                const t = window.setTimeout(() => setCountdown((c) => c - 1), 1000);
-                return () => window.clearTimeout(t);
-            }
-
-            if (introStage === "reveal") {
-                const t = window.setTimeout(() => {
-                    setIntroStage("done");
-                    setShowIntro(false);
-                }, 1200);
-                return () => window.clearTimeout(t);
-            }
-
-            return;
-        }
-
         let raf = 0;
 
         const step = () => {
-            const now = Date.now();
-            const elapsed = now - runStartedAtMs;
-
-            if (elapsed < COUNTDOWN_MS) {
-                setIntroStage("countdown");
-                const remainingMs = COUNTDOWN_MS - elapsed;
-                const sec = Math.max(0, Math.min(5, Math.ceil(remainingMs / 1000)));
-                setCountdown(sec);
-            } else if (elapsed < COUNTDOWN_MS + REVEAL_MS) {
-                setIntroStage("reveal");
-                setCountdown(0);
-            } else {
-                setIntroStage("done");
-                setShowIntro(false);
+            if (!lobby) {
+                setVoteSecondsLeft(null);
+                setCountdownSecondsLeft(null);
+                raf = window.requestAnimationFrame(step);
                 return;
+            }
+
+            if (lobby.phase === "topic_vote") {
+                const ms = msUntil(lobby.topic_vote_ends_at);
+                if (ms === null) setVoteSecondsLeft(null);
+                else setVoteSecondsLeft(clamp(Math.ceil(ms / 1000), 0, 99));
+            } else {
+                setVoteSecondsLeft(null);
+            }
+
+            if (lobby.phase === "countdown") {
+                const ms = msUntil(lobby.countdown_ends_at);
+                if (ms === null) setCountdownSecondsLeft(null);
+                else setCountdownSecondsLeft(clamp(Math.ceil(ms / 1000), 0, 10));
+            } else {
+                setCountdownSecondsLeft(null);
             }
 
             raf = window.requestAnimationFrame(step);
@@ -256,80 +309,81 @@ export default function GamePage() {
         return () => {
             if (raf) window.cancelAnimationFrame(raf);
         };
-    }, [showIntro, runStartedAtMs, introStage, countdown]);
+    }, [lobby]);
 
-    // ✅ PASS handler
+    // -----------------------------
+    // Vote action
+    // -----------------------------
+    const vote = useCallback(
+        async (choice: 1 | 2 | 3) => {
+            if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
+            if (!lobby) return;
+            if (lobby.phase !== "topic_vote") return;
+            if (voteBusy) return;
+
+            setVoteBusy(true);
+            try {
+                await supabase.rpc("rpc_vote_topic", {
+                    p_lobby_id: lobby.id,
+                    p_player_id: mePlayerId,
+                    p_choice: choice,
+                });
+
+                setMyVote(choice);
+                showToast("✅ Vote gespeichert", 900);
+            } catch (e: unknown) {
+                showToast(`❌ ${getErrorMessage(e)}`, 2400);
+            } finally {
+                setVoteBusy(false);
+            }
+        },
+        [mePlayerId, lobby, voteBusy, supabase, showToast]
+    );
+
+    // -----------------------------
+    // PASS handler
+    // -----------------------------
     const handlePass = useCallback(async () => {
-        if (!mePlayerId) {
-            showToast("⚠️ Keine Player-ID", 1800);
-            return;
-        }
-        if (!lobby || lobby.phase !== "running") {
-            showToast("⏳ Noch nicht gestartet", 1400);
-            return;
-        }
-        if (iAmEliminated) {
-            showToast("💀 Du bist raus", 1400);
-            return;
-        }
-        if (!isMeHolder) {
-            showToast("🙅 Du hast die Kartoffel nicht", 1400);
-            return;
-        }
+        if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
+        if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
+        if (iAmEliminated) return showToast("💀 Du bist raus", 1400);
+        if (!isMeHolder) return showToast("🙅 Du hast die Kartoffel nicht", 1400);
         if (passBusy) return;
 
         setPassBusy(true);
         try {
             await passPotato(code, mePlayerId);
             showToast("✅ Weitergegeben", 900);
-
-            // pull lobby once quickly (best-effort)
-            void supabase
-                .from("lobbies")
-                .select("id, holder_player_id, phase, explode_at, last_activity_at, run_started_at")
-                .eq("code", code)
-                .single()
-                .then((r) => {
-                    if (r.data) {
-                        setLobby({
-                            id: r.data.id,
-                            holder_player_id: r.data.holder_player_id,
-                            phase: r.data.phase,
-                            explode_at: r.data.explode_at ?? null,
-                            last_activity_at: r.data.last_activity_at ?? null,
-                            run_started_at: r.data.run_started_at ?? null,
-                        });
-                    }
-                })
-                .catch(() => {
-                });
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
             setPassBusy(false);
         }
-    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, showToast, supabase]);
+    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, showToast]);
 
-    // Spacebar pass
+    // Spacebar pass (nur running)
     useEffect(() => {
         const onKeyDown = (ev: KeyboardEvent) => {
             if (ev.code !== "Space") return;
+            if (!lobby || lobby.phase !== "running") return;
             ev.preventDefault();
             void handlePass();
         };
 
-        window.addEventListener("keydown", onKeyDown, {passive: false});
+        window.addEventListener("keydown", onKeyDown, { passive: false });
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [handlePass]);
+    }, [handlePass, lobby]);
 
-    // UI states
+    // -----------------------------
+    // UI: fatal / loading
+    // -----------------------------
     if (fatalError) {
         return (
-            <main style={{minHeight: "100vh", display: "grid", placeItems: "center", padding: 24}}>
-                <div style={{width: "min(720px, 96vw)", textAlign: "center"}}>
-                    <div style={{fontWeight: 950, fontSize: 22}}>⚠️ Spiel konnte nicht geladen werden</div>
-                    <div style={{marginTop: 10, opacity: 0.8}}>{fatalError}</div>
-                    <div style={{marginTop: 18}}>
+            <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+                <div style={{ width: "min(720px, 96vw)", textAlign: "center" }}>
+                    <div style={{ fontWeight: 950, fontSize: 22 }}>⚠️ Spiel konnte nicht geladen werden</div>
+                    <div style={{ marginTop: 10, opacity: 0.8 }}>{fatalError}</div>
+                    <div style={{ marginTop: 18 }}>
                         <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
                             Zurück zur Lobby
                         </button>
@@ -341,7 +395,16 @@ export default function GamePage() {
 
     if (!lobby) return <div className="p-6 opacity-70">Lade Spiel…</div>;
 
-    if (lobby.phase !== "running" && lobby.phase !== "finished") {
+    // -----------------------------
+    // Phase: topic_vote
+    // -----------------------------
+    if (lobby.phase === "topic_vote") {
+        const a = lobby.topic_a ?? "…";
+        const b = lobby.topic_b ?? "…";
+
+        const totalPlayers = players.length;
+        const votedPlayers = voteCounts.a + voteCounts.b + voteCounts.r;
+
         return (
             <main
                 style={{
@@ -350,102 +413,151 @@ export default function GamePage() {
                     placeItems: "center",
                     padding: 24,
                     background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
+                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.45) 0%, rgba(192,106,0,0.82) 80%)",
                 }}
             >
-                <div style={{width: "min(820px, 96vw)", textAlign: "center"}}>
-                    <div style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75}}>WARTEN</div>
-                    <div style={{fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12}}>⏳ Warten auf
-                        Start…
-                    </div>
-                    <div style={{marginTop: 10, opacity: 0.78, fontWeight: 700}}>Der Host startet gleich das Spiel.
-                    </div>
-                    <div style={{display: "flex", justifyContent: "center", gap: 12, marginTop: 22}}>
-                        <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
-                            Zur Lobby
-                        </button>
+                <div style={{ width: "min(900px, 96vw)" }}>
+                    <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA VOTING</div>
+
+                        <div style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 950, marginTop: 10 }}>
+                            Wählt das Thema
+                        </div>
+
+                        <div style={{ marginTop: 10, opacity: 0.8, fontWeight: 750 }}>
+                            Zeit: <b>{voteSecondsLeft ?? 15}s</b> · Votes: <b>{votedPlayers}</b> / <b>{totalPlayers}</b>
+                        </div>
+
+                        <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
+                            <button
+                                className={`btn btnXL ${myVote === 1 ? "btnPrimary" : "btnSecondary"}`}
+                                disabled={voteBusy || !mePlayerId}
+                                onClick={() => void vote(1)}
+                                type="button"
+                                style={{ width: "100%" }}
+                            >
+                                ① {a} <span style={{ opacity: 0.75, marginLeft: 10 }}>({voteCounts.a})</span>
+                            </button>
+
+                            <button
+                                className={`btn btnXL ${myVote === 2 ? "btnPrimary" : "btnSecondary"}`}
+                                disabled={voteBusy || !mePlayerId}
+                                onClick={() => void vote(2)}
+                                type="button"
+                                style={{ width: "100%" }}
+                            >
+                                ② {b} <span style={{ opacity: 0.75, marginLeft: 10 }}>({voteCounts.b})</span>
+                            </button>
+
+                            <button
+                                className={`btn btnXL ${myVote === 3 ? "btnPrimary" : "btnSecondary"}`}
+                                disabled={voteBusy || !mePlayerId}
+                                onClick={() => void vote(3)}
+                                type="button"
+                                style={{ width: "100%" }}
+                            >
+                                ③ 🎲 Zufällig <span style={{ opacity: 0.75, marginLeft: 10 }}>({voteCounts.r})</span>
+                            </button>
+                        </div>
+
+                        <div style={{ marginTop: 14, opacity: 0.78, fontWeight: 750 }}>
+                            Wenn alle gewählt haben, geht’s sofort weiter.
+                        </div>
+
+                        <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 12 }}>
+                            <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
+                                Zur Lobby
+                            </button>
+                        </div>
+
+                        {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
                     </div>
                 </div>
             </main>
         );
     }
 
-    // Intro
-    if (showIntro && lobby.phase === "running") {
-        const bg = isMeHolder
-            ? "radial-gradient(circle at 50% 35%, rgba(255,140,70,0.55) 0%, rgba(143,15,15,0.96) 72%)"
-            : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.55) 0%, rgba(192,106,0,0.88) 80%)";
+    // -----------------------------
+    // Phase: countdown (synced)
+    // -----------------------------
+    if (lobby.phase === "countdown") {
+        const selected = lobby.topic_selected ?? lobby.topic_a ?? "…";
+
+        const tie = lobby.topic_tie_choices && lobby.topic_tie_choices.length > 1;
+        const tieChoices = lobby.topic_tie_choices ?? [];
+        const pick = lobby.topic_tie_pick;
+
+        const labelForChoice = (c: number) => {
+            if (c === 1) return `① ${lobby.topic_a ?? "…"} `;
+            if (c === 2) return `② ${lobby.topic_b ?? "…"} `;
+            if (c === 3) return `③ 🎲 Zufällig `;
+            return String(c);
+        };
 
         return (
             <main
                 style={{
                     minHeight: "100vh",
-                    width: "100vw",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
-                    overflow: "hidden",
-                    background: bg,
-                    position: "relative",
+                    background:
+                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.22) 0%, rgba(0,120,45,0.68) 80%)",
                 }}
             >
-                {introStage === "countdown" ? (
-                    <div
-                        aria-hidden
-                        style={{
-                            position: "absolute",
-                            inset: 0,
-                            backdropFilter: "blur(10px)",
-                            WebkitBackdropFilter: "blur(10px)",
-                            background: "rgba(0,0,0,0.18)",
-                        }}
-                    />
-                ) : null}
+                <div style={{ width: "min(920px, 96vw)", textAlign: "center" }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
-                <div style={{textAlign: "center", width: "min(920px, 96vw)", position: "relative", zIndex: 2}}>
-                    {introStage === "countdown" ? (
-                        <>
-                            <div style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75}}>START IN
+                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 12 }}>
+                        {selected}
+                    </div>
+
+                    {tie ? (
+                        <div style={{ marginTop: 12, opacity: 0.85, fontWeight: 800 }}>
+                            Tie zwischen:{" "}
+                            <span style={{ opacity: 0.95 }}>
+                {tieChoices.map((c) => labelForChoice(c)).join(" · ")}
+              </span>
+                            <div style={{ marginTop: 6, opacity: 0.9 }}>
+                                Zufällig gewählt: <b>{pick ? labelForChoice(pick) : "…"}</b>
                             </div>
-                            <div
-                                style={{
-                                    marginTop: 14,
-                                    fontSize: "clamp(80px, 10vw, 140px)",
-                                    fontWeight: 950,
-                                    letterSpacing: 2,
-                                    textShadow: "0 18px 70px rgba(0,0,0,0.35)",
-                                }}
-                            >
-                                {Math.max(0, countdown)}
-                            </div>
-                            <div style={{marginTop: 10, fontSize: 14, fontWeight: 800, opacity: 0.75}}>Bereit machen…
-                            </div>
-                        </>
+                        </div>
                     ) : (
-                        <>
-                            <div style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75}}>READY?</div>
-                            <div style={{fontSize: "clamp(44px, 6vw, 84px)", fontWeight: 950, marginTop: 12}}>
-                                {isMeHolder ? "🔥 DU STARTERST HEISS" : "🌿 BLEIB RUHIG"}
-                            </div>
-                            <div style={{marginTop: 12, fontSize: 14, fontWeight: 750, opacity: 0.78}}>
-                                Holder: <b>{holderName}</b>
-                            </div>
-                            <div style={{marginTop: 16, fontSize: 14, fontWeight: 700, opacity: 0.72}}>
-                                Wenn du die Kartoffel hast: <b>Leertaste</b> oder Button → weitergeben.
-                            </div>
-                            <div style={{marginTop: 22, opacity: 0.7, fontWeight: 800}}>Los!</div>
-                        </>
+                        <div style={{ marginTop: 12, opacity: 0.82, fontWeight: 750 }}>Jetzt kurz Thema im Kopf: sag gleich was dazu.</div>
                     )}
 
-                    {toast ? <div style={{marginTop: 18, fontWeight: 900, opacity: 0.92}}>{toast}</div> : null}
+                    <div style={{ marginTop: 22, fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>START IN</div>
+                    <div
+                        style={{
+                            marginTop: 10,
+                            fontSize: "clamp(80px, 10vw, 140px)",
+                            fontWeight: 950,
+                            letterSpacing: 2,
+                            textShadow: "0 18px 70px rgba(0,0,0,0.35)",
+                        }}
+                    >
+                        {Math.max(0, countdownSecondsLeft ?? 5)}
+                    </div>
+
+                    <div style={{ marginTop: 14, display: "flex", justifyContent: "center", gap: 12 }}>
+                        <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
+                            Zur Lobby
+                        </button>
+                    </div>
+
+                    {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
                 </div>
             </main>
         );
     }
 
-    // Finished
+    // -----------------------------
+    // Phase: finished
+    // -----------------------------
     if (lobby.phase === "finished") {
-        const winner = lobby.holder_player_id ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt" : "Unbekannt";
+        const winner = lobby.holder_player_id
+            ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
+            : "Unbekannt";
 
         return (
             <main
@@ -458,21 +570,17 @@ export default function GamePage() {
                         "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.55) 0%, rgba(192,106,0,0.88) 80%)",
                 }}
             >
-                <div style={{textAlign: "center", width: "min(900px, 96vw)"}}>
-                    <div style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75}}>SPIEL BEENDET</div>
-                    <div style={{fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14}}>🏆 {winner}</div>
-                    <div style={{
-                        marginTop: 12,
-                        fontSize: 14,
-                        fontWeight: 700,
-                        opacity: 0.75
-                    }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
-                    <div style={{display: "flex", gap: 12, justifyContent: "center", marginTop: 22}}>
+                <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>SPIEL BEENDET</div>
+                    <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
+                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>
+                        {iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}
+                    </div>
+                    <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
                         <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
                             Zur Lobby
                         </button>
-                        <button className="btn btnSecondary btnXL" onClick={() => (window.location.href = "/")}
-                                type="button">
+                        <button className="btn btnSecondary btnXL" onClick={() => (window.location.href = "/")} type="button">
                             Hauptmenü
                         </button>
                     </div>
@@ -481,9 +589,54 @@ export default function GamePage() {
         );
     }
 
-    // Main board (+ toast overlay)
+    // -----------------------------
+    // Phase: running (Main board + ring + backgrounds)
+    // -----------------------------
+    if (lobby.phase !== "running") {
+        // fallback (z.B. lobby/round_end)
+        return (
+            <main
+                style={{
+                    minHeight: "100vh",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 24,
+                    background:
+                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
+                }}
+            >
+                <div style={{ width: "min(820px, 96vw)", textAlign: "center" }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>WARTEN</div>
+                    <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>⏳ Warten…</div>
+                    <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>Der Host startet gleich das Spiel.</div>
+                    <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 22 }}>
+                        <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
+                            Zur Lobby
+                        </button>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
+    const runningBg = isMeHolder
+        ? "radial-gradient(circle at 50% 35%, rgba(255,120,80,0.55) 0%, rgba(143,15,15,0.96) 72%)"
+        : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.26) 0%, rgba(0,130,60,0.78) 80%)";
+
     return (
-        <>
+        <main
+            style={{
+                minHeight: "100vh",
+                width: "100vw",
+                position: "relative",
+                overflow: "hidden",
+                background: runningBg,
+            }}
+        >
+            {/* Holder pulse */}
+            {isMeHolder ? <div className="holderPulseLayer" aria-hidden /> : null}
+
+            {/* Toast overlay */}
             {toast ? (
                 <div
                     style={{
@@ -505,8 +658,28 @@ export default function GamePage() {
                 </div>
             ) : null}
 
-            <GameBoard holderPlayerId={lobby.holder_player_id} players={players} mePlayerId={mePlayerId}
-                       onPass={handlePass}/>
-        </>
+            {/* Ring overlay */}
+            <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} />
+
+            {/* Existing board (pass action stays) */}
+            <GameBoard holderPlayerId={lobby.holder_player_id} players={players} mePlayerId={mePlayerId} onPass={handlePass} />
+
+            <style>{`
+        @keyframes holderPulse {
+          0% { transform: scale(1); opacity: .55; }
+          50% { transform: scale(1.03); opacity: .90; }
+          100% { transform: scale(1); opacity: .55; }
+        }
+        .holderPulseLayer{
+          position:absolute;
+          inset:-40px;
+          background: radial-gradient(circle at 50% 40%, rgba(255,90,90,.62), rgba(143,15,15,.95));
+          filter: blur(18px);
+          animation: holderPulse 1.2s ease-in-out infinite;
+          pointer-events:none;
+          z-index: 0;
+        }
+      `}</style>
+        </main>
     );
 }

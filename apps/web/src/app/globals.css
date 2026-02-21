@@ -1386,3 +1386,17 @@ body::after{
     border: 1px solid rgba(255,255,255,0.08);
     opacity: 0.9;
 }
+
+@keyframes holderPulse {
+    0% { transform: scale(1); opacity: .55; }
+    50% { transform: scale(1.03); opacity: .85; }
+    100% { transform: scale(1); opacity: .55; }
+}
+.holderPulseLayer {
+    position: absolute;
+    inset: -30px;
+    background: radial-gradient(circle at 50% 40%, rgba(255,80,80,.55), rgba(143,15,15,.92));
+    filter: blur(18px);
+    animation: holderPulse 1.2s ease-in-out infinite;
+    pointer-events: none;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Player = {
     player_id: string;
@@ -8,173 +8,108 @@ type Player = {
     is_alive: boolean;
 };
 
-export type PlayerPosMap = Record<string, { x: number; y: number }>;
-
-export function PlayerRing({
-                               players,
-                               holderPlayerId,
-                               mePlayerId,
-                               onPositions,
-                           }: {
+type Props = {
     players: Player[];
     holderPlayerId: string | null;
     mePlayerId: string | null;
-    onPositions?: (map: PlayerPosMap) => void;
-}) {
-    const containerRef = useRef<HTMLDivElement | null>(null);
+};
 
-    const ordered = useMemo(() => reorder(players, mePlayerId), [players, mePlayerId]);
-    const n = ordered.length;
+function clamp(n: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, n));
+}
 
-    // Layout parameters
-    const radius = Math.min(320, Math.max(160, 120 + n * 18));
-    const ellipseY = 0.62;
+export function PlayerRing({ players, holderPlayerId, mePlayerId }: Props) {
+    const [vw, setVw] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1200);
+    const [vh, setVh] = useState<number>(typeof window !== "undefined" ? window.innerHeight : 800);
 
-    // Compute positions in container coords
-    const layout = useMemo(() => {
-        return ordered.map((p, idx) => {
-            const a = computeAngle(idx, n);
-            const x = Math.cos(a) * radius;
-            const y = Math.sin(a) * radius * ellipseY;
-            return { id: p.player_id, x, y };
-        });
-    }, [ordered, n, radius]);
+    useEffect(() => {
+        const onResize = () => {
+            setVw(window.innerWidth);
+            setVh(window.innerHeight);
+        };
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+    }, []);
 
-    // Report viewport positions for flying potato
-    useLayoutEffect(() => {
-        if (!onPositions) return;
-        const el = containerRef.current;
-        if (!el) return;
+    const alivePlayers = useMemo(() => players.filter((p) => p.is_alive), [players]);
 
-        const rect = el.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height * 0.62; // same anchor as render (top: 62%)
+    const N = alivePlayers.length || 1;
 
-        const map: PlayerPosMap = {};
-        for (const pt of layout) {
-            map[pt.id] = { x: cx + pt.x, y: cy + pt.y };
-        }
-        onPositions(map);
-    }, [layout, onPositions]);
+    const cx = vw / 2;
+    const cy = vh / 2;
 
+    // Ellipse radii: keep margin for UI buttons etc.
+    const margin = 80;
+    const rx = clamp(vw / 2 - margin, 220, 520);
+    const ry = clamp(vh / 2 - margin, 160, 420);
+
+    // Keep ring behind primary interaction, but visible
     return (
         <div
-            ref={containerRef}
+            aria-hidden
             style={{
-                position: "relative",
-                height: 260,
-                width: "min(980px, 100%)",
-                margin: "0 auto",
+                position: "absolute",
+                inset: 0,
+                zIndex: 2,
+                pointerEvents: "none",
             }}
         >
-            {/* Plate */}
-            <div
-                aria-hidden
-                style={{
-                    position: "absolute",
-                    left: "50%",
-                    top: "62%",
-                    transform: "translate(-50%, -50%)",
-                    width: "min(920px, 98%)",
-                    height: 210,
-                    borderRadius: 999,
-                    background: "rgba(0,0,0,0.10)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    boxShadow: "0 18px 70px rgba(0,0,0,0.18)",
-                }}
-            />
-
-            {ordered.map((p, idx) => {
+            {alivePlayers.map((p, i) => {
                 const isHolder = !!holderPlayerId && p.player_id === holderPlayerId;
                 const isMe = !!mePlayerId && p.player_id === mePlayerId;
 
-                const size = isHolder ? 96 : 74;
+                // Start at top (-90deg) and go clockwise
+                const angle = (Math.PI * 2 * i) / N - Math.PI / 2;
 
-                const pt = layout[idx];
-                const x = pt?.x ?? 0;
-                const y = pt?.y ?? 0;
+                const x = cx + Math.cos(angle) * rx;
+                const y = cy + Math.sin(angle) * ry;
+
+                const scale = isHolder ? 1.18 : isMe ? 1.08 : 1.0;
+
+                const bg = isHolder
+                    ? "rgba(255,90,90,0.22)"
+                    : "rgba(0,0,0,0.30)";
+
+                const border = isHolder
+                    ? "1px solid rgba(255,160,160,0.40)"
+                    : "1px solid rgba(255,255,255,0.10)";
+
+                const glow = isHolder
+                    ? "0 0 22px rgba(255,90,90,0.35)"
+                    : isMe
+                        ? "0 0 18px rgba(255,255,255,0.18)"
+                        : "none";
 
                 return (
                     <div
                         key={p.player_id}
                         style={{
                             position: "absolute",
-                            left: "50%",
-                            top: "62%",
-                            transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
-                            width: size,
-                            height: size,
+                            left: x,
+                            top: y,
+                            transform: `translate(-50%, -50%) scale(${scale})`,
+                            padding: "10px 14px",
                             borderRadius: 999,
-                            display: "grid",
-                            placeItems: "center",
-                            textAlign: "center",
-                            padding: 10,
-                            userSelect: "none",
-                            opacity: p.is_alive ? 1 : 0.35,
-                            filter: p.is_alive ? "none" : "grayscale(1)",
-
-                            background: isHolder
-                                ? "linear-gradient(135deg, rgba(255,70,40,0.92), rgba(255,25,60,0.85))"
-                                : "rgba(0,0,0,0.16)",
-                            border: isHolder
-                                ? "1px solid rgba(255,180,120,0.45)"
-                                : "1px solid rgba(255,255,255,0.12)",
-                            boxShadow: isHolder
-                                ? "0 0 0 2px rgba(255,90,40,0.22), 0 20px 60px rgba(255,60,40,0.22), 0 0 40px rgba(255,90,40,0.22)"
-                                : "0 14px 40px rgba(0,0,0,0.18)",
+                            background: bg,
+                            border,
+                            boxShadow: glow,
+                            backdropFilter: "blur(10px)",
+                            WebkitBackdropFilter: "blur(10px)",
+                            fontWeight: 950,
+                            letterSpacing: 0.2,
+                            whiteSpace: "nowrap",
+                            opacity: p.is_alive ? 1 : 0.5,
                         }}
                     >
-                        <div style={{ lineHeight: 1.05 }}>
-                            <div style={{ fontSize: 13, fontWeight: 900 }}>
-                                {p.name}
-                                {isMe ? " (Du)" : ""}
-                            </div>
-                            {isHolder && (
-                                <div style={{ marginTop: 6, fontSize: 12, fontWeight: 950, opacity: 0.95 }}>
-                                    🥔 HOLDER
-                                </div>
-                            )}
-                        </div>
+            <span style={{ marginRight: 8, opacity: 0.85 }}>
+              {isHolder ? "🥔" : isMe ? "👤" : "•"}
+            </span>
+                        <span style={{ opacity: 0.95 }}>{p.name}</span>
+                        {isHolder ? <span style={{ marginLeft: 8, opacity: 0.85 }}>HOLDER</span> : null}
+                        {!p.is_alive ? <span style={{ marginLeft: 8, opacity: 0.75 }}>💀</span> : null}
                     </div>
                 );
             })}
         </div>
     );
-}
-
-/**
- * Layout:
- * - idx=0 ist "me" und sitzt unten (90°)
- * - 2–3 Spieler: schöner Halbkreis unten (nicht kompletter Ring)
- * - 4+ Spieler: kompletter Ring (Ellipse)
- */
-function computeAngle(idx: number, n: number) {
-    // me unten
-    const bottom = Math.PI / 2;
-
-    if (n <= 1) return bottom;
-
-    if (n === 2) {
-        // me unten, other leicht links oben (gefühlt)
-        return idx === 0 ? bottom : bottom - Math.PI * 0.75;
-    }
-
-    if (n === 3) {
-        // Halbkreis unten: me unten, zwei oben links/rechts
-        const angles = [bottom, bottom - Math.PI * 0.70, bottom + Math.PI * 0.70];
-        return angles[idx] ?? bottom;
-    }
-
-    // 4+ full ring
-    const step = (Math.PI * 2) / n;
-    return bottom + idx * step;
-}
-
-function reorder(players: Player[], meId: string | null) {
-    if (!meId) return players;
-
-    const me = players.find((p) => p.player_id === meId);
-    const others = players.filter((p) => p.player_id !== meId);
-
-    return me ? [me, ...others] : players;
 }
