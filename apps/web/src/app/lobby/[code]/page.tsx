@@ -39,6 +39,8 @@ function clearMyIdentityStorage() {
     } catch {}
 }
 
+const GAME_PHASES = new Set(["topic_vote", "countdown", "running"]);
+
 export default function LobbyPage() {
     const params = useParams<{ code: string }>();
     const router = useRouter();
@@ -46,9 +48,9 @@ export default function LobbyPage() {
     const code = String(params.code ?? "").toUpperCase();
     const { mePlayerId, meName } = usePlayerIdentity();
 
-    const suppressRunningRedirectRef = useRef(false);
+    const suppressRedirectRef = useRef(false);
 
-    // ✅ navigation helper (App Router) — use replace for clean back behavior
+    // navigation helper
     const go = useCallback(
         (url: string) => {
             router.replace(url);
@@ -57,11 +59,9 @@ export default function LobbyPage() {
     );
 
     const hardGoGame = useCallback(() => {
-        go(`/game/${encodeURIComponent(code)}`);
+        go(`/game/${encodeURIComponent(code)}?t=${Date.now()}`);
     }, [code, go]);
 
-    // ✅ single source of truth: lobby.phase
-    // (do NOT use onPhaseRunning here — keep one redirect mechanism)
     const { lobby, players, loading, error } = useLobbyState(code, {
         pollMs: 900,
     });
@@ -83,10 +83,11 @@ export default function LobbyPage() {
         staleSeconds: 25,
     });
 
-    // ✅ running -> game (DB is source of truth)
+    // ✅ game phases -> game
     useEffect(() => {
-        if (suppressRunningRedirectRef.current) return;
-        if (lobby?.phase === "running") hardGoGame();
+        if (suppressRedirectRef.current) return;
+        const ph = lobby?.phase ?? null;
+        if (ph && GAME_PHASES.has(ph)) hardGoGame();
     }, [lobby?.phase, hardGoGame]);
 
     // removed from lobby -> go /host with reason
@@ -113,12 +114,12 @@ export default function LobbyPage() {
                 const status = !statusErr ? (data?.status as string | undefined) : undefined;
 
                 clearMyIdentityStorage();
-                suppressRunningRedirectRef.current = true;
+                suppressRedirectRef.current = true;
 
                 go(status === "kicked" ? `/host?kicked=1` : `/host?left=1`);
             } catch {
                 clearMyIdentityStorage();
-                suppressRunningRedirectRef.current = true;
+                suppressRedirectRef.current = true;
                 go(`/host`);
             }
         })();
@@ -193,7 +194,7 @@ export default function LobbyPage() {
                 return;
             }
 
-            // ✅ Do NOT navigate immediately; wait for lobby.phase === "running"
+            // ✅ No immediate navigation; DB phase triggers redirect to /game (topic_vote/countdown/running)
             showToast("✅ Spiel startet…", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2500);
@@ -203,7 +204,7 @@ export default function LobbyPage() {
     }, [amIHost, mePlayerId, starting, isRunning, code, showToast]);
 
     const leaveLobby = useCallback(async () => {
-        suppressRunningRedirectRef.current = true;
+        suppressRedirectRef.current = true;
 
         try {
             if (mePlayerId && lobbyId) {
@@ -303,10 +304,7 @@ export default function LobbyPage() {
                                     </button>
 
                                     {toast ? (
-                                        <div
-                                            className="fieldHelp"
-                                            style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}
-                                        >
+                                        <div className="fieldHelp" style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}>
                                             {toast}
                                         </div>
                                     ) : (
@@ -349,21 +347,13 @@ export default function LobbyPage() {
                                             title={lobby.topic ?? undefined}
                                         >
                                             <span style={{ opacity: 0.8 }}>🏷️</span>
-                                            <span
-                                                style={{
-                                                    fontWeight: 900,
-                                                    whiteSpace: "nowrap",
-                                                    overflow: "hidden",
-                                                    textOverflow: "ellipsis",
-                                                }}
-                                            >
+                                            <span style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {lobby.topic}
                       </span>
                                         </div>
                                     ) : null}
                                 </div>
 
-                                {/* 🚫 Admin intentionally not linked from LobbyPage (kept for later) */}
                                 {amIHost ? (
                                     <div
                                         className="pillChip"
@@ -472,9 +462,7 @@ export default function LobbyPage() {
                                     type="button"
                                     onClick={toggleReady}
                                     disabled={busyReady || !mePlayerId || starting || isRunning}
-                                    className={`btn btnXL ${busyReady || starting || isRunning ? "btnDisabled" : ""} ${
-                                        meReady ? "btnReadyOff" : "btnReadyOn"
-                                    }`}
+                                    className={`btn btnXL ${busyReady || starting || isRunning ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
                                 >
                                     {isRunning ? "🚀 Läuft" : starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
                                 </button>

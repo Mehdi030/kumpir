@@ -62,7 +62,6 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
         const lobbyRow = lobbyRes.data as LobbyRow;
         setLobby(lobbyRow);
 
-        // fire callback only on transition -> running
         const prev = prevPhaseRef.current;
         const next = lobbyRow.phase ?? null;
         if (prev !== "running" && next === "running") {
