@@ -342,7 +342,11 @@ export default function LobbyPage() {
                                     </div>
 
                                     {lobby?.topic ? (
-                                        <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }} title={lobby.topic}>
+                                        <div
+                                            className="pillChip"
+                                            style={{ height: 32, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }}
+                                            title={lobby.topic ?? undefined}
+                                        >
                                             <span style={{ opacity: 0.8 }}>🏷️</span>
                                             <span style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {lobby.topic}
