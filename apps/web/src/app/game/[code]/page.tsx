@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
-import { GameBoard } from "@/components/game/GameBoard";
 import { PlayerRing } from "@/components/game/PlayerRing";
 
 import { passPotato } from "@/actions/passPotato";
@@ -94,6 +93,10 @@ export default function GamePage() {
     const [voteSecondsLeft, setVoteSecondsLeft] = useState<number | null>(null);
     const [countdownSecondsLeft, setCountdownSecondsLeft] = useState<number | null>(null);
 
+    // Prevent spamming finalize/advance
+    const finalizeInFlightRef = useRef(false);
+    const advanceInFlightRef = useRef(false);
+
     // Pass UX
     const [toast, setToast] = useState("");
     const [passBusy, setPassBusy] = useState(false);
@@ -119,6 +122,26 @@ export default function GamePage() {
         if (!lobby?.holder_player_id) return "…";
         return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
     }, [players, lobby?.holder_player_id]);
+
+    const selectedTopic = useMemo(() => {
+        return lobby?.topic_selected ?? lobby?.topic_a ?? "…";
+    }, [lobby?.topic_selected, lobby?.topic_a]);
+
+    // Winner choice (for result animation in countdown)
+    const winnerChoice = useMemo<1 | 2 | 3 | null>(() => {
+        if (!lobby) return null;
+        if (lobby.topic_tie_pick && (lobby.topic_tie_pick === 1 || lobby.topic_tie_pick === 2 || lobby.topic_tie_pick === 3)) {
+            return lobby.topic_tie_pick as 1 | 2 | 3;
+        }
+        if (!lobby.topic_selected) return null;
+        if (lobby.topic_selected === lobby.topic_a) return 1;
+        if (lobby.topic_selected === lobby.topic_b) return 2;
+        return 3;
+    }, [lobby]);
+
+    const totalPlayers = players.length;
+    const votedPlayers = voteCounts.a + voteCounts.b + voteCounts.r;
+    const allVoted = totalPlayers > 0 && votedPlayers >= totalPlayers;
 
     // -----------------------------
     // Poll loop (Lobby + Players + Votes)
@@ -203,10 +226,7 @@ export default function GamePage() {
 
                 // ---- Topic vote counts (only when needed)
                 if (nextLobby.phase === "topic_vote") {
-                    const votesRes = await supabase
-                        .from("topic_votes")
-                        .select("choice,player_id")
-                        .eq("lobby_id", nextLobby.id);
+                    const votesRes = await supabase.from("topic_votes").select("choice,player_id").eq("lobby_id", nextLobby.id);
 
                     if (!alive) return;
 
@@ -229,7 +249,6 @@ export default function GamePage() {
                         setMyVote(mine);
                     }
                 } else {
-                    // cleanup
                     setVoteCounts({ a: 0, b: 0, r: 0 });
                     setMyVote(null);
                 }
@@ -243,19 +262,31 @@ export default function GamePage() {
                     if (meAlive && due) void tickGame(code).catch(() => {});
                 }
 
-                // 2) topic_vote: finalize when due (fallback if nobody triggers early finish)
+                // 2) topic_vote: finalize when due
                 if (nextLobby.phase === "topic_vote" && nextLobby.topic_vote_ends_at) {
                     const dueMs = msUntil(nextLobby.topic_vote_ends_at);
-                    if (dueMs !== null && dueMs <= 0) {
-                        void supabase.rpc("rpc_finalize_topic_vote", { p_lobby_id: nextLobby.id }).catch(() => {});
+                    if (dueMs !== null && dueMs <= 0 && !finalizeInFlightRef.current) {
+                        finalizeInFlightRef.current = true;
+                        void supabase
+                            .rpc("rpc_finalize_topic_vote", { p_lobby_id: nextLobby.id })
+                            .catch(() => {})
+                            .finally(() => {
+                                finalizeInFlightRef.current = false;
+                            });
                     }
                 }
 
                 // 3) countdown: advance to running when due
                 if (nextLobby.phase === "countdown" && nextLobby.countdown_ends_at) {
                     const dueMs = msUntil(nextLobby.countdown_ends_at);
-                    if (dueMs !== null && dueMs <= 0) {
-                        void supabase.rpc("rpc_advance_from_countdown", { p_lobby_id: nextLobby.id }).catch(() => {});
+                    if (dueMs !== null && dueMs <= 0 && !advanceInFlightRef.current) {
+                        advanceInFlightRef.current = true;
+                        void supabase
+                            .rpc("rpc_advance_from_countdown", { p_lobby_id: nextLobby.id })
+                            .catch(() => {})
+                            .finally(() => {
+                                advanceInFlightRef.current = false;
+                            });
                     }
                 }
             } finally {
@@ -271,6 +302,25 @@ export default function GamePage() {
             window.clearInterval(t);
         };
     }, [code, supabase, mePlayerId]);
+
+    // -----------------------------
+    // EARLY FINISH: when all voted -> finalize immediately
+    // (this is what usually fixes “nach Voting geht’s nicht weiter”)
+    // -----------------------------
+    useEffect(() => {
+        if (!lobby) return;
+        if (lobby.phase !== "topic_vote") return;
+        if (!allVoted) return;
+        if (finalizeInFlightRef.current) return;
+
+        finalizeInFlightRef.current = true;
+        void supabase
+            .rpc("rpc_finalize_topic_vote", { p_lobby_id: lobby.id })
+            .catch(() => {})
+            .finally(() => {
+                finalizeInFlightRef.current = false;
+            });
+    }, [allVoted, lobby, supabase]);
 
     // -----------------------------
     // Synced timers (vote + countdown)
@@ -323,11 +373,13 @@ export default function GamePage() {
 
             setVoteBusy(true);
             try {
-                await supabase.rpc("rpc_vote_topic", {
+                const { error } = await supabase.rpc("rpc_vote_topic", {
                     p_lobby_id: lobby.id,
                     p_player_id: mePlayerId,
                     p_choice: choice,
                 });
+
+                if (error) throw new Error(error.message);
 
                 setMyVote(choice);
                 showToast("✅ Vote gespeichert", 900);
@@ -395,15 +447,16 @@ export default function GamePage() {
 
     if (!lobby) return <div className="p-6 opacity-70">Lade Spiel…</div>;
 
+    // Helper: topic labels (for UI tiles)
+    const aLabel = lobby.topic_a ?? "…";
+    const bLabel = lobby.topic_b ?? "…";
+    const rLabel = "Zufällig";
+
     // -----------------------------
-    // Phase: topic_vote
+    // Phase: topic_vote  (ORANGE + 3 big tiles side-by-side)
     // -----------------------------
     if (lobby.phase === "topic_vote") {
-        const a = lobby.topic_a ?? "…";
-        const b = lobby.topic_b ?? "…";
-
-        const totalPlayers = players.length;
-        const votedPlayers = voteCounts.a + voteCounts.b + voteCounts.r;
+        const timeLabel = voteSecondsLeft ?? 15;
 
         return (
             <main
@@ -413,55 +466,65 @@ export default function GamePage() {
                     placeItems: "center",
                     padding: 24,
                     background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.45) 0%, rgba(192,106,0,0.82) 80%)",
+                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.20) 58%), radial-gradient(circle at 50% 80%, rgba(255,149,0,0.62) 0%, rgba(192,83,18,0.94) 86%)",
                 }}
             >
-                <div style={{ width: "min(900px, 96vw)" }}>
+                <div style={{ width: "min(1100px, 96vw)" }}>
                     <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA VOTING</div>
+                        <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.78 }}>THEMA VOTING</div>
 
-                        <div style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 950, marginTop: 10 }}>
+                        <div style={{ fontSize: "clamp(26px, 3.8vw, 44px)", fontWeight: 950, marginTop: 10 }}>
                             Wählt das Thema
                         </div>
 
-                        <div style={{ marginTop: 10, opacity: 0.8, fontWeight: 750 }}>
-                            Zeit: <b>{voteSecondsLeft ?? 15}s</b> · Votes: <b>{votedPlayers}</b> / <b>{totalPlayers}</b>
+                        <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 800 }}>
+                            Zeit: <b>{timeLabel}s</b> · Votes: <b>{votedPlayers}</b> / <b>{totalPlayers}</b>
                         </div>
 
-                        <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
+                        <div
+                            style={{
+                                marginTop: 18,
+                                display: "grid",
+                                gridTemplateColumns: "repeat(3, minmax(0,1fr))",
+                                gap: 14,
+                            }}
+                        >
                             <button
-                                className={`btn btnXL ${myVote === 1 ? "btnPrimary" : "btnSecondary"}`}
-                                disabled={voteBusy || !mePlayerId}
+                                type="button"
                                 onClick={() => void vote(1)}
-                                type="button"
-                                style={{ width: "100%" }}
+                                disabled={voteBusy || !mePlayerId}
+                                className={`topicTile ${myVote === 1 ? "topicTileActive" : ""}`}
                             >
-                                ① {a} <span style={{ opacity: 0.75, marginLeft: 10 }}>({voteCounts.a})</span>
+                                <div className="topicTileBadge">①</div>
+                                <div className="topicTileTitle">{aLabel}</div>
+                                <div className="topicTileMeta">{voteCounts.a} Votes</div>
                             </button>
 
                             <button
-                                className={`btn btnXL ${myVote === 2 ? "btnPrimary" : "btnSecondary"}`}
-                                disabled={voteBusy || !mePlayerId}
+                                type="button"
                                 onClick={() => void vote(2)}
-                                type="button"
-                                style={{ width: "100%" }}
+                                disabled={voteBusy || !mePlayerId}
+                                className={`topicTile ${myVote === 2 ? "topicTileActive" : ""}`}
                             >
-                                ② {b} <span style={{ opacity: 0.75, marginLeft: 10 }}>({voteCounts.b})</span>
+                                <div className="topicTileBadge">②</div>
+                                <div className="topicTileTitle">{bLabel}</div>
+                                <div className="topicTileMeta">{voteCounts.b} Votes</div>
                             </button>
 
                             <button
-                                className={`btn btnXL ${myVote === 3 ? "btnPrimary" : "btnSecondary"}`}
-                                disabled={voteBusy || !mePlayerId}
-                                onClick={() => void vote(3)}
                                 type="button"
-                                style={{ width: "100%" }}
+                                onClick={() => void vote(3)}
+                                disabled={voteBusy || !mePlayerId}
+                                className={`topicTile ${myVote === 3 ? "topicTileActive" : ""}`}
                             >
-                                ③ 🎲 Zufällig <span style={{ opacity: 0.75, marginLeft: 10 }}>({voteCounts.r})</span>
+                                <div className="topicTileBadge">🎲</div>
+                                <div className="topicTileTitle">{rLabel}</div>
+                                <div className="topicTileMeta">{voteCounts.r} Votes</div>
                             </button>
                         </div>
 
-                        <div style={{ marginTop: 14, opacity: 0.78, fontWeight: 750 }}>
-                            Wenn alle gewählt haben, geht’s sofort weiter.
+                        <div style={{ marginTop: 14, opacity: 0.88, fontWeight: 800 }}>
+                            {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wenn alle gewählt haben, geht’s sofort weiter."}
                         </div>
 
                         <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 12 }}>
@@ -470,29 +533,97 @@ export default function GamePage() {
                             </button>
                         </div>
 
-                        {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
+                        {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.95 }}>{toast}</div> : null}
                     </div>
                 </div>
+
+                <style>{`
+          .topicTile{
+            width:100%;
+            border-radius: 28px;
+            border: 1px solid rgba(255,255,255,0.16);
+            background: rgba(0,0,0,0.20);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 18px 16px;
+            cursor: pointer;
+            transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
+            text-align:left;
+            min-height: 150px;
+            position:relative;
+            overflow:hidden;
+          }
+          .topicTile:hover{
+            transform: translateY(-2px);
+            border-color: rgba(255,255,255,0.26);
+          }
+          .topicTile:disabled{
+            opacity: .75;
+            cursor: not-allowed;
+          }
+
+          .topicTileBadge{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            height: 34px;
+            padding: 0 12px;
+            border-radius: 999px;
+            font-weight: 950;
+            letter-spacing:.3px;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.14);
+          }
+
+          .topicTileTitle{
+            margin-top: 14px;
+            font-size: clamp(18px, 2.2vw, 28px);
+            font-weight: 950;
+            letter-spacing: .2px;
+            text-shadow: 0 10px 30px rgba(0,0,0,0.25);
+          }
+
+          .topicTileMeta{
+            margin-top: 10px;
+            opacity: .85;
+            font-weight: 850;
+            font-size: 13px;
+          }
+
+          @keyframes chosenGlow {
+            0% { filter: brightness(1); transform: translateY(0) scale(1); }
+            50% { filter: brightness(1.15); transform: translateY(-2px) scale(1.01); }
+            100% { filter: brightness(1); transform: translateY(0) scale(1); }
+          }
+
+          .topicTileActive{
+            background: linear-gradient(135deg, rgba(255,214,10,0.26), rgba(255,149,0,0.22), rgba(255,45,85,0.14));
+            border-color: rgba(255,255,255,0.34);
+            box-shadow: 0 18px 60px rgba(0,0,0,0.28);
+            animation: chosenGlow .9s ease-in-out infinite;
+          }
+        `}</style>
             </main>
         );
     }
 
     // -----------------------------
-    // Phase: countdown (synced)
+    // Phase: countdown (synced) + RESULT ANIMATION:
+    // winner tile grows, others slide out
     // -----------------------------
     if (lobby.phase === "countdown") {
-        const selected = lobby.topic_selected ?? lobby.topic_a ?? "…";
-
         const tie = lobby.topic_tie_choices && lobby.topic_tie_choices.length > 1;
         const tieChoices = lobby.topic_tie_choices ?? [];
         const pick = lobby.topic_tie_pick;
 
         const labelForChoice = (c: number) => {
-            if (c === 1) return `① ${lobby.topic_a ?? "…"} `;
-            if (c === 2) return `② ${lobby.topic_b ?? "…"} `;
-            if (c === 3) return `③ 🎲 Zufällig `;
+            if (c === 1) return `① ${aLabel}`;
+            if (c === 2) return `② ${bLabel}`;
+            if (c === 3) return `🎲 ${rLabel}`;
             return String(c);
         };
+
+        const isWinner = (c: 1 | 2 | 3) => winnerChoice === c;
 
         return (
             <main
@@ -505,25 +636,47 @@ export default function GamePage() {
                         "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.22) 0%, rgba(0,120,45,0.68) 80%)",
                 }}
             >
-                <div style={{ width: "min(920px, 96vw)", textAlign: "center" }}>
+                <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
-                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 12 }}>
-                        {selected}
+                    {/* Result tiles */}
+                    <div
+                        className="resultRow"
+                        style={{
+                            marginTop: 16,
+                            display: "grid",
+                            gridTemplateColumns: "repeat(3, minmax(0,1fr))",
+                            gap: 14,
+                            alignItems: "stretch",
+                        }}
+                    >
+                        <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`}>
+                            <div className="resultBadge">①</div>
+                            <div className="resultTitle">{aLabel}</div>
+                        </div>
+
+                        <div className={`resultTile ${isWinner(2) ? "win" : "lose"}`}>
+                            <div className="resultBadge">②</div>
+                            <div className="resultTitle">{bLabel}</div>
+                        </div>
+
+                        <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
+                            <div className="resultBadge">🎲</div>
+                            <div className="resultTitle">{rLabel}</div>
+                        </div>
                     </div>
 
+                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>{selectedTopic}</div>
+
                     {tie ? (
-                        <div style={{ marginTop: 12, opacity: 0.85, fontWeight: 800 }}>
-                            Tie zwischen:{" "}
-                            <span style={{ opacity: 0.95 }}>
-                {tieChoices.map((c) => labelForChoice(c)).join(" · ")}
-              </span>
-                            <div style={{ marginTop: 6, opacity: 0.9 }}>
+                        <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 850 }}>
+                            Tie zwischen: <span style={{ opacity: 0.98 }}>{tieChoices.map((c) => labelForChoice(c)).join(" · ")}</span>
+                            <div style={{ marginTop: 6, opacity: 0.92 }}>
                                 Zufällig gewählt: <b>{pick ? labelForChoice(pick) : "…"}</b>
                             </div>
                         </div>
                     ) : (
-                        <div style={{ marginTop: 12, opacity: 0.82, fontWeight: 750 }}>Jetzt kurz Thema im Kopf: sag gleich was dazu.</div>
+                        <div style={{ marginTop: 10, opacity: 0.85, fontWeight: 800 }}>Sag gleich was zum Thema.</div>
                     )}
 
                     <div style={{ marginTop: 22, fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>START IN</div>
@@ -547,6 +700,59 @@ export default function GamePage() {
 
                     {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
                 </div>
+
+                <style>{`
+          .resultTile{
+            border-radius: 28px;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: rgba(0,0,0,0.18);
+            padding: 16px 14px;
+            text-align:left;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            overflow:hidden;
+            position:relative;
+            transform-origin: center;
+          }
+          .resultBadge{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            height: 34px;
+            padding: 0 12px;
+            border-radius: 999px;
+            font-weight: 950;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.14);
+          }
+          .resultTitle{
+            margin-top: 14px;
+            font-size: clamp(18px, 2.2vw, 28px);
+            font-weight: 950;
+            text-shadow: 0 10px 30px rgba(0,0,0,0.22);
+          }
+
+          @keyframes winPop {
+            0% { transform: scale(1); filter: brightness(1); }
+            70% { transform: scale(1.06); filter: brightness(1.18); }
+            100% { transform: scale(1.04); filter: brightness(1.12); }
+          }
+          @keyframes loseSlide {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: translateY(14px) scale(0.92); opacity: 0.12; }
+          }
+
+          .resultTile.win{
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18)),
+                        linear-gradient(135deg, rgba(52,199,89,0.18), rgba(10,132,255,0.10), rgba(255,214,10,0.12));
+            border-color: rgba(255,255,255,0.28);
+            box-shadow: 0 18px 70px rgba(0,0,0,0.25);
+            animation: winPop .55s ease-out forwards;
+          }
+          .resultTile.lose{
+            animation: loseSlide .55s ease-out forwards;
+          }
+        `}</style>
             </main>
         );
     }
@@ -590,10 +796,9 @@ export default function GamePage() {
     }
 
     // -----------------------------
-    // Phase: running (Main board + ring + backgrounds)
+    // Phase: running (NO GameBoard import required)
     // -----------------------------
     if (lobby.phase !== "running") {
-        // fallback (z.B. lobby/round_end)
         return (
             <main
                 style={{
@@ -661,8 +866,46 @@ export default function GamePage() {
             {/* Ring overlay */}
             <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} />
 
-            {/* Existing board (pass action stays) */}
-            <GameBoard holderPlayerId={lobby.holder_player_id} players={players} mePlayerId={mePlayerId} onPass={handlePass} />
+            {/* Minimal “board” */}
+            <div
+                style={{
+                    position: "relative",
+                    zIndex: 2,
+                    minHeight: "100vh",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 24,
+                }}
+            >
+                <div style={{ width: "min(860px, 96vw)", textAlign: "center" }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>RUNNING</div>
+                    <div style={{ fontSize: "clamp(28px, 4.2vw, 56px)", fontWeight: 950, marginTop: 12 }}>{selectedTopic}</div>
+
+                    <div style={{ marginTop: 12, opacity: 0.9, fontWeight: 850 }}>
+                        Holder: <b>{holderName}</b>
+                    </div>
+
+                    <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+                        <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
+                            Zur Lobby
+                        </button>
+
+                        <button
+                            className="btn btnPrimary btnXL"
+                            onClick={() => void handlePass()}
+                            type="button"
+                            disabled={!mePlayerId || passBusy || iAmEliminated || !isMeHolder}
+                            title={!isMeHolder ? "Du hast die Kartoffel nicht" : iAmEliminated ? "Du bist raus" : "Weitergeben"}
+                        >
+                            {isMeHolder ? (passBusy ? "…" : "🥔 Weitergeben (Space)") : "⛔ Nicht Holder"}
+                        </button>
+                    </div>
+
+                    <div style={{ marginTop: 12, opacity: 0.8, fontWeight: 800 }}>
+                        {isMeHolder ? "Du hast die Kartoffel. Drück Space oder Button." : "Warte, bis du die Kartoffel bekommst."}
+                    </div>
+                </div>
+            </div>
 
             <style>{`
         @keyframes holderPulse {
