@@ -15,6 +15,7 @@ type LobbyState = {
     id: string;
     holder_player_id: string | null;
     phase: LobbyPhase;
+    explode_at: string | null; // ✅ used to trigger tick only when due
     last_activity_at: string | null;
     run_started_at: string | null; // ✅ for synced countdown
 };
@@ -47,7 +48,7 @@ export default function GamePage() {
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
 
-    const { mePlayerId } = usePlayerIdentity();
+    const {mePlayerId} = usePlayerIdentity();
 
     const [lobby, setLobby] = useState<LobbyState | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
@@ -92,7 +93,7 @@ export default function GamePage() {
 
     // ✅ Poll loop:
     // - clients read state
-    // - ONLY the holder triggers tickGame (prevents races)
+    // - any alive client may trigger tickGame *when explode_at is due* (prevents freeze when holder is offline)
     useEffect(() => {
         let alive = true;
 
@@ -103,7 +104,7 @@ export default function GamePage() {
             try {
                 const lobbyRes = await supabase
                     .from("lobbies")
-                    .select("id, holder_player_id, phase, last_activity_at, run_started_at")
+                    .select("id, holder_player_id, phase, explode_at, last_activity_at, run_started_at")
                     .eq("code", code)
                     .single();
 
@@ -118,6 +119,7 @@ export default function GamePage() {
                     id: lobbyRes.data.id,
                     holder_player_id: lobbyRes.data.holder_player_id,
                     phase: lobbyRes.data.phase,
+                    explode_at: lobbyRes.data.explode_at ?? null,
                     last_activity_at: lobbyRes.data.last_activity_at ?? null,
                     run_started_at: lobbyRes.data.run_started_at ?? null,
                 };
@@ -133,16 +135,11 @@ export default function GamePage() {
                     setRunStartedAtMs(null);
                 }
 
-                // ✅ tickGame ONLY by holder (best-effort)
-                if (mePlayerId && nextLobby.phase === "running" && nextLobby.holder_player_id === mePlayerId) {
-                    void tickGame(code).catch(() => {});
-                }
-
                 const playersRes = await supabase
                     .from("players")
                     .select("player_id,name,is_alive")
                     .eq("lobby_id", nextLobby.id)
-                    .order("seat_index", { ascending: true });
+                    .order("seat_index", {ascending: true});
 
                 if (!alive) return;
 
@@ -151,8 +148,22 @@ export default function GamePage() {
                     return;
                 }
 
-                setPlayers(playersRes.data as Player[]);
+                const nextPlayers = playersRes.data as Player[];
+                setPlayers(nextPlayers);
                 setFatalError("");
+
+                // ✅ tick best-effort by ANY alive client, but only when explode_at is due (reduces spam)
+                if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
+                    const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
+
+                    const explodeMs = Date.parse(nextLobby.explode_at);
+                    const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
+
+                    if (meAlive && due) {
+                        void tickGame(code).catch(() => {
+                        });
+                    }
+                }
             } finally {
                 inFlightRef.current = false;
             }
@@ -247,7 +258,7 @@ export default function GamePage() {
         };
     }, [showIntro, runStartedAtMs, introStage, countdown]);
 
-    // ✅ PASS handler (zeigt echte Fehlermeldung zuverlässig + triggert direkt refresh)
+    // ✅ PASS handler
     const handlePass = useCallback(async () => {
         if (!mePlayerId) {
             showToast("⚠️ Keine Player-ID", 1800);
@@ -262,7 +273,6 @@ export default function GamePage() {
             return;
         }
         if (!isMeHolder) {
-            // kommt oft bei minimalem Lag
             showToast("🙅 Du hast die Kartoffel nicht", 1400);
             return;
         }
@@ -273,11 +283,10 @@ export default function GamePage() {
             await passPotato(code, mePlayerId);
             showToast("✅ Weitergegeben", 900);
 
-            // ✅ don't wait for polling: pull lobby once quickly
-            // (best-effort; ignore errors)
+            // pull lobby once quickly (best-effort)
             void supabase
                 .from("lobbies")
-                .select("id, holder_player_id, phase, last_activity_at, run_started_at")
+                .select("id, holder_player_id, phase, explode_at, last_activity_at, run_started_at")
                 .eq("code", code)
                 .single()
                 .then((r) => {
@@ -286,14 +295,15 @@ export default function GamePage() {
                             id: r.data.id,
                             holder_player_id: r.data.holder_player_id,
                             phase: r.data.phase,
+                            explode_at: r.data.explode_at ?? null,
                             last_activity_at: r.data.last_activity_at ?? null,
                             run_started_at: r.data.run_started_at ?? null,
                         });
                     }
                 })
-                .catch(() => {});
+                .catch(() => {
+                });
         } catch (e: unknown) {
-            // ✅ show the thrown error message from server action
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
             setPassBusy(false);
@@ -308,18 +318,18 @@ export default function GamePage() {
             void handlePass();
         };
 
-        window.addEventListener("keydown", onKeyDown, { passive: false });
+        window.addEventListener("keydown", onKeyDown, {passive: false});
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [handlePass]);
 
     // UI states
     if (fatalError) {
         return (
-            <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-                <div style={{ width: "min(720px, 96vw)", textAlign: "center" }}>
-                    <div style={{ fontWeight: 950, fontSize: 22 }}>⚠️ Spiel konnte nicht geladen werden</div>
-                    <div style={{ marginTop: 10, opacity: 0.8 }}>{fatalError}</div>
-                    <div style={{ marginTop: 18 }}>
+            <main style={{minHeight: "100vh", display: "grid", placeItems: "center", padding: 24}}>
+                <div style={{width: "min(720px, 96vw)", textAlign: "center"}}>
+                    <div style={{fontWeight: 950, fontSize: 22}}>⚠️ Spiel konnte nicht geladen werden</div>
+                    <div style={{marginTop: 10, opacity: 0.8}}>{fatalError}</div>
+                    <div style={{marginTop: 18}}>
                         <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
                             Zurück zur Lobby
                         </button>
@@ -343,11 +353,14 @@ export default function GamePage() {
                         "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
                 }}
             >
-                <div style={{ width: "min(820px, 96vw)", textAlign: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>WARTEN</div>
-                    <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>⏳ Warten auf Start…</div>
-                    <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>Der Host startet gleich das Spiel.</div>
-                    <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 22 }}>
+                <div style={{width: "min(820px, 96vw)", textAlign: "center"}}>
+                    <div style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75}}>WARTEN</div>
+                    <div style={{fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12}}>⏳ Warten auf
+                        Start…
+                    </div>
+                    <div style={{marginTop: 10, opacity: 0.78, fontWeight: 700}}>Der Host startet gleich das Spiel.
+                    </div>
+                    <div style={{display: "flex", justifyContent: "center", gap: 12, marginTop: 22}}>
                         <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
                             Zur Lobby
                         </button>
@@ -389,10 +402,11 @@ export default function GamePage() {
                     />
                 ) : null}
 
-                <div style={{ textAlign: "center", width: "min(920px, 96vw)", position: "relative", zIndex: 2 }}>
+                <div style={{textAlign: "center", width: "min(920px, 96vw)", position: "relative", zIndex: 2}}>
                     {introStage === "countdown" ? (
                         <>
-                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>START IN</div>
+                            <div style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75}}>START IN
+                            </div>
                             <div
                                 style={{
                                     marginTop: 14,
@@ -404,25 +418,26 @@ export default function GamePage() {
                             >
                                 {Math.max(0, countdown)}
                             </div>
-                            <div style={{ marginTop: 10, fontSize: 14, fontWeight: 800, opacity: 0.75 }}>Bereit machen…</div>
+                            <div style={{marginTop: 10, fontSize: 14, fontWeight: 800, opacity: 0.75}}>Bereit machen…
+                            </div>
                         </>
                     ) : (
                         <>
-                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>READY?</div>
-                            <div style={{ fontSize: "clamp(44px, 6vw, 84px)", fontWeight: 950, marginTop: 12 }}>
+                            <div style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75}}>READY?</div>
+                            <div style={{fontSize: "clamp(44px, 6vw, 84px)", fontWeight: 950, marginTop: 12}}>
                                 {isMeHolder ? "🔥 DU STARTERST HEISS" : "🌿 BLEIB RUHIG"}
                             </div>
-                            <div style={{ marginTop: 12, fontSize: 14, fontWeight: 750, opacity: 0.78 }}>
+                            <div style={{marginTop: 12, fontSize: 14, fontWeight: 750, opacity: 0.78}}>
                                 Holder: <b>{holderName}</b>
                             </div>
-                            <div style={{ marginTop: 16, fontSize: 14, fontWeight: 700, opacity: 0.72 }}>
+                            <div style={{marginTop: 16, fontSize: 14, fontWeight: 700, opacity: 0.72}}>
                                 Wenn du die Kartoffel hast: <b>Leertaste</b> oder Button → weitergeben.
                             </div>
-                            <div style={{ marginTop: 22, opacity: 0.7, fontWeight: 800 }}>Los!</div>
+                            <div style={{marginTop: 22, opacity: 0.7, fontWeight: 800}}>Los!</div>
                         </>
                     )}
 
-                    {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
+                    {toast ? <div style={{marginTop: 18, fontWeight: 900, opacity: 0.92}}>{toast}</div> : null}
                 </div>
             </main>
         );
@@ -443,15 +458,21 @@ export default function GamePage() {
                         "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.55) 0%, rgba(192,106,0,0.88) 80%)",
                 }}
             >
-                <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>SPIEL BEENDET</div>
-                    <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
-                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
-                    <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
+                <div style={{textAlign: "center", width: "min(900px, 96vw)"}}>
+                    <div style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75}}>SPIEL BEENDET</div>
+                    <div style={{fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14}}>🏆 {winner}</div>
+                    <div style={{
+                        marginTop: 12,
+                        fontSize: 14,
+                        fontWeight: 700,
+                        opacity: 0.75
+                    }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
+                    <div style={{display: "flex", gap: 12, justifyContent: "center", marginTop: 22}}>
                         <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
                             Zur Lobby
                         </button>
-                        <button className="btn btnSecondary btnXL" onClick={() => (window.location.href = "/")} type="button">
+                        <button className="btn btnSecondary btnXL" onClick={() => (window.location.href = "/")}
+                                type="button">
                             Hauptmenü
                         </button>
                     </div>
@@ -484,7 +505,8 @@ export default function GamePage() {
                 </div>
             ) : null}
 
-            <GameBoard holderPlayerId={lobby.holder_player_id} players={players} mePlayerId={mePlayerId} onPass={handlePass} />
+            <GameBoard holderPlayerId={lobby.holder_player_id} players={players} mePlayerId={mePlayerId}
+                       onPass={handlePass}/>
         </>
     );
 }

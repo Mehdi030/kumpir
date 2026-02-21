@@ -44,12 +44,11 @@ export default function LobbyPage() {
     const router = useRouter();
 
     const code = String(params.code ?? "").toUpperCase();
-
     const { mePlayerId, meName } = usePlayerIdentity();
 
     const suppressRunningRedirectRef = useRef(false);
 
-    // ✅ no global lock; App Router navigation
+    // ✅ navigation helper (App Router)
     const go = useCallback(
         (url: string) => {
             router.push(url);
@@ -78,7 +77,6 @@ export default function LobbyPage() {
 
     const isRunning = lobby?.phase === "running";
 
-    // heartbeat + cleanup (host-only cleanup)
     useHeartbeat({
         lobbyId,
         playerId: mePlayerId,
@@ -87,6 +85,7 @@ export default function LobbyPage() {
         staleSeconds: 25,
     });
 
+    // running -> game
     useEffect(() => {
         if (suppressRunningRedirectRef.current) return;
         if (lobby?.phase === "running") hardGoGame();
@@ -237,7 +236,6 @@ export default function LobbyPage() {
         <main className="container">
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
-                    {/* small top polish */}
                     <div
                         style={{
                             position: "sticky",
@@ -307,10 +305,7 @@ export default function LobbyPage() {
                                     </button>
 
                                     {toast ? (
-                                        <div
-                                            className="fieldHelp"
-                                            style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}
-                                        >
+                                        <div className="fieldHelp" style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}>
                                             {toast}
                                         </div>
                                     ) : (
@@ -328,7 +323,7 @@ export default function LobbyPage() {
                                 </div>
                             </div>
 
-                            <div style={{ display: "grid", gap: 10, justifyItems: "end", minWidth: 260 }}>
+                            <div style={{ display: "grid", gap: 10, justifyItems: "end", minWidth: 240 }}>
                                 <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", justifyContent: "center" }}>
                                     {meLabel}
                                 </div>
@@ -345,19 +340,36 @@ export default function LobbyPage() {
                                         <span>{MODES[mode]?.icon ?? "🥔"}</span>
                                         <span style={{ fontWeight: 900 }}>{MODES[mode]?.label ?? mode}</span>
                                     </div>
+
+                                    {lobby?.topic ? (
+                                        <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }} title={lobby.topic}>
+                                            <span style={{ opacity: 0.8 }}>🏷️</span>
+                                            <span style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {lobby.topic}
+                      </span>
+                                        </div>
+                                    ) : null}
                                 </div>
 
-                                {/* ✅ Host: Admin button (router.push) */}
+                                {/* 🚫 Admin intentionally not linked from LobbyPage (kept for later) */}
                                 {amIHost ? (
-                                    <button
-                                        type="button"
-                                        className="btn btnSecondary btnSmall"
-                                        onClick={() => go(`/lobby/${encodeURIComponent(code)}/admin`)}
-                                        disabled={starting || isRunning}
-                                        title="Lobby Admin"
+                                    <div
+                                        className="pillChip"
+                                        style={{
+                                            height: 32,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 8,
+                                            opacity: 0.75,
+                                            userSelect: "none",
+                                            cursor: "not-allowed",
+                                        }}
+                                        title="Admin ist aktuell deaktiviert (kommt später wieder)."
+                                        aria-disabled="true"
                                     >
-                                        ⚙️ Admin
-                                    </button>
+                                        <span>⚙️</span>
+                                        <span style={{ fontWeight: 900 }}>Admin (deaktiviert)</span>
+                                    </div>
                                 ) : null}
                             </div>
                         </div>
@@ -456,12 +468,7 @@ export default function LobbyPage() {
 
                             {amIHost && allReady && lobby?.phase !== "running" ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-                                    <button
-                                        type="button"
-                                        className="btn btnPrimary btnSmall btnGlow"
-                                        onClick={() => void startGameClick()}
-                                        disabled={starting || isRunning}
-                                    >
+                                    <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={() => void startGameClick()} disabled={starting || isRunning}>
                                         🚀 Spiel starten
                                     </button>
                                 </div>

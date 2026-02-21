@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { startGame, type StartGameResult } from "@/actions/startGame";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -44,11 +45,11 @@ export default function LobbyPage() {
     const router = useRouter();
 
     const code = String(params.code ?? "").toUpperCase();
-    const { mePlayerId, meName } = usePlayerIdentity();
+    const {mePlayerId, meName} = usePlayerIdentity();
 
     const suppressRunningRedirectRef = useRef(false);
 
-    // ✅ single navigation helper (no lock)
+    // ✅ navigation helper (App Router)
     const go = useCallback(
         (url: string) => {
             router.push(url);
@@ -60,7 +61,7 @@ export default function LobbyPage() {
         go(`/game/${encodeURIComponent(code)}?t=${Date.now()}`);
     }, [code, go]);
 
-    const { lobby, players, loading, error } = useLobbyState(code, {
+    const {lobby, players, loading, error} = useLobbyState(code, {
         pollMs: 900,
         onPhaseRunning: () => {
             if (suppressRunningRedirectRef.current) return;
@@ -85,11 +86,13 @@ export default function LobbyPage() {
         staleSeconds: 25,
     });
 
+    // running -> game
     useEffect(() => {
         if (suppressRunningRedirectRef.current) return;
         if (lobby?.phase === "running") hardGoGame();
     }, [lobby?.phase, hardGoGame]);
 
+    // removed from lobby -> go /host with reason
     useEffect(() => {
         if (!mePlayerId) return;
         if (!lobbyId) return;
@@ -100,10 +103,10 @@ export default function LobbyPage() {
 
         (async () => {
             try {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
+                const {getSupabaseClient} = await import("@/lib/supabaseClient");
                 const supabase = getSupabaseClient();
 
-                const { data, error: statusErr } = await supabase
+                const {data, error: statusErr} = await supabase
                     .from("players")
                     .select("status")
                     .eq("lobby_id", lobbyId)
@@ -162,10 +165,10 @@ export default function LobbyPage() {
 
         setBusyReady(true);
         try {
-            const { getSupabaseClient } = await import("@/lib/supabaseClient");
+            const {getSupabaseClient} = await import("@/lib/supabaseClient");
             const supabase = getSupabaseClient();
 
-            const { error: rpcErr } = await supabase.rpc("rpc_toggle_ready", {
+            const {error: rpcErr} = await supabase.rpc("rpc_toggle_ready", {
                 p_lobby_id: lobbyId,
                 p_player_id: mePlayerId,
             });
@@ -207,7 +210,7 @@ export default function LobbyPage() {
 
         try {
             if (mePlayerId && lobbyId) {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
+                const {getSupabaseClient} = await import("@/lib/supabaseClient");
                 const supabase = getSupabaseClient();
 
                 await supabase.rpc("leave_lobby", {
@@ -230,10 +233,12 @@ export default function LobbyPage() {
     const maxPlayers = lobby?.max_players ?? 8;
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
 
+    const adminHref = useMemo(() => `/lobby/${encodeURIComponent(code)}/admin`, [code]);
+
     return (
         <main className="container">
             <div className="landingWrap">
-                <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
+                <section className="card" aria-label="Lobby" style={{position: "relative"}}>
                     <div
                         style={{
                             position: "sticky",
@@ -247,7 +252,7 @@ export default function LobbyPage() {
                         }}
                     >
                         {isRunning ? (
-                            <div className="pillChip" style={{ marginBottom: 10, fontWeight: 950, opacity: 0.95 }}>
+                            <div className="pillChip" style={{marginBottom: 10, fontWeight: 950, opacity: 0.95}}>
                                 🚀 Spiel läuft – Lobby ist read-only
                             </div>
                         ) : null}
@@ -261,17 +266,22 @@ export default function LobbyPage() {
                                 flexWrap: "wrap",
                             }}
                         >
-                            <div style={{ flex: 1, minWidth: 280 }}>
-                                <h1 className="h1" style={{ marginBottom: 10 }}>
+                            <div style={{flex: 1, minWidth: 280}}>
+                                <h1 className="h1" style={{marginBottom: 10}}>
                                     Private Lobby
                                 </h1>
 
-                                <div style={{ display: "grid", placeItems: "center", marginTop: 6 }}>
+                                <div style={{display: "grid", placeItems: "center", marginTop: 6}}>
                                     <button
                                         type="button"
                                         onClick={copyInviteByClick}
                                         title="Klick → Join-Link kopieren"
-                                        style={{ border: "none", background: "transparent", cursor: isRunning ? "not-allowed" : "pointer", padding: 0 }}
+                                        style={{
+                                            border: "none",
+                                            background: "transparent",
+                                            cursor: isRunning ? "not-allowed" : "pointer",
+                                            padding: 0,
+                                        }}
                                         aria-label="Join-Link kopieren"
                                         disabled={isRunning}
                                     >
@@ -298,11 +308,17 @@ export default function LobbyPage() {
                                     </button>
 
                                     {toast ? (
-                                        <div className="fieldHelp" style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}>
+                                        <div className="fieldHelp" style={{
+                                            marginTop: 8,
+                                            fontWeight: 900,
+                                            opacity: 0.95,
+                                            textAlign: "center"
+                                        }}>
                                             {toast}
                                         </div>
                                     ) : (
-                                        <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.85, textAlign: "center" }}>
+                                        <div className="fieldHelp"
+                                             style={{marginTop: 8, opacity: 0.85, textAlign: "center"}}>
                                             Klick auf den Code kopiert den Join-Link.
                                         </div>
                                     )}
@@ -316,22 +332,29 @@ export default function LobbyPage() {
                                 </div>
                             </div>
 
-                            <div style={{ display: "grid", gap: 10, justifyItems: "end", minWidth: 240 }}>
-                                <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <div style={{display: "grid", gap: 10, justifyItems: "end", minWidth: 240}}>
+                                <div className="pillChip" style={{
+                                    height: 34,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
+                                }}>
                                     {meLabel}
                                 </div>
 
-                                <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                                    <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8 }}>
-                                        <span style={{ opacity: 0.8 }}>👥</span>
-                                        <span style={{ fontWeight: 900 }}>{players.length}</span>
-                                        <span style={{ opacity: 0.8 }}>/</span>
-                                        <span style={{ fontWeight: 900 }}>{maxPlayers}</span>
+                                <div style={{display: "grid", gap: 8, justifyItems: "end"}}>
+                                    <div className="pillChip"
+                                         style={{height: 32, display: "flex", alignItems: "center", gap: 8}}>
+                                        <span style={{opacity: 0.8}}>👥</span>
+                                        <span style={{fontWeight: 900}}>{players.length}</span>
+                                        <span style={{opacity: 0.8}}>/</span>
+                                        <span style={{fontWeight: 900}}>{maxPlayers}</span>
                                     </div>
 
-                                    <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8 }}>
+                                    <div className="pillChip"
+                                         style={{height: 32, display: "flex", alignItems: "center", gap: 8}}>
                                         <span>{MODES[mode]?.icon ?? "🥔"}</span>
-                                        <span style={{ fontWeight: 900 }}>{MODES[mode]?.label ?? mode}</span>
+                                        <span style={{fontWeight: 900}}>{MODES[mode]?.label ?? mode}</span>
                                     </div>
 
                                     {lobby?.topic ? (
@@ -346,7 +369,7 @@ export default function LobbyPage() {
                                             }}
                                             title={lobby.topic}
                                         >
-                                            <span style={{ opacity: 0.8 }}>🏷️</span>
+                                            <span style={{opacity: 0.8}}>🏷️</span>
                                             <span
                                                 style={{
                                                     fontWeight: 900,
@@ -361,16 +384,20 @@ export default function LobbyPage() {
                                     ) : null}
                                 </div>
 
+                                {/* ✅ Host: Admin (Link is the most reliable navigation) */}
                                 {amIHost ? (
-                                    <button
-                                        type="button"
-                                        className="btn btnSecondary btnSmall"
-                                        onClick={() => go(`/lobby/${encodeURIComponent(code)}/admin`)}
-                                        disabled={starting || isRunning}
+                                    <Link
+                                        href={adminHref}
+                                        className={`btn btnSecondary btnSmall ${starting || isRunning ? "btnDisabled" : ""}`}
+                                        aria-disabled={starting || isRunning}
+                                        tabIndex={starting || isRunning ? -1 : 0}
+                                        onClick={(e) => {
+                                            if (starting || isRunning) e.preventDefault();
+                                        }}
                                         title="Lobby Admin"
                                     >
                                         ⚙️ Admin
-                                    </button>
+                                    </Link>
                                 ) : null}
                             </div>
                         </div>
@@ -381,20 +408,20 @@ export default function LobbyPage() {
                             <div className="stepsTitle">Spieler</div>
                             {error ? <p className="errorText">{error}</p> : null}
 
-                            <div style={{ overflowX: "auto" }}>
-                                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                            <div style={{overflowX: "auto"}}>
+                                <table style={{width: "100%", borderCollapse: "collapse"}}>
                                     <thead>
-                                    <tr style={{ textAlign: "left", opacity: 0.75 }}>
-                                        <th style={{ padding: "10px 8px" }}>#</th>
-                                        <th style={{ padding: "10px 8px" }}>Name</th>
-                                        <th style={{ padding: "10px 8px", textAlign: "right" }}>Zustand</th>
+                                    <tr style={{textAlign: "left", opacity: 0.75}}>
+                                        <th style={{padding: "10px 8px"}}>#</th>
+                                        <th style={{padding: "10px 8px"}}>Name</th>
+                                        <th style={{padding: "10px 8px", textAlign: "right"}}>Zustand</th>
                                     </tr>
                                     </thead>
 
                                     <tbody>
                                     {loading && players.length === 0 ? (
                                         <tr>
-                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>
+                                            <td colSpan={3} style={{padding: "12px 8px", opacity: 0.75}}>
                                                 Lädt…
                                             </td>
                                         </tr>
@@ -413,10 +440,10 @@ export default function LobbyPage() {
                                                     background: isHostRow ? "rgba(255,255,255,0.07)" : "transparent",
                                                 }}
                                             >
-                                                <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
+                                                <td style={{padding: "10px 8px"}}>{idx + 1}</td>
 
-                                                <td style={{ padding: "10px 8px", fontWeight: 900 }}>
-                                                    {p.name} {isMe ? <span style={{ opacity: 0.6 }}>(du)</span> : null}
+                                                <td style={{padding: "10px 8px", fontWeight: 900}}>
+                                                    {p.name} {isMe ? <span style={{opacity: 0.6}}>(du)</span> : null}
                                                     {isHostRow ? (
                                                         <span
                                                             style={{
@@ -434,7 +461,7 @@ export default function LobbyPage() {
                                                     ) : null}
                                                 </td>
 
-                                                <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>
+                                                <td style={{padding: "10px 8px", textAlign: "right", fontWeight: 950}}>
                                                     {p.ready ? "✅ Bereit" : "⏳ nicht bereit"}
                                                 </td>
                                             </tr>
@@ -443,7 +470,7 @@ export default function LobbyPage() {
 
                                     {!loading && players.length === 0 ? (
                                         <tr>
-                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>
+                                            <td colSpan={3} style={{padding: "12px 8px", opacity: 0.75}}>
                                                 Noch niemand beigetreten.
                                             </td>
                                         </tr>
@@ -452,8 +479,15 @@ export default function LobbyPage() {
                                 </table>
                             </div>
 
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
-                                <button type="button" className="btn btnSecondary btnSmall" onClick={() => void leaveLobby()} disabled={starting}>
+                            <div style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-end",
+                                gap: 12,
+                                marginTop: 14
+                            }}>
+                                <button type="button" className="btn btnSecondary btnSmall"
+                                        onClick={() => void leaveLobby()} disabled={starting}>
                                     ← Hauptmenü
                                 </button>
 
@@ -461,22 +495,25 @@ export default function LobbyPage() {
                                     type="button"
                                     onClick={toggleReady}
                                     disabled={busyReady || !mePlayerId || starting || isRunning}
-                                    className={`btn btnXL ${busyReady || starting || isRunning ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
+                                    className={`btn btnXL ${busyReady || starting || isRunning ? "btnDisabled" : ""} ${
+                                        meReady ? "btnReadyOff" : "btnReadyOn"
+                                    }`}
                                 >
                                     {isRunning ? "🚀 Läuft" : starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
                                 </button>
                             </div>
 
                             {amIHost && allReady && lobby?.phase !== "running" ? (
-                                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-                                    <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={() => void startGameClick()} disabled={starting || isRunning}>
+                                <div style={{display: "flex", justifyContent: "flex-end", marginTop: 10}}>
+                                    <button type="button" className="btn btnPrimary btnSmall btnGlow"
+                                            onClick={() => void startGameClick()} disabled={starting || isRunning}>
                                         🚀 Spiel starten
                                     </button>
                                 </div>
                             ) : null}
 
                             {!allReady ? (
-                                <div style={{ marginTop: 10, opacity: 0.75, fontWeight: 800, fontSize: 13 }}>
+                                <div style={{marginTop: 10, opacity: 0.75, fontWeight: 800, fontSize: 13}}>
                                     Mindestens {MIN_PLAYERS} Spieler müssen beitreten und bereit sein.
                                 </div>
                             ) : null}

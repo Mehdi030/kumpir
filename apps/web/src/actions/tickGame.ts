@@ -91,8 +91,8 @@ export async function tickGame(code: string) {
             })
             .eq("id", lobby.id)
             .eq("phase", "running")
-            .eq("explode_at", lobby.explode_at)          // ✅ CAS
-            .eq("holder_player_id", loserId)             // ✅ CAS
+            .eq("explode_at", lobby.explode_at) // ✅ CAS
+            .eq("holder_player_id", loserId) // ✅ CAS
             .select("id")
             .maybeSingle();
 
@@ -104,9 +104,7 @@ export async function tickGame(code: string) {
 
     // Next holder (Seat-Reihenfolge, wrap-around)
     const loserSeat = alive.find((p) => p.player_id === loserId)?.seat_index ?? -1;
-    const next =
-        aliveAfter.find((p) => (p.seat_index ?? 0) > loserSeat) ?? aliveAfter[0];
-
+    const next = aliveAfter.find((p) => (p.seat_index ?? 0) > loserSeat) ?? aliveAfter[0];
     const nextHolderId = next.player_id;
 
     // Neue explode_at berechnen
@@ -132,8 +130,8 @@ export async function tickGame(code: string) {
         })
         .eq("id", lobby.id)
         .eq("phase", "running")
-        .eq("explode_at", lobby.explode_at)          // ✅ CAS
-        .eq("holder_player_id", loserId)             // ✅ CAS
+        .eq("explode_at", lobby.explode_at) // ✅ CAS
+        .eq("holder_player_id", loserId) // ✅ CAS
         .select("id")
         .maybeSingle();
 
