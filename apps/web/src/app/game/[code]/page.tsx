@@ -127,16 +127,17 @@ export default function GamePage() {
         return lobby?.topic_selected ?? lobby?.topic_a ?? "…";
     }, [lobby?.topic_selected, lobby?.topic_a]);
 
-    // Winner choice (for result animation in countdown)
+    // Winner choice (for result animation)
     const winnerChoice = useMemo<1 | 2 | 3 | null>(() => {
         if (!lobby) return null;
-        if (lobby.topic_tie_pick && (lobby.topic_tie_pick === 1 || lobby.topic_tie_pick === 2 || lobby.topic_tie_pick === 3)) {
-            return lobby.topic_tie_pick as 1 | 2 | 3;
-        }
+
+        const pick = lobby.topic_tie_pick;
+        if (pick === 1 || pick === 2 || pick === 3) return pick;
+
         if (!lobby.topic_selected) return null;
         if (lobby.topic_selected === lobby.topic_a) return 1;
         if (lobby.topic_selected === lobby.topic_b) return 2;
-        return 3;
+        return 3; // if selected matches neither, treat as random
     }, [lobby]);
 
     const totalPlayers = players.length;
@@ -227,7 +228,6 @@ export default function GamePage() {
                 // ---- Topic vote counts (only when needed)
                 if (nextLobby.phase === "topic_vote") {
                     const votesRes = await supabase.from("topic_votes").select("choice,player_id").eq("lobby_id", nextLobby.id);
-
                     if (!alive) return;
 
                     if (!votesRes.error && votesRes.data) {
@@ -254,6 +254,7 @@ export default function GamePage() {
                 }
 
                 // ---- Best-effort “advance” calls (prevents freeze)
+
                 // 1) running: tickGame due
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
                     const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
@@ -262,7 +263,7 @@ export default function GamePage() {
                     if (meAlive && due) void tickGame(code).catch(() => {});
                 }
 
-                // 2) topic_vote: finalize when due
+                // 2) topic_vote: finalize when due (timer)
                 if (nextLobby.phase === "topic_vote" && nextLobby.topic_vote_ends_at) {
                     const dueMs = msUntil(nextLobby.topic_vote_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !finalizeInFlightRef.current) {
@@ -305,7 +306,6 @@ export default function GamePage() {
 
     // -----------------------------
     // EARLY FINISH: when all voted -> finalize immediately
-    // (this is what usually fixes “nach Voting geht’s nicht weiter”)
     // -----------------------------
     useEffect(() => {
         if (!lobby) return;
@@ -378,7 +378,6 @@ export default function GamePage() {
                     p_player_id: mePlayerId,
                     p_choice: choice,
                 });
-
                 if (error) throw new Error(error.message);
 
                 setMyVote(choice);
@@ -447,16 +446,17 @@ export default function GamePage() {
 
     if (!lobby) return <div className="p-6 opacity-70">Lade Spiel…</div>;
 
-    // Helper: topic labels (for UI tiles)
+    // Labels
     const aLabel = lobby.topic_a ?? "…";
     const bLabel = lobby.topic_b ?? "…";
     const rLabel = "Zufällig";
 
-    // -----------------------------
-    // Phase: topic_vote  (ORANGE + 3 big tiles side-by-side)
-    // -----------------------------
+    // =========================================================
+    // PHASE: TOPIC VOTE
+    // =========================================================
     if (lobby.phase === "topic_vote") {
-        const timeLabel = voteSecondsLeft ?? 15;
+        const timeLeft = voteSecondsLeft ?? 15;
+        const progress = clamp(timeLeft / 15, 0, 1);
 
         return (
             <main
@@ -466,64 +466,89 @@ export default function GamePage() {
                     placeItems: "center",
                     padding: 24,
                     background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.20) 58%), radial-gradient(circle at 50% 80%, rgba(255,149,0,0.62) 0%, rgba(192,83,18,0.94) 86%)",
+                        "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.14) 0%, rgba(0,0,0,0.18) 56%), radial-gradient(circle at 50% 85%, rgba(255,149,0,0.78) 0%, rgba(192,83,18,0.98) 84%)",
+                    position: "relative",
+                    overflow: "hidden",
                 }}
             >
-                <div style={{ width: "min(1100px, 96vw)" }}>
-                    <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.78 }}>THEMA VOTING</div>
+                {/* Pattern */}
+                <div
+                    aria-hidden
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        backgroundImage:
+                            "linear-gradient(135deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.00) 25%, rgba(255,255,255,0.00) 50%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.06) 75%, rgba(255,255,255,0.00) 75%, rgba(255,255,255,0.00) 100%)",
+                        backgroundSize: "18px 18px",
+                        opacity: 0.26,
+                        pointerEvents: "none",
+                    }}
+                />
 
-                        <div style={{ fontSize: "clamp(26px, 3.8vw, 44px)", fontWeight: 950, marginTop: 10 }}>
+                <div style={{ width: "min(1100px, 96vw)", position: "relative", zIndex: 2 }}>
+                    <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 13, fontWeight: 950, letterSpacing: 1.9, opacity: 0.78 }}>THEMA VOTING</div>
+
+                        <div style={{ fontSize: "clamp(30px, 4.2vw, 54px)", fontWeight: 980, marginTop: 10 }}>
                             Wählt das Thema
                         </div>
 
-                        <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 800 }}>
-                            Zeit: <b>{timeLabel}s</b> · Votes: <b>{votedPlayers}</b> / <b>{totalPlayers}</b>
+                        <div style={{ marginTop: 10, opacity: 0.92, fontWeight: 850 }}>
+                            Zeit: <b>{timeLeft}s</b> · Votes: <b>{votedPlayers}</b> / <b>{totalPlayers}</b>
                         </div>
 
                         <div
                             style={{
-                                marginTop: 18,
+                                marginTop: 22,
                                 display: "grid",
                                 gridTemplateColumns: "repeat(3, minmax(0,1fr))",
-                                gap: 14,
+                                gap: 16,
                             }}
                         >
                             <button
                                 type="button"
                                 onClick={() => void vote(1)}
                                 disabled={voteBusy || !mePlayerId}
-                                className={`topicTile ${myVote === 1 ? "topicTileActive" : ""}`}
+                                className={`topicCard ${myVote === 1 ? "active" : ""}`}
                             >
-                                <div className="topicTileBadge">①</div>
-                                <div className="topicTileTitle">{aLabel}</div>
-                                <div className="topicTileMeta">{voteCounts.a} Votes</div>
+                                <div className="topRow">
+                                    <span className="badge">①</span>
+                                    <span className="count">{voteCounts.a} Votes</span>
+                                </div>
+                                <div className="title">{aLabel}</div>
+                                <div className="hint">Thema A</div>
                             </button>
 
                             <button
                                 type="button"
                                 onClick={() => void vote(2)}
                                 disabled={voteBusy || !mePlayerId}
-                                className={`topicTile ${myVote === 2 ? "topicTileActive" : ""}`}
+                                className={`topicCard ${myVote === 2 ? "active" : ""}`}
                             >
-                                <div className="topicTileBadge">②</div>
-                                <div className="topicTileTitle">{bLabel}</div>
-                                <div className="topicTileMeta">{voteCounts.b} Votes</div>
+                                <div className="topRow">
+                                    <span className="badge">②</span>
+                                    <span className="count">{voteCounts.b} Votes</span>
+                                </div>
+                                <div className="title">{bLabel}</div>
+                                <div className="hint">Thema B</div>
                             </button>
 
                             <button
                                 type="button"
                                 onClick={() => void vote(3)}
                                 disabled={voteBusy || !mePlayerId}
-                                className={`topicTile ${myVote === 3 ? "topicTileActive" : ""}`}
+                                className={`topicCard ${myVote === 3 ? "active" : ""}`}
                             >
-                                <div className="topicTileBadge">🎲</div>
-                                <div className="topicTileTitle">{rLabel}</div>
-                                <div className="topicTileMeta">{voteCounts.r} Votes</div>
+                                <div className="topRow">
+                                    <span className="badge">🎲</span>
+                                    <span className="count">{voteCounts.r} Votes</span>
+                                </div>
+                                <div className="title">{rLabel}</div>
+                                <div className="hint">Random Pick</div>
                             </button>
                         </div>
 
-                        <div style={{ marginTop: 14, opacity: 0.88, fontWeight: 800 }}>
+                        <div style={{ marginTop: 14, opacity: 0.9, fontWeight: 850 }}>
                             {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wenn alle gewählt haben, geht’s sofort weiter."}
                         </div>
 
@@ -533,84 +558,174 @@ export default function GamePage() {
                             </button>
                         </div>
 
-                        {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.95 }}>{toast}</div> : null}
+                        {toast ? <div style={{ marginTop: 18, fontWeight: 950, opacity: 0.95 }}>{toast}</div> : null}
+                    </div>
+                </div>
+
+                {/* Bottom Countdown */}
+                <div
+                    style={{
+                        position: "fixed",
+                        left: "50%",
+                        bottom: 18,
+                        transform: "translateX(-50%)",
+                        width: "min(980px, 94vw)",
+                        zIndex: 50,
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 14,
+                            padding: "14px 16px",
+                            borderRadius: 999,
+                            background: "rgba(0,0,0,0.28)",
+                            border: "1px solid rgba(255,255,255,0.16)",
+                            backdropFilter: "blur(12px)",
+                            WebkitBackdropFilter: "blur(12px)",
+                            boxShadow: "0 18px 70px rgba(0,0,0,0.28)",
+                        }}
+                    >
+                        <div style={{ fontWeight: 950, letterSpacing: 1.4, opacity: 0.9 }}>⏳ Countdown</div>
+
+                        <div
+                            style={{
+                                flex: 1,
+                                height: 12,
+                                borderRadius: 999,
+                                background: "rgba(255,255,255,0.12)",
+                                overflow: "hidden",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                            }}
+                            aria-hidden
+                        >
+                            <div
+                                style={{
+                                    width: `${Math.round(progress * 100)}%`,
+                                    height: "100%",
+                                    background:
+                                        "linear-gradient(90deg, rgba(255,214,10,0.95), rgba(255,149,0,0.95), rgba(255,45,85,0.80))",
+                                    transition: "width 220ms linear",
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ fontSize: 22, fontWeight: 980, minWidth: 46, textAlign: "right" }}>{timeLeft}s</div>
                     </div>
                 </div>
 
                 <style>{`
-          .topicTile{
+          .topicCard{
             width:100%;
-            border-radius: 28px;
-            border: 1px solid rgba(255,255,255,0.16);
-            background: rgba(0,0,0,0.20);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            padding: 18px 16px;
+            border-radius: 30px;
+            border: 1px solid rgba(255,255,255,0.18);
+            background:
+              radial-gradient(circle at 25% 20%, rgba(255,255,255,0.16), rgba(0,0,0,0.18)),
+              linear-gradient(135deg, rgba(0,0,0,0.16), rgba(255,255,255,0.04));
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 18px 18px 16px;
             cursor: pointer;
-            transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
+            transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, filter .18s ease;
             text-align:left;
-            min-height: 150px;
+            min-height: 170px;
             position:relative;
             overflow:hidden;
           }
-          .topicTile:hover{
-            transform: translateY(-2px);
-            border-color: rgba(255,255,255,0.26);
+          .topicCard::after{
+            content:"";
+            position:absolute;
+            inset:-60px;
+            background: radial-gradient(circle at 40% 30%, rgba(255,214,10,0.18), rgba(255,149,0,0.10), rgba(255,45,85,0.06));
+            opacity:.7;
+            filter: blur(20px);
+            pointer-events:none;
           }
-          .topicTile:disabled{
-            opacity: .75;
+          .topicCard:hover{
+            transform: translateY(-3px);
+            border-color: rgba(255,255,255,0.28);
+            box-shadow: 0 18px 70px rgba(0,0,0,0.26);
+            filter: brightness(1.03);
+          }
+          .topicCard:disabled{
+            opacity: .78;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
           }
 
-          .topicTileBadge{
+          .topicCard .topRow{
+            position:relative;
+            z-index:2;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:10px;
+          }
+          .topicCard .badge{
             display:inline-flex;
             align-items:center;
             justify-content:center;
             height: 34px;
             padding: 0 12px;
             border-radius: 999px;
-            font-weight: 950;
-            letter-spacing:.3px;
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.14);
+            font-weight: 980;
+            background: rgba(255,255,255,0.14);
+            border: 1px solid rgba(255,255,255,0.16);
           }
-
-          .topicTileTitle{
-            margin-top: 14px;
-            font-size: clamp(18px, 2.2vw, 28px);
-            font-weight: 950;
-            letter-spacing: .2px;
-            text-shadow: 0 10px 30px rgba(0,0,0,0.25);
+          .topicCard .count{
+            font-weight: 900;
+            opacity: .9;
+            font-size: 13px;
           }
-
-          .topicTileMeta{
+          .topicCard .title{
+            position:relative;
+            z-index:2;
+            margin-top: 16px;
+            font-size: clamp(20px, 2.6vw, 34px);
+            font-weight: 1000;
+            letter-spacing:.2px;
+            text-shadow: 0 12px 36px rgba(0,0,0,0.22);
+          }
+          .topicCard .hint{
+            position:relative;
+            z-index:2;
             margin-top: 10px;
-            opacity: .85;
             font-weight: 850;
+            opacity: .78;
             font-size: 13px;
           }
 
-          @keyframes chosenGlow {
-            0% { filter: brightness(1); transform: translateY(0) scale(1); }
-            50% { filter: brightness(1.15); transform: translateY(-2px) scale(1.01); }
-            100% { filter: brightness(1); transform: translateY(0) scale(1); }
+          @keyframes activePulse {
+            0% { transform: translateY(-3px) scale(1); filter: brightness(1.05); }
+            50% { transform: translateY(-3px) scale(1.02); filter: brightness(1.12); }
+            100% { transform: translateY(-3px) scale(1); filter: brightness(1.05); }
+          }
+          .topicCard.active{
+            border-color: rgba(255,255,255,0.36);
+            box-shadow: 0 22px 90px rgba(0,0,0,0.32);
+            animation: activePulse .85s ease-in-out infinite;
+            background:
+              radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), rgba(0,0,0,0.16)),
+              linear-gradient(135deg, rgba(255,214,10,0.22), rgba(255,149,0,0.18), rgba(255,45,85,0.12));
           }
 
-          .topicTileActive{
-            background: linear-gradient(135deg, rgba(255,214,10,0.26), rgba(255,149,0,0.22), rgba(255,45,85,0.14));
-            border-color: rgba(255,255,255,0.34);
-            box-shadow: 0 18px 60px rgba(0,0,0,0.28);
-            animation: chosenGlow .9s ease-in-out infinite;
+          @media (max-width: 860px){
+            .topicCard{ min-height: 150px; }
+            main div[style*="gridTemplateColumns: repeat(3"]{
+              grid-template-columns: 1fr !important;
+            }
           }
         `}</style>
             </main>
         );
     }
 
-    // -----------------------------
-    // Phase: countdown (synced) + RESULT ANIMATION:
-    // winner tile grows, others slide out
-    // -----------------------------
+    // =========================================================
+    // PHASE: COUNTDOWN (shows result animation)
+    // =========================================================
     if (lobby.phase === "countdown") {
         const tie = lobby.topic_tie_choices && lobby.topic_tie_choices.length > 1;
         const tieChoices = lobby.topic_tie_choices ?? [];
@@ -639,9 +754,8 @@ export default function GamePage() {
                 <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
-                    {/* Result tiles */}
+                    {/* Result tiles (win grows, others slide out) */}
                     <div
-                        className="resultRow"
                         style={{
                             marginTop: 16,
                             display: "grid",
@@ -752,18 +866,22 @@ export default function GamePage() {
           .resultTile.lose{
             animation: loseSlide .55s ease-out forwards;
           }
+
+          @media (max-width: 860px){
+            main div[style*="gridTemplateColumns: repeat(3"]{
+              grid-template-columns: 1fr !important;
+            }
+          }
         `}</style>
             </main>
         );
     }
 
-    // -----------------------------
-    // Phase: finished
-    // -----------------------------
+    // =========================================================
+    // PHASE: FINISHED
+    // =========================================================
     if (lobby.phase === "finished") {
-        const winner = lobby.holder_player_id
-            ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
-            : "Unbekannt";
+        const winner = lobby.holder_player_id ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt" : "Unbekannt";
 
         return (
             <main
@@ -779,9 +897,7 @@ export default function GamePage() {
                 <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>SPIEL BEENDET</div>
                     <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
-                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>
-                        {iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}
-                    </div>
+                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
                     <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
                         <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
                             Zur Lobby
@@ -795,9 +911,9 @@ export default function GamePage() {
         );
     }
 
-    // -----------------------------
-    // Phase: running (NO GameBoard import required)
-    // -----------------------------
+    // =========================================================
+    // PHASE: RUNNING (no GameBoard)
+    // =========================================================
     if (lobby.phase !== "running") {
         return (
             <main
@@ -866,17 +982,8 @@ export default function GamePage() {
             {/* Ring overlay */}
             <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} />
 
-            {/* Minimal “board” */}
-            <div
-                style={{
-                    position: "relative",
-                    zIndex: 2,
-                    minHeight: "100vh",
-                    display: "grid",
-                    placeItems: "center",
-                    padding: 24,
-                }}
-            >
+            {/* Minimal board */}
+            <div style={{ position: "relative", zIndex: 2, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(860px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>RUNNING</div>
                     <div style={{ fontSize: "clamp(28px, 4.2vw, 56px)", fontWeight: 950, marginTop: 12 }}>{selectedTopic}</div>
