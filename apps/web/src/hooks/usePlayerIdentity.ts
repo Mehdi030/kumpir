@@ -27,7 +27,7 @@ export function usePlayerIdentity() {
 
         const onStorage = (e: StorageEvent) => {
             if (e.key === "kumpir_player_id" || e.key === "kumpir_player_name") sync();
-        };
+        };2
 
         window.addEventListener("storage", onStorage);
         window.addEventListener("focus", sync);
