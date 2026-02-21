@@ -9,7 +9,6 @@ export type LobbyRow = {
     host_player_id: string | null;
     phase: string | null;
     locked: boolean | null;
-
     max_players: number | null;
     game_mode: string | null;
     topic: string | null;
@@ -37,6 +36,8 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
         onPhaseRunningRef.current = opts?.onPhaseRunning;
     }, [opts?.onPhaseRunning]);
 
+    const prevPhaseRef = useRef<string | null>(null);
+
     const [lobby, setLobby] = useState<LobbyRow | null>(null);
     const [players, setPlayers] = useState<PlayerRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -59,13 +60,15 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
         }
 
         const lobbyRow = lobbyRes.data as LobbyRow;
-
-        if (lobbyRow.phase === "running") {
-            onPhaseRunningRef.current?.();
-            return;
-        }
-
         setLobby(lobbyRow);
+
+        // fire callback only on transition -> running
+        const prev = prevPhaseRef.current;
+        const next = lobbyRow.phase ?? null;
+        if (prev !== "running" && next === "running") {
+            onPhaseRunningRef.current?.();
+        }
+        prevPhaseRef.current = next;
 
         const playersRes = await supabase
             .from("players")

@@ -48,24 +48,22 @@ export default function LobbyPage() {
 
     const suppressRunningRedirectRef = useRef(false);
 
-    // ✅ navigation helper (App Router)
+    // ✅ navigation helper (App Router) — use replace for clean back behavior
     const go = useCallback(
         (url: string) => {
-            router.push(url);
+            router.replace(url);
         },
         [router]
     );
 
     const hardGoGame = useCallback(() => {
-        go(`/game/${encodeURIComponent(code)}?t=${Date.now()}`);
+        go(`/game/${encodeURIComponent(code)}`);
     }, [code, go]);
 
+    // ✅ single source of truth: lobby.phase
+    // (do NOT use onPhaseRunning here — keep one redirect mechanism)
     const { lobby, players, loading, error } = useLobbyState(code, {
         pollMs: 900,
-        onPhaseRunning: () => {
-            if (suppressRunningRedirectRef.current) return;
-            hardGoGame();
-        },
     });
 
     const lobbyId = lobby?.id ?? null;
@@ -85,7 +83,7 @@ export default function LobbyPage() {
         staleSeconds: 25,
     });
 
-    // running -> game
+    // ✅ running -> game (DB is source of truth)
     useEffect(() => {
         if (suppressRunningRedirectRef.current) return;
         if (lobby?.phase === "running") hardGoGame();
@@ -195,14 +193,14 @@ export default function LobbyPage() {
                 return;
             }
 
+            // ✅ Do NOT navigate immediately; wait for lobby.phase === "running"
             showToast("✅ Spiel startet…", 900);
-            hardGoGame();
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2500);
         } finally {
             setStarting(false);
         }
-    }, [amIHost, mePlayerId, starting, isRunning, code, showToast, hardGoGame]);
+    }, [amIHost, mePlayerId, starting, isRunning, code, showToast]);
 
     const leaveLobby = useCallback(async () => {
         suppressRunningRedirectRef.current = true;
@@ -305,7 +303,10 @@ export default function LobbyPage() {
                                     </button>
 
                                     {toast ? (
-                                        <div className="fieldHelp" style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}>
+                                        <div
+                                            className="fieldHelp"
+                                            style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}
+                                        >
                                             {toast}
                                         </div>
                                     ) : (
@@ -348,7 +349,14 @@ export default function LobbyPage() {
                                             title={lobby.topic ?? undefined}
                                         >
                                             <span style={{ opacity: 0.8 }}>🏷️</span>
-                                            <span style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                            <span
+                                                style={{
+                                                    fontWeight: 900,
+                                                    whiteSpace: "nowrap",
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                }}
+                                            >
                         {lobby.topic}
                       </span>
                                         </div>
@@ -464,7 +472,9 @@ export default function LobbyPage() {
                                     type="button"
                                     onClick={toggleReady}
                                     disabled={busyReady || !mePlayerId || starting || isRunning}
-                                    className={`btn btnXL ${busyReady || starting || isRunning ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
+                                    className={`btn btnXL ${busyReady || starting || isRunning ? "btnDisabled" : ""} ${
+                                        meReady ? "btnReadyOff" : "btnReadyOn"
+                                    }`}
                                 >
                                     {isRunning ? "🚀 Läuft" : starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
                                 </button>
