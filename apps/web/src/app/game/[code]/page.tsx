@@ -56,11 +56,6 @@ function getErrorMessage(e: unknown): string {
     }
 }
 
-function goLobby(code: string) {
-    if (typeof window === "undefined") return;
-    window.location.replace(`/lobby/${code}`);
-}
-
 function clamp(n: number, min: number, max: number) {
     return Math.max(min, Math.min(max, n));
 }
@@ -164,7 +159,6 @@ export default function GamePage() {
             const { error } = await supabase.rpc("rpc_finalize_topic_vote", { p_lobby_id: lobbyId });
             if (error) {
                 console.error("rpc_finalize_topic_vote failed:", error);
-                // keep UI running; show toast for visibility
                 showToast(`❌ Finalize: ${error.message}`, 2400);
                 throw new Error(error.message);
             }
@@ -271,8 +265,6 @@ export default function GamePage() {
                     if (!alive) return;
 
                     if (votesRes.error) {
-                        // This is where you’d see the "updated_at does not exist" indirectly only if you were writing.
-                        // But if SELECT fails, show a fatal.
                         console.error("topic_votes select failed:", votesRes.error);
                         showToast(`❌ Votes laden: ${votesRes.error.message}`, 2400);
                     } else if (votesRes.data) {
@@ -416,7 +408,6 @@ export default function GamePage() {
                 });
 
                 if (error) {
-                    // This is exactly where you will see: updated_at does not exist
                     console.error("rpc_vote_topic failed:", error);
                     throw new Error(error.message);
                 }
@@ -439,7 +430,7 @@ export default function GamePage() {
         if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
         if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
         if (iAmEliminated) return showToast("💀 Du bist raus", 1400);
-        if (!isMeHolder) return showToast("🙅 Du hast die Kartoffel nicht", 1400);
+        if (!isMeHolder) return; // UI zeigt eh keine Buttons dafür
         if (passBusy) return;
 
         setPassBusy(true);
@@ -453,18 +444,19 @@ export default function GamePage() {
         }
     }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, showToast]);
 
-    // Spacebar pass (nur running)
+    // Spacebar pass (nur running, nur Holder)
     useEffect(() => {
         const onKeyDown = (ev: KeyboardEvent) => {
             if (ev.code !== "Space") return;
             if (!lobby || lobby.phase !== "running") return;
+            if (!isMeHolder) return;
             ev.preventDefault();
             void handlePass();
         };
 
         window.addEventListener("keydown", onKeyDown, { passive: false });
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [handlePass, lobby]);
+    }, [handlePass, lobby, isMeHolder]);
 
     // -----------------------------
     // UI: fatal / loading
@@ -475,11 +467,7 @@ export default function GamePage() {
                 <div style={{ width: "min(720px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontWeight: 950, fontSize: 22 }}>⚠️ Spiel konnte nicht geladen werden</div>
                     <div style={{ marginTop: 10, opacity: 0.8 }}>{fatalError}</div>
-                    <div style={{ marginTop: 18 }}>
-                        <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
-                            Zurück zur Lobby
-                        </button>
-                    </div>
+                    {/* kein "Zur Lobby" */}
                 </div>
             </main>
         );
@@ -493,12 +481,10 @@ export default function GamePage() {
     const rLabel = "Zufällig";
 
     // =========================================================
-    // PHASE: TOPIC VOTE (NO PARALLAX SHIFT, BIGGER CARDS, ONLY HOVER SCALE)
+    // PHASE: TOPIC VOTE
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
-
-        // UI duration used for progress bar. If your DB duration differs, set it accordingly.
         const duration = 15;
         const progress = clamp(timeLeft / duration, 0, 1);
 
@@ -580,7 +566,6 @@ export default function GamePage() {
                             </button>
                         </div>
 
-                        {/* Status line UNDER the cards */}
                         <div className="statusLine">
                             {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
                         </div>
@@ -589,7 +574,6 @@ export default function GamePage() {
                     </div>
                 </div>
 
-                {/* Bottom Countdown only */}
                 <div className="bottomBar" style={{ zIndex: 50 }}>
                     <div className="bottomInner">
                         <div className="bottomLeft">
@@ -619,6 +603,7 @@ export default function GamePage() {
                     </div>
                 </div>
 
+                {/* styles unverändert */}
                 <style>{`
           .kicker{
             font-size: 12px;
@@ -647,15 +632,12 @@ export default function GamePage() {
             pointer-events:none;
             animation: ${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};
           }
-
           .topicGrid{
             margin-top: 24px;
             display:grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 18px;
           }
-
-          /* BIGGER 3D glass cards (no position shift on hover) */
           .glassCard{
             position:relative;
             width:100%;
@@ -680,8 +662,6 @@ export default function GamePage() {
           }
           .glassCard:nth-child(2){ animation-delay: ${reduceMotion ? "0ms" : "70ms"}; }
           .glassCard:nth-child(3){ animation-delay: ${reduceMotion ? "0ms" : "140ms"}; }
-
-          /* ONLY scale on hover (no translate/shift) */
           .glassCard:hover{
             transform: scale(1.035);
             border-color: rgba(255,255,255,0.30);
@@ -690,16 +670,13 @@ export default function GamePage() {
               inset 0 1px 0 rgba(255,255,255,0.22);
             filter: brightness(1.03);
           }
-          .glassCard:active{
-            transform: scale(1.015);
-          }
+          .glassCard:active{ transform: scale(1.015); }
           .glassCard:disabled{
             opacity: .78;
             cursor:not-allowed;
             transform:none;
             filter:none;
           }
-
           .glassShine{
             position:absolute;
             inset:-120px;
@@ -710,7 +687,6 @@ export default function GamePage() {
             pointer-events:none;
             animation: ${reduceMotion ? "none" : "shineSweep 5.2s ease-in-out infinite"};
           }
-
           .cardTop{
             display:flex;
             justify-content:space-between;
@@ -755,7 +731,6 @@ export default function GamePage() {
             position:relative;
             z-index:2;
           }
-
           .glassCard.active{
             border-color: rgba(255,255,255,0.44);
             background:
@@ -766,7 +741,6 @@ export default function GamePage() {
               0 0 0 1px rgba(255,255,255,0.06) inset;
             animation: ${reduceMotion ? "none" : "selectedBreath 1.05s ease-in-out infinite"};
           }
-
           .statusLine{
             margin-top: 14px;
             font-weight: 900;
@@ -774,15 +748,12 @@ export default function GamePage() {
             font-size: 13px;
             animation: ${reduceMotion ? "none" : "fadeUp 520ms ease both"};
           }
-
           .toastInline{
             margin-top: 14px;
             font-weight: 950;
             opacity: .92;
             animation: ${reduceMotion ? "none" : "fadeUp 480ms ease both"};
           }
-
-          /* Bottom bar */
           .bottomBar{
             position: fixed;
             left: 50%;
@@ -805,43 +776,19 @@ export default function GamePage() {
             animation: ${reduceMotion ? "none" : "dockIn 900ms cubic-bezier(.16,1,.3,1) both"};
             animation-delay: ${reduceMotion ? "0ms" : "120ms"};
           }
-          .bottomLeft{
-            display:flex;
-            align-items:center;
-            gap: 10px;
-            min-width: 220px;
-          }
+          .bottomLeft{ display:flex; align-items:center; gap: 10px; min-width: 220px; }
           .brandMark{
-            width: 40px;
-            height: 40px;
-            border-radius: 999px;
-            display:grid;
-            place-items:center;
+            width: 40px; height: 40px; border-radius: 999px;
+            display:grid; place-items:center;
             background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18));
             border: 1px solid rgba(255,255,255,0.14);
             box-shadow: 0 10px 30px rgba(0,0,0,0.22);
           }
-          .bottomTitle{
-            font-weight: 1000;
-            letter-spacing: 1.2px;
-            font-size: 12px;
-            text-transform: uppercase;
-            opacity: .9;
-          }
-          .bottomSub{
-            font-weight: 850;
-            opacity: .78;
-            font-size: 12px;
-            margin-top: 2px;
-          }
-          .barWrap{
-            flex: 1;
-            min-width: 180px;
-            position: relative;
-          }
+          .bottomTitle{ font-weight: 1000; letter-spacing: 1.2px; font-size: 12px; text-transform: uppercase; opacity: .9; }
+          .bottomSub{ font-weight: 850; opacity: .78; font-size: 12px; margin-top: 2px; }
+          .barWrap{ flex: 1; min-width: 180px; position: relative; }
           .barTrack{
-            height: 12px;
-            border-radius: 999px;
+            height: 12px; border-radius: 999px;
             background: rgba(255,255,255,0.10);
             border: 1px solid rgba(255,255,255,0.12);
             overflow:hidden;
@@ -861,22 +808,15 @@ export default function GamePage() {
             animation: ${reduceMotion ? "none" : "glowFloat 3.6s ease-in-out infinite"};
           }
           .timeBox{
-            min-width: 70px;
-            height: 40px;
-            border-radius: 999px;
-            display:grid;
-            place-items:center;
-            font-size: 18px;
-            font-weight: 1000;
+            min-width: 70px; height: 40px; border-radius: 999px;
+            display:grid; place-items:center;
+            font-size: 18px; font-weight: 1000;
             background: rgba(255,255,255,0.10);
             border: 1px solid rgba(255,255,255,0.14);
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
           }
-
-          /* background layers */
           .grain{
-            position:absolute;
-            inset:0;
+            position:absolute; inset:0;
             background-image:
               url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
             opacity: .10;
@@ -902,44 +842,18 @@ export default function GamePage() {
             animation: ${reduceMotion ? "none" : "orbFloat 10.5s ease-in-out infinite"};
             animation-delay: ${reduceMotion ? "0s" : "-2.1s"};
           }
-
-          /* animations */
-          @keyframes fadeUp{
-            from{ opacity:0; transform: translateY(10px); }
-            to{ opacity:1; transform: translateY(0); }
-          }
+          @keyframes fadeUp{ from{ opacity:0; transform: translateY(10px);} to{ opacity:1; transform: translateY(0);} }
           @keyframes heroIn{
             0%{ opacity:0; transform: translateY(12px) scale(0.985); filter: blur(1px); }
             100%{ opacity:1; transform: translateY(0) scale(1); filter: blur(0); }
           }
-          @keyframes cardIn{
-            0%{ opacity:0; transform: translateY(16px) scale(0.985); }
-            100%{ opacity:1; transform: translateY(0) scale(1); }
-          }
-          @keyframes dockIn{
-            0%{ opacity:0; transform: translateY(16px); }
-            100%{ opacity:1; transform: translateY(0); }
-          }
-          @keyframes glowFloat{
-            0%,100%{ transform: translateY(0); opacity: .82; }
-            50%{ transform: translateY(-6px); opacity: 1; }
-          }
-          @keyframes shineSweep{
-            0%,100%{ transform: translateX(-10px) rotate(12deg); opacity: .60; }
-            50%{ transform: translateX(18px) rotate(12deg); opacity: .90; }
-          }
-          @keyframes selectedBreath{
-            0%,100%{ transform: scale(1.01); filter: brightness(1.06); }
-            50%{ transform: scale(1.025); filter: brightness(1.14); }
-          }
-          @keyframes orbFloat{
-            0%,100%{ transform: translateY(0) translateX(0); }
-            50%{ transform: translateY(18px) translateX(10px); }
-          }
-
-          @media (max-width: 980px){
-            .glassCard{ min-height: 230px; }
-          }
+          @keyframes cardIn{ 0%{ opacity:0; transform: translateY(16px) scale(0.985);} 100%{ opacity:1; transform: translateY(0) scale(1);} }
+          @keyframes dockIn{ 0%{ opacity:0; transform: translateY(16px);} 100%{ opacity:1; transform: translateY(0);} }
+          @keyframes glowFloat{ 0%,100%{ transform: translateY(0); opacity: .82;} 50%{ transform: translateY(-6px); opacity: 1;} }
+          @keyframes shineSweep{ 0%,100%{ transform: translateX(-10px) rotate(12deg); opacity: .60;} 50%{ transform: translateX(18px) rotate(12deg); opacity: .90;} }
+          @keyframes selectedBreath{ 0%,100%{ transform: scale(1.01); filter: brightness(1.06);} 50%{ transform: scale(1.025); filter: brightness(1.14);} }
+          @keyframes orbFloat{ 0%,100%{ transform: translateY(0) translateX(0);} 50%{ transform: translateY(18px) translateX(10px);} }
+          @media (max-width: 980px){ .glassCard{ min-height: 230px; } }
           @media (max-width: 860px){
             .topicGrid{ grid-template-columns: 1fr; }
             .glassCard{ min-height: 190px; }
@@ -1066,7 +980,6 @@ export default function GamePage() {
             font-weight: 950;
             text-shadow: 0 10px 30px rgba(0,0,0,0.22);
           }
-
           @keyframes winPop {
             0% { transform: scale(1); filter: brightness(1); }
             70% { transform: scale(1.06); filter: brightness(1.18); }
@@ -1076,7 +989,6 @@ export default function GamePage() {
             0% { transform: scale(1); opacity: 1; }
             100% { transform: translateY(14px) scale(0.92); opacity: 0.12; }
           }
-
           .resultTile.win{
             background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18)),
                         linear-gradient(135deg, rgba(52,199,89,0.18), rgba(10,132,255,0.10), rgba(255,214,10,0.12));
@@ -1084,14 +996,9 @@ export default function GamePage() {
             box-shadow: 0 18px 70px rgba(0,0,0,0.25);
             animation: winPop .55s ease-out forwards;
           }
-          .resultTile.lose{
-            animation: loseSlide .55s ease-out forwards;
-          }
-
+          .resultTile.lose{ animation: loseSlide .55s ease-out forwards; }
           @media (max-width: 860px){
-            main div[style*="gridTemplateColumns: repeat(3"]{
-              grid-template-columns: 1fr !important;
-            }
+            main div[style*="gridTemplateColumns: repeat(3"]{ grid-template-columns: 1fr !important; }
           }
         `}</style>
             </main>
@@ -1099,12 +1006,10 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: FINISHED
+    // PHASE: FINISHED  (nur hier "Zur Lobby")
     // =========================================================
     if (lobby.phase === "finished") {
-        const winner = lobby.holder_player_id
-            ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
-            : "Unbekannt";
+        const winner = lobby.holder_player_id ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt" : "Unbekannt";
 
         return (
             <main
@@ -1120,11 +1025,9 @@ export default function GamePage() {
                 <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>SPIEL BEENDET</div>
                     <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
-                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>
-                        {iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}
-                    </div>
+                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
                     <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
-                        <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
+                        <button className="btn btnPrimary btnXL" onClick={() => (window.location.href = `/lobby/${encodeURIComponent(code)}`)} type="button">
                             Zur Lobby
                         </button>
                         <button className="btn btnSecondary btnXL" onClick={() => (window.location.href = "/")} type="button">
@@ -1137,7 +1040,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: RUNNING
+    // PHASE: NOT RUNNING (WARTEN)  -> KEIN "Zur Lobby"
     // =========================================================
     if (lobby.phase !== "running") {
         return (
@@ -1155,11 +1058,7 @@ export default function GamePage() {
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>WARTEN</div>
                     <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>⏳ Warten…</div>
                     <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>Der Host startet gleich das Spiel.</div>
-                    <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 22 }}>
-                        <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
-                            Zur Lobby
-                        </button>
-                    </div>
+                    {/* kein Button */}
                 </div>
             </main>
         );
@@ -1169,6 +1068,9 @@ export default function GamePage() {
         ? "radial-gradient(circle at 50% 35%, rgba(255,120,80,0.55) 0%, rgba(143,15,15,0.96) 72%)"
         : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.26) 0%, rgba(0,130,60,0.78) 80%)";
 
+    // =========================================================
+    // PHASE: RUNNING  -> Buttons NUR für Holder
+    // =========================================================
     return (
         <main
             style={{
@@ -1213,21 +1115,19 @@ export default function GamePage() {
                         Holder: <b>{holderName}</b>
                     </div>
 
-                    <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
-                        <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
-                            Zur Lobby
-                        </button>
-
-                        <button
-                            className="btn btnPrimary btnXL"
-                            onClick={() => void handlePass()}
-                            type="button"
-                            disabled={!mePlayerId || passBusy || iAmEliminated || !isMeHolder}
-                            title={!isMeHolder ? "Du hast die Kartoffel nicht" : iAmEliminated ? "Du bist raus" : "Weitergeben"}
-                        >
-                            {isMeHolder ? (passBusy ? "…" : "🥔 Weitergeben (Space)") : "⛔ Nicht Holder"}
-                        </button>
-                    </div>
+                    {isMeHolder ? (
+                        <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+                            <button
+                                className="btn btnPrimary btnXL"
+                                onClick={() => void handlePass()}
+                                type="button"
+                                disabled={!mePlayerId || passBusy || iAmEliminated}
+                                title={iAmEliminated ? "Du bist raus" : "Weitergeben"}
+                            >
+                                {passBusy ? "…" : "🥔 Weitergeben (Space)"}
+                            </button>
+                        </div>
+                    ) : null}
 
                     <div style={{ marginTop: 12, opacity: 0.8, fontWeight: 800 }}>
                         {isMeHolder ? "Du hast die Kartoffel. Drück Space oder Button." : "Warte, bis du die Kartoffel bekommst."}
