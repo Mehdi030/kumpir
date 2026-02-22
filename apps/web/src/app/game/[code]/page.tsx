@@ -102,6 +102,19 @@ export default function GamePage() {
     const [toast, setToast] = useState("");
     const [passBusy, setPassBusy] = useState(false);
 
+    // 3D parallax
+    const [tilt, setTilt] = useState({ x: 0, y: 0 });
+    const [reduceMotion, setReduceMotion] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+        const apply = () => setReduceMotion(!!mq?.matches);
+        apply();
+        mq?.addEventListener?.("change", apply);
+        return () => mq?.removeEventListener?.("change", apply);
+    }, []);
+
     const showToast = useCallback((msg: string, ms = 1600) => {
         setToast(msg);
         window.setTimeout(() => setToast(""), ms);
@@ -427,6 +440,28 @@ export default function GamePage() {
     }, [handlePass, lobby]);
 
     // -----------------------------
+    // 3D Parallax tracking (topic_vote only)
+    // -----------------------------
+    const onMove = useCallback(
+        (e: React.PointerEvent) => {
+            if (reduceMotion) return;
+            const el = e.currentTarget as HTMLDivElement;
+            const r = el.getBoundingClientRect();
+            const px = (e.clientX - r.left) / r.width; // 0..1
+            const py = (e.clientY - r.top) / r.height; // 0..1
+            const x = clamp((py - 0.5) * -10, -10, 10); // rotateX
+            const y = clamp((px - 0.5) * 12, -12, 12); // rotateY
+            setTilt({ x, y });
+        },
+        [reduceMotion]
+    );
+
+    const onLeave = useCallback(() => {
+        if (reduceMotion) return;
+        setTilt({ x: 0, y: 0 });
+    }, [reduceMotion]);
+
+    // -----------------------------
     // UI: fatal / loading
     // -----------------------------
     if (fatalError) {
@@ -453,254 +488,546 @@ export default function GamePage() {
     const rLabel = "Zufällig";
 
     // =========================================================
-    // PHASE: TOPIC VOTE
+    // PHASE: TOPIC VOTE (3D GLASS + KEYNOTE MOTION + KUMPIR BRAND)
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
-        const duration = 15; // UI duration (match your DB vote duration if possible)
+
+        // NOTE: UI duration used for progress bar. If your DB duration differs, set it accordingly.
+        const duration = 15;
         const progress = clamp(timeLeft / duration, 0, 1);
+
+        const containerTransform = reduceMotion
+            ? "none"
+            : `perspective(1200px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateZ(0)`;
 
         return (
             <main
+                onPointerMove={onMove}
+                onPointerLeave={onLeave}
                 style={{
                     minHeight: "100vh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
-                    background:
-                        "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.14) 0%, rgba(0,0,0,0.18) 56%), radial-gradient(circle at 50% 85%, rgba(255,149,0,0.78) 0%, rgba(192,83,18,0.98) 84%)",
                     position: "relative",
                     overflow: "hidden",
+                    background:
+                    // Kumpir brand: deep red -> orange -> golden
+                        "radial-gradient(circle at 25% 15%, rgba(255,255,255,0.16) 0%, rgba(0,0,0,0) 55%)," +
+                        "radial-gradient(circle at 80% 10%, rgba(34,211,238,0.10) 0%, rgba(0,0,0,0) 58%)," +
+                        "radial-gradient(circle at 50% 90%, rgba(255,214,10,0.55) 0%, rgba(240,138,26,0.60) 45%, rgba(197,58,18,0.92) 78%, rgba(143,15,15,0.98) 100%)",
                 }}
             >
-                {/* Pattern */}
+                {/* cinematic grain */}
+                <div className="grain" aria-hidden />
+                {/* floating light orbs */}
+                <div className="orbs" aria-hidden>
+                    <span className="orb o1" />
+                    <span className="orb o2" />
+                    <span className="orb o3" />
+                </div>
+
                 <div
-                    aria-hidden
                     style={{
-                        position: "absolute",
-                        inset: 0,
-                        backgroundImage:
-                            "linear-gradient(135deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.00) 25%, rgba(255,255,255,0.00) 50%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.06) 75%, rgba(255,255,255,0.00) 75%, rgba(255,255,255,0.00) 100%)",
-                        backgroundSize: "18px 18px",
-                        opacity: 0.26,
-                        pointerEvents: "none",
+                        width: "min(1100px, 96vw)",
+                        position: "relative",
+                        zIndex: 2,
+                        transform: containerTransform,
+                        transition: reduceMotion ? "none" : "transform 120ms ease-out",
+                        transformStyle: "preserve-3d",
                     }}
-                />
-
-                <div style={{ width: "min(1100px, 96vw)", position: "relative", zIndex: 2 }}>
+                >
                     <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 13, fontWeight: 950, letterSpacing: 1.9, opacity: 0.78 }}>THEMA VOTING</div>
+                        <div className="kicker">THEMA VOTING</div>
 
-                        <div style={{ fontSize: "clamp(30px, 4.2vw, 54px)", fontWeight: 980, marginTop: 10 }}>Wählt das Thema</div>
-
-                        <div style={{ marginTop: 10, opacity: 0.92, fontWeight: 850 }}>
-                            Zeit: <b>{timeLeft}s</b> · Votes: <b>{votedPlayers}</b> / <b>{totalPlayers}</b>
+                        <div className="headline">
+                            Wählt das Thema
+                            <span className="headlineGlow" aria-hidden />
                         </div>
 
+                        {/* Only time + subtle status. No vote counts, no votes/x */}
+                        <div className="subline">
+                            <span className="pill">
+                                <span className="dot" />
+                                <span style={{ fontWeight: 950 }}>Noch</span>&nbsp;{timeLeft}s
+                            </span>
+
+                            <span className="pill soft">
+                                {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
+                            </span>
+                        </div>
+
+                        {/* 3D glass cards */}
                         <div className="topicGrid">
-                            <button type="button" onClick={() => void vote(1)} disabled={voteBusy || !mePlayerId} className={`topicCard ${myVote === 1 ? "active" : ""}`}>
-                                <div className="topRow">
-                                    <span className="badge">①</span>
-                                    <span className="count">{voteCounts.a} Votes</span>
+                            <button
+                                type="button"
+                                onClick={() => void vote(1)}
+                                disabled={voteBusy || !mePlayerId}
+                                className={`glassCard ${myVote === 1 ? "active" : ""}`}
+                            >
+                                <div className="glassShine" aria-hidden />
+                                <div className="cardTop">
+                                    <span className="chip">①</span>
+                                    <span className="micro">Thema A</span>
                                 </div>
-                                <div className="title">{aLabel}</div>
-                                <div className="hint">Thema A</div>
+                                <div className="cardTitle">{aLabel}</div>
+                                <div className="cardHint">Tippe zum Voten</div>
                             </button>
 
-                            <button type="button" onClick={() => void vote(2)} disabled={voteBusy || !mePlayerId} className={`topicCard ${myVote === 2 ? "active" : ""}`}>
-                                <div className="topRow">
-                                    <span className="badge">②</span>
-                                    <span className="count">{voteCounts.b} Votes</span>
+                            <button
+                                type="button"
+                                onClick={() => void vote(2)}
+                                disabled={voteBusy || !mePlayerId}
+                                className={`glassCard ${myVote === 2 ? "active" : ""}`}
+                            >
+                                <div className="glassShine" aria-hidden />
+                                <div className="cardTop">
+                                    <span className="chip">②</span>
+                                    <span className="micro">Thema B</span>
                                 </div>
-                                <div className="title">{bLabel}</div>
-                                <div className="hint">Thema B</div>
+                                <div className="cardTitle">{bLabel}</div>
+                                <div className="cardHint">Tippe zum Voten</div>
                             </button>
 
-                            <button type="button" onClick={() => void vote(3)} disabled={voteBusy || !mePlayerId} className={`topicCard ${myVote === 3 ? "active" : ""}`}>
-                                <div className="topRow">
-                                    <span className="badge">🎲</span>
-                                    <span className="count">{voteCounts.r} Votes</span>
+                            <button
+                                type="button"
+                                onClick={() => void vote(3)}
+                                disabled={voteBusy || !mePlayerId}
+                                className={`glassCard ${myVote === 3 ? "active" : ""}`}
+                            >
+                                <div className="glassShine" aria-hidden />
+                                <div className="cardTop">
+                                    <span className="chip">🎲</span>
+                                    <span className="micro">Random</span>
                                 </div>
-                                <div className="title">{rLabel}</div>
-                                <div className="hint">Random Pick</div>
+                                <div className="cardTitle">{rLabel}</div>
+                                <div className="cardHint">Überraschen lassen</div>
                             </button>
                         </div>
 
-                        <div style={{ marginTop: 14, opacity: 0.9, fontWeight: 850 }}>
-                            {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wenn alle gewählt haben, geht’s sofort weiter."}
-                        </div>
-
-                        <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 12 }}>
-                            <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
-                                Zur Lobby
-                            </button>
-                        </div>
-
-                        {toast ? <div style={{ marginTop: 18, fontWeight: 950, opacity: 0.95 }}>{toast}</div> : null}
+                        {toast ? <div className="toastInline">{toast}</div> : null}
                     </div>
                 </div>
 
-                {/* Bottom Countdown */}
-                <div
-                    style={{
-                        position: "fixed",
-                        left: "50%",
-                        bottom: 18,
-                        transform: "translateX(-50%)",
-                        width: "min(980px, 94vw)",
-                        zIndex: 50,
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 14,
-                            padding: "14px 16px",
-                            borderRadius: 999,
-                            background: "rgba(0,0,0,0.28)",
-                            border: "1px solid rgba(255,255,255,0.16)",
-                            backdropFilter: "blur(12px)",
-                            WebkitBackdropFilter: "blur(12px)",
-                            boxShadow: "0 18px 70px rgba(0,0,0,0.28)",
-                        }}
-                    >
-                        <div style={{ fontWeight: 950, letterSpacing: 1.4, opacity: 0.9 }}>⏳ Countdown</div>
-
-                        <div
-                            style={{
-                                flex: 1,
-                                height: 12,
-                                borderRadius: 999,
-                                background: "rgba(255,255,255,0.12)",
-                                overflow: "hidden",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                            }}
-                            aria-hidden
-                        >
-                            <div
-                                style={{
-                                    width: `${Math.round(progress * 100)}%`,
-                                    height: "100%",
-                                    background: "linear-gradient(90deg, rgba(255,214,10,0.95), rgba(255,149,0,0.95), rgba(255,45,85,0.80))",
-                                    transition: "width 220ms linear",
-                                }}
-                            />
+                {/* Bottom Countdown (premium) */}
+                <div className="bottomBar" style={{ zIndex: 50 }}>
+                    <div className="bottomInner">
+                        <div className="bottomLeft">
+                            <div className="brandMark">🥔</div>
+                            <div className="bottomText">
+                                <div className="bottomTitle">Countdown</div>
+                                <div className="bottomSub">{myVote ? "Dein Vote ist gesetzt." : "Tippe auf ein Thema."}</div>
+                            </div>
                         </div>
 
-                        <div style={{ fontSize: 22, fontWeight: 980, minWidth: 46, textAlign: "right" }}>{timeLeft}s</div>
+                        <div className="barWrap" aria-hidden>
+                            <div className="barTrack">
+                                <div
+                                    className="barFill"
+                                    style={{
+                                        width: `${Math.round(progress * 100)}%`,
+                                        transition: reduceMotion ? "none" : "width 220ms linear",
+                                    }}
+                                />
+                            </div>
+                            <div className="barGlow" />
+                        </div>
+
+                        <div className="timeBox" aria-label="Sekunden verbleibend">
+                            {timeLeft}s
+                        </div>
                     </div>
                 </div>
 
                 <style>{`
-          .topicGrid{
-            margin-top: 22px;
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 16px;
+          /* ========= Keynote motion + Kumpir brand tokens ========= */
+          .kicker{
+            font-size: 12px;
+            font-weight: 950;
+            letter-spacing: 2.2px;
+            opacity: .78;
+            text-transform: uppercase;
+            transform: translateZ(20px);
+            animation: ${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};
           }
-
-          .topicCard{
-            width:100%;
-            border-radius: 30px;
-            border: 1px solid rgba(255,255,255,0.18);
-            background:
-              radial-gradient(circle at 25% 20%, rgba(255,255,255,0.16), rgba(0,0,0,0.18)),
-              linear-gradient(135deg, rgba(0,0,0,0.16), rgba(255,255,255,0.04));
+          .headline{
+            margin-top: 10px;
+            font-size: clamp(34px, 4.6vw, 64px);
+            font-weight: 1000;
+            letter-spacing: -0.6px;
+            position: relative;
+            display: inline-block;
+            transform: translateZ(34px);
+            text-shadow: 0 24px 80px rgba(0,0,0,0.35);
+            animation: ${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};
+          }
+          .headlineGlow{
+            position:absolute;
+            inset:-30px -60px;
+            background: radial-gradient(circle at 40% 35%, rgba(255,214,10,0.25), rgba(255,149,0,0.18), rgba(255,45,85,0.06), transparent 70%);
+            filter: blur(18px);
+            opacity: .9;
+            pointer-events:none;
+            transform: translateZ(-1px);
+            animation: ${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};
+          }
+          .subline{
+            margin-top: 14px;
+            display:flex;
+            justify-content:center;
+            gap: 10px;
+            flex-wrap: wrap;
+            transform: translateZ(24px);
+            animation: ${reduceMotion ? "none" : "fadeUp 900ms cubic-bezier(.2,.9,.2,1) both"};
+            animation-delay: ${reduceMotion ? "0ms" : "80ms"};
+          }
+          .pill{
+            display:inline-flex;
+            align-items:center;
+            gap:10px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(0,0,0,0.22);
+            border: 1px solid rgba(255,255,255,0.14);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            padding: 18px 18px 16px;
-            cursor: pointer;
-            transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, filter .18s ease;
-            text-align:left;
-            min-height: 170px;
-            position:relative;
-            overflow:hidden;
+            font-weight: 900;
+            opacity: .95;
           }
-          .topicCard::after{
-            content:"";
-            position:absolute;
-            inset:-60px;
-            background: radial-gradient(circle at 40% 30%, rgba(255,214,10,0.18), rgba(255,149,0,0.10), rgba(255,45,85,0.06));
-            opacity:.7;
-            filter: blur(20px);
-            pointer-events:none;
+          .pill.soft{
+            opacity: .85;
+            font-weight: 850;
           }
-          .topicCard:hover{
-            transform: translateY(-3px);
-            border-color: rgba(255,255,255,0.28);
-            box-shadow: 0 18px 70px rgba(0,0,0,0.26);
-            filter: brightness(1.03);
-          }
-          .topicCard:disabled{
-            opacity: .78;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
+          .dot{
+            width: 9px;
+            height: 9px;
+            border-radius: 999px;
+            background: rgba(255,214,10,0.95);
+            box-shadow: 0 0 0 6px rgba(255,214,10,0.12);
+            animation: ${reduceMotion ? "none" : "pulseDot 1.2s ease-in-out infinite"};
           }
 
-          .topicCard .topRow{
+          .topicGrid{
+            margin-top: 24px;
+            display:grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            transform: translateZ(14px);
+          }
+
+          /* ========= 3D GLASS CARD ========= */
+          .glassCard{
             position:relative;
-            z-index:2;
+            width:100%;
+            border-radius: 34px;
+            padding: 20px 18px 18px;
+            min-height: 210px;
+            text-align:left;
+            cursor:pointer;
+            border: 1px solid rgba(255,255,255,0.18);
+            background:
+              linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),
+              radial-gradient(circle at 30% 20%, rgba(255,214,10,0.14), rgba(255,149,0,0.08), rgba(0,0,0,0.16) 70%);
+            backdrop-filter: blur(16px) saturate(140%);
+            -webkit-backdrop-filter: blur(16px) saturate(140%);
+            box-shadow:
+              0 18px 70px rgba(0,0,0,0.28),
+              inset 0 1px 0 rgba(255,255,255,0.20);
+            overflow:hidden;
+            transform-style: preserve-3d;
+            transition: transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease;
+            animation: ${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};
+          }
+          .glassCard:nth-child(2){ animation-delay: ${reduceMotion ? "0ms" : "70ms"}; }
+          .glassCard:nth-child(3){ animation-delay: ${reduceMotion ? "0ms" : "140ms"}; }
+
+          .glassCard:hover{
+            transform: translateY(-6px) scale(1.01) rotateX(2deg);
+            border-color: rgba(255,255,255,0.30);
+            box-shadow:
+              0 26px 90px rgba(0,0,0,0.34),
+              inset 0 1px 0 rgba(255,255,255,0.22);
+            filter: brightness(1.03);
+          }
+          .glassCard:active{
+            transform: translateY(-2px) scale(0.995);
+          }
+          .glassCard:disabled{
+            opacity: .78;
+            cursor:not-allowed;
+            transform:none;
+            filter:none;
+          }
+
+          .glassShine{
+            position:absolute;
+            inset:-120px;
+            background:
+              radial-gradient(circle at 20% 20%, rgba(255,255,255,0.24), rgba(255,255,255,0.06), transparent 60%);
+            transform: translateZ(1px) rotate(12deg);
+            opacity:.75;
+            filter: blur(18px);
+            pointer-events:none;
+            animation: ${reduceMotion ? "none" : "shineSweep 5.2s ease-in-out infinite"};
+          }
+
+          .cardTop{
             display:flex;
             justify-content:space-between;
             align-items:center;
-            gap:10px;
+            gap: 10px;
+            position:relative;
+            z-index:2;
+            transform: translateZ(12px);
           }
-          .topicCard .badge{
+          .chip{
             display:inline-flex;
             align-items:center;
             justify-content:center;
-            height: 34px;
+            height: 36px;
             padding: 0 12px;
             border-radius: 999px;
-            font-weight: 980;
-            background: rgba(255,255,255,0.14);
-            border: 1px solid rgba(255,255,255,0.16);
-          }
-          .topicCard .count{
-            font-weight: 900;
-            opacity: .9;
-            font-size: 13px;
-          }
-          .topicCard .title{
-            position:relative;
-            z-index:2;
-            margin-top: 16px;
-            font-size: clamp(20px, 2.6vw, 34px);
             font-weight: 1000;
             letter-spacing:.2px;
-            text-shadow: 0 12px 36px rgba(0,0,0,0.22);
+            background: rgba(0,0,0,0.18);
+            border: 1px solid rgba(255,255,255,0.16);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
           }
-          .topicCard .hint{
+          .micro{
+            font-size: 12px;
+            font-weight: 950;
+            letter-spacing: 1.2px;
+            opacity:.78;
+            text-transform: uppercase;
+          }
+          .cardTitle{
+            margin-top: 18px;
+            font-size: clamp(22px, 2.6vw, 36px);
+            font-weight: 1000;
+            letter-spacing: -0.2px;
             position:relative;
             z-index:2;
-            margin-top: 10px;
+            transform: translateZ(18px);
+            text-shadow: 0 18px 60px rgba(0,0,0,0.26);
+          }
+          .cardHint{
+            margin-top: 12px;
+            font-size: 13px;
+            font-weight: 900;
+            opacity: .78;
+            position:relative;
+            z-index:2;
+            transform: translateZ(10px);
+          }
+
+          /* selected = keynote “spotlight” */
+          .glassCard.active{
+            border-color: rgba(255,255,255,0.44);
+            background:
+              radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), rgba(0,0,0,0.10) 55%),
+              linear-gradient(135deg, rgba(255,214,10,0.28), rgba(255,149,0,0.22), rgba(255,45,85,0.12));
+            box-shadow:
+              0 30px 110px rgba(0,0,0,0.40),
+              0 0 0 1px rgba(255,255,255,0.06) inset;
+            animation: ${reduceMotion ? "none" : "selectedBreath 1.05s ease-in-out infinite"};
+          }
+
+          .toastInline{
+            margin-top: 16px;
+            font-weight: 950;
+            opacity: .92;
+            transform: translateZ(20px);
+            animation: ${reduceMotion ? "none" : "fadeUp 480ms ease both"};
+          }
+
+          /* ========= Bottom premium bar ========= */
+          .bottomBar{
+            position: fixed;
+            left: 50%;
+            bottom: 16px;
+            transform: translateX(-50%);
+            width: min(980px, 94vw);
+          }
+          .bottomInner{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap: 14px;
+            padding: 14px 14px;
+            border-radius: 999px;
+            background: rgba(0,0,0,0.26);
+            border: 1px solid rgba(255,255,255,0.16);
+            backdrop-filter: blur(14px) saturate(140%);
+            -webkit-backdrop-filter: blur(14px) saturate(140%);
+            box-shadow: 0 18px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.14);
+            transform: translateZ(18px);
+            animation: ${reduceMotion ? "none" : "dockIn 900ms cubic-bezier(.16,1,.3,1) both"};
+            animation-delay: ${reduceMotion ? "0ms" : "120ms"};
+          }
+          .bottomLeft{
+            display:flex;
+            align-items:center;
+            gap: 10px;
+            min-width: 220px;
+          }
+          .brandMark{
+            width: 40px;
+            height: 40px;
+            border-radius: 999px;
+            display:grid;
+            place-items:center;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18));
+            border: 1px solid rgba(255,255,255,0.14);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+          }
+          .bottomTitle{
+            font-weight: 1000;
+            letter-spacing: 1.2px;
+            font-size: 12px;
+            text-transform: uppercase;
+            opacity: .9;
+          }
+          .bottomSub{
             font-weight: 850;
             opacity: .78;
-            font-size: 13px;
+            font-size: 12px;
+            margin-top: 2px;
+          }
+          .barWrap{
+            flex: 1;
+            min-width: 180px;
+            position: relative;
+          }
+          .barTrack{
+            height: 12px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.10);
+            border: 1px solid rgba(255,255,255,0.12);
+            overflow:hidden;
+          }
+          .barFill{
+            height: 100%;
+            background: linear-gradient(90deg, rgba(255,214,10,0.95), rgba(255,149,0,0.95), rgba(255,45,85,0.80));
+            filter: saturate(120%);
+          }
+          .barGlow{
+            position:absolute;
+            inset:-18px -22px;
+            background: radial-gradient(circle at 50% 50%, rgba(255,214,10,0.18), rgba(255,149,0,0.14), rgba(255,45,85,0.06), transparent 70%);
+            filter: blur(18px);
+            opacity: .9;
+            pointer-events:none;
+            animation: ${reduceMotion ? "none" : "glowFloat 3.6s ease-in-out infinite"};
+          }
+          .timeBox{
+            min-width: 70px;
+            height: 40px;
+            border-radius: 999px;
+            display:grid;
+            place-items:center;
+            font-size: 18px;
+            font-weight: 1000;
+            letter-spacing: .3px;
+            background: rgba(255,255,255,0.10);
+            border: 1px solid rgba(255,255,255,0.14);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
           }
 
-          @keyframes activePulse {
-            0% { transform: translateY(-3px) scale(1); filter: brightness(1.05); }
-            50% { transform: translateY(-3px) scale(1.02); filter: brightness(1.12); }
-            100% { transform: translateY(-3px) scale(1); filter: brightness(1.05); }
+          /* ========= Background layers ========= */
+          .grain{
+            position:absolute;
+            inset:0;
+            background-image:
+              url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+            opacity: .10;
+            mix-blend-mode: overlay;
+            pointer-events:none;
           }
-          .topicCard.active{
-            border-color: rgba(255,255,255,0.36);
-            box-shadow: 0 22px 90px rgba(0,0,0,0.32);
-            animation: activePulse .85s ease-in-out infinite;
-            background:
-              radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), rgba(0,0,0,0.16)),
-              linear-gradient(135deg, rgba(255,214,10,0.22), rgba(255,149,0,0.18), rgba(255,45,85,0.12));
+          .orbs{
+            position:absolute;
+            inset:0;
+            pointer-events:none;
+            overflow:hidden;
+          }
+          .orb{
+            position:absolute;
+            border-radius: 999px;
+            filter: blur(24px);
+            opacity: .75;
+            mix-blend-mode: screen;
+          }
+          .o1{
+            width: 420px;
+            height: 420px;
+            left: -120px;
+            top: -120px;
+            background: radial-gradient(circle at 30% 30%, rgba(255,214,10,0.26), rgba(255,149,0,0.18), transparent 70%);
+            animation: ${reduceMotion ? "none" : "orbFloat 8s ease-in-out infinite"};
+          }
+          .o2{
+            width: 360px;
+            height: 360px;
+            right: -120px;
+            top: 40px;
+            background: radial-gradient(circle at 30% 30%, rgba(34,211,238,0.18), rgba(167,139,250,0.12), transparent 72%);
+            animation: ${reduceMotion ? "none" : "orbFloat 9.5s ease-in-out infinite"};
+            animation-delay: ${reduceMotion ? "0s" : "-1.2s"};
+          }
+          .o3{
+            width: 520px;
+            height: 520px;
+            left: 20%;
+            bottom: -220px;
+            background: radial-gradient(circle at 30% 30%, rgba(255,45,85,0.14), rgba(255,149,0,0.16), transparent 70%);
+            animation: ${reduceMotion ? "none" : "orbFloat 10.5s ease-in-out infinite"};
+            animation-delay: ${reduceMotion ? "0s" : "-2.1s"};
           }
 
+          /* ========= Animations ========= */
+          @keyframes fadeUp{
+            from{ opacity:0; transform: translateY(10px) translateZ(10px); }
+            to{ opacity:1; transform: translateY(0) translateZ(10px); }
+          }
+          @keyframes heroIn{
+            0%{ opacity:0; transform: translateY(12px) scale(0.985) translateZ(34px); filter: blur(1px); }
+            100%{ opacity:1; transform: translateY(0) scale(1) translateZ(34px); filter: blur(0); }
+          }
+          @keyframes cardIn{
+            0%{ opacity:0; transform: translateY(16px) scale(0.985); }
+            100%{ opacity:1; transform: translateY(0) scale(1); }
+          }
+          @keyframes dockIn{
+            0%{ opacity:0; transform: translateY(16px); }
+            100%{ opacity:1; transform: translateY(0); }
+          }
+          @keyframes glowFloat{
+            0%,100%{ transform: translateY(0); opacity: .82; }
+            50%{ transform: translateY(-6px); opacity: 1; }
+          }
+          @keyframes pulseDot{
+            0%,100%{ transform: scale(1); opacity: 1; }
+            50%{ transform: scale(1.22); opacity: .86; }
+          }
+          @keyframes shineSweep{
+            0%,100%{ transform: translateX(-10px) translateZ(1px) rotate(12deg); opacity: .60; }
+            50%{ transform: translateX(18px) translateZ(1px) rotate(12deg); opacity: .90; }
+          }
+          @keyframes selectedBreath{
+            0%,100%{ transform: translateY(-6px) scale(1.01); filter: brightness(1.06); }
+            50%{ transform: translateY(-6px) scale(1.025); filter: brightness(1.14); }
+          }
+          @keyframes orbFloat{
+            0%,100%{ transform: translateY(0) translateX(0); }
+            50%{ transform: translateY(18px) translateX(10px); }
+          }
+
+          /* ========= Responsive ========= */
           @media (max-width: 860px){
-            .topicGrid{
-              grid-template-columns: 1fr;
-            }
-            .topicCard{ min-height: 150px; }
+            .topicGrid{ grid-template-columns: 1fr; }
+            .glassCard{ min-height: 170px; }
+            .bottomLeft{ min-width: 160px; }
+            .timeBox{ min-width: 64px; }
           }
         `}</style>
             </main>
@@ -708,7 +1035,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: COUNTDOWN (shows result animation)
+    // PHASE: COUNTDOWN (kept; you can ask to keynote-upgrade later)
     // =========================================================
     if (lobby.phase === "countdown") {
         const tie = lobby.topic_tie_choices && lobby.topic_tie_choices.length > 1;
@@ -738,7 +1065,15 @@ export default function GamePage() {
                 <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
-                    <div className="resultGrid">
+                    <div
+                        style={{
+                            marginTop: 16,
+                            display: "grid",
+                            gridTemplateColumns: "repeat(3, minmax(0,1fr))",
+                            gap: 14,
+                            alignItems: "stretch",
+                        }}
+                    >
                         <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`}>
                             <div className="resultBadge">①</div>
                             <div className="resultTitle">{aLabel}</div>
@@ -781,24 +1116,10 @@ export default function GamePage() {
                         {Math.max(0, countdownSecondsLeft ?? 5)}
                     </div>
 
-                    <div style={{ marginTop: 14, display: "flex", justifyContent: "center", gap: 12 }}>
-                        <button className="btn btnSecondary btnXL" onClick={() => goLobby(code)} type="button">
-                            Zur Lobby
-                        </button>
-                    </div>
-
                     {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
                 </div>
 
                 <style>{`
-          .resultGrid{
-            margin-top: 16px;
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0,1fr));
-            gap: 14px;
-            align-items: stretch;
-          }
-
           .resultTile{
             border-radius: 28px;
             border: 1px solid rgba(255,255,255,0.14);
@@ -851,7 +1172,9 @@ export default function GamePage() {
           }
 
           @media (max-width: 860px){
-            .resultGrid{ grid-template-columns: 1fr; }
+            main div[style*="gridTemplateColumns: repeat(3"]{
+              grid-template-columns: 1fr !important;
+            }
           }
         `}</style>
             </main>
