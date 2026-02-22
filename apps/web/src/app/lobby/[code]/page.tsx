@@ -50,7 +50,6 @@ export default function LobbyPage() {
 
     const suppressRedirectRef = useRef(false);
 
-    // navigation helper
     const go = useCallback(
         (url: string) => {
             router.replace(url);
@@ -62,9 +61,7 @@ export default function LobbyPage() {
         go(`/game/${encodeURIComponent(code)}?t=${Date.now()}`);
     }, [code, go]);
 
-    const { lobby, players, loading, error } = useLobbyState(code, {
-        pollMs: 900,
-    });
+    const { lobby, players, loading, error } = useLobbyState(code, { pollMs: 900 });
 
     const lobbyId = lobby?.id ?? null;
 
@@ -194,7 +191,7 @@ export default function LobbyPage() {
                 return;
             }
 
-            // ✅ No immediate navigation; DB phase triggers redirect to /game (topic_vote/countdown/running)
+            // ✅ No immediate navigation; DB phase triggers redirect
             showToast("✅ Spiel startet…", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2500);
@@ -207,14 +204,13 @@ export default function LobbyPage() {
         suppressRedirectRef.current = true;
 
         try {
+            // Optional: falls ihr später eine echte RPC habt (rpc_leave_lobby), hier einsetzen.
+            // Aktuell nur best-effort: Spielerstatus auf left setzen (wenn RLS das erlaubt).
             if (mePlayerId && lobbyId) {
                 const { getSupabaseClient } = await import("@/lib/supabaseClient");
                 const supabase = getSupabaseClient();
 
-                await supabase.rpc("leave_lobby", {
-                    p_lobby_id: lobbyId,
-                    p_player_id: mePlayerId,
-                });
+                await supabase.from("players").update({ status: "left" }).eq("lobby_id", lobbyId).eq("player_id", mePlayerId);
             }
         } catch {
             // ignore
@@ -253,15 +249,7 @@ export default function LobbyPage() {
                             </div>
                         ) : null}
 
-                        <div
-                            style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: 14,
-                                alignItems: "flex-start",
-                                flexWrap: "wrap",
-                            }}
-                        >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
                             <div style={{ flex: 1, minWidth: 280 }}>
                                 <h1 className="h1" style={{ marginBottom: 10 }}>
                                     Private Lobby
@@ -272,12 +260,7 @@ export default function LobbyPage() {
                                         type="button"
                                         onClick={copyInviteByClick}
                                         title="Klick → Join-Link kopieren"
-                                        style={{
-                                            border: "none",
-                                            background: "transparent",
-                                            cursor: isRunning ? "not-allowed" : "pointer",
-                                            padding: 0,
-                                        }}
+                                        style={{ border: "none", background: "transparent", cursor: isRunning ? "not-allowed" : "pointer", padding: 0 }}
                                         aria-label="Join-Link kopieren"
                                         disabled={isRunning}
                                     >
@@ -287,8 +270,7 @@ export default function LobbyPage() {
                                                 fontWeight: 950,
                                                 letterSpacing: 6,
                                                 lineHeight: 1,
-                                                backgroundImage:
-                                                    "linear-gradient(90deg,#ff2d55,#ff9500,#ffd60a,#34c759,#0a84ff,#bf5af2,#ff2d55)",
+                                                backgroundImage: "linear-gradient(90deg,#ff2d55,#ff9500,#ffd60a,#34c759,#0a84ff,#bf5af2,#ff2d55)",
                                                 backgroundSize: "220% 100%",
                                                 WebkitBackgroundClip: "text",
                                                 backgroundClip: "text",
@@ -341,11 +323,7 @@ export default function LobbyPage() {
                                     </div>
 
                                     {lobby?.topic ? (
-                                        <div
-                                            className="pillChip"
-                                            style={{ height: 32, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }}
-                                            title={lobby.topic ?? undefined}
-                                        >
+                                        <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }} title={lobby.topic ?? undefined}>
                                             <span style={{ opacity: 0.8 }}>🏷️</span>
                                             <span style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {lobby.topic}
@@ -357,15 +335,7 @@ export default function LobbyPage() {
                                 {amIHost ? (
                                     <div
                                         className="pillChip"
-                                        style={{
-                                            height: 32,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 8,
-                                            opacity: 0.75,
-                                            userSelect: "none",
-                                            cursor: "not-allowed",
-                                        }}
+                                        style={{ height: 32, display: "flex", alignItems: "center", gap: 8, opacity: 0.75, userSelect: "none", cursor: "not-allowed" }}
                                         title="Admin ist aktuell deaktiviert (kommt später wieder)."
                                         aria-disabled="true"
                                     >
@@ -415,7 +385,6 @@ export default function LobbyPage() {
                                                 }}
                                             >
                                                 <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
-
                                                 <td style={{ padding: "10px 8px", fontWeight: 900 }}>
                                                     {p.name} {isMe ? <span style={{ opacity: 0.6 }}>(du)</span> : null}
                                                     {isHostRow ? (
@@ -435,9 +404,7 @@ export default function LobbyPage() {
                                                     ) : null}
                                                 </td>
 
-                                                <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>
-                                                    {p.ready ? "✅ Bereit" : "⏳ nicht bereit"}
-                                                </td>
+                                                <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>{p.ready ? "✅ Bereit" : "⏳ nicht bereit"}</td>
                                             </tr>
                                         );
                                     })}
@@ -468,6 +435,7 @@ export default function LobbyPage() {
                                 </button>
                             </div>
 
+                            {/* ✅ START BUTTON: Host + allReady */}
                             {amIHost && allReady && lobby?.phase !== "running" ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                                     <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={() => void startGameClick()} disabled={starting || isRunning}>

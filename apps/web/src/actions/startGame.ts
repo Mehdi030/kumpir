@@ -14,7 +14,9 @@ export async function startGame(code: string, mePlayerId: string): Promise<Start
             .eq("code", code)
             .maybeSingle();
 
-        if (lobbyErr || !lobby?.id) return { ok: false, error: lobbyErr?.message ?? "Lobby nicht gefunden." };
+        if (lobbyErr || !lobby?.id) {
+            return { ok: false, error: lobbyErr?.message ?? "Lobby nicht gefunden." };
+        }
 
         const { error } = await supabase.rpc("rpc_begin_topic_vote", {
             p_lobby_id: lobby.id,

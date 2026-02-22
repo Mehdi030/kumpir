@@ -33,14 +33,15 @@ type LobbyState = {
     countdown_started_at: string | null;
 
     // Tie visualization
-    topic_tie_choices: number[] | null; // [1,2,3] subset
-    topic_tie_pick: number | null; // 1|2|3
+    topic_tie_choices: number[] | null;
+    topic_tie_pick: number | null;
 };
 
 type Player = {
     player_id: string;
     name: string;
     is_alive: boolean;
+    ready?: boolean;
 };
 
 type VoteCounts = { a: number; b: number; r: number };
@@ -137,7 +138,7 @@ export default function GamePage() {
         if (!lobby.topic_selected) return null;
         if (lobby.topic_selected === lobby.topic_a) return 1;
         if (lobby.topic_selected === lobby.topic_b) return 2;
-        return 3; // if selected matches neither, treat as random
+        return 3; // fallback (random)
     }, [lobby]);
 
     const totalPlayers = players.length;
@@ -209,7 +210,7 @@ export default function GamePage() {
 
                 const playersRes = await supabase
                     .from("players")
-                    .select("player_id,name,is_alive,status,seat_index")
+                    .select("player_id,name,is_alive,status,seat_index,ready")
                     .eq("lobby_id", nextLobby.id)
                     .eq("status", "active")
                     .order("seat_index", { ascending: true });
@@ -253,7 +254,7 @@ export default function GamePage() {
                     setMyVote(null);
                 }
 
-                // ---- Best-effort “advance” calls (prevents freeze)
+                // ---- Best-effort “advance” calls
 
                 // 1) running: tickGame due
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
@@ -456,7 +457,8 @@ export default function GamePage() {
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
-        const progress = clamp(timeLeft / 15, 0, 1);
+        const duration = 15; // UI duration (match your DB vote duration if possible)
+        const progress = clamp(timeLeft / duration, 0, 1);
 
         return (
             <main
@@ -489,28 +491,14 @@ export default function GamePage() {
                     <div style={{ textAlign: "center" }}>
                         <div style={{ fontSize: 13, fontWeight: 950, letterSpacing: 1.9, opacity: 0.78 }}>THEMA VOTING</div>
 
-                        <div style={{ fontSize: "clamp(30px, 4.2vw, 54px)", fontWeight: 980, marginTop: 10 }}>
-                            Wählt das Thema
-                        </div>
+                        <div style={{ fontSize: "clamp(30px, 4.2vw, 54px)", fontWeight: 980, marginTop: 10 }}>Wählt das Thema</div>
 
                         <div style={{ marginTop: 10, opacity: 0.92, fontWeight: 850 }}>
                             Zeit: <b>{timeLeft}s</b> · Votes: <b>{votedPlayers}</b> / <b>{totalPlayers}</b>
                         </div>
 
-                        <div
-                            style={{
-                                marginTop: 22,
-                                display: "grid",
-                                gridTemplateColumns: "repeat(3, minmax(0,1fr))",
-                                gap: 16,
-                            }}
-                        >
-                            <button
-                                type="button"
-                                onClick={() => void vote(1)}
-                                disabled={voteBusy || !mePlayerId}
-                                className={`topicCard ${myVote === 1 ? "active" : ""}`}
-                            >
+                        <div className="topicGrid">
+                            <button type="button" onClick={() => void vote(1)} disabled={voteBusy || !mePlayerId} className={`topicCard ${myVote === 1 ? "active" : ""}`}>
                                 <div className="topRow">
                                     <span className="badge">①</span>
                                     <span className="count">{voteCounts.a} Votes</span>
@@ -519,12 +507,7 @@ export default function GamePage() {
                                 <div className="hint">Thema A</div>
                             </button>
 
-                            <button
-                                type="button"
-                                onClick={() => void vote(2)}
-                                disabled={voteBusy || !mePlayerId}
-                                className={`topicCard ${myVote === 2 ? "active" : ""}`}
-                            >
+                            <button type="button" onClick={() => void vote(2)} disabled={voteBusy || !mePlayerId} className={`topicCard ${myVote === 2 ? "active" : ""}`}>
                                 <div className="topRow">
                                     <span className="badge">②</span>
                                     <span className="count">{voteCounts.b} Votes</span>
@@ -533,12 +516,7 @@ export default function GamePage() {
                                 <div className="hint">Thema B</div>
                             </button>
 
-                            <button
-                                type="button"
-                                onClick={() => void vote(3)}
-                                disabled={voteBusy || !mePlayerId}
-                                className={`topicCard ${myVote === 3 ? "active" : ""}`}
-                            >
+                            <button type="button" onClick={() => void vote(3)} disabled={voteBusy || !mePlayerId} className={`topicCard ${myVote === 3 ? "active" : ""}`}>
                                 <div className="topRow">
                                     <span className="badge">🎲</span>
                                     <span className="count">{voteCounts.r} Votes</span>
@@ -605,8 +583,7 @@ export default function GamePage() {
                                 style={{
                                     width: `${Math.round(progress * 100)}%`,
                                     height: "100%",
-                                    background:
-                                        "linear-gradient(90deg, rgba(255,214,10,0.95), rgba(255,149,0,0.95), rgba(255,45,85,0.80))",
+                                    background: "linear-gradient(90deg, rgba(255,214,10,0.95), rgba(255,149,0,0.95), rgba(255,45,85,0.80))",
                                     transition: "width 220ms linear",
                                 }}
                             />
@@ -617,6 +594,13 @@ export default function GamePage() {
                 </div>
 
                 <style>{`
+          .topicGrid{
+            margin-top: 22px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+          }
+
           .topicCard{
             width:100%;
             border-radius: 30px;
@@ -713,10 +697,10 @@ export default function GamePage() {
           }
 
           @media (max-width: 860px){
-            .topicCard{ min-height: 150px; }
-            main div[style*="gridTemplateColumns: repeat(3"]{
-              grid-template-columns: 1fr !important;
+            .topicGrid{
+              grid-template-columns: 1fr;
             }
+            .topicCard{ min-height: 150px; }
           }
         `}</style>
             </main>
@@ -754,16 +738,7 @@ export default function GamePage() {
                 <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
-                    {/* Result tiles (win grows, others slide out) */}
-                    <div
-                        style={{
-                            marginTop: 16,
-                            display: "grid",
-                            gridTemplateColumns: "repeat(3, minmax(0,1fr))",
-                            gap: 14,
-                            alignItems: "stretch",
-                        }}
-                    >
+                    <div className="resultGrid">
                         <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`}>
                             <div className="resultBadge">①</div>
                             <div className="resultTitle">{aLabel}</div>
@@ -816,6 +791,14 @@ export default function GamePage() {
                 </div>
 
                 <style>{`
+          .resultGrid{
+            margin-top: 16px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0,1fr));
+            gap: 14px;
+            align-items: stretch;
+          }
+
           .resultTile{
             border-radius: 28px;
             border: 1px solid rgba(255,255,255,0.14);
@@ -868,9 +851,7 @@ export default function GamePage() {
           }
 
           @media (max-width: 860px){
-            main div[style*="gridTemplateColumns: repeat(3"]{
-              grid-template-columns: 1fr !important;
-            }
+            .resultGrid{ grid-template-columns: 1fr; }
           }
         `}</style>
             </main>
@@ -912,7 +893,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: RUNNING (no GameBoard)
+    // PHASE: RUNNING
     // =========================================================
     if (lobby.phase !== "running") {
         return (
