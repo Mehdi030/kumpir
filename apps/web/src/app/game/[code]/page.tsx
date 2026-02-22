@@ -102,8 +102,6 @@ export default function GamePage() {
     const [toast, setToast] = useState("");
     const [passBusy, setPassBusy] = useState(false);
 
-    // 3D parallax
-    const [tilt, setTilt] = useState({ x: 0, y: 0 });
     const [reduceMotion, setReduceMotion] = useState(false);
 
     useEffect(() => {
@@ -440,28 +438,6 @@ export default function GamePage() {
     }, [handlePass, lobby]);
 
     // -----------------------------
-    // 3D Parallax tracking (topic_vote only)
-    // -----------------------------
-    const onMove = useCallback(
-        (e: React.PointerEvent) => {
-            if (reduceMotion) return;
-            const el = e.currentTarget as HTMLDivElement;
-            const r = el.getBoundingClientRect();
-            const px = (e.clientX - r.left) / r.width; // 0..1
-            const py = (e.clientY - r.top) / r.height; // 0..1
-            const x = clamp((py - 0.5) * -10, -10, 10); // rotateX
-            const y = clamp((px - 0.5) * 12, -12, 12); // rotateY
-            setTilt({ x, y });
-        },
-        [reduceMotion]
-    );
-
-    const onLeave = useCallback(() => {
-        if (reduceMotion) return;
-        setTilt({ x: 0, y: 0 });
-    }, [reduceMotion]);
-
-    // -----------------------------
     // UI: fatal / loading
     // -----------------------------
     if (fatalError) {
@@ -488,7 +464,7 @@ export default function GamePage() {
     const rLabel = "Zufällig";
 
     // =========================================================
-    // PHASE: TOPIC VOTE (3D GLASS + KEYNOTE MOTION + KUMPIR BRAND)
+    // PHASE: TOPIC VOTE (NO PARALLAX SHIFT, BIGGER CARDS, ONLY HOVER SCALE)
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
@@ -497,14 +473,8 @@ export default function GamePage() {
         const duration = 15;
         const progress = clamp(timeLeft / duration, 0, 1);
 
-        const containerTransform = reduceMotion
-            ? "none"
-            : `perspective(1200px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateZ(0)`;
-
         return (
             <main
-                onPointerMove={onMove}
-                onPointerLeave={onLeave}
                 style={{
                     minHeight: "100vh",
                     display: "grid",
@@ -513,31 +483,19 @@ export default function GamePage() {
                     position: "relative",
                     overflow: "hidden",
                     background:
-                    // Kumpir brand: deep red -> orange -> golden
                         "radial-gradient(circle at 25% 15%, rgba(255,255,255,0.16) 0%, rgba(0,0,0,0) 55%)," +
                         "radial-gradient(circle at 80% 10%, rgba(34,211,238,0.10) 0%, rgba(0,0,0,0) 58%)," +
                         "radial-gradient(circle at 50% 90%, rgba(255,214,10,0.55) 0%, rgba(240,138,26,0.60) 45%, rgba(197,58,18,0.92) 78%, rgba(143,15,15,0.98) 100%)",
                 }}
             >
-                {/* cinematic grain */}
                 <div className="grain" aria-hidden />
-                {/* floating light orbs */}
                 <div className="orbs" aria-hidden>
                     <span className="orb o1" />
                     <span className="orb o2" />
                     <span className="orb o3" />
                 </div>
 
-                <div
-                    style={{
-                        width: "min(1100px, 96vw)",
-                        position: "relative",
-                        zIndex: 2,
-                        transform: containerTransform,
-                        transition: reduceMotion ? "none" : "transform 120ms ease-out",
-                        transformStyle: "preserve-3d",
-                    }}
-                >
+                <div style={{ width: "min(1160px, 96vw)", position: "relative", zIndex: 2 }}>
                     <div style={{ textAlign: "center" }}>
                         <div className="kicker">THEMA VOTING</div>
 
@@ -546,19 +504,6 @@ export default function GamePage() {
                             <span className="headlineGlow" aria-hidden />
                         </div>
 
-                        {/* Only time + subtle status. No vote counts, no votes/x */}
-                        <div className="subline">
-                            <span className="pill">
-                                <span className="dot" />
-                                <span style={{ fontWeight: 950 }}>Noch</span>&nbsp;{timeLeft}s
-                            </span>
-
-                            <span className="pill soft">
-                                {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
-                            </span>
-                        </div>
-
-                        {/* 3D glass cards */}
                         <div className="topicGrid">
                             <button
                                 type="button"
@@ -606,11 +551,16 @@ export default function GamePage() {
                             </button>
                         </div>
 
+                        {/* Status line UNDER the cards */}
+                        <div className="statusLine">
+                            {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
+                        </div>
+
                         {toast ? <div className="toastInline">{toast}</div> : null}
                     </div>
                 </div>
 
-                {/* Bottom Countdown (premium) */}
+                {/* Bottom Countdown only */}
                 <div className="bottomBar" style={{ zIndex: 50 }}>
                     <div className="bottomInner">
                         <div className="bottomLeft">
@@ -641,24 +591,21 @@ export default function GamePage() {
                 </div>
 
                 <style>{`
-          /* ========= Keynote motion + Kumpir brand tokens ========= */
           .kicker{
             font-size: 12px;
             font-weight: 950;
             letter-spacing: 2.2px;
             opacity: .78;
             text-transform: uppercase;
-            transform: translateZ(20px);
             animation: ${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};
           }
           .headline{
             margin-top: 10px;
-            font-size: clamp(34px, 4.6vw, 64px);
+            font-size: clamp(36px, 4.8vw, 70px);
             font-weight: 1000;
             letter-spacing: -0.6px;
             position: relative;
             display: inline-block;
-            transform: translateZ(34px);
             text-shadow: 0 24px 80px rgba(0,0,0,0.35);
             animation: ${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};
           }
@@ -669,60 +616,23 @@ export default function GamePage() {
             filter: blur(18px);
             opacity: .9;
             pointer-events:none;
-            transform: translateZ(-1px);
             animation: ${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};
-          }
-          .subline{
-            margin-top: 14px;
-            display:flex;
-            justify-content:center;
-            gap: 10px;
-            flex-wrap: wrap;
-            transform: translateZ(24px);
-            animation: ${reduceMotion ? "none" : "fadeUp 900ms cubic-bezier(.2,.9,.2,1) both"};
-            animation-delay: ${reduceMotion ? "0ms" : "80ms"};
-          }
-          .pill{
-            display:inline-flex;
-            align-items:center;
-            gap:10px;
-            padding: 10px 14px;
-            border-radius: 999px;
-            background: rgba(0,0,0,0.22);
-            border: 1px solid rgba(255,255,255,0.14);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            font-weight: 900;
-            opacity: .95;
-          }
-          .pill.soft{
-            opacity: .85;
-            font-weight: 850;
-          }
-          .dot{
-            width: 9px;
-            height: 9px;
-            border-radius: 999px;
-            background: rgba(255,214,10,0.95);
-            box-shadow: 0 0 0 6px rgba(255,214,10,0.12);
-            animation: ${reduceMotion ? "none" : "pulseDot 1.2s ease-in-out infinite"};
           }
 
           .topicGrid{
             margin-top: 24px;
             display:grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 16px;
-            transform: translateZ(14px);
+            gap: 18px;
           }
 
-          /* ========= 3D GLASS CARD ========= */
+          /* BIGGER 3D glass cards (no position shift on hover) */
           .glassCard{
             position:relative;
             width:100%;
-            border-radius: 34px;
-            padding: 20px 18px 18px;
-            min-height: 210px;
+            border-radius: 38px;
+            padding: 24px 22px 22px;
+            min-height: 260px;
             text-align:left;
             cursor:pointer;
             border: 1px solid rgba(255,255,255,0.18);
@@ -735,15 +645,16 @@ export default function GamePage() {
               0 18px 70px rgba(0,0,0,0.28),
               inset 0 1px 0 rgba(255,255,255,0.20);
             overflow:hidden;
-            transform-style: preserve-3d;
+            transform: translateZ(0);
             transition: transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease;
             animation: ${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};
           }
           .glassCard:nth-child(2){ animation-delay: ${reduceMotion ? "0ms" : "70ms"}; }
           .glassCard:nth-child(3){ animation-delay: ${reduceMotion ? "0ms" : "140ms"}; }
 
+          /* ONLY scale on hover (no translate/shift) */
           .glassCard:hover{
-            transform: translateY(-6px) scale(1.01) rotateX(2deg);
+            transform: scale(1.035);
             border-color: rgba(255,255,255,0.30);
             box-shadow:
               0 26px 90px rgba(0,0,0,0.34),
@@ -751,7 +662,7 @@ export default function GamePage() {
             filter: brightness(1.03);
           }
           .glassCard:active{
-            transform: translateY(-2px) scale(0.995);
+            transform: scale(1.015);
           }
           .glassCard:disabled{
             opacity: .78;
@@ -765,7 +676,6 @@ export default function GamePage() {
             inset:-120px;
             background:
               radial-gradient(circle at 20% 20%, rgba(255,255,255,0.24), rgba(255,255,255,0.06), transparent 60%);
-            transform: translateZ(1px) rotate(12deg);
             opacity:.75;
             filter: blur(18px);
             pointer-events:none;
@@ -779,17 +689,15 @@ export default function GamePage() {
             gap: 10px;
             position:relative;
             z-index:2;
-            transform: translateZ(12px);
           }
           .chip{
             display:inline-flex;
             align-items:center;
             justify-content:center;
-            height: 36px;
-            padding: 0 12px;
+            height: 38px;
+            padding: 0 14px;
             border-radius: 999px;
             font-weight: 1000;
-            letter-spacing:.2px;
             background: rgba(0,0,0,0.18);
             border: 1px solid rgba(255,255,255,0.16);
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
@@ -802,13 +710,12 @@ export default function GamePage() {
             text-transform: uppercase;
           }
           .cardTitle{
-            margin-top: 18px;
-            font-size: clamp(22px, 2.6vw, 36px);
+            margin-top: 20px;
+            font-size: clamp(24px, 2.8vw, 40px);
             font-weight: 1000;
             letter-spacing: -0.2px;
             position:relative;
             z-index:2;
-            transform: translateZ(18px);
             text-shadow: 0 18px 60px rgba(0,0,0,0.26);
           }
           .cardHint{
@@ -818,10 +725,8 @@ export default function GamePage() {
             opacity: .78;
             position:relative;
             z-index:2;
-            transform: translateZ(10px);
           }
 
-          /* selected = keynote “spotlight” */
           .glassCard.active{
             border-color: rgba(255,255,255,0.44);
             background:
@@ -833,15 +738,22 @@ export default function GamePage() {
             animation: ${reduceMotion ? "none" : "selectedBreath 1.05s ease-in-out infinite"};
           }
 
+          .statusLine{
+            margin-top: 14px;
+            font-weight: 900;
+            opacity: .86;
+            font-size: 13px;
+            animation: ${reduceMotion ? "none" : "fadeUp 520ms ease both"};
+          }
+
           .toastInline{
-            margin-top: 16px;
+            margin-top: 14px;
             font-weight: 950;
             opacity: .92;
-            transform: translateZ(20px);
             animation: ${reduceMotion ? "none" : "fadeUp 480ms ease both"};
           }
 
-          /* ========= Bottom premium bar ========= */
+          /* Bottom bar */
           .bottomBar{
             position: fixed;
             left: 50%;
@@ -861,7 +773,6 @@ export default function GamePage() {
             backdrop-filter: blur(14px) saturate(140%);
             -webkit-backdrop-filter: blur(14px) saturate(140%);
             box-shadow: 0 18px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.14);
-            transform: translateZ(18px);
             animation: ${reduceMotion ? "none" : "dockIn 900ms cubic-bezier(.16,1,.3,1) both"};
             animation-delay: ${reduceMotion ? "0ms" : "120ms"};
           }
@@ -928,13 +839,12 @@ export default function GamePage() {
             place-items:center;
             font-size: 18px;
             font-weight: 1000;
-            letter-spacing: .3px;
             background: rgba(255,255,255,0.10);
             border: 1px solid rgba(255,255,255,0.14);
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
           }
 
-          /* ========= Background layers ========= */
+          /* background layers */
           .grain{
             position:absolute;
             inset:0;
@@ -944,54 +854,34 @@ export default function GamePage() {
             mix-blend-mode: overlay;
             pointer-events:none;
           }
-          .orbs{
-            position:absolute;
-            inset:0;
-            pointer-events:none;
-            overflow:hidden;
-          }
-          .orb{
-            position:absolute;
-            border-radius: 999px;
-            filter: blur(24px);
-            opacity: .75;
-            mix-blend-mode: screen;
-          }
+          .orbs{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+          .orb{ position:absolute; border-radius: 999px; filter: blur(24px); opacity: .75; mix-blend-mode: screen; }
           .o1{
-            width: 420px;
-            height: 420px;
-            left: -120px;
-            top: -120px;
+            width: 420px; height: 420px; left: -120px; top: -120px;
             background: radial-gradient(circle at 30% 30%, rgba(255,214,10,0.26), rgba(255,149,0,0.18), transparent 70%);
             animation: ${reduceMotion ? "none" : "orbFloat 8s ease-in-out infinite"};
           }
           .o2{
-            width: 360px;
-            height: 360px;
-            right: -120px;
-            top: 40px;
+            width: 360px; height: 360px; right: -120px; top: 40px;
             background: radial-gradient(circle at 30% 30%, rgba(34,211,238,0.18), rgba(167,139,250,0.12), transparent 72%);
             animation: ${reduceMotion ? "none" : "orbFloat 9.5s ease-in-out infinite"};
             animation-delay: ${reduceMotion ? "0s" : "-1.2s"};
           }
           .o3{
-            width: 520px;
-            height: 520px;
-            left: 20%;
-            bottom: -220px;
+            width: 520px; height: 520px; left: 20%; bottom: -220px;
             background: radial-gradient(circle at 30% 30%, rgba(255,45,85,0.14), rgba(255,149,0,0.16), transparent 70%);
             animation: ${reduceMotion ? "none" : "orbFloat 10.5s ease-in-out infinite"};
             animation-delay: ${reduceMotion ? "0s" : "-2.1s"};
           }
 
-          /* ========= Animations ========= */
+          /* animations */
           @keyframes fadeUp{
-            from{ opacity:0; transform: translateY(10px) translateZ(10px); }
-            to{ opacity:1; transform: translateY(0) translateZ(10px); }
+            from{ opacity:0; transform: translateY(10px); }
+            to{ opacity:1; transform: translateY(0); }
           }
           @keyframes heroIn{
-            0%{ opacity:0; transform: translateY(12px) scale(0.985) translateZ(34px); filter: blur(1px); }
-            100%{ opacity:1; transform: translateY(0) scale(1) translateZ(34px); filter: blur(0); }
+            0%{ opacity:0; transform: translateY(12px) scale(0.985); filter: blur(1px); }
+            100%{ opacity:1; transform: translateY(0) scale(1); filter: blur(0); }
           }
           @keyframes cardIn{
             0%{ opacity:0; transform: translateY(16px) scale(0.985); }
@@ -1005,27 +895,25 @@ export default function GamePage() {
             0%,100%{ transform: translateY(0); opacity: .82; }
             50%{ transform: translateY(-6px); opacity: 1; }
           }
-          @keyframes pulseDot{
-            0%,100%{ transform: scale(1); opacity: 1; }
-            50%{ transform: scale(1.22); opacity: .86; }
-          }
           @keyframes shineSweep{
-            0%,100%{ transform: translateX(-10px) translateZ(1px) rotate(12deg); opacity: .60; }
-            50%{ transform: translateX(18px) translateZ(1px) rotate(12deg); opacity: .90; }
+            0%,100%{ transform: translateX(-10px) rotate(12deg); opacity: .60; }
+            50%{ transform: translateX(18px) rotate(12deg); opacity: .90; }
           }
           @keyframes selectedBreath{
-            0%,100%{ transform: translateY(-6px) scale(1.01); filter: brightness(1.06); }
-            50%{ transform: translateY(-6px) scale(1.025); filter: brightness(1.14); }
+            0%,100%{ transform: scale(1.01); filter: brightness(1.06); }
+            50%{ transform: scale(1.025); filter: brightness(1.14); }
           }
           @keyframes orbFloat{
             0%,100%{ transform: translateY(0) translateX(0); }
             50%{ transform: translateY(18px) translateX(10px); }
           }
 
-          /* ========= Responsive ========= */
+          @media (max-width: 980px){
+            .glassCard{ min-height: 230px; }
+          }
           @media (max-width: 860px){
             .topicGrid{ grid-template-columns: 1fr; }
-            .glassCard{ min-height: 170px; }
+            .glassCard{ min-height: 190px; }
             .bottomLeft{ min-width: 160px; }
             .timeBox{ min-width: 64px; }
           }
@@ -1035,7 +923,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: COUNTDOWN (kept; you can ask to keynote-upgrade later)
+    // PHASE: COUNTDOWN
     // =========================================================
     if (lobby.phase === "countdown") {
         const tie = lobby.topic_tie_choices && lobby.topic_tie_choices.length > 1;
@@ -1258,10 +1146,8 @@ export default function GamePage() {
                 background: runningBg,
             }}
         >
-            {/* Holder pulse */}
             {isMeHolder ? <div className="holderPulseLayer" aria-hidden /> : null}
 
-            {/* Toast overlay */}
             {toast ? (
                 <div
                     style={{
@@ -1283,10 +1169,8 @@ export default function GamePage() {
                 </div>
             ) : null}
 
-            {/* Ring overlay */}
             <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} />
 
-            {/* Minimal board */}
             <div style={{ position: "relative", zIndex: 2, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(860px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>RUNNING</div>
