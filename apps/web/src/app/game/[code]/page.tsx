@@ -157,6 +157,34 @@ export default function GamePage() {
     const allVoted = totalPlayers > 0 && votedPlayers >= totalPlayers;
 
     // -----------------------------
+    // Best-effort RPC wrappers (NO silent swallow)
+    // -----------------------------
+    const rpcFinalizeTopicVote = useCallback(
+        async (lobbyId: string) => {
+            const { error } = await supabase.rpc("rpc_finalize_topic_vote", { p_lobby_id: lobbyId });
+            if (error) {
+                console.error("rpc_finalize_topic_vote failed:", error);
+                // keep UI running; show toast for visibility
+                showToast(`❌ Finalize: ${error.message}`, 2400);
+                throw new Error(error.message);
+            }
+        },
+        [supabase, showToast]
+    );
+
+    const rpcAdvanceFromCountdown = useCallback(
+        async (lobbyId: string) => {
+            const { error } = await supabase.rpc("rpc_advance_from_countdown", { p_lobby_id: lobbyId });
+            if (error) {
+                console.error("rpc_advance_from_countdown failed:", error);
+                showToast(`❌ Advance: ${error.message}`, 2400);
+                throw new Error(error.message);
+            }
+        },
+        [supabase, showToast]
+    );
+
+    // -----------------------------
     // Poll loop (Lobby + Players + Votes)
     // -----------------------------
     useEffect(() => {
@@ -242,7 +270,12 @@ export default function GamePage() {
                     const votesRes = await supabase.from("topic_votes").select("choice,player_id").eq("lobby_id", nextLobby.id);
                     if (!alive) return;
 
-                    if (!votesRes.error && votesRes.data) {
+                    if (votesRes.error) {
+                        // This is where you’d see the "updated_at does not exist" indirectly only if you were writing.
+                        // But if SELECT fails, show a fatal.
+                        console.error("topic_votes select failed:", votesRes.error);
+                        showToast(`❌ Votes laden: ${votesRes.error.message}`, 2400);
+                    } else if (votesRes.data) {
                         let a = 0,
                             b = 0,
                             r = 0;
@@ -265,14 +298,14 @@ export default function GamePage() {
                     setMyVote(null);
                 }
 
-                // ---- Best-effort “advance” calls
+                // ---- Best-effort “advance” calls (with visibility)
 
                 // 1) running: tickGame due
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
                     const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
                     const explodeMs = Date.parse(nextLobby.explode_at);
                     const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
-                    if (meAlive && due) void tickGame(code).catch(() => {});
+                    if (meAlive && due) void tickGame(code).catch((e) => console.error("tickGame failed:", e));
                 }
 
                 // 2) topic_vote: finalize when due (timer)
@@ -280,12 +313,9 @@ export default function GamePage() {
                     const dueMs = msUntil(nextLobby.topic_vote_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !finalizeInFlightRef.current) {
                         finalizeInFlightRef.current = true;
-                        void supabase
-                            .rpc("rpc_finalize_topic_vote", { p_lobby_id: nextLobby.id })
-                            .catch(() => {})
-                            .finally(() => {
-                                finalizeInFlightRef.current = false;
-                            });
+                        void rpcFinalizeTopicVote(nextLobby.id).finally(() => {
+                            finalizeInFlightRef.current = false;
+                        });
                     }
                 }
 
@@ -294,12 +324,9 @@ export default function GamePage() {
                     const dueMs = msUntil(nextLobby.countdown_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !advanceInFlightRef.current) {
                         advanceInFlightRef.current = true;
-                        void supabase
-                            .rpc("rpc_advance_from_countdown", { p_lobby_id: nextLobby.id })
-                            .catch(() => {})
-                            .finally(() => {
-                                advanceInFlightRef.current = false;
-                            });
+                        void rpcAdvanceFromCountdown(nextLobby.id).finally(() => {
+                            advanceInFlightRef.current = false;
+                        });
                     }
                 }
             } finally {
@@ -314,7 +341,7 @@ export default function GamePage() {
             alive = false;
             window.clearInterval(t);
         };
-    }, [code, supabase, mePlayerId]);
+    }, [code, supabase, mePlayerId, rpcFinalizeTopicVote, rpcAdvanceFromCountdown, showToast]);
 
     // -----------------------------
     // EARLY FINISH: when all voted -> finalize immediately
@@ -326,13 +353,10 @@ export default function GamePage() {
         if (finalizeInFlightRef.current) return;
 
         finalizeInFlightRef.current = true;
-        void supabase
-            .rpc("rpc_finalize_topic_vote", { p_lobby_id: lobby.id })
-            .catch(() => {})
-            .finally(() => {
-                finalizeInFlightRef.current = false;
-            });
-    }, [allVoted, lobby, supabase]);
+        void rpcFinalizeTopicVote(lobby.id).finally(() => {
+            finalizeInFlightRef.current = false;
+        });
+    }, [allVoted, lobby, rpcFinalizeTopicVote]);
 
     // -----------------------------
     // Synced timers (vote + countdown)
@@ -374,7 +398,7 @@ export default function GamePage() {
     }, [lobby]);
 
     // -----------------------------
-    // Vote action
+    // Vote action (shows real DB error)
     // -----------------------------
     const vote = useCallback(
         async (choice: 1 | 2 | 3) => {
@@ -390,12 +414,17 @@ export default function GamePage() {
                     p_player_id: mePlayerId,
                     p_choice: choice,
                 });
-                if (error) throw new Error(error.message);
+
+                if (error) {
+                    // This is exactly where you will see: updated_at does not exist
+                    console.error("rpc_vote_topic failed:", error);
+                    throw new Error(error.message);
+                }
 
                 setMyVote(choice);
                 showToast("✅ Vote gespeichert", 900);
             } catch (e: unknown) {
-                showToast(`❌ ${getErrorMessage(e)}`, 2400);
+                showToast(`❌ ${getErrorMessage(e)}`, 2600);
             } finally {
                 setVoteBusy(false);
             }
@@ -469,7 +498,7 @@ export default function GamePage() {
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
 
-        // NOTE: UI duration used for progress bar. If your DB duration differs, set it accordingly.
+        // UI duration used for progress bar. If your DB duration differs, set it accordingly.
         const duration = 15;
         const progress = clamp(timeLeft / duration, 0, 1);
 
@@ -1073,7 +1102,9 @@ export default function GamePage() {
     // PHASE: FINISHED
     // =========================================================
     if (lobby.phase === "finished") {
-        const winner = lobby.holder_player_id ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt" : "Unbekannt";
+        const winner = lobby.holder_player_id
+            ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
+            : "Unbekannt";
 
         return (
             <main
@@ -1089,7 +1120,9 @@ export default function GamePage() {
                 <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>SPIEL BEENDET</div>
                     <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
-                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
+                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>
+                        {iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}
+                    </div>
                     <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
                         <button className="btn btnPrimary btnXL" onClick={() => goLobby(code)} type="button">
                             Zur Lobby
