@@ -1129,11 +1129,27 @@ export default function GamePage() {
                     <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
                     <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
                     <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
-                        <button className="btn btnPrimary btnXL" onClick={() => (window.location.href = `/lobby/${encodeURIComponent(code)}`)} type="button">
-                            Zur Lobby
+                        <button
+                            className="btn btnPrimary btnXL"
+                            onClick={() => (window.location.href = `/lobby/${encodeURIComponent(code)}`)}
+                            type="button"
+                        >
+                            Zurück zur Lobby
                         </button>
-                        <button className="btn btnSecondary btnXL" onClick={() => (window.location.href = "/")} type="button">
-                            Hauptmenü
+
+                        <button
+                            className="btn btnSecondary btnXL"
+                            onClick={async () => {
+                                const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
+                                if (error) {
+                                    showToast(`❌ Rematch: ${error.message}`, 2400);
+                                    return;
+                                }
+                                showToast("🔁 Rematch gestartet", 1200);
+                            }}
+                            type="button"
+                        >
+                            🔁 Rematch
                         </button>
                     </div>
                 </div>
