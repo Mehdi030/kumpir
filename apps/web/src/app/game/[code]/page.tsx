@@ -409,7 +409,8 @@ export default function GamePage() {
 
                 if (error) {
                     console.error("rpc_vote_topic failed:", error);
-                    throw new Error(error.message);
+                    showToast(`❌ ${error.message}`, 2600);
+                    return;
                 }
 
                 setMyVote(choice);
@@ -424,18 +425,49 @@ export default function GamePage() {
     );
 
     // -----------------------------
-    // PASS handler
+    // PASS handler (TS-sicher + mit Fehler-Toast)
     // -----------------------------
     const handlePass = useCallback(async () => {
-        if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
-        if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
-        if (iAmEliminated) return showToast("💀 Du bist raus", 1400);
-        if (!isMeHolder) return; // UI zeigt eh keine Buttons dafür
+        if (!mePlayerId) {
+            showToast("⚠️ Keine Player-ID", 1800);
+            return;
+        }
+
+        if (!lobby || lobby.phase !== "running") {
+            showToast("⏳ Noch nicht gestartet", 1400);
+            return;
+        }
+
+        if (iAmEliminated) {
+            showToast("💀 Du bist raus", 1400);
+            return;
+        }
+
+        if (!isMeHolder) {
+            showToast("⚠️ Du hältst die Kartoffel nicht.", 1400);
+            return;
+        }
+
         if (passBusy) return;
 
         setPassBusy(true);
         try {
-            await passPotato(code, mePlayerId);
+            const res = await passPotato(code, mePlayerId);
+
+            if (!res.ok) {
+                // TS-sicher: KEIN res.error Zugriff (weil PassPotatoResult kein .error hat)
+                const anyRes = res as unknown as Record<string, unknown>;
+
+                const msg =
+                    (typeof anyRes["error"] === "string" && anyRes["error"]) ||
+                    (typeof anyRes["message"] === "string" && anyRes["message"]) ||
+                    (typeof anyRes["reason"] === "string" && anyRes["reason"]) ||
+                    "Pass fehlgeschlagen";
+
+                showToast(`❌ ${msg}`, 2400);
+                return;
+            }
+
             showToast("✅ Weitergegeben", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
@@ -603,7 +635,6 @@ export default function GamePage() {
                     </div>
                 </div>
 
-                {/* styles unverändert */}
                 <style>{`
           .kicker{
             font-size: 12px;
