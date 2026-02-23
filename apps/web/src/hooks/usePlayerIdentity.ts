@@ -18,7 +18,6 @@ export function usePlayerIdentity() {
 
     useEffect(() => {
         const sync = () => {
-            // ✅ reflect storage exactly (including null) — prevents "stuck" identities
             setMePlayerId(readStoredPlayerId());
             setMeName(readStoredName());
         };
@@ -27,13 +26,12 @@ export function usePlayerIdentity() {
 
         const onStorage = (e: StorageEvent) => {
             if (e.key === "kumpir_player_id" || e.key === "kumpir_player_name") sync();
-        };2
+        };
 
         window.addEventListener("storage", onStorage);
         window.addEventListener("focus", sync);
         document.addEventListener("visibilitychange", sync);
 
-        // keep it light; focus/visibility already cover most cases
         const t = window.setInterval(sync, 1500);
 
         return () => {

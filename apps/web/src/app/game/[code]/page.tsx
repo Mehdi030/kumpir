@@ -46,6 +46,12 @@ type Player = {
 
 type VoteCounts = { a: number; b: number; r: number };
 
+type PassEvent = {
+    fromPlayerId: string;
+    toPlayerId: string;
+    nonce: number; // force change detection
+};
+
 function getErrorMessage(e: unknown): string {
     if (e instanceof Error) return e.message;
     if (typeof e === "string") return e;
@@ -65,6 +71,27 @@ function msUntil(ts: string | null): number | null {
     const ms = Date.parse(ts);
     if (Number.isNaN(ms)) return null;
     return ms - Date.now();
+}
+
+function pickNextAlive(players: Player[], holderId: string | null): Player | null {
+    if (!holderId) return null;
+    if (players.length === 0) return null;
+
+    const alive = players.filter((p) => p.is_alive);
+    if (alive.length <= 1) return null;
+
+    const idx = alive.findIndex((p) => p.player_id === holderId);
+    if (idx < 0) return alive[0] ?? null;
+
+    for (let step = 1; step <= alive.length; step++) {
+        const p = alive[(idx + step) % alive.length];
+        if (p?.is_alive) return p;
+    }
+    return null;
+}
+
+function isOkResult(u: unknown): u is { ok: boolean; error?: string; message?: string } {
+    return typeof u === "object" && u !== null && "ok" in u && typeof (u as any).ok === "boolean";
 }
 
 export default function GamePage() {
@@ -97,7 +124,19 @@ export default function GamePage() {
     const [toast, setToast] = useState("");
     const [passBusy, setPassBusy] = useState(false);
 
+    // Motion
     const [reduceMotion, setReduceMotion] = useState(false);
+
+    // “Your turn” overlay (1x per transition)
+    const [turnOverlay, setTurnOverlay] = useState(false);
+    const lastShownTurnNonceRef = useRef<number>(0);
+
+    // Pass animation event
+    const [passEvent, setPassEvent] = useState<PassEvent | null>(null);
+
+    // holder transition tracking
+    const prevHolderRef = useRef<string | null>(null);
+    const passNonceRef = useRef(0);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -144,36 +183,47 @@ export default function GamePage() {
         if (!lobby.topic_selected) return null;
         if (lobby.topic_selected === lobby.topic_a) return 1;
         if (lobby.topic_selected === lobby.topic_b) return 2;
-        return 3; // fallback (random)
+        return 3;
     }, [lobby]);
 
     const totalPlayers = players.length;
     const votedPlayers = voteCounts.a + voteCounts.b + voteCounts.r;
     const allVoted = totalPlayers > 0 && votedPlayers >= totalPlayers;
 
+    // Spectator HUD data
+    const nextUp = useMemo(() => pickNextAlive(players, lobby?.holder_player_id ?? null), [players, lobby?.holder_player_id]);
+    const explodeSecondsLeft = useMemo(() => {
+        if (!lobby?.explode_at) return null;
+        const ms = msUntil(lobby.explode_at);
+        if (ms === null) return null;
+        return clamp(Math.ceil(ms / 1000), 0, 999);
+    }, [lobby?.explode_at]);
+
     // -----------------------------
-    // Best-effort RPC wrappers (NO silent swallow)
+    // RPC wrappers (NO throw)
     // -----------------------------
     const rpcFinalizeTopicVote = useCallback(
-        async (lobbyId: string) => {
+        async (lobbyId: string): Promise<{ ok: true } | { ok: false; error: string }> => {
             const { error } = await supabase.rpc("rpc_finalize_topic_vote", { p_lobby_id: lobbyId });
             if (error) {
                 console.error("rpc_finalize_topic_vote failed:", error);
                 showToast(`❌ Finalize: ${error.message}`, 2400);
-                throw new Error(error.message);
+                return { ok: false, error: error.message };
             }
+            return { ok: true };
         },
         [supabase, showToast]
     );
 
     const rpcAdvanceFromCountdown = useCallback(
-        async (lobbyId: string) => {
+        async (lobbyId: string): Promise<{ ok: true } | { ok: false; error: string }> => {
             const { error } = await supabase.rpc("rpc_advance_from_countdown", { p_lobby_id: lobbyId });
             if (error) {
                 console.error("rpc_advance_from_countdown failed:", error);
                 showToast(`❌ Advance: ${error.message}`, 2400);
-                throw new Error(error.message);
+                return { ok: false, error: error.message };
             }
+            return { ok: true };
         },
         [supabase, showToast]
     );
@@ -239,6 +289,33 @@ export default function GamePage() {
                     topic_tie_pick: (lobbyRes.data.topic_tie_pick as number | null) ?? null,
                 };
 
+                // BEFORE setLobby: compute holder transition (for overlay + pass anim)
+                const prevHolder = prevHolderRef.current;
+                const nextHolder = nextLobby.holder_player_id ?? null;
+
+                // Pass animation event: when holder changes (and both exist)
+                if (prevHolder && nextHolder && prevHolder !== nextHolder) {
+                    passNonceRef.current += 1;
+                    setPassEvent({
+                        fromPlayerId: prevHolder,
+                        toPlayerId: nextHolder,
+                        nonce: passNonceRef.current,
+                    });
+                }
+
+                // "Du bist dran" overlay: only when transition enters me
+                if (mePlayerId && nextHolder === mePlayerId && prevHolder !== mePlayerId) {
+                    const nonce = Date.now();
+                    // lock so it won't show twice from fast rerenders
+                    if (nonce - lastShownTurnNonceRef.current > 700) {
+                        lastShownTurnNonceRef.current = nonce;
+                        setTurnOverlay(true);
+                        window.setTimeout(() => setTurnOverlay(false), 1700);
+                    }
+                }
+
+                prevHolderRef.current = nextHolder;
+
                 setLobby(nextLobby);
 
                 const playersRes = await supabase
@@ -290,7 +367,7 @@ export default function GamePage() {
                     setMyVote(null);
                 }
 
-                // ---- Best-effort “advance” calls (with visibility)
+                // ---- Best-effort “advance” calls
 
                 // 1) running: tickGame due
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
@@ -390,7 +467,7 @@ export default function GamePage() {
     }, [lobby]);
 
     // -----------------------------
-    // Vote action (shows real DB error)
+    // Vote action
     // -----------------------------
     const vote = useCallback(
         async (choice: 1 | 2 | 3) => {
@@ -425,49 +502,29 @@ export default function GamePage() {
     );
 
     // -----------------------------
-    // PASS handler (TS-sicher + mit Fehler-Toast)
+    // PASS handler (TS-safe, no res.error)
     // -----------------------------
     const handlePass = useCallback(async () => {
-        if (!mePlayerId) {
-            showToast("⚠️ Keine Player-ID", 1800);
-            return;
-        }
-
-        if (!lobby || lobby.phase !== "running") {
-            showToast("⏳ Noch nicht gestartet", 1400);
-            return;
-        }
-
-        if (iAmEliminated) {
-            showToast("💀 Du bist raus", 1400);
-            return;
-        }
-
-        if (!isMeHolder) {
-            showToast("⚠️ Du hältst die Kartoffel nicht.", 1400);
-            return;
-        }
-
+        if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
+        if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
+        if (iAmEliminated) return showToast("💀 Du bist raus", 1400);
+        if (!isMeHolder) return;
         if (passBusy) return;
 
         setPassBusy(true);
         try {
-            const res = await passPotato(code, mePlayerId);
+            const res = (await passPotato(code, mePlayerId)) as unknown;
 
-            if (!res.ok) {
-                // TS-sicher: KEIN res.error Zugriff (weil PassPotatoResult kein .error hat)
-                const anyRes = res as unknown as Record<string, unknown>;
-
-                const msg =
-                    (typeof anyRes["error"] === "string" && anyRes["error"]) ||
-                    (typeof anyRes["message"] === "string" && anyRes["message"]) ||
-                    (typeof anyRes["reason"] === "string" && anyRes["reason"]) ||
-                    "Pass fehlgeschlagen";
-
-                showToast(`❌ ${msg}`, 2400);
-                return;
+            // If action returns structured ok/error
+            if (isOkResult(res)) {
+                if (!res.ok) {
+                    const msg = res.error ?? res.message ?? "Unbekannter Fehler";
+                    showToast(`❌ ${msg}`, 2400);
+                    return;
+                }
             }
 
+            // If action throws on failure, we land in catch anyway.
             showToast("✅ Weitergegeben", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
@@ -499,7 +556,6 @@ export default function GamePage() {
                 <div style={{ width: "min(720px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontWeight: 950, fontSize: 22 }}>⚠️ Spiel konnte nicht geladen werden</div>
                     <div style={{ marginTop: 10, opacity: 0.8 }}>{fatalError}</div>
-                    {/* kein "Zur Lobby" */}
                 </div>
             </main>
         );
@@ -598,9 +654,7 @@ export default function GamePage() {
                             </button>
                         </div>
 
-                        <div className="statusLine">
-                            {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
-                        </div>
+                        <div className="statusLine">{allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}</div>
 
                         {toast ? <div className="toastInline">{toast}</div> : null}
                     </div>
@@ -1037,7 +1091,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: FINISHED  (nur hier "Zur Lobby")
+    // PHASE: FINISHED
     // =========================================================
     if (lobby.phase === "finished") {
         const winner = lobby.holder_player_id ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt" : "Unbekannt";
@@ -1071,7 +1125,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: NOT RUNNING (WARTEN)  -> KEIN "Zur Lobby"
+    // PHASE: NOT RUNNING (WARTEN)
     // =========================================================
     if (lobby.phase !== "running") {
         return (
@@ -1089,7 +1143,6 @@ export default function GamePage() {
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>WARTEN</div>
                     <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>⏳ Warten…</div>
                     <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>Der Host startet gleich das Spiel.</div>
-                    {/* kein Button */}
                 </div>
             </main>
         );
@@ -1100,7 +1153,7 @@ export default function GamePage() {
         : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.26) 0%, rgba(0,130,60,0.78) 80%)";
 
     // =========================================================
-    // PHASE: RUNNING  -> Buttons NUR für Holder
+    // PHASE: RUNNING
     // =========================================================
     return (
         <main
@@ -1112,8 +1165,36 @@ export default function GamePage() {
                 background: runningBg,
             }}
         >
+            {/* pass animation ring */}
+            <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} passEvent={passEvent} />
+
+            {/* subtle holder pulse layer */}
             {isMeHolder ? <div className="holderPulseLayer" aria-hidden /> : null}
 
+            {/* “Du bist dran” overlay (only once per transition) */}
+            {turnOverlay ? (
+                <div
+                    style={{
+                        position: "fixed",
+                        left: "50%",
+                        top: 22,
+                        transform: "translateX(-50%)",
+                        zIndex: 9999,
+                        padding: "12px 16px",
+                        borderRadius: 999,
+                        background: "rgba(0,0,0,0.62)",
+                        border: "1px solid rgba(255,255,255,0.14)",
+                        fontWeight: 950,
+                        letterSpacing: 0.3,
+                        backdropFilter: "blur(10px)",
+                        WebkitBackdropFilter: "blur(10px)",
+                    }}
+                >
+                    ✅ Du bist dran
+                </div>
+            ) : null}
+
+            {/* toast */}
             {toast ? (
                 <div
                     style={{
@@ -1135,10 +1216,50 @@ export default function GamePage() {
                 </div>
             ) : null}
 
-            <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} />
+            {/* center content */}
+            <div style={{ position: "relative", zIndex: 3, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+                <div style={{ width: "min(920px, 96vw)", textAlign: "center" }}>
+                    {/* spectator HUD */}
+                    {iAmEliminated ? (
+                        <div
+                            style={{
+                                marginBottom: 14,
+                                display: "inline-flex",
+                                gap: 10,
+                                alignItems: "center",
+                                padding: "10px 12px",
+                                borderRadius: 999,
+                                background: "rgba(0,0,0,0.30)",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                backdropFilter: "blur(10px)",
+                                WebkitBackdropFilter: "blur(10px)",
+                                fontWeight: 900,
+                            }}
+                        >
+                            <span style={{ opacity: 0.9 }}>👁️ Spectator</span>
+                            <span style={{ opacity: 0.75 }}>•</span>
+                            <span style={{ opacity: 0.9 }}>
+                Jetzt: <b>{holderName}</b>
+              </span>
+                            {nextUp ? (
+                                <>
+                                    <span style={{ opacity: 0.75 }}>•</span>
+                                    <span style={{ opacity: 0.9 }}>
+                    Next: <b>{nextUp.name}</b>
+                  </span>
+                                </>
+                            ) : null}
+                            {typeof explodeSecondsLeft === "number" ? (
+                                <>
+                                    <span style={{ opacity: 0.75 }}>•</span>
+                                    <span style={{ opacity: 0.9 }}>
+                    💣 {explodeSecondsLeft}s
+                  </span>
+                                </>
+                            ) : null}
+                        </div>
+                    ) : null}
 
-            <div style={{ position: "relative", zIndex: 2, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-                <div style={{ width: "min(860px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>RUNNING</div>
                     <div style={{ fontSize: "clamp(28px, 4.2vw, 56px)", fontWeight: 950, marginTop: 12 }}>{selectedTopic}</div>
 
@@ -1146,22 +1267,17 @@ export default function GamePage() {
                         Holder: <b>{holderName}</b>
                     </div>
 
-                    {isMeHolder ? (
+                    {/* actions: only holder and only if alive */}
+                    {isMeHolder && !iAmEliminated ? (
                         <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
-                            <button
-                                className="btn btnPrimary btnXL"
-                                onClick={() => void handlePass()}
-                                type="button"
-                                disabled={!mePlayerId || passBusy || iAmEliminated}
-                                title={iAmEliminated ? "Du bist raus" : "Weitergeben"}
-                            >
+                            <button className="btn btnPrimary btnXL" onClick={() => void handlePass()} type="button" disabled={!mePlayerId || passBusy} title="Weitergeben">
                                 {passBusy ? "…" : "🥔 Weitergeben (Space)"}
                             </button>
                         </div>
                     ) : null}
 
                     <div style={{ marginTop: 12, opacity: 0.8, fontWeight: 800 }}>
-                        {isMeHolder ? "Du hast die Kartoffel. Drück Space oder Button." : "Warte, bis du die Kartoffel bekommst."}
+                        {iAmEliminated ? "Du schaust zu." : isMeHolder ? "Du hast die Kartoffel. Drück Space oder Button." : "Warte, bis du die Kartoffel bekommst."}
                     </div>
                 </div>
             </div>
@@ -1179,7 +1295,7 @@ export default function GamePage() {
           filter: blur(18px);
           animation: holderPulse 1.2s ease-in-out infinite;
           pointer-events:none;
-          z-index: 0;
+          z-index: 1;
         }
       `}</style>
         </main>
