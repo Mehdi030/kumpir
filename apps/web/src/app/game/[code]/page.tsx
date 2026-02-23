@@ -370,11 +370,21 @@ export default function GamePage() {
                 // ---- Best-effort “advance” calls
 
                 // 1) running: tickGame due
+                // ✅ OPTION A: NUR HOLDER tickt
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
                     const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
-                    const explodeMs = Date.parse(nextLobby.explode_at);
-                    const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
-                    if (meAlive && due) void tickGame(code).catch((e) => console.error("tickGame failed:", e));
+
+                    const iAmHolderNow = nextLobby.holder_player_id === mePlayerId;
+                    if (!iAmHolderNow) {
+                        // Nicht holder -> niemals ticken
+                    } else {
+                        const explodeMs = Date.parse(nextLobby.explode_at);
+                        const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
+
+                        if (meAlive && due) {
+                            void tickGame(code).catch((e) => console.error("tickGame failed:", e));
+                        }
+                    }
                 }
 
                 // 2) topic_vote: finalize when due (timer)
@@ -1239,22 +1249,20 @@ export default function GamePage() {
                             <span style={{ opacity: 0.9 }}>👁️ Spectator</span>
                             <span style={{ opacity: 0.75 }}>•</span>
                             <span style={{ opacity: 0.9 }}>
-                Jetzt: <b>{holderName}</b>
-              </span>
+                                Jetzt: <b>{holderName}</b>
+                            </span>
                             {nextUp ? (
                                 <>
                                     <span style={{ opacity: 0.75 }}>•</span>
                                     <span style={{ opacity: 0.9 }}>
-                    Next: <b>{nextUp.name}</b>
-                  </span>
+                                        Next: <b>{nextUp.name}</b>
+                                    </span>
                                 </>
                             ) : null}
                             {typeof explodeSecondsLeft === "number" ? (
                                 <>
                                     <span style={{ opacity: 0.75 }}>•</span>
-                                    <span style={{ opacity: 0.9 }}>
-                    💣 {explodeSecondsLeft}s
-                  </span>
+                                    <span style={{ opacity: 0.9 }}>💣 {explodeSecondsLeft}s</span>
                                 </>
                             ) : null}
                         </div>

@@ -19,7 +19,7 @@ export async function passPotato(code: string, playerId: string): Promise<PassPo
         if (lobby.phase !== "running") return { ok: false, error: "Spiel läuft nicht." };
         if (lobby.holder_player_id !== playerId) return { ok: false, error: "Du hältst die Kartoffel nicht." };
 
-        // 🔒 Pass blocken, wenn Timer schon fällig ist oder gerade getickt wird
+        // 🔒 Pass blocken, wenn Timer schon fällig ist oder gerade getickt wird (tickGame claim setzt explode_at = null)
         if (!lobby.explode_at) return { ok: false, error: "Zu spät (Timer wird gerade verarbeitet)." };
 
         const explodeMs = Date.parse(lobby.explode_at);
@@ -46,10 +46,13 @@ export async function passPotato(code: string, playerId: string): Promise<PassPo
 
         const { data: updData, error: updErr } = await supabase
             .from("lobbies")
-            .update({ holder_player_id: next, last_activity_at: new Date().toISOString() })
+            .update({
+                holder_player_id: next,
+                last_activity_at: new Date().toISOString(),
+            })
             .eq("id", lobby.id)
-            .eq("holder_player_id", playerId)
-            .eq("explode_at", lobby.explode_at) // ✅ CAS auch auf Timer
+            .eq("holder_player_id", playerId) // ✅ CAS gegen Double-Click / Race
+            .eq("explode_at", lobby.explode_at) // ✅ CAS auch auf Timer (blockt bei claim/expiry)
             .select("id");
 
         if (updErr) return { ok: false, error: updErr.message };
