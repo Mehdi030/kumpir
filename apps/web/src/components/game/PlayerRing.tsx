@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type Player = {
     player_id: string;
     name: string;
     is_alive: boolean;
+    ready?: boolean;
+    // optional seat_index wenn du es hier drin hast
+    // seat_index?: number;
 };
 
-export type PassEvent = {
+type PassEvent = {
     fromPlayerId: string;
     toPlayerId: string;
     nonce: number;
@@ -18,184 +21,313 @@ type Props = {
     players: Player[];
     holderPlayerId: string | null;
     mePlayerId: string | null;
-    passEvent?: PassEvent | null;
+    passEvent: PassEvent | null;
 };
 
-function clamp(n: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, n));
+type Pt = { x: number; y: number };
+
+function easeInOutCubic(t: number) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-function getReduceMotion(): boolean {
-    if (typeof window === "undefined") return false;
-    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    return !!mq?.matches;
+// Quadratic Bezier
+function bezier(p0: Pt, p1: Pt, p2: Pt, t: number): Pt {
+    const u = 1 - t;
+    return {
+        x: u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x,
+        y: u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y,
+    };
 }
 
 export function PlayerRing({ players, holderPlayerId, mePlayerId, passEvent }: Props) {
-    const [vw, setVw] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1200);
-    const [vh, setVh] = useState<number>(typeof window !== "undefined" ? window.innerHeight : 800);
+    const containerRef = useRef<HTMLDivElement | null>(null);
 
-    const [reduceMotion, setReduceMotion] = useState(false);
-
-    // flying potato state
-    const [fly, setFly] = useState<null | {
-        x: number;
-        y: number;
-        tx: number;
-        ty: number;
-        active: boolean;
+    // Flying potato state
+    const [fly, setFly] = useState<{
         nonce: number;
-    }>(null);
+        fromId: string;
+        toId: string;
+        t: number; // 0..1
+    } | null>(null);
 
-    const flyTimeoutRef = useRef<number | null>(null);
+    // Receiver pop highlight
+    const [popPlayerId, setPopPlayerId] = useState<string | null>(null);
 
+    // Reduced motion
+    const [reduceMotion, setReduceMotion] = useState(false);
     useEffect(() => {
-        setReduceMotion(getReduceMotion());
         const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-        const onChange = () => setReduceMotion(getReduceMotion());
-        mq?.addEventListener?.("change", onChange);
-        return () => mq?.removeEventListener?.("change", onChange);
+        const apply = () => setReduceMotion(!!mq?.matches);
+        apply();
+        mq?.addEventListener?.("change", apply);
+        return () => mq?.removeEventListener?.("change", apply);
     }, []);
 
-    useEffect(() => {
-        const onResize = () => {
-            setVw(window.innerWidth);
-            setVh(window.innerHeight);
-        };
-        window.addEventListener("resize", onResize);
-        return () => window.removeEventListener("resize", onResize);
-    }, []);
+    // Compute positions on ring (in container coords)
+    const positions = useMemo(() => {
+        const n = players.length;
+        const map = new Map<string, Pt>();
+        // fallback if no layout
+        if (n === 0) return map;
 
-    const alivePlayers = useMemo(() => players.filter((p) => p.is_alive), [players]);
-    const N = alivePlayers.length || 1;
+        // We'll assume the ring container is square-ish; we compute relative coords,
+        // then convert to px using container size.
+        // Use a slightly top-biased start angle so "top" seat feels natural.
+        const startAngle = -Math.PI / 2;
+        const step = (Math.PI * 2) / n;
 
-    const cx = vw / 2;
-    const cy = vh / 2;
-
-    const margin = 80;
-    const rx = clamp(vw / 2 - margin, 220, 520);
-    const ry = clamp(vh / 2 - margin, 160, 420);
-
-    // precompute positions for current alivePlayers ordering
-    const pos = useMemo(() => {
-        const m = new Map<string, { x: number; y: number }>();
-        for (let i = 0; i < alivePlayers.length; i++) {
-            const p = alivePlayers[i];
-            const angle = (Math.PI * 2 * i) / N - Math.PI / 2;
-            const x = cx + Math.cos(angle) * rx;
-            const y = cy + Math.sin(angle) * ry;
-            m.set(p.player_id, { x, y });
+        // Base radius in % (converted later)
+        for (let i = 0; i < n; i++) {
+            const a = startAngle + i * step;
+            // relative [-1..1]
+            const x = Math.cos(a);
+            const y = Math.sin(a);
+            map.set(players[i]!.player_id, { x, y });
         }
-        return m;
-    }, [alivePlayers, N, cx, cy, rx, ry]);
+        return map;
+    }, [players]);
 
-    // run flying potato animation on passEvent
+    // Convert relative coords to px coords at runtime
+    const getPx = (id: string): Pt | null => {
+        const rel = positions.get(id);
+        const el = containerRef.current;
+        if (!rel || !el) return null;
+
+        const rect = el.getBoundingClientRect();
+        const size = Math.min(rect.width, rect.height);
+
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+
+        // radius: leave padding for avatars
+        const r = size * 0.38;
+
+        return {
+            x: cx + rel.x * r,
+            y: cy + rel.y * r,
+        };
+    };
+
+    // Trigger nicer animation on passEvent
     useEffect(() => {
         if (!passEvent) return;
-
-        const from = pos.get(passEvent.fromPlayerId);
-        const to = pos.get(passEvent.toPlayerId);
-        if (!from || !to) return;
-
-        // cancel previous
-        if (flyTimeoutRef.current) window.clearTimeout(flyTimeoutRef.current);
-
         if (reduceMotion) {
-            // reduced motion: just "pop" at target briefly
-            setFly({ x: to.x, y: to.y, tx: to.x, ty: to.y, active: true, nonce: passEvent.nonce });
-            flyTimeoutRef.current = window.setTimeout(() => setFly(null), 500);
-            return;
+            // still pop receiver briefly
+            setPopPlayerId(passEvent.toPlayerId);
+            const t = window.setTimeout(() => setPopPlayerId(null), 380);
+            return () => window.clearTimeout(t);
         }
 
-        // start at from, then animate to to
-        setFly({ x: from.x, y: from.y, tx: to.x, ty: to.y, active: false, nonce: passEvent.nonce });
-
-        const raf = window.requestAnimationFrame(() => {
-            setFly((prev) => (prev ? { ...prev, active: true } : prev));
+        // start fly
+        setFly({
+            nonce: passEvent.nonce,
+            fromId: passEvent.fromPlayerId,
+            toId: passEvent.toPlayerId,
+            t: 0,
         });
+    }, [passEvent, reduceMotion]);
 
-        flyTimeoutRef.current = window.setTimeout(() => {
-            setFly(null);
-            window.cancelAnimationFrame(raf);
-        }, 650);
+    // Animate fly.t with rAF
+    useEffect(() => {
+        if (!fly) return;
 
-        return () => {
-            window.cancelAnimationFrame(raf);
+        let raf = 0;
+        const start = performance.now();
+        const duration = 520; // ms (snappy but visible)
+
+        const step = (now: number) => {
+            const raw = (now - start) / duration;
+            const t = Math.max(0, Math.min(1, raw));
+            setFly((prev) => (prev ? { ...prev, t } : prev));
+
+            if (t < 1) raf = requestAnimationFrame(step);
+            else {
+                // End: pop receiver
+                setPopPlayerId(fly.toId);
+                window.setTimeout(() => setPopPlayerId(null), 420);
+                // cleanup fly
+                window.setTimeout(() => setFly(null), 60);
+            }
         };
-    }, [passEvent, pos, reduceMotion]);
+
+        raf = requestAnimationFrame(step);
+        return () => cancelAnimationFrame(raf);
+    }, [fly?.nonce]); // re-run per animation
+
+    // Flying potato render data
+    const flyRender = useMemo(() => {
+        if (!fly) return null;
+
+        const from = getPx(fly.fromId);
+        const to = getPx(fly.toId);
+        const el = containerRef.current;
+        if (!from || !to || !el) return null;
+
+        const rect = el.getBoundingClientRect();
+
+        // Points in local container coordinates
+        const p0 = { x: from.x, y: from.y };
+        const p2 = { x: to.x, y: to.y };
+
+        // control point: mid + lift upward a bit (nice arc)
+        const mid = { x: (p0.x + p2.x) / 2, y: (p0.y + p2.y) / 2 };
+        const dx = p2.x - p0.x;
+        const dy = p2.y - p0.y;
+        const dist = Math.max(1, Math.hypot(dx, dy));
+
+        // lift scales with distance (cap)
+        const lift = Math.min(120, 0.28 * dist);
+        const p1 = { x: mid.x, y: mid.y - lift };
+
+        const t = easeInOutCubic(fly.t);
+        const p = bezier(p0, p1, p2, t);
+
+        // rotation based on motion direction
+        const pNext = bezier(p0, p1, p2, Math.min(1, t + 0.02));
+        const ang = Math.atan2(pNext.y - p.y, pNext.x - p.x);
+
+        // slight scale pulse during flight
+        const scale = 1 + Math.sin(Math.PI * t) * 0.12;
+
+        // convert to local pos within container
+        return {
+            x: p.x,
+            y: p.y,
+            rot: ang,
+            scale,
+            // for trail opacity
+            t,
+            w: rect.width,
+            h: rect.height,
+            p0,
+            p2,
+            p1,
+        };
+    }, [fly, players, positions]);
 
     return (
-        <div
-            aria-hidden
-            style={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 2,
-                pointerEvents: "none",
-            }}
-        >
-            {/* flying potato layer */}
-            {fly ? (
-                <div
-                    style={{
-                        position: "absolute",
-                        left: fly.active ? fly.tx : fly.x,
-                        top: fly.active ? fly.ty : fly.y,
-                        transform: "translate(-50%, -50%)",
-                        transition: reduceMotion ? "none" : "left 520ms cubic-bezier(.2,1,.2,1), top 520ms cubic-bezier(.2,1,.2,1), transform 520ms cubic-bezier(.2,1,.2,1)",
-                        filter: "drop-shadow(0 12px 22px rgba(0,0,0,0.35))",
-                        fontSize: 30,
-                        fontWeight: 900,
-                        opacity: 0.95,
-                        zIndex: 5,
-                    }}
-                >
-                    🥔
-                </div>
-            ) : null}
+        <div ref={containerRef} className="ringWrap">
+            {/* Your existing ring UI goes here (avatars etc.) */}
+            {/* Keep your current layout; only add the overlay layers below */}
 
-            {alivePlayers.map((p) => {
-                const isHolder = !!holderPlayerId && p.player_id === holderPlayerId;
-                const isMe = !!mePlayerId && p.player_id === mePlayerId;
+            {/* Pass overlay */}
+            {flyRender ? (
+                <div className="passOverlay" aria-hidden>
+                    {/* trail line using an SVG */}
+                    <svg className="trailSvg" width="100%" height="100%">
+                        <path
+                            d={`M ${flyRender.p0.x} ${flyRender.p0.y} Q ${flyRender.p1.x} ${flyRender.p1.y} ${flyRender.p2.x} ${flyRender.p2.y}`}
+                            className="trailPath"
+                            style={{ strokeDashoffset: `${(1 - flyRender.t) * 220}` }}
+                        />
+                    </svg>
 
-                const xy = pos.get(p.player_id);
-                if (!xy) return null;
-
-                const scale = isHolder ? 1.18 : isMe ? 1.08 : 1.0;
-
-                const bg = isHolder ? "rgba(255,90,90,0.22)" : "rgba(0,0,0,0.30)";
-
-                const border = isHolder ? "1px solid rgba(255,160,160,0.40)" : "1px solid rgba(255,255,255,0.10)";
-
-                const glow = isHolder ? "0 0 22px rgba(255,90,90,0.35)" : isMe ? "0 0 18px rgba(255,255,255,0.18)" : "none";
-
-                return (
+                    {/* flying potato */}
                     <div
-                        key={p.player_id}
+                        className="potato"
                         style={{
-                            position: "absolute",
-                            left: xy.x,
-                            top: xy.y,
-                            transform: `translate(-50%, -50%) scale(${scale})`,
-                            padding: "10px 14px",
-                            borderRadius: 999,
-                            background: bg,
-                            border,
-                            boxShadow: glow,
-                            backdropFilter: "blur(10px)",
-                            WebkitBackdropFilter: "blur(10px)",
-                            fontWeight: 950,
-                            letterSpacing: 0.2,
-                            whiteSpace: "nowrap",
+                            left: flyRender.x,
+                            top: flyRender.y,
+                            transform: `translate(-50%, -50%) rotate(${flyRender.rot}rad) scale(${flyRender.scale})`,
                             opacity: 1,
                         }}
                     >
-                        <span style={{ marginRight: 8, opacity: 0.85 }}>{isHolder ? "🥔" : isMe ? "👤" : "•"}</span>
-                        <span style={{ opacity: 0.95 }}>{p.name}</span>
-                        {/* kein extra “HOLDER” Text mehr -> weniger doppelt/visuell cleaner */}
+                        🥔
+                        <span className="potatoGlow" />
                     </div>
-                );
-            })}
+                </div>
+            ) : null}
+
+            {/* Receiver pop highlight */}
+            {popPlayerId ? (
+                <div
+                    className="receiverPop"
+                    style={(() => {
+                        const p = getPx(popPlayerId);
+                        if (!p) return { display: "none" } as React.CSSProperties;
+                        return {
+                            left: p.x,
+                            top: p.y,
+                            transform: "translate(-50%, -50%)",
+                        };
+                    })()}
+                    aria-hidden
+                />
+            ) : null}
+
+            <style>{`
+        .ringWrap{
+          position: relative;
+          width: 100%;
+          height: 100%;
+        }
+
+        .passOverlay{
+          position:absolute;
+          inset:0;
+          pointer-events:none;
+          z-index: 50;
+        }
+
+        .trailSvg{
+          position:absolute;
+          inset:0;
+        }
+
+        .trailPath{
+          fill: none;
+          stroke: rgba(255,255,255,0.45);
+          stroke-width: 3.5;
+          stroke-linecap: round;
+          filter: drop-shadow(0 10px 20px rgba(0,0,0,0.25));
+          stroke-dasharray: 220;
+          transition: stroke-dashoffset 80ms linear;
+          opacity: .85;
+        }
+
+        .potato{
+          position:absolute;
+          width: 46px;
+          height: 46px;
+          display:grid;
+          place-items:center;
+          font-size: 28px;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.28);
+          border: 1px solid rgba(255,255,255,0.16);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          box-shadow: 0 18px 60px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.14);
+        }
+
+        .potatoGlow{
+          position:absolute;
+          inset:-18px;
+          border-radius: 999px;
+          background: radial-gradient(circle at 50% 50%, rgba(255,214,10,0.22), rgba(255,149,0,0.14), transparent 70%);
+          filter: blur(14px);
+          opacity: .95;
+          pointer-events:none;
+        }
+
+        .receiverPop{
+          position:absolute;
+          width: 110px;
+          height: 110px;
+          border-radius: 999px;
+          background: radial-gradient(circle at 50% 50%, rgba(255,214,10,0.18), rgba(255,45,85,0.10), transparent 70%);
+          filter: blur(10px);
+          animation: pop 420ms cubic-bezier(.2,1,.2,1) both;
+          z-index: 40;
+          pointer-events:none;
+        }
+
+        @keyframes pop{
+          0%{ transform: translate(-50%,-50%) scale(.65); opacity: 0; }
+          50%{ transform: translate(-50%,-50%) scale(1.05); opacity: 1; }
+          100%{ transform: translate(-50%,-50%) scale(.92); opacity: 0; }
+        }
+      `}</style>
         </div>
     );
 }
