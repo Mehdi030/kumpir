@@ -1,3 +1,5 @@
+// actions/tickGame.ts (nur der running/due Teil relevant)
+
 "use server";
 
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
@@ -24,7 +26,25 @@ export async function tickGame(code: string) {
     const loserId = lobby.holder_player_id;
     if (!loserId) return { ok: true, didWork: false };
 
-    // Alive vor der Elimination
+    // ✅ CLAIM: nur 1 Tick darf weiterlaufen
+    const { data: claimRow, error: claimErr } = await supabase
+        .from("lobbies")
+        .update({
+            explode_at: null, // 🔒 LOCK
+            last_activity_at: new Date().toISOString(),
+        })
+        .eq("id", lobby.id)
+        .eq("phase", "running")
+        .eq("explode_at", lobby.explode_at)     // ✅ CAS
+        .eq("holder_player_id", loserId)        // ✅ CAS
+        .select("id")
+        .maybeSingle();
+
+    if (claimErr) throw new Error(`Tick-Claim fehlgeschlagen: ${claimErr.message}`);
+    if (!claimRow) return { ok: true, didWork: false }; // jemand anders war schneller
+
+    // Ab hier: wir sind der einzige Tick-Prozessor
+
     const { data: alive, error: aliveErr } = await supabase
         .from("players")
         .select("player_id, seat_index")
@@ -34,24 +54,17 @@ export async function tickGame(code: string) {
 
     if (aliveErr || !alive) throw new Error(`Spieler konnten nicht geladen werden: ${aliveErr?.message ?? ""}`);
 
-    // Wenn schon fertig
     if (alive.length <= 1) {
-        // ✅ CAS: finalisieren nur wenn explode_at noch identisch ist
-        const { data: finishedRow, error: finErr } = await supabase
+        const { error: finErr } = await supabase
             .from("lobbies")
-            .update({
-                phase: "finished",
-                last_activity_at: new Date().toISOString(),
-            })
+            .update({ phase: "finished", last_activity_at: new Date().toISOString() })
             .eq("id", lobby.id)
             .eq("phase", "running")
-            .eq("explode_at", lobby.explode_at)
+            .is("explode_at", null) // ✅ nur wenn wir gelockt haben
             .select("id")
             .maybeSingle();
 
         if (finErr) throw new Error(`Finish fehlgeschlagen: ${finErr.message}`);
-        if (!finishedRow) return { ok: true, didWork: false }; // jemand anders war schneller
-
         return { ok: true, didWork: true, finished: true };
     }
 
@@ -59,7 +72,7 @@ export async function tickGame(code: string) {
     const holderIsAlive = alive.some((p) => p.player_id === loserId);
     if (!holderIsAlive) return { ok: true, didWork: false };
 
-    // Holder eliminieren (idempotent ok)
+    // ✅ erst jetzt killen (nach Claim)
     const { error: killErr } = await supabase
         .from("players")
         .update({ is_alive: false })
@@ -69,7 +82,6 @@ export async function tickGame(code: string) {
 
     if (killErr) throw new Error(`Elimination fehlgeschlagen: ${killErr.message}`);
 
-    // Alive nach der Elimination
     const { data: aliveAfter, error: afterErr } = await supabase
         .from("players")
         .select("player_id, seat_index")
@@ -79,7 +91,6 @@ export async function tickGame(code: string) {
 
     if (afterErr || !aliveAfter) throw new Error(`Spieler konnten nicht geladen werden: ${afterErr?.message ?? ""}`);
 
-    // Wenn jetzt nur noch 1 übrig: Spiel beenden + Winner setzen
     if (aliveAfter.length === 1) {
         const { data: finRow, error: updErr } = await supabase
             .from("lobbies")
@@ -91,23 +102,20 @@ export async function tickGame(code: string) {
             })
             .eq("id", lobby.id)
             .eq("phase", "running")
-            .eq("explode_at", lobby.explode_at) // ✅ CAS
-            .eq("holder_player_id", loserId) // ✅ CAS
+            .is("explode_at", null)              // ✅ unser Lock
+            .eq("holder_player_id", loserId)     // ✅ sollte unverändert sein, da passPotato jetzt blockt
             .select("id")
             .maybeSingle();
 
         if (updErr) throw new Error(`Finish fehlgeschlagen: ${updErr.message}`);
-        if (!finRow) return { ok: true, didWork: false }; // jemand anders war schneller
-
+        if (!finRow) return { ok: true, didWork: false };
         return { ok: true, didWork: true, finished: true };
     }
 
-    // Next holder (Seat-Reihenfolge, wrap-around)
     const loserSeat = alive.find((p) => p.player_id === loserId)?.seat_index ?? -1;
     const next = aliveAfter.find((p) => (p.seat_index ?? 0) > loserSeat) ?? aliveAfter[0];
     const nextHolderId = next.player_id;
 
-    // Neue explode_at berechnen
     const speed = (lobby.round_speed ?? "normal") as RoundSpeed;
     const explodeInSec = calculateExplodeSeconds(speed, aliveAfter.length, {
         exponent: 1.9,
@@ -118,26 +126,23 @@ export async function tickGame(code: string) {
     const newExplodeAt = new Date(Date.now() + explodeInSec * 1000).toISOString();
     const newRoundNumber = (lobby.round_number ?? 1) + 1;
 
-    // ✅ CAS: Lobby updaten nur wenn explode_at/holder noch identisch → verhindert Double-Tick
     const { data: updRow, error: updErr } = await supabase
         .from("lobbies")
         .update({
             holder_player_id: nextHolderId,
-            explode_at: newExplodeAt,
+            explode_at: newExplodeAt,           // 🔓 unlock + new timer
             round_number: newRoundNumber,
             last_loser_player_id: loserId,
             last_activity_at: new Date().toISOString(),
         })
         .eq("id", lobby.id)
         .eq("phase", "running")
-        .eq("explode_at", lobby.explode_at) // ✅ CAS
-        .eq("holder_player_id", loserId) // ✅ CAS
+        .is("explode_at", null)              // ✅ nur der Claimer darf weitermachen
+        .eq("holder_player_id", loserId)     // ✅
         .select("id")
         .maybeSingle();
 
     if (updErr) throw new Error(`Rundenstart fehlgeschlagen: ${updErr.message}`);
-
-    // wenn kein Update → jemand anders hat schon getickt
     if (!updRow) return { ok: true, didWork: false };
 
     return { ok: true, didWork: true, finished: false };

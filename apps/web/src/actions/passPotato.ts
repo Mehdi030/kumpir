@@ -11,13 +11,22 @@ export async function passPotato(code: string, playerId: string): Promise<PassPo
 
         const { data: lobby, error: lobbyErr } = await supabase
             .from("lobbies")
-            .select("id, phase, holder_player_id")
+            .select("id, phase, holder_player_id, explode_at")
             .eq("code", code)
             .single();
 
         if (lobbyErr || !lobby) return { ok: false, error: lobbyErr?.message ?? "Lobby nicht gefunden." };
         if (lobby.phase !== "running") return { ok: false, error: "Spiel läuft nicht." };
         if (lobby.holder_player_id !== playerId) return { ok: false, error: "Du hältst die Kartoffel nicht." };
+
+        // 🔒 Pass blocken, wenn Timer schon fällig ist oder gerade getickt wird
+        if (!lobby.explode_at) return { ok: false, error: "Zu spät (Timer wird gerade verarbeitet)." };
+
+        const explodeMs = Date.parse(lobby.explode_at);
+        if (Number.isNaN(explodeMs)) return { ok: false, error: "Ungültiger Timer." };
+
+        // kleine Grace, damit es nicht “unfair” flackert
+        if (Date.now() >= explodeMs - 150) return { ok: false, error: "Zu spät (Timer abgelaufen)." };
 
         const { data: alive, error: aliveErr } = await supabase
             .from("players")
@@ -35,20 +44,16 @@ export async function passPotato(code: string, playerId: string): Promise<PassPo
 
         const next = alive[(idx + 1) % alive.length].player_id;
 
-        // IMPORTANT: select() damit wir merken, ob wirklich geupdated wurde
         const { data: updData, error: updErr } = await supabase
             .from("lobbies")
             .update({ holder_player_id: next, last_activity_at: new Date().toISOString() })
             .eq("id", lobby.id)
-            .eq("holder_player_id", playerId) // CAS gegen Double-Click / Race
+            .eq("holder_player_id", playerId)
+            .eq("explode_at", lobby.explode_at) // ✅ CAS auch auf Timer
             .select("id");
 
         if (updErr) return { ok: false, error: updErr.message };
-
-        // 0 rows updated => CAS hat nicht gematcht => Holder war nicht mehr du (Race / Zustand)
-        if (!updData || updData.length === 0) {
-            return { ok: false, error: "Weitergabe nicht übernommen (Holder hat sich geändert). Versuch nochmal." };
-        }
+        if (!updData || updData.length === 0) return { ok: false, error: "Weitergabe nicht übernommen (Zustand hat sich geändert)." };
 
         return { ok: true };
     } catch (e: unknown) {
