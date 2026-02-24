@@ -1131,7 +1131,14 @@ export default function GamePage() {
                     <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
                         <button
                             className="btn btnPrimary btnXL"
-                            onClick={() => (window.location.href = `/lobby/${encodeURIComponent(code)}`)}
+                            onClick={async () => {
+                                const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
+                                if (error) {
+                                    showToast(`❌ Reset: ${error.message}`, 2400);
+                                    return;
+                                }
+                                window.location.href = `/lobby/${encodeURIComponent(code)}`;
+                            }}
                             type="button"
                         >
                             Zurück zur Lobby
