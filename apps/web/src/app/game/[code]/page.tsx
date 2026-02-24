@@ -1181,10 +1181,11 @@ export default function GamePage() {
         );
     }
 
-    const runningBg = isMeHolder
-        ? "radial-gradient(circle at 50% 35%, rgba(255,120,80,0.55) 0%, rgba(143,15,15,0.96) 72%)"
-        : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.26) 0%, rgba(0,130,60,0.78) 80%)";
-
+    const runningBg = iAmEliminated
+        ? "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.35) 60%), radial-gradient(circle at 50% 85%, rgba(180,180,180,0.14) 0%, rgba(25,25,25,0.92) 80%)"
+        : isMeHolder
+            ? "radial-gradient(circle at 50% 35%, rgba(255,120,80,0.55) 0%, rgba(143,15,15,0.96) 72%)"
+            : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.26) 0%, rgba(0,130,60,0.78) 80%)";
     // =========================================================
     // PHASE: RUNNING
     // =========================================================
@@ -1200,8 +1201,7 @@ export default function GamePage() {
         >
             <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} passEvent={passEvent} />
 
-            {isMeHolder ? <div className="holderPulseLayer" aria-hidden /> : null}
-
+            {isMeHolder && !iAmEliminated ? <div className="holderPulseLayer" aria-hidden /> : null}
             {turnOverlay ? (
                 <div
                     style={{
