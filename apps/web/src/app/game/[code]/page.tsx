@@ -1108,10 +1108,12 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: FINISHED
-    // =========================================================
+// PHASE: FINISHED
+// =========================================================
     if (lobby.phase === "finished") {
-        const winner = lobby.holder_player_id ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt" : "Unbekannt";
+        const winner = lobby.holder_player_id
+            ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
+            : "Unbekannt";
 
         return (
             <main
@@ -1127,13 +1129,18 @@ export default function GamePage() {
                 <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>SPIEL BEENDET</div>
                     <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
-                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>{iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}</div>
+                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>
+                        {iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}
+                    </div>
+
                     <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
                         <button
                             className="btn btnPrimary btnXL"
                             onClick={async () => {
+                                console.log("Back to lobby clicked -> rpc_reset_lobby", code);
                                 const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
                                 if (error) {
+                                    console.error("rpc_reset_lobby failed:", error);
                                     showToast(`❌ Reset: ${error.message}`, 2400);
                                     return;
                                 }
@@ -1160,10 +1167,31 @@ export default function GamePage() {
                         </button>
                     </div>
                 </div>
+
+                {/* WICHTIG: Toast auch im FINISHED Screen rendern */}
+                {toast ? (
+                    <div
+                        style={{
+                            position: "fixed",
+                            left: "50%",
+                            bottom: 22,
+                            transform: "translateX(-50%)",
+                            zIndex: 9999,
+                            padding: "10px 14px",
+                            borderRadius: 999,
+                            background: "rgba(0,0,0,0.55)",
+                            border: "1px solid rgba(255,255,255,0.10)",
+                            fontWeight: 900,
+                            backdropFilter: "blur(10px)",
+                            WebkitBackdropFilter: "blur(10px)",
+                        }}
+                    >
+                        {toast}
+                    </div>
+                ) : null}
             </main>
         );
     }
-
     // =========================================================
     // PHASE: NOT RUNNING (WARTEN)
     // =========================================================
