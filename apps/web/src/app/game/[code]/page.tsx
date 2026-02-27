@@ -44,7 +44,7 @@ type Player = {
     is_alive: boolean;
     ready?: boolean;
 
-    // ---- Core stats (prepare ranking system)
+    // optional stats (safe)
     last_pass_at?: string | null;
     pass_count?: number;
     clutch_pass_count?: number;
@@ -99,19 +99,12 @@ function fmtHold(ms?: number) {
 
 function pickNextAlive(players: Player[], holderId: string | null): Player | null {
     if (!holderId) return null;
-    if (players.length === 0) return null;
-
     const alive = players.filter((p) => p.is_alive);
     if (alive.length <= 1) return null;
 
     const idx = alive.findIndex((p) => p.player_id === holderId);
     if (idx < 0) return alive[0] ?? null;
-
-    for (let step = 1; step <= alive.length; step++) {
-        const p = alive[(idx + step) % alive.length];
-        if (p?.is_alive) return p;
-    }
-    return null;
+    return alive[(idx + 1) % alive.length] ?? null;
 }
 
 export default function GamePage() {
@@ -124,8 +117,6 @@ export default function GamePage() {
     const [lobby, setLobby] = useState<LobbyState | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     const [fatalError, setFatalError] = useState<string>("");
-
-    const inFlightRef = useRef(false);
 
     // Topic vote state
     const [voteCounts, setVoteCounts] = useState<VoteCounts>({ a: 0, b: 0, r: 0 });
@@ -140,7 +131,7 @@ export default function GamePage() {
     const finalizeInFlightRef = useRef(false);
     const advanceInFlightRef = useRef(false);
 
-    // Pass UX
+    // Pass UX (NO COOLDOWN)
     const [toast, setToast] = useState("");
     const [passBusy, setPassBusy] = useState(false);
 
@@ -151,8 +142,10 @@ export default function GamePage() {
     const [turnOverlay, setTurnOverlay] = useState(false);
     const lastShownTurnNonceRef = useRef<number>(0);
 
-    // Pass animation event
+    // Pass animation event (optional PlayerRing usage)
     const [passEvent, setPassEvent] = useState<PassEvent | null>(null);
+
+    const inFlightRef = useRef(false);
     const prevHolderRef = useRef<string | null>(null);
     const passNonceRef = useRef(0);
 
@@ -161,10 +154,6 @@ export default function GamePage() {
 
     // Finished screen UI
     const [showFullRanking, setShowFullRanking] = useState(false);
-
-    // --- UX tuning
-    const PASS_COOLDOWN_MS = 900; // frontend anti-spam (backend should also enforce)
-    const CLUTCH_THRESHOLD_S = 2;
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -202,17 +191,13 @@ export default function GamePage() {
         return lobby?.topic_selected ?? lobby?.topic_a ?? "…";
     }, [lobby?.phase, lobby?.topic_selected, lobby?.topic_a]);
 
-    // Winner choice (countdown tiles)
     const winnerChoice = useMemo<1 | 2 | 3 | null>(() => {
         if (!lobby) return null;
-
         const pick = lobby.topic_tie_pick;
         if (pick === 1 || pick === 2 || pick === 3) return pick;
-
         if (!lobby.topic_selected) return null;
         if (lobby.topic_selected === lobby.topic_a) return 1;
         if (lobby.topic_selected === lobby.topic_b) return 2;
-
         return 3;
     }, [lobby]);
 
@@ -229,30 +214,12 @@ export default function GamePage() {
         return clamp(Math.ceil(ms / 1000), 0, 999);
     }, [lobby?.explode_at]);
 
-    const clutchNow = useMemo(() => {
-        if (!isMeHolder || iAmEliminated) return false;
-        if (typeof explodeSecondsLeft !== "number") return false;
-        return explodeSecondsLeft <= CLUTCH_THRESHOLD_S;
-    }, [isMeHolder, iAmEliminated, explodeSecondsLeft]);
-
-    const passCooldownMsLeft = useMemo(() => {
-        if (!meRow?.last_pass_at) return 0;
-        const last = Date.parse(meRow.last_pass_at);
-        if (Number.isNaN(last)) return 0;
-        const elapsed = Date.now() - last;
-        const left = PASS_COOLDOWN_MS - elapsed;
-        return left > 0 ? left : 0;
-    }, [meRow?.last_pass_at]);
-
-    // Winner player (MUST be defined before mvp usage)
+    // Winner / MVP / Ranking
     const winnerPlayer = useMemo(() => {
         if (!lobby?.holder_player_id) return null;
         return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
     }, [players, lobby?.holder_player_id]);
 
-    // -----------------------------
-    // Ranking system (prepared)
-    // -----------------------------
     const ranking = useMemo(() => {
         const rows = players.map((p) => {
             const pass = p.pass_count ?? 0;
@@ -260,7 +227,6 @@ export default function GamePage() {
             const streak = p.survival_streak ?? 0;
             const fastest = p.fastest_pass_ms ?? null;
 
-            // Simple scoring (tweak later)
             const fastestBonus = fastest == null ? 0 : Math.max(0, Math.min(12, Math.round((2200 - fastest) / 200)));
             const score = pass * 10 + clutch * 18 + streak * 6 + fastestBonus;
 
@@ -281,9 +247,6 @@ export default function GamePage() {
 
     const top5 = useMemo(() => ranking.slice(0, 5), [ranking]);
 
-    // MVP = Winner
-    const mvp = useMemo(() => winnerPlayer ?? null, [winnerPlayer]);
-
     const myRankRow = useMemo(() => {
         if (!mePlayerId) return null;
         const idx = ranking.findIndex((r) => r.player_id === mePlayerId);
@@ -291,8 +254,10 @@ export default function GamePage() {
         return { row: ranking[idx], rank: idx + 1 };
     }, [ranking, mePlayerId]);
 
+    const mvp = useMemo(() => winnerPlayer ?? null, [winnerPlayer]);
+
     // -----------------------------
-    // RPC wrappers (NO throw)
+    // RPC wrappers
     // -----------------------------
     const rpcFinalizeTopicVote = useCallback(
         async (lobbyId: string) => {
@@ -332,7 +297,7 @@ export default function GamePage() {
         async (codeUpper: string, playerId: string) => {
             const { error } = await supabase.rpc("rpc_pass_potato", {
                 p_code: codeUpper,
-                p_player_id: playerId, // IMPORTANT: If you have rpc_pass_potato overloads, Postgres will error.
+                p_player_id: playerId,
             });
             return error;
         },
@@ -340,7 +305,7 @@ export default function GamePage() {
     );
 
     // -----------------------------
-    // Poll loop (Lobby + Players + Votes)
+    // Poll loop
     // -----------------------------
     useEffect(() => {
         let alive = true;
@@ -407,7 +372,14 @@ export default function GamePage() {
                     topic_tie_pick: (lobbyRes.data.topic_tie_pick as number | null) ?? null,
                 };
 
-                // Holder transition (overlay + passEvent)
+                // Post-round loser toast (once)
+                if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
+                    lastLoserRef.current = nextLobby.last_loser_player_id;
+                    const loserName = players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
+                    showToast(`💥 ${loserName} ist raus`, 1500);
+                }
+
+                // Holder transition (passEvent)
                 const prevHolder = prevHolderRef.current;
                 const nextHolder = nextLobby.holder_player_id ?? null;
 
@@ -420,6 +392,7 @@ export default function GamePage() {
                     });
                 }
 
+                // “Your turn” overlay
                 if (mePlayerId && nextHolder === mePlayerId && prevHolder !== mePlayerId) {
                     const nonce = Date.now();
                     if (nonce - lastShownTurnNonceRef.current > 700) {
@@ -442,7 +415,7 @@ export default function GamePage() {
                             "status",
                             "seat_index",
                             "ready",
-                            // stats
+                            // stats (optional)
                             "last_pass_at",
                             "pass_count",
                             "clutch_pass_count",
@@ -465,13 +438,6 @@ export default function GamePage() {
                 const nextPlayers = playersRes.data as unknown as Player[];
                 setPlayers(nextPlayers);
                 setFatalError("");
-
-                // Post-round loser toast (once) — now using NEXT players list
-                if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
-                    lastLoserRef.current = nextLobby.last_loser_player_id;
-                    const loserName = nextPlayers.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
-                    showToast(`💥 ${loserName} ist raus`, 1500);
-                }
 
                 // Votes
                 if (nextLobby.phase === "topic_vote") {
@@ -621,7 +587,7 @@ export default function GamePage() {
         [mePlayerId, lobby, voteBusy, supabase, showToast]
     );
 
-    // PASS handler
+    // PASS handler (NO cooldown; only in-flight guard)
     const handlePass = useCallback(async () => {
         if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
         if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
@@ -629,28 +595,17 @@ export default function GamePage() {
         if (!isMeHolder) return;
         if (passBusy) return;
 
-        if (passCooldownMsLeft > 0) return showToast("⏱️ Pass-Cooldown…", 900);
-
         setPassBusy(true);
         try {
             const err = await rpcPassPotato(code, mePlayerId);
-            if (err) {
-                const msg = err.message || "Unbekannter Fehler";
-                // Special case: postgres overload ambiguity
-                if (msg.includes("Could not choose the best candidate function") && msg.includes("rpc_pass_potato")) {
-                    showToast("❌ DB-Problem: Es existieren 2 rpc_pass_potato Overloads. Bitte eine entfernen/umbenennen.", 3200);
-                    return;
-                }
-                showToast(`❌ ${msg}`, 2400);
-                return;
-            }
-            showToast(clutchNow ? "🔥 CLUTCH PASS" : "✅ Weitergegeben", 900);
+            if (err) return showToast(`❌ ${err.message}`, 2400);
+            showToast("✅ Weitergegeben", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
             setPassBusy(false);
         }
-    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, passCooldownMsLeft, code, rpcPassPotato, showToast, clutchNow]);
+    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, rpcPassPotato, showToast]);
 
     // Spacebar pass
     useEffect(() => {
@@ -682,12 +637,13 @@ export default function GamePage() {
 
     if (!lobby) return <div className="p-6 opacity-70">Lade Spiel…</div>;
 
+    // Labels
     const aLabel = lobby.topic_a ?? "…";
     const bLabel = lobby.topic_b ?? "…";
     const rLabel = "Zufällig";
 
     // =========================================================
-    // TOPIC VOTE (dein Design)
+    // PHASE: TOPIC VOTE (dein Design)
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
@@ -843,7 +799,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // COUNTDOWN
+    // PHASE: COUNTDOWN
     // =========================================================
     if (lobby.phase === "countdown") {
         const tie = lobby.topic_tie_choices && lobby.topic_tie_choices.length > 1;
@@ -923,11 +879,10 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // FINISHED (Winner big + MVP + Ranking)
+    // PHASE: FINISHED
     // =========================================================
     if (lobby.phase === "finished") {
         const winnerName = winnerPlayer?.name ?? "Unbekannt";
-        const showRound = typeof lobby.round_number === "number" && lobby.round_number > 0;
 
         return (
             <main
@@ -944,19 +899,14 @@ export default function GamePage() {
                 <div style={{ width: "min(1120px, 96vw)" }}>
                     <div className="finishHero">
                         <div className="finishKicker">SPIEL BEENDET</div>
-
                         <div className="finishWinner">🏆 {winnerName}</div>
                         <div className="finishSubMvp">⭐ MVP</div>
 
                         <div className="finishMeta">
-                            {showRound ? (
-                                <>
-                  <span>
-                    Runde: <b>{lobby.round_number}</b>
-                  </span>
-                                    <span className="dot">•</span>
-                                </>
-                            ) : null}
+              <span>
+                Runden: <b>{lobby.round_number ?? "—"}</b>
+              </span>
+                            <span className="dot">•</span>
                             <span>
                 Thema: <b>{selectedTopic}</b>
               </span>
@@ -1006,7 +956,7 @@ export default function GamePage() {
                             <div className="panelHead">
                                 <div>
                                     <div className="panelTitle">📊 Ranking</div>
-                                    <div className="panelSub">Score basiert auf Passes, Clutch, Streak & Fastest Pass (tweakbar).</div>
+                                    <div className="panelSub">Score basiert auf Passes, Clutch, Streak & Fastest Pass.</div>
                                 </div>
 
                                 <button className="btn btnGhost" type="button" onClick={() => setShowFullRanking((v) => !v)}>
@@ -1040,12 +990,12 @@ export default function GamePage() {
                                                 <span className="nm">{p.name}</span>
                                                 {isMe ? <span className="meTag">YOU</span> : null}
                                             </div>
-                                            <div className="right">{(p as any).score}</div>
-                                            <div className="right">{(p as any).pass}</div>
-                                            <div className="right">{(p as any).clutch}</div>
-                                            <div className="right">{fmtMs((p as any).fastest)}</div>
-                                            <div className="right">{fmtHold((p as any).holdMs)}</div>
-                                            <div className="right">{(p as any).streak}</div>
+                                            <div className="right">{p.score}</div>
+                                            <div className="right">{p.pass}</div>
+                                            <div className="right">{p.clutch}</div>
+                                            <div className="right">{fmtMs(p.fastest)}</div>
+                                            <div className="right">{fmtHold(p.holdMs)}</div>
+                                            <div className="right">{p.streak}</div>
                                         </div>
                                     );
                                 })}
@@ -1056,7 +1006,7 @@ export default function GamePage() {
                             <div className="panelHead">
                                 <div>
                                     <div className="panelTitle">⭐ Match Highlights</div>
-                                    <div className="panelSub">Wichtigste Infos, nicht übertrieben.</div>
+                                    <div className="panelSub">Wichtigste Infos.</div>
                                 </div>
                             </div>
 
@@ -1064,24 +1014,20 @@ export default function GamePage() {
                                 <div className="statCard">
                                     <div className="statK">Winner</div>
                                     <div className="statV">{winnerName}</div>
-                                    <div className="statS">Letzter Holder (Phase finished)</div>
+                                    <div className="statS">Letzter Holder</div>
                                 </div>
 
                                 <div className="statCard">
                                     <div className="statK">MVP</div>
                                     <div className="statV">{mvp?.name ?? "—"}</div>
-                                    <div className="statS">
-                                        Score {(mvp as any)?.score ?? 0} • Pass {(mvp as any)?.pass ?? 0} • Clutch {(mvp as any)?.clutch ?? 0}
-                                    </div>
+                                    <div className="statS">MVP = Winner</div>
                                 </div>
 
                                 <div className="statCard">
                                     <div className="statK">Fastest Pass</div>
                                     <div className="statV">
                                         {(() => {
-                                            const best = [...ranking]
-                                                .filter((r: any) => r.fastest != null)
-                                                .sort((a: any, b: any) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] as any;
+                                            const best = [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0];
                                             if (!best) return "—";
                                             return `${best.name} • ${fmtMs(best.fastest)}`;
                                         })()}
@@ -1093,38 +1039,19 @@ export default function GamePage() {
                                     <div className="statK">Most Passes</div>
                                     <div className="statV">
                                         {(() => {
-                                            const best = [...ranking].sort((a: any, b: any) => (b.pass ?? 0) - (a.pass ?? 0))[0] as any;
+                                            const best = [...ranking].sort((a, b) => b.pass - a.pass)[0];
                                             if (!best) return "—";
-                                            return `${best.name} • ${best.pass ?? 0}`;
+                                            return `${best.name} • ${best.pass}`;
                                         })()}
                                     </div>
                                     <div className="statS">Aggressives Spiel</div>
-                                </div>
-
-                                <div className="statCard">
-                                    <div className="statK">Most Clutch</div>
-                                    <div className="statV">
-                                        {(() => {
-                                            const best = [...ranking].sort((a: any, b: any) => (b.clutch ?? 0) - (a.clutch ?? 0))[0] as any;
-                                            if (!best) return "—";
-                                            return `${best.name} • ${best.clutch ?? 0}`;
-                                        })()}
-                                    </div>
-                                    <div className="statS">Pass unter Druck</div>
-                                </div>
-
-                                <div className="statCard">
-                                    <div className="statK">Round Scaling</div>
-                                    <div className="statV">Dynamic</div>
-                                    <div className="statS">Timer wird serverseitig pro Runde leicht schneller</div>
                                 </div>
                             </div>
 
                             <div className="noteBox">
                                 <div className="noteTitle">🧩 Prepared</div>
                                 <div className="noteText">
-                                    Ranking nutzt Felder aus <code>players</code>: <b>pass_count</b>, <b>clutch_pass_count</b>, <b>fastest_pass_ms</b>, <b>total_hold_ms</b>,{" "}
-                                    <b>survival_streak</b>. Wenn einzelne Felder noch null sind, bleibt UI stabil.
+                                    Ranking nutzt Felder: <b>pass_count</b>, <b>clutch_pass_count</b>, <b>fastest_pass_ms</b>, <b>total_hold_ms</b>, <b>survival_streak</b>.
                                 </div>
                             </div>
                         </div>
@@ -1138,8 +1065,6 @@ export default function GamePage() {
                 ) : null}
 
                 <style>{`
-          .dot{ opacity: .65; }
-
           .finishHero{
             position: relative;
             border-radius: 34px;
@@ -1160,10 +1085,10 @@ export default function GamePage() {
             text-shadow: 0 22px 90px rgba(0,0,0,0.45);
           }
           .finishSubMvp{
-            margin-top: 6px;
-            font-weight: 950;
-            opacity: .86;
-            letter-spacing: 1px;
+            margin-top: 8px;
+            font-weight: 1000;
+            letter-spacing: .8px;
+            opacity: .92;
           }
           .finishMeta{
             margin-top: 10px;
@@ -1174,6 +1099,7 @@ export default function GamePage() {
             gap: 10px;
             flex-wrap: wrap;
           }
+          .dot{ opacity: .65; }
           .finishChips{
             margin-top: 16px;
             display:flex;
@@ -1181,8 +1107,7 @@ export default function GamePage() {
             gap: 10px;
             flex-wrap: wrap;
           }
-          .finishChips.single{ justify-content: center; }
-
+          .finishChips.single{ justify-content:center; }
           .chipPill{
             display:inline-flex;
             align-items:center;
@@ -1198,7 +1123,6 @@ export default function GamePage() {
             border: 1px solid rgba(255,255,255,0.12);
           }
           .muted{ opacity: .75; font-weight: 850; }
-
           .finishButtons{
             margin-top: 18px;
             display:flex;
@@ -1219,7 +1143,6 @@ export default function GamePage() {
             opacity: .92;
             pointer-events:none;
           }
-
           .finishGrid{
             margin-top: 16px;
             display:grid;
@@ -1245,7 +1168,6 @@ export default function GamePage() {
           }
           .panelTitle{ font-weight: 1000; font-size: 16px; }
           .panelSub{ margin-top: 2px; font-weight: 850; opacity: .72; font-size: 12px; }
-
           .rankTable{ padding: 10px 10px 12px; }
           .rankRow{
             display:grid;
@@ -1294,7 +1216,6 @@ export default function GamePage() {
             border-color: rgba(34,211,238,0.22);
             background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.12), rgba(0,0,0,0.14) 70%);
           }
-
           .cards{ padding: 12px 12px 14px; display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
           .statCard{
             border-radius: 22px;
@@ -1305,7 +1226,6 @@ export default function GamePage() {
           .statK{ font-weight: 950; opacity: .78; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
           .statV{ margin-top: 6px; font-weight: 1000; font-size: 18px; }
           .statS{ margin-top: 4px; font-weight: 850; opacity: .70; font-size: 12px; }
-
           .noteBox{
             margin: 0 12px 14px;
             border-radius: 22px;
@@ -1315,7 +1235,6 @@ export default function GamePage() {
           }
           .noteTitle{ font-weight: 1000; }
           .noteText{ margin-top: 6px; font-weight: 850; opacity: .78; font-size: 12px; line-height: 1.35; }
-          code{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
           .toastFixed{
             position: fixed;
@@ -1350,12 +1269,9 @@ export default function GamePage() {
           .btnXL{ padding: 12px 18px; font-size: 14px; }
           .btnPrimary{
             background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95));
-            border-color: rgba(255,255,255,0.14);
-            box-shadow: 0 18px 60px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14);
           }
           .btnSecondary{
             background: linear-gradient(135deg, rgba(214,162,92,0.96), rgba(148,92,54,0.96));
-            border-color: rgba(255,255,255,0.14);
           }
           .btnGhost{
             background: rgba(255,255,255,0.06);
@@ -1379,7 +1295,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // NOT RUNNING (WARTEN)
+    // PHASE: NOT RUNNING (WAITING)
     // =========================================================
     if (lobby.phase !== "running") {
         return (
@@ -1389,7 +1305,8 @@ export default function GamePage() {
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
-                    background: "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
+                    background:
+                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
                 }}
             >
                 <div style={{ width: "min(820px, 96vw)", textAlign: "center" }}>
@@ -1402,7 +1319,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // RUNNING
+    // PHASE: RUNNING (clean; NO cooldown, NO clutch fx)
     // =========================================================
     const runningBg = iAmEliminated
         ? "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.35) 60%), radial-gradient(circle at 50% 85%, rgba(180,180,180,0.14) 0%, rgba(25,25,25,0.92) 80%)"
@@ -1410,14 +1327,19 @@ export default function GamePage() {
             ? "radial-gradient(circle at 50% 35%, rgba(255,120,80,0.55) 0%, rgba(143,15,15,0.96) 72%)"
             : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.26) 0%, rgba(0,130,60,0.78) 80%)";
 
-    const passDisabledReason =
-        iAmEliminated ? "Du bist raus" : !isMeHolder ? "Nicht dein Turn" : passBusy ? "Busy" : passCooldownMsLeft > 0 ? "Cooldown" : null;
+    const passDisabledReason = iAmEliminated ? "Du bist raus" : !isMeHolder ? "Nicht dein Turn" : passBusy ? "Busy" : null;
 
     return (
-        <main style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg }}>
+        <main
+            style={{
+                minHeight: "100vh",
+                width: "100vw",
+                position: "relative",
+                overflow: "hidden",
+                background: runningBg,
+            }}
+        >
             <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} passEvent={passEvent} />
-
-            {isMeHolder && !iAmEliminated ? <div className="holderPulseLayer" aria-hidden /> : null}
 
             {turnOverlay ? (
                 <div className="turnOverlay" role="status" aria-live="polite">
@@ -1441,11 +1363,6 @@ export default function GamePage() {
                         {typeof explodeSecondsLeft === "number" ? (
                             <>
                                 <span className="dot">•</span> 💣 <b>{explodeSecondsLeft}s</b>
-                            </>
-                        ) : null}
-                        {clutchNow ? (
-                            <>
-                                <span className="dot">•</span> <span className="clutch">🔥 CLUTCH</span>
                             </>
                         ) : null}
                     </div>
@@ -1477,16 +1394,9 @@ export default function GamePage() {
                     {isMeHolder && !iAmEliminated ? (
                         <div className="actions">
                             <button className="btn btnPrimary btnXL" onClick={() => void handlePass()} type="button" disabled={!!passDisabledReason} title={passDisabledReason ?? "Weitergeben"}>
-                                {passBusy ? "…" : passCooldownMsLeft > 0 ? `⏱️ Cooldown ${Math.ceil(passCooldownMsLeft / 100) / 10}s` : "🥔 Weitergeben (Space)"}
+                                {passBusy ? "…" : "🥔 Weitergeben (Space)"}
                             </button>
-
-                            <div className="helper">
-                                {clutchNow ? (
-                                    <span>🔥 Unter 2s = Clutch zählt</span>
-                                ) : (
-                                    <span>Tip: schneller passen = besser</span>
-                                )}
-                            </div>
+                            <div className="helper">Weitergeben wenn du dran bist.</div>
                         </div>
                     ) : (
                         <div className="helper">{iAmEliminated ? "Du schaust zu." : "Warte, bis du die Kartoffel bekommst."}</div>
@@ -1495,8 +1405,6 @@ export default function GamePage() {
             </div>
 
             <style>{`
-        .dot{ opacity: .65; }
-
         .hud{
           position: relative;
           z-index: 3;
@@ -1532,11 +1440,6 @@ export default function GamePage() {
           gap: 10px;
           flex-wrap: wrap;
         }
-        .clutch{
-          font-weight: 1000;
-          letter-spacing: .4px;
-          text-shadow: 0 12px 50px rgba(0,0,0,0.25);
-        }
         .spectatorBar{
           margin: 14px auto 0;
           display: inline-flex;
@@ -1551,7 +1454,6 @@ export default function GamePage() {
           font-weight: 900;
           opacity: .96;
         }
-
         .actions{
           margin-top: 16px;
           display: grid;
@@ -1563,22 +1465,6 @@ export default function GamePage() {
           font-weight: 850;
           opacity: .80;
         }
-
-        @keyframes holderPulse {
-          0% { transform: scale(1); opacity: .55; }
-          50% { transform: scale(1.03); opacity: .90; }
-          100% { transform: scale(1); opacity: .55; }
-        }
-        .holderPulseLayer{
-          position:absolute;
-          inset:-40px;
-          background: radial-gradient(circle at 50% 40%, rgba(255,90,90,.62), rgba(143,15,15,.95));
-          filter: blur(18px);
-          animation: holderPulse 1.2s ease-in-out infinite;
-          pointer-events:none;
-          z-index: 1;
-        }
-
         .turnOverlay{
           position: fixed;
           left: 50%;
@@ -1594,7 +1480,6 @@ export default function GamePage() {
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
         }
-
         .toastFixed{
           position: fixed;
           left: 50%;
@@ -1609,7 +1494,6 @@ export default function GamePage() {
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
         }
-
         .btn{
           appearance:none;
           border: 1px solid rgba(255,255,255,0.14);
@@ -1628,8 +1512,6 @@ export default function GamePage() {
         .btnXL{ padding: 12px 18px; font-size: 14px; }
         .btnPrimary{
           background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95));
-          border-color: rgba(255,255,255,0.14);
-          box-shadow: 0 18px 60px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14);
         }
       `}</style>
         </main>
