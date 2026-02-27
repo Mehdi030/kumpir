@@ -16,7 +16,6 @@ type LobbyState = {
     holder_player_id: string | null;
 
     explode_at: string | null;
-    safe_until: string | null;
 
     run_started_at: string | null;
     last_activity_at: string | null;
@@ -230,13 +229,6 @@ export default function GamePage() {
         return clamp(Math.ceil(ms / 1000), 0, 999);
     }, [lobby?.explode_at]);
 
-    const safeSecondsLeft = useMemo(() => {
-        if (!lobby?.safe_until) return null;
-        const ms = msUntil(lobby.safe_until);
-        if (ms === null) return null;
-        return clamp(Math.ceil(ms / 1000), 0, 99);
-    }, [lobby?.safe_until]);
-
     const clutchNow = useMemo(() => {
         if (!isMeHolder || iAmEliminated) return false;
         if (typeof explodeSecondsLeft !== "number") return false;
@@ -366,7 +358,6 @@ export default function GamePage() {
                             "phase",
                             "holder_player_id",
                             "explode_at",
-                            "safe_until",
                             "last_activity_at",
                             "run_started_at",
                             "round_number",
@@ -397,7 +388,6 @@ export default function GamePage() {
                     holder_player_id: lobbyRes.data.holder_player_id ?? null,
 
                     explode_at: lobbyRes.data.explode_at ?? null,
-                    safe_until: lobbyRes.data.safe_until ?? null,
 
                     last_activity_at: lobbyRes.data.last_activity_at ?? null,
                     run_started_at: lobbyRes.data.run_started_at ?? null,
@@ -1453,11 +1443,6 @@ export default function GamePage() {
                                 <span className="dot">•</span> 💣 <b>{explodeSecondsLeft}s</b>
                             </>
                         ) : null}
-                        {typeof safeSecondsLeft === "number" && safeSecondsLeft > 0 ? (
-                            <>
-                                <span className="dot">•</span> 🛡️ Safe <b>{safeSecondsLeft}s</b>
-                            </>
-                        ) : null}
                         {clutchNow ? (
                             <>
                                 <span className="dot">•</span> <span className="clutch">🔥 CLUTCH</span>
@@ -1496,7 +1481,11 @@ export default function GamePage() {
                             </button>
 
                             <div className="helper">
-                                {typeof safeSecondsLeft === "number" && safeSecondsLeft > 0 ? <span>🛡️ Safe Window aktiv</span> : clutchNow ? <span>🔥 Unter 2s = Clutch zählt</span> : <span>Tip: schneller passen = besser</span>}
+                                {clutchNow ? (
+                                    <span>🔥 Unter 2s = Clutch zählt</span>
+                                ) : (
+                                    <span>Tip: schneller passen = besser</span>
+                                )}
                             </div>
                         </div>
                     ) : (
