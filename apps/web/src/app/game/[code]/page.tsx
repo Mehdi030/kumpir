@@ -7,14 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 
-type LobbyPhase =
-    | "waiting"
-    | "lobby"
-    | "topic_vote"
-    | "countdown"
-    | "running"
-    | "finished"
-    | string;
+type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
 
 type LobbyState = {
     id: string;
@@ -159,9 +152,8 @@ export default function GamePage() {
     const [turnOverlay, setTurnOverlay] = useState(false);
     const lastShownTurnNonceRef = useRef<number>(0);
 
-    // Pass animation event (optional PlayerRing usage)
+    // Pass animation event
     const [passEvent, setPassEvent] = useState<PassEvent | null>(null);
-
     const prevHolderRef = useRef<string | null>(null);
     const passNonceRef = useRef(0);
 
@@ -206,10 +198,6 @@ export default function GamePage() {
         return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
     }, [players, lobby?.holder_player_id]);
 
-    /**
-     * IMPORTANT:
-     * - topic_selected MUST be the real topic text (also when 🎲 wins).
-     */
     const selectedTopic = useMemo(() => {
         if (lobby?.phase === "topic_vote") return lobby?.topic_a ?? "…";
         return lobby?.topic_selected ?? lobby?.topic_a ?? "…";
@@ -233,11 +221,7 @@ export default function GamePage() {
     const votedPlayers = voteCounts.a + voteCounts.b + voteCounts.r;
     const allVoted = totalPlayers > 0 && votedPlayers >= totalPlayers;
 
-    // Spectator HUD
-    const nextUp = useMemo(
-        () => pickNextAlive(players, lobby?.holder_player_id ?? null),
-        [players, lobby?.holder_player_id]
-    );
+    const nextUp = useMemo(() => pickNextAlive(players, lobby?.holder_player_id ?? null), [players, lobby?.holder_player_id]);
 
     const explodeSecondsLeft = useMemo(() => {
         if (!lobby?.explode_at) return null;
@@ -267,6 +251,12 @@ export default function GamePage() {
         const left = PASS_COOLDOWN_MS - elapsed;
         return left > 0 ? left : 0;
     }, [meRow?.last_pass_at]);
+
+    // Winner player (MUST be defined before mvp usage)
+    const winnerPlayer = useMemo(() => {
+        if (!lobby?.holder_player_id) return null;
+        return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
+    }, [players, lobby?.holder_player_id]);
 
     // -----------------------------
     // Ranking system (prepared)
@@ -299,7 +289,8 @@ export default function GamePage() {
 
     const top5 = useMemo(() => ranking.slice(0, 5), [ranking]);
 
-    const mvp = useMemo(() => ranking[0] ?? null, [ranking]);
+    // MVP = Winner
+    const mvp = useMemo(() => winnerPlayer ?? null, [winnerPlayer]);
 
     const myRankRow = useMemo(() => {
         if (!mePlayerId) return null;
@@ -307,11 +298,6 @@ export default function GamePage() {
         if (idx < 0) return null;
         return { row: ranking[idx], rank: idx + 1 };
     }, [ranking, mePlayerId]);
-
-    const winnerPlayer = useMemo(() => {
-        if (!lobby?.holder_player_id) return null;
-        return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
-    }, [players, lobby?.holder_player_id]);
 
     // -----------------------------
     // RPC wrappers (NO throw)
@@ -354,7 +340,7 @@ export default function GamePage() {
         async (codeUpper: string, playerId: string) => {
             const { error } = await supabase.rpc("rpc_pass_potato", {
                 p_code: codeUpper,
-                p_player_id: playerId,
+                p_player_id: playerId, // IMPORTANT: If you have rpc_pass_potato overloads, Postgres will error.
             });
             return error;
         },
@@ -431,13 +417,6 @@ export default function GamePage() {
                     topic_tie_pick: (lobbyRes.data.topic_tie_pick as number | null) ?? null,
                 };
 
-                // Post-round loser toast (once)
-                if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
-                    lastLoserRef.current = nextLobby.last_loser_player_id;
-                    const loserName = players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
-                    showToast(`💥 ${loserName} ist raus`, 1500);
-                }
-
                 // Holder transition (overlay + passEvent)
                 const prevHolder = prevHolderRef.current;
                 const nextHolder = nextLobby.holder_player_id ?? null;
@@ -496,6 +475,13 @@ export default function GamePage() {
                 const nextPlayers = playersRes.data as unknown as Player[];
                 setPlayers(nextPlayers);
                 setFatalError("");
+
+                // Post-round loser toast (once) — now using NEXT players list
+                if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
+                    lastLoserRef.current = nextLobby.last_loser_player_id;
+                    const loserName = nextPlayers.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
+                    showToast(`💥 ${loserName} ist raus`, 1500);
+                }
 
                 // Votes
                 if (nextLobby.phase === "topic_vote") {
@@ -645,7 +631,7 @@ export default function GamePage() {
         [mePlayerId, lobby, voteBusy, supabase, showToast]
     );
 
-    // PASS handler (cooldown + safe window awareness)
+    // PASS handler
     const handlePass = useCallback(async () => {
         if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
         if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
@@ -658,7 +644,16 @@ export default function GamePage() {
         setPassBusy(true);
         try {
             const err = await rpcPassPotato(code, mePlayerId);
-            if (err) return showToast(`❌ ${err.message}`, 2400);
+            if (err) {
+                const msg = err.message || "Unbekannter Fehler";
+                // Special case: postgres overload ambiguity
+                if (msg.includes("Could not choose the best candidate function") && msg.includes("rpc_pass_potato")) {
+                    showToast("❌ DB-Problem: Es existieren 2 rpc_pass_potato Overloads. Bitte eine entfernen/umbenennen.", 3200);
+                    return;
+                }
+                showToast(`❌ ${msg}`, 2400);
+                return;
+            }
             showToast(clutchNow ? "🔥 CLUTCH PASS" : "✅ Weitergegeben", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
@@ -697,13 +692,12 @@ export default function GamePage() {
 
     if (!lobby) return <div className="p-6 opacity-70">Lade Spiel…</div>;
 
-    // Labels
     const aLabel = lobby.topic_a ?? "…";
     const bLabel = lobby.topic_b ?? "…";
     const rLabel = "Zufällig";
 
     // =========================================================
-    // PHASE: TOPIC VOTE (dein Design)
+    // TOPIC VOTE (dein Design)
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
@@ -801,7 +795,6 @@ export default function GamePage() {
                     </div>
                 </div>
 
-                {/* (dein original CSS – unverändert) */}
                 <style>{`
           .kicker{font-size:12px;font-weight:950;letter-spacing:2.2px;opacity:.78;text-transform:uppercase;animation:${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};}
           .headline{margin-top:10px;font-size:clamp(36px,4.8vw,70px);font-weight:1000;letter-spacing:-0.6px;position:relative;display:inline-block;text-shadow:0 24px 80px rgba(0,0,0,0.35);animation:${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};}
@@ -860,7 +853,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: COUNTDOWN
+    // COUNTDOWN
     // =========================================================
     if (lobby.phase === "countdown") {
         const tie = lobby.topic_tie_choices && lobby.topic_tie_choices.length > 1;
@@ -883,8 +876,7 @@ export default function GamePage() {
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
-                    background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.22) 0%, rgba(0,120,45,0.68) 80%)",
+                    background: "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.22) 0%, rgba(0,120,45,0.68) 80%)",
                 }}
             >
                 <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
@@ -941,10 +933,11 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: FINISHED (Winner big + MVP + Ranking System)
+    // FINISHED (Winner big + MVP + Ranking)
     // =========================================================
     if (lobby.phase === "finished") {
         const winnerName = winnerPlayer?.name ?? "Unbekannt";
+        const showRound = typeof lobby.round_number === "number" && lobby.round_number > 0;
 
         return (
             <main
@@ -959,31 +952,35 @@ export default function GamePage() {
                 }}
             >
                 <div style={{ width: "min(1120px, 96vw)" }}>
-                    {/* HERO */}
                     <div className="finishHero">
                         <div className="finishKicker">SPIEL BEENDET</div>
+
                         <div className="finishWinner">🏆 {winnerName}</div>
+                        <div className="finishSubMvp">⭐ MVP</div>
 
                         <div className="finishMeta">
-              <span>
-                Runde: <b>{lobby.round_number ?? "—"}</b>
-              </span>
-                            <span className="dot">•</span>
+                            {showRound ? (
+                                <>
+                  <span>
+                    Runde: <b>{lobby.round_number}</b>
+                  </span>
+                                    <span className="dot">•</span>
+                                </>
+                            ) : null}
                             <span>
                 Thema: <b>{selectedTopic}</b>
               </span>
                         </div>
 
-                        <div className="finishChips">
-                            <div className="chipPill">
-                                ⭐ MVP <span className="dot">•</span> <b>{mvp?.name ?? "—"}</b> <span className="muted">(Score {mvp?.score ?? 0})</span>
-                            </div>
-                            {myRankRow ? (
+                        {myRankRow ? (
+                            <div className="finishChips single">
                                 <div className="chipPill alt">
-                                    📌 Dein Platz <span className="dot">•</span> <b>#{myRankRow.rank}</b> <span className="muted">(Score {myRankRow.row.score})</span>
+                                    📌 Dein Platz <span className="dot">•</span>
+                                    <b>#{myRankRow.rank}</b>
+                                    <span className="muted"> (Score {myRankRow.row.score})</span>
                                 </div>
-                            ) : null}
-                        </div>
+                            </div>
+                        ) : null}
 
                         <div className="finishButtons">
                             <button
@@ -1014,9 +1011,7 @@ export default function GamePage() {
                         <div className="finishOrbs" aria-hidden />
                     </div>
 
-                    {/* CONTENT GRID */}
                     <div className="finishGrid">
-                        {/* Ranking */}
                         <div className="panel">
                             <div className="panelHead">
                                 <div>
@@ -1051,25 +1046,22 @@ export default function GamePage() {
                                         <div key={p.player_id} className={`rankRow ${isWinner ? "winner" : ""} ${isMe ? "me" : ""}`}>
                                             <div className="rankNum">{rank}</div>
                                             <div className="rankName">
-                        <span className="badge">
-                          {isWinner ? "🏆" : p.is_alive ? "🟢" : "⚫"}
-                        </span>
+                                                <span className="badge">{isWinner ? "🏆" : p.is_alive ? "🟢" : "⚫"}</span>
                                                 <span className="nm">{p.name}</span>
                                                 {isMe ? <span className="meTag">YOU</span> : null}
                                             </div>
-                                            <div className="right">{p.score}</div>
-                                            <div className="right">{p.pass}</div>
-                                            <div className="right">{p.clutch}</div>
-                                            <div className="right">{fmtMs(p.fastest)}</div>
-                                            <div className="right">{fmtHold(p.holdMs)}</div>
-                                            <div className="right">{p.streak}</div>
+                                            <div className="right">{(p as any).score}</div>
+                                            <div className="right">{(p as any).pass}</div>
+                                            <div className="right">{(p as any).clutch}</div>
+                                            <div className="right">{fmtMs((p as any).fastest)}</div>
+                                            <div className="right">{fmtHold((p as any).holdMs)}</div>
+                                            <div className="right">{(p as any).streak}</div>
                                         </div>
                                     );
                                 })}
                             </div>
                         </div>
 
-                        {/* MVP / Highlights */}
                         <div className="panel">
                             <div className="panelHead">
                                 <div>
@@ -1089,7 +1081,7 @@ export default function GamePage() {
                                     <div className="statK">MVP</div>
                                     <div className="statV">{mvp?.name ?? "—"}</div>
                                     <div className="statS">
-                                        Score {mvp?.score ?? 0} • Pass {mvp?.pass ?? 0} • Clutch {mvp?.clutch ?? 0}
+                                        Score {(mvp as any)?.score ?? 0} • Pass {(mvp as any)?.pass ?? 0} • Clutch {(mvp as any)?.clutch ?? 0}
                                     </div>
                                 </div>
 
@@ -1097,7 +1089,9 @@ export default function GamePage() {
                                     <div className="statK">Fastest Pass</div>
                                     <div className="statV">
                                         {(() => {
-                                            const best = [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0];
+                                            const best = [...ranking]
+                                                .filter((r: any) => r.fastest != null)
+                                                .sort((a: any, b: any) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] as any;
                                             if (!best) return "—";
                                             return `${best.name} • ${fmtMs(best.fastest)}`;
                                         })()}
@@ -1109,9 +1103,9 @@ export default function GamePage() {
                                     <div className="statK">Most Passes</div>
                                     <div className="statV">
                                         {(() => {
-                                            const best = [...ranking].sort((a, b) => b.pass - a.pass)[0];
+                                            const best = [...ranking].sort((a: any, b: any) => (b.pass ?? 0) - (a.pass ?? 0))[0] as any;
                                             if (!best) return "—";
-                                            return `${best.name} • ${best.pass}`;
+                                            return `${best.name} • ${best.pass ?? 0}`;
                                         })()}
                                     </div>
                                     <div className="statS">Aggressives Spiel</div>
@@ -1121,9 +1115,9 @@ export default function GamePage() {
                                     <div className="statK">Most Clutch</div>
                                     <div className="statV">
                                         {(() => {
-                                            const best = [...ranking].sort((a, b) => b.clutch - a.clutch)[0];
+                                            const best = [...ranking].sort((a: any, b: any) => (b.clutch ?? 0) - (a.clutch ?? 0))[0] as any;
                                             if (!best) return "—";
-                                            return `${best.name} • ${best.clutch}`;
+                                            return `${best.name} • ${best.clutch ?? 0}`;
                                         })()}
                                     </div>
                                     <div className="statS">Pass unter Druck</div>
@@ -1139,15 +1133,14 @@ export default function GamePage() {
                             <div className="noteBox">
                                 <div className="noteTitle">🧩 Prepared</div>
                                 <div className="noteText">
-                                    Ranking nutzt Felder aus <code>players</code>: <b>pass_count</b>, <b>clutch_pass_count</b>, <b>fastest_pass_ms</b>, <b>total_hold_ms</b>, <b>survival_streak</b>.
-                                    Wenn einzelne Felder noch null sind, bleibt UI stabil.
+                                    Ranking nutzt Felder aus <code>players</code>: <b>pass_count</b>, <b>clutch_pass_count</b>, <b>fastest_pass_ms</b>, <b>total_hold_ms</b>,{" "}
+                                    <b>survival_streak</b>. Wenn einzelne Felder noch null sind, bleibt UI stabil.
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Toast also on finished */}
                 {toast ? (
                     <div className="toastFixed" role="status" aria-live="polite">
                         {toast}
@@ -1155,6 +1148,8 @@ export default function GamePage() {
                 ) : null}
 
                 <style>{`
+          .dot{ opacity: .65; }
+
           .finishHero{
             position: relative;
             border-radius: 34px;
@@ -1174,6 +1169,12 @@ export default function GamePage() {
             font-weight: 1000;
             text-shadow: 0 22px 90px rgba(0,0,0,0.45);
           }
+          .finishSubMvp{
+            margin-top: 6px;
+            font-weight: 950;
+            opacity: .86;
+            letter-spacing: 1px;
+          }
           .finishMeta{
             margin-top: 10px;
             font-weight: 900;
@@ -1183,7 +1184,6 @@ export default function GamePage() {
             gap: 10px;
             flex-wrap: wrap;
           }
-          .dot{ opacity: .65; }
           .finishChips{
             margin-top: 16px;
             display:flex;
@@ -1191,6 +1191,8 @@ export default function GamePage() {
             gap: 10px;
             flex-wrap: wrap;
           }
+          .finishChips.single{ justify-content: center; }
+
           .chipPill{
             display:inline-flex;
             align-items:center;
@@ -1206,6 +1208,7 @@ export default function GamePage() {
             border: 1px solid rgba(255,255,255,0.12);
           }
           .muted{ opacity: .75; font-weight: 850; }
+
           .finishButtons{
             margin-top: 18px;
             display:flex;
@@ -1226,6 +1229,7 @@ export default function GamePage() {
             opacity: .92;
             pointer-events:none;
           }
+
           .finishGrid{
             margin-top: 16px;
             display:grid;
@@ -1251,6 +1255,7 @@ export default function GamePage() {
           }
           .panelTitle{ font-weight: 1000; font-size: 16px; }
           .panelSub{ margin-top: 2px; font-weight: 850; opacity: .72; font-size: 12px; }
+
           .rankTable{ padding: 10px 10px 12px; }
           .rankRow{
             display:grid;
@@ -1299,6 +1304,7 @@ export default function GamePage() {
             border-color: rgba(34,211,238,0.22);
             background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.12), rgba(0,0,0,0.14) 70%);
           }
+
           .cards{ padding: 12px 12px 14px; display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
           .statCard{
             border-radius: 22px;
@@ -1309,6 +1315,7 @@ export default function GamePage() {
           .statK{ font-weight: 950; opacity: .78; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
           .statV{ margin-top: 6px; font-weight: 1000; font-size: 18px; }
           .statS{ margin-top: 4px; font-weight: 850; opacity: .70; font-size: 12px; }
+
           .noteBox{
             margin: 0 12px 14px;
             border-radius: 22px;
@@ -1319,6 +1326,7 @@ export default function GamePage() {
           .noteTitle{ font-weight: 1000; }
           .noteText{ margin-top: 6px; font-weight: 850; opacity: .78; font-size: 12px; line-height: 1.35; }
           code{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
           .toastFixed{
             position: fixed;
             left: 50%;
@@ -1334,7 +1342,6 @@ export default function GamePage() {
             -webkit-backdrop-filter: blur(10px);
           }
 
-          /* Buttons (self-contained so MVP works even if global styles differ) */
           .btn{
             appearance:none;
             border: 1px solid rgba(255,255,255,0.14);
@@ -1382,7 +1389,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: NOT RUNNING (WARTEN)
+    // NOT RUNNING (WARTEN)
     // =========================================================
     if (lobby.phase !== "running") {
         return (
@@ -1392,8 +1399,7 @@ export default function GamePage() {
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
-                    background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
+                    background: "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
                 }}
             >
                 <div style={{ width: "min(820px, 96vw)", textAlign: "center" }}>
@@ -1406,7 +1412,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: RUNNING (Safe Window + Pass Cooldown + Clutch + Spectator HUD)
+    // RUNNING
     // =========================================================
     const runningBg = iAmEliminated
         ? "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.35) 60%), radial-gradient(circle at 50% 85%, rgba(180,180,180,0.14) 0%, rgba(25,25,25,0.92) 80%)"
@@ -1415,46 +1421,26 @@ export default function GamePage() {
             : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.26) 0%, rgba(0,130,60,0.78) 80%)";
 
     const passDisabledReason =
-        iAmEliminated
-            ? "Du bist raus"
-            : !isMeHolder
-                ? "Nicht dein Turn"
-                : passBusy
-                    ? "Busy"
-                    : passCooldownMsLeft > 0
-                        ? "Cooldown"
-                        : null;
+        iAmEliminated ? "Du bist raus" : !isMeHolder ? "Nicht dein Turn" : passBusy ? "Busy" : passCooldownMsLeft > 0 ? "Cooldown" : null;
 
     return (
-        <main
-            style={{
-                minHeight: "100vh",
-                width: "100vw",
-                position: "relative",
-                overflow: "hidden",
-                background: runningBg,
-            }}
-        >
-            {/* ring overlay */}
+        <main style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg }}>
             <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} passEvent={passEvent} />
 
             {isMeHolder && !iAmEliminated ? <div className="holderPulseLayer" aria-hidden /> : null}
 
-            {/* Turn overlay */}
             {turnOverlay ? (
                 <div className="turnOverlay" role="status" aria-live="polite">
                     ✅ Du bist dran
                 </div>
             ) : null}
 
-            {/* Toast */}
             {toast ? (
                 <div className="toastFixed" role="status" aria-live="polite">
                     {toast}
                 </div>
             ) : null}
 
-            {/* HUD */}
             <div className="hud">
                 <div className="hudTop">
                     <div className="hudTitle">RUNNING</div>
@@ -1479,7 +1465,6 @@ export default function GamePage() {
                         ) : null}
                     </div>
 
-                    {/* Spectator bar */}
                     {iAmEliminated ? (
                         <div className="spectatorBar">
                             <span>👁️ Spectator</span>
@@ -1504,38 +1489,25 @@ export default function GamePage() {
                         </div>
                     ) : null}
 
-                    {/* Action */}
                     {isMeHolder && !iAmEliminated ? (
                         <div className="actions">
-                            <button
-                                className="btn btnPrimary btnXL"
-                                onClick={() => void handlePass()}
-                                type="button"
-                                disabled={!!passDisabledReason}
-                                title={passDisabledReason ?? "Weitergeben"}
-                            >
+                            <button className="btn btnPrimary btnXL" onClick={() => void handlePass()} type="button" disabled={!!passDisabledReason} title={passDisabledReason ?? "Weitergeben"}>
                                 {passBusy ? "…" : passCooldownMsLeft > 0 ? `⏱️ Cooldown ${Math.ceil(passCooldownMsLeft / 100) / 10}s` : "🥔 Weitergeben (Space)"}
                             </button>
 
                             <div className="helper">
-                                {typeof safeSecondsLeft === "number" && safeSecondsLeft > 0 ? (
-                                    <span>🛡️ Safe Window aktiv</span>
-                                ) : clutchNow ? (
-                                    <span>🔥 Unter 2s = Clutch zählt</span>
-                                ) : (
-                                    <span>Tip: schneller passen = besser</span>
-                                )}
+                                {typeof safeSecondsLeft === "number" && safeSecondsLeft > 0 ? <span>🛡️ Safe Window aktiv</span> : clutchNow ? <span>🔥 Unter 2s = Clutch zählt</span> : <span>Tip: schneller passen = besser</span>}
                             </div>
                         </div>
                     ) : (
-                        <div className="helper">
-                            {iAmEliminated ? "Du schaust zu." : "Warte, bis du die Kartoffel bekommst."}
-                        </div>
+                        <div className="helper">{iAmEliminated ? "Du schaust zu." : "Warte, bis du die Kartoffel bekommst."}</div>
                     )}
                 </div>
             </div>
 
             <style>{`
+        .dot{ opacity: .65; }
+
         .hud{
           position: relative;
           z-index: 3;
@@ -1649,7 +1621,6 @@ export default function GamePage() {
           -webkit-backdrop-filter: blur(10px);
         }
 
-        /* Buttons (same as finished) */
         .btn{
           appearance:none;
           border: 1px solid rgba(255,255,255,0.14);
