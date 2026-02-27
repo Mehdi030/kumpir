@@ -7,7 +7,14 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 
-type LobbyPhase = "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
+type LobbyPhase =
+    | "waiting"
+    | "lobby"
+    | "topic_vote"
+    | "countdown"
+    | "running"
+    | "finished"
+    | string;
 
 type LobbyState = {
     id: string;
@@ -16,8 +23,13 @@ type LobbyState = {
     holder_player_id: string | null;
 
     explode_at: string | null;
+    safe_until: string | null;
+
     run_started_at: string | null;
     last_activity_at: string | null;
+
+    round_number: number | null;
+    last_loser_player_id: string | null;
 
     // Topic voting
     topic_a: string | null;
@@ -39,6 +51,14 @@ type Player = {
     name: string;
     is_alive: boolean;
     ready?: boolean;
+
+    // ---- Core stats (prepare ranking system)
+    last_pass_at?: string | null;
+    pass_count?: number;
+    clutch_pass_count?: number;
+    fastest_pass_ms?: number | null;
+    total_hold_ms?: number;
+    survival_streak?: number;
 };
 
 type VoteCounts = { a: number; b: number; r: number };
@@ -46,7 +66,7 @@ type VoteCounts = { a: number; b: number; r: number };
 type PassEvent = {
     fromPlayerId: string;
     toPlayerId: string;
-    nonce: number; // force change detection
+    nonce: number;
 };
 
 function getErrorMessage(e: unknown): string {
@@ -68,6 +88,21 @@ function msUntil(ts: string | null): number | null {
     const ms = Date.parse(ts);
     if (Number.isNaN(ms)) return null;
     return ms - Date.now();
+}
+
+function fmtMs(ms?: number | null) {
+    if (ms == null) return "—";
+    if (ms < 1000) return `${Math.round(ms)} ms`;
+    return `${(ms / 1000).toFixed(2)} s`;
+}
+
+function fmtHold(ms?: number) {
+    if (!ms) return "—";
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}m ${r}s`;
 }
 
 function pickNextAlive(players: Player[], holderId: string | null): Player | null {
@@ -120,16 +155,25 @@ export default function GamePage() {
     // Motion
     const [reduceMotion, setReduceMotion] = useState(false);
 
-    // “Your turn” overlay (1x per transition)
+    // “Your turn” overlay
     const [turnOverlay, setTurnOverlay] = useState(false);
     const lastShownTurnNonceRef = useRef<number>(0);
 
-    // Pass animation event
+    // Pass animation event (optional PlayerRing usage)
     const [passEvent, setPassEvent] = useState<PassEvent | null>(null);
 
-    // holder transition tracking
     const prevHolderRef = useRef<string | null>(null);
     const passNonceRef = useRef(0);
+
+    // post-round feedback
+    const lastLoserRef = useRef<string | null>(null);
+
+    // Finished screen UI
+    const [showFullRanking, setShowFullRanking] = useState(false);
+
+    // --- UX tuning
+    const PASS_COOLDOWN_MS = 900; // frontend anti-spam (backend should also enforce)
+    const CLUTCH_THRESHOLD_S = 2;
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -163,20 +207,15 @@ export default function GamePage() {
     }, [players, lobby?.holder_player_id]);
 
     /**
-     * WICHTIG:
-     * - topic_selected MUSS der echte Topic-Text sein (auch wenn 🎲 gewinnt).
-     * - Wenn deine DB noch "Zufällig" rein schreibt, ist das ein Backend-Problem.
-     *   (SQL-Patch unten in dieser Antwort.)
+     * IMPORTANT:
+     * - topic_selected MUST be the real topic text (also when 🎲 wins).
      */
     const selectedTopic = useMemo(() => {
-        // im Voting noch nichts "selected" => zeig A (oder …)
         if (lobby?.phase === "topic_vote") return lobby?.topic_a ?? "…";
-
-        // in countdown/running/finished => echtes selected anzeigen
         return lobby?.topic_selected ?? lobby?.topic_a ?? "…";
     }, [lobby?.phase, lobby?.topic_selected, lobby?.topic_a]);
 
-    // Winner choice (for result animation)
+    // Winner choice (countdown tiles)
     const winnerChoice = useMemo<1 | 2 | 3 | null>(() => {
         if (!lobby) return null;
 
@@ -187,7 +226,6 @@ export default function GamePage() {
         if (lobby.topic_selected === lobby.topic_a) return 1;
         if (lobby.topic_selected === lobby.topic_b) return 2;
 
-        // Falls topic_selected ein anderer Text ist => das ist der Random-Pool-Topic
         return 3;
     }, [lobby]);
 
@@ -195,8 +233,11 @@ export default function GamePage() {
     const votedPlayers = voteCounts.a + voteCounts.b + voteCounts.r;
     const allVoted = totalPlayers > 0 && votedPlayers >= totalPlayers;
 
-    // Spectator HUD data
-    const nextUp = useMemo(() => pickNextAlive(players, lobby?.holder_player_id ?? null), [players, lobby?.holder_player_id]);
+    // Spectator HUD
+    const nextUp = useMemo(
+        () => pickNextAlive(players, lobby?.holder_player_id ?? null),
+        [players, lobby?.holder_player_id]
+    );
 
     const explodeSecondsLeft = useMemo(() => {
         if (!lobby?.explode_at) return null;
@@ -205,31 +246,98 @@ export default function GamePage() {
         return clamp(Math.ceil(ms / 1000), 0, 999);
     }, [lobby?.explode_at]);
 
+    const safeSecondsLeft = useMemo(() => {
+        if (!lobby?.safe_until) return null;
+        const ms = msUntil(lobby.safe_until);
+        if (ms === null) return null;
+        return clamp(Math.ceil(ms / 1000), 0, 99);
+    }, [lobby?.safe_until]);
+
+    const clutchNow = useMemo(() => {
+        if (!isMeHolder || iAmEliminated) return false;
+        if (typeof explodeSecondsLeft !== "number") return false;
+        return explodeSecondsLeft <= CLUTCH_THRESHOLD_S;
+    }, [isMeHolder, iAmEliminated, explodeSecondsLeft]);
+
+    const passCooldownMsLeft = useMemo(() => {
+        if (!meRow?.last_pass_at) return 0;
+        const last = Date.parse(meRow.last_pass_at);
+        if (Number.isNaN(last)) return 0;
+        const elapsed = Date.now() - last;
+        const left = PASS_COOLDOWN_MS - elapsed;
+        return left > 0 ? left : 0;
+    }, [meRow?.last_pass_at]);
+
+    // -----------------------------
+    // Ranking system (prepared)
+    // -----------------------------
+    const ranking = useMemo(() => {
+        const rows = players.map((p) => {
+            const pass = p.pass_count ?? 0;
+            const clutch = p.clutch_pass_count ?? 0;
+            const streak = p.survival_streak ?? 0;
+            const fastest = p.fastest_pass_ms ?? null;
+
+            // Simple scoring (tweak later)
+            const fastestBonus = fastest == null ? 0 : Math.max(0, Math.min(12, Math.round((2200 - fastest) / 200)));
+            const score = pass * 10 + clutch * 18 + streak * 6 + fastestBonus;
+
+            return {
+                ...p,
+                score,
+                pass,
+                clutch,
+                streak,
+                fastest,
+                holdMs: p.total_hold_ms ?? 0,
+            };
+        });
+
+        rows.sort((a, b) => b.score - a.score);
+        return rows;
+    }, [players]);
+
+    const top5 = useMemo(() => ranking.slice(0, 5), [ranking]);
+
+    const mvp = useMemo(() => ranking[0] ?? null, [ranking]);
+
+    const myRankRow = useMemo(() => {
+        if (!mePlayerId) return null;
+        const idx = ranking.findIndex((r) => r.player_id === mePlayerId);
+        if (idx < 0) return null;
+        return { row: ranking[idx], rank: idx + 1 };
+    }, [ranking, mePlayerId]);
+
+    const winnerPlayer = useMemo(() => {
+        if (!lobby?.holder_player_id) return null;
+        return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
+    }, [players, lobby?.holder_player_id]);
+
     // -----------------------------
     // RPC wrappers (NO throw)
     // -----------------------------
     const rpcFinalizeTopicVote = useCallback(
-        async (lobbyId: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+        async (lobbyId: string) => {
             const { error } = await supabase.rpc("rpc_finalize_topic_vote", { p_lobby_id: lobbyId });
             if (error) {
                 console.error("rpc_finalize_topic_vote failed:", error);
                 showToast(`❌ Finalize: ${error.message}`, 2400);
-                return { ok: false, error: error.message };
+                return { ok: false as const, error: error.message };
             }
-            return { ok: true };
+            return { ok: true as const };
         },
         [supabase, showToast]
     );
 
     const rpcAdvanceFromCountdown = useCallback(
-        async (lobbyId: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+        async (lobbyId: string) => {
             const { error } = await supabase.rpc("rpc_advance_from_countdown", { p_lobby_id: lobbyId });
             if (error) {
                 console.error("rpc_advance_from_countdown failed:", error);
                 showToast(`❌ Advance: ${error.message}`, 2400);
-                return { ok: false, error: error.message };
+                return { ok: false as const, error: error.message };
             }
-            return { ok: true };
+            return { ok: true as const };
         },
         [supabase, showToast]
     );
@@ -272,8 +380,11 @@ export default function GamePage() {
                             "phase",
                             "holder_player_id",
                             "explode_at",
+                            "safe_until",
                             "last_activity_at",
                             "run_started_at",
+                            "round_number",
+                            "last_loser_player_id",
                             "topic_a",
                             "topic_b",
                             "topic_selected",
@@ -298,9 +409,15 @@ export default function GamePage() {
                     id: lobbyRes.data.id,
                     phase: lobbyRes.data.phase,
                     holder_player_id: lobbyRes.data.holder_player_id ?? null,
+
                     explode_at: lobbyRes.data.explode_at ?? null,
+                    safe_until: lobbyRes.data.safe_until ?? null,
+
                     last_activity_at: lobbyRes.data.last_activity_at ?? null,
                     run_started_at: lobbyRes.data.run_started_at ?? null,
+
+                    round_number: (lobbyRes.data.round_number as number | null) ?? null,
+                    last_loser_player_id: (lobbyRes.data.last_loser_player_id as string | null) ?? null,
 
                     topic_a: lobbyRes.data.topic_a ?? null,
                     topic_b: lobbyRes.data.topic_b ?? null,
@@ -314,11 +431,17 @@ export default function GamePage() {
                     topic_tie_pick: (lobbyRes.data.topic_tie_pick as number | null) ?? null,
                 };
 
-                // BEFORE setLobby: compute holder transition (for overlay + pass anim)
+                // Post-round loser toast (once)
+                if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
+                    lastLoserRef.current = nextLobby.last_loser_player_id;
+                    const loserName = players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
+                    showToast(`💥 ${loserName} ist raus`, 1500);
+                }
+
+                // Holder transition (overlay + passEvent)
                 const prevHolder = prevHolderRef.current;
                 const nextHolder = nextLobby.holder_player_id ?? null;
 
-                // Pass animation event: when holder changes (and both exist)
                 if (prevHolder && nextHolder && prevHolder !== nextHolder) {
                     passNonceRef.current += 1;
                     setPassEvent({
@@ -328,7 +451,6 @@ export default function GamePage() {
                     });
                 }
 
-                // "Du bist dran" overlay: only when transition enters me
                 if (mePlayerId && nextHolder === mePlayerId && prevHolder !== mePlayerId) {
                     const nonce = Date.now();
                     if (nonce - lastShownTurnNonceRef.current > 700) {
@@ -339,12 +461,27 @@ export default function GamePage() {
                 }
 
                 prevHolderRef.current = nextHolder;
-
                 setLobby(nextLobby);
 
                 const playersRes = await supabase
                     .from("players")
-                    .select("player_id,name,is_alive,status,seat_index,ready")
+                    .select(
+                        [
+                            "player_id",
+                            "name",
+                            "is_alive",
+                            "status",
+                            "seat_index",
+                            "ready",
+                            // stats
+                            "last_pass_at",
+                            "pass_count",
+                            "clutch_pass_count",
+                            "fastest_pass_ms",
+                            "total_hold_ms",
+                            "survival_streak",
+                        ].join(",")
+                    )
                     .eq("lobby_id", nextLobby.id)
                     .eq("status", "active")
                     .order("seat_index", { ascending: true });
@@ -360,7 +497,7 @@ export default function GamePage() {
                 setPlayers(nextPlayers);
                 setFatalError("");
 
-                // ---- Topic vote counts (only when needed)
+                // Votes
                 if (nextLobby.phase === "topic_vote") {
                     const votesRes = await supabase.from("topic_votes").select("choice,player_id").eq("lobby_id", nextLobby.id);
                     if (!alive) return;
@@ -391,9 +528,7 @@ export default function GamePage() {
                     setMyVote(null);
                 }
 
-                // ---- Best-effort “advance” calls
-
-                // 1) running: tick due (nur HOLDER tickt)
+                // Best-effort phase automations
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
                     const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
                     const iAmHolderNow = nextLobby.holder_player_id === mePlayerId;
@@ -405,7 +540,6 @@ export default function GamePage() {
                     }
                 }
 
-                // 2) topic_vote: finalize when due (timer)
                 if (nextLobby.phase === "topic_vote" && nextLobby.topic_vote_ends_at) {
                     const dueMs = msUntil(nextLobby.topic_vote_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !finalizeInFlightRef.current) {
@@ -414,7 +548,6 @@ export default function GamePage() {
                     }
                 }
 
-                // 3) countdown: advance to running when due
                 if (nextLobby.phase === "countdown" && nextLobby.countdown_ends_at) {
                     const dueMs = msUntil(nextLobby.countdown_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !advanceInFlightRef.current) {
@@ -434,11 +567,10 @@ export default function GamePage() {
             alive = false;
             window.clearInterval(t);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [code, supabase, mePlayerId, rpcFinalizeTopicVote, rpcAdvanceFromCountdown, rpcTickGame, showToast]);
 
-    // -----------------------------
-    // EARLY FINISH: when all voted -> finalize immediately
-    // -----------------------------
+    // Early finalize when all voted
     useEffect(() => {
         if (!lobby) return;
         if (lobby.phase !== "topic_vote") return;
@@ -449,9 +581,7 @@ export default function GamePage() {
         void rpcFinalizeTopicVote(lobby.id).finally(() => (finalizeInFlightRef.current = false));
     }, [allVoted, lobby, rpcFinalizeTopicVote]);
 
-    // -----------------------------
-    // Synced timers (vote + countdown)
-    // -----------------------------
+    // Synced timers
     useEffect(() => {
         let raf = 0;
 
@@ -465,14 +595,12 @@ export default function GamePage() {
 
             if (lobby.phase === "topic_vote") {
                 const ms = msUntil(lobby.topic_vote_ends_at);
-                if (ms === null) setVoteSecondsLeft(null);
-                else setVoteSecondsLeft(clamp(Math.ceil(ms / 1000), 0, 99));
+                setVoteSecondsLeft(ms === null ? null : clamp(Math.ceil(ms / 1000), 0, 99));
             } else setVoteSecondsLeft(null);
 
             if (lobby.phase === "countdown") {
                 const ms = msUntil(lobby.countdown_ends_at);
-                if (ms === null) setCountdownSecondsLeft(null);
-                else setCountdownSecondsLeft(clamp(Math.ceil(ms / 1000), 0, 10));
+                setCountdownSecondsLeft(ms === null ? null : clamp(Math.ceil(ms / 1000), 0, 10));
             } else setCountdownSecondsLeft(null);
 
             raf = window.requestAnimationFrame(step);
@@ -484,9 +612,7 @@ export default function GamePage() {
         };
     }, [lobby]);
 
-    // -----------------------------
     // Vote action
-    // -----------------------------
     const vote = useCallback(
         async (choice: 1 | 2 | 3) => {
             if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
@@ -519,9 +645,7 @@ export default function GamePage() {
         [mePlayerId, lobby, voteBusy, supabase, showToast]
     );
 
-    // -----------------------------
-    // PASS handler (RPC-only)
-    // -----------------------------
+    // PASS handler (cooldown + safe window awareness)
     const handlePass = useCallback(async () => {
         if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
         if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
@@ -529,22 +653,21 @@ export default function GamePage() {
         if (!isMeHolder) return;
         if (passBusy) return;
 
+        if (passCooldownMsLeft > 0) return showToast("⏱️ Pass-Cooldown…", 900);
+
         setPassBusy(true);
         try {
             const err = await rpcPassPotato(code, mePlayerId);
-            if (err) {
-                showToast(`❌ ${err.message}`, 2400);
-                return;
-            }
-            showToast("✅ Weitergegeben", 900);
+            if (err) return showToast(`❌ ${err.message}`, 2400);
+            showToast(clutchNow ? "🔥 CLUTCH PASS" : "✅ Weitergegeben", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
             setPassBusy(false);
         }
-    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, rpcPassPotato, showToast]);
+    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, passCooldownMsLeft, code, rpcPassPotato, showToast, clutchNow]);
 
-    // Spacebar pass (nur running, nur Holder)
+    // Spacebar pass
     useEffect(() => {
         const onKeyDown = (ev: KeyboardEvent) => {
             if (ev.code !== "Space") return;
@@ -577,10 +700,10 @@ export default function GamePage() {
     // Labels
     const aLabel = lobby.topic_a ?? "…";
     const bLabel = lobby.topic_b ?? "…";
-    const rLabel = "Zufällig"; // bleibt im Voting & Kachel 3 immer "Zufällig"
+    const rLabel = "Zufällig";
 
     // =========================================================
-    // PHASE: TOPIC VOTE (DESIGN UNVERÄNDERT)
+    // PHASE: TOPIC VOTE (dein Design)
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
@@ -619,12 +742,7 @@ export default function GamePage() {
                         </div>
 
                         <div className="topicGrid">
-                            <button
-                                type="button"
-                                onClick={() => void vote(1)}
-                                disabled={voteBusy || !mePlayerId}
-                                className={`glassCard ${myVote === 1 ? "active" : ""}`}
-                            >
+                            <button type="button" onClick={() => void vote(1)} disabled={voteBusy || !mePlayerId} className={`glassCard ${myVote === 1 ? "active" : ""}`}>
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">①</span>
@@ -634,12 +752,7 @@ export default function GamePage() {
                                 <div className="cardHint">Tippe zum Voten</div>
                             </button>
 
-                            <button
-                                type="button"
-                                onClick={() => void vote(2)}
-                                disabled={voteBusy || !mePlayerId}
-                                className={`glassCard ${myVote === 2 ? "active" : ""}`}
-                            >
+                            <button type="button" onClick={() => void vote(2)} disabled={voteBusy || !mePlayerId} className={`glassCard ${myVote === 2 ? "active" : ""}`}>
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">②</span>
@@ -649,12 +762,7 @@ export default function GamePage() {
                                 <div className="cardHint">Tippe zum Voten</div>
                             </button>
 
-                            <button
-                                type="button"
-                                onClick={() => void vote(3)}
-                                disabled={voteBusy || !mePlayerId}
-                                className={`glassCard ${myVote === 3 ? "active" : ""}`}
-                            >
+                            <button type="button" onClick={() => void vote(3)} disabled={voteBusy || !mePlayerId} className={`glassCard ${myVote === 3 ? "active" : ""}`}>
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">🎲</span>
@@ -665,10 +773,7 @@ export default function GamePage() {
                             </button>
                         </div>
 
-                        <div className="statusLine">
-                            {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
-                        </div>
-
+                        <div className="statusLine">{allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}</div>
                         {toast ? <div className="toastInline">{toast}</div> : null}
                     </div>
                 </div>
@@ -685,13 +790,7 @@ export default function GamePage() {
 
                         <div className="barWrap" aria-hidden>
                             <div className="barTrack">
-                                <div
-                                    className="barFill"
-                                    style={{
-                                        width: `${Math.round(progress * 100)}%`,
-                                        transition: reduceMotion ? "none" : "width 220ms linear",
-                                    }}
-                                />
+                                <div className="barFill" style={{ width: `${Math.round(progress * 100)}%`, transition: reduceMotion ? "none" : "width 220ms linear" }} />
                             </div>
                             <div className="barGlow" />
                         </div>
@@ -702,256 +801,52 @@ export default function GamePage() {
                     </div>
                 </div>
 
-                {/* DEIN ORIGINAL CSS BLOCK (UNVERÄNDERT) */}
+                {/* (dein original CSS – unverändert) */}
                 <style>{`
-          .kicker{
-            font-size: 12px;
-            font-weight: 950;
-            letter-spacing: 2.2px;
-            opacity: .78;
-            text-transform: uppercase;
-            animation: ${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};
-          }
-          .headline{
-            margin-top: 10px;
-            font-size: clamp(36px, 4.8vw, 70px);
-            font-weight: 1000;
-            letter-spacing: -0.6px;
-            position: relative;
-            display: inline-block;
-            text-shadow: 0 24px 80px rgba(0,0,0,0.35);
-            animation: ${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};
-          }
-          .headlineGlow{
-            position:absolute;
-            inset:-30px -60px;
-            background: radial-gradient(circle at 40% 35%, rgba(255,214,10,0.25), rgba(255,149,0,0.18), rgba(255,45,85,0.06), transparent 70%);
-            filter: blur(18px);
-            opacity: .9;
-            pointer-events:none;
-            animation: ${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};
-          }
-          .topicGrid{
-            margin-top: 24px;
-            display:grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 18px;
-          }
-          .glassCard{
-            position:relative;
-            width:100%;
-            border-radius: 38px;
-            padding: 24px 22px 22px;
-            min-height: 260px;
-            text-align:left;
-            cursor:pointer;
-            border: 1px solid rgba(255,255,255,0.18);
-            background:
-              linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),
-              radial-gradient(circle at 30% 20%, rgba(255,214,10,0.14), rgba(255,149,0,0.08), rgba(0,0,0,0.16) 70%);
-            backdrop-filter: blur(16px) saturate(140%);
-            -webkit-backdrop-filter: blur(16px) saturate(140%);
-            box-shadow:
-              0 18px 70px rgba(0,0,0,0.28),
-              inset 0 1px 0 rgba(255,255,255,0.20);
-            overflow:hidden;
-            transform: translateZ(0);
-            transition: transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease;
-            animation: ${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};
-          }
-          .glassCard:nth-child(2){ animation-delay: ${reduceMotion ? "0ms" : "70ms"}; }
-          .glassCard:nth-child(3){ animation-delay: ${reduceMotion ? "0ms" : "140ms"}; }
-          .glassCard:hover{
-            transform: scale(1.035);
-            border-color: rgba(255,255,255,0.30);
-            box-shadow:
-              0 26px 90px rgba(0,0,0,0.34),
-              inset 0 1px 0 rgba(255,255,255,0.22);
-            filter: brightness(1.03);
-          }
-          .glassCard:active{ transform: scale(1.015); }
-          .glassCard:disabled{
-            opacity: .78;
-            cursor:not-allowed;
-            transform:none;
-            filter:none;
-          }
-          .glassShine{
-            position:absolute;
-            inset:-120px;
-            background:
-              radial-gradient(circle at 20% 20%, rgba(255,255,255,0.24), rgba(255,255,255,0.06), transparent 60%);
-            opacity:.75;
-            filter: blur(18px);
-            pointer-events:none;
-            animation: ${reduceMotion ? "none" : "shineSweep 5.2s ease-in-out infinite"};
-          }
-          .cardTop{
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            gap: 10px;
-            position:relative;
-            z-index:2;
-          }
-          .chip{
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            height: 38px;
-            padding: 0 14px;
-            border-radius: 999px;
-            font-weight: 1000;
-            background: rgba(0,0,0,0.18);
-            border: 1px solid rgba(255,255,255,0.16);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
-          }
-          .micro{
-            font-size: 12px;
-            font-weight: 950;
-            letter-spacing: 1.2px;
-            opacity:.78;
-            text-transform: uppercase;
-          }
-          .cardTitle{
-            margin-top: 20px;
-            font-size: clamp(24px, 2.8vw, 40px);
-            font-weight: 1000;
-            letter-spacing: -0.2px;
-            position:relative;
-            z-index:2;
-            text-shadow: 0 18px 60px rgba(0,0,0,0.26);
-          }
-          .cardHint{
-            margin-top: 12px;
-            font-size: 13px;
-            font-weight: 900;
-            opacity: .78;
-            position:relative;
-            z-index:2;
-          }
-          .glassCard.active{
-            border-color: rgba(255,255,255,0.44);
-            background:
-              radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), rgba(0,0,0,0.10) 55%),
-              linear-gradient(135deg, rgba(255,214,10,0.28), rgba(255,149,0,0.22), rgba(255,45,85,0.12));
-            box-shadow:
-              0 30px 110px rgba(0,0,0,0.40),
-              0 0 0 1px rgba(255,255,255,0.06) inset;
-            animation: ${reduceMotion ? "none" : "selectedBreath 1.05s ease-in-out infinite"};
-          }
-          .statusLine{
-            margin-top: 14px;
-            font-weight: 900;
-            opacity: .86;
-            font-size: 13px;
-            animation: ${reduceMotion ? "none" : "fadeUp 520ms ease both"};
-          }
-          .toastInline{
-            margin-top: 14px;
-            font-weight: 950;
-            opacity: .92;
-            animation: ${reduceMotion ? "none" : "fadeUp 480ms ease both"};
-          }
-          .bottomBar{
-            position: fixed;
-            left: 50%;
-            bottom: 16px;
-            transform: translateX(-50%);
-            width: min(980px, 94vw);
-          }
-          .bottomInner{
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap: 14px;
-            padding: 14px 14px;
-            border-radius: 999px;
-            background: rgba(0,0,0,0.26);
-            border: 1px solid rgba(255,255,255,0.16);
-            backdrop-filter: blur(14px) saturate(140%);
-            -webkit-backdrop-filter: blur(14px) saturate(140%);
-            box-shadow: 0 18px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.14);
-            animation: ${reduceMotion ? "none" : "dockIn 900ms cubic-bezier(.16,1,.3,1) both"};
-            animation-delay: ${reduceMotion ? "0ms" : "120ms"};
-          }
-          .bottomLeft{ display:flex; align-items:center; gap: 10px; min-width: 220px; }
-          .brandMark{
-            width: 40px; height: 40px; border-radius: 999px;
-            display:grid; place-items:center;
-            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18));
-            border: 1px solid rgba(255,255,255,0.14);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.22);
-          }
-          .bottomTitle{ font-weight: 1000; letter-spacing: 1.2px; font-size: 12px; text-transform: uppercase; opacity: .9; }
-          .bottomSub{ font-weight: 850; opacity: .78; font-size: 12px; margin-top: 2px; }
-          .barWrap{ flex: 1; min-width: 180px; position: relative; }
-          .barTrack{
-            height: 12px; border-radius: 999px;
-            background: rgba(255,255,255,0.10);
-            border: 1px solid rgba(255,255,255,0.12);
-            overflow:hidden;
-          }
-          .barFill{
-            height: 100%;
-            background: linear-gradient(90deg, rgba(255,214,10,0.95), rgba(255,149,0,0.95), rgba(255,45,85,0.80));
-            filter: saturate(120%);
-          }
-          .barGlow{
-            position:absolute;
-            inset:-18px -22px;
-            background: radial-gradient(circle at 50% 50%, rgba(255,214,10,0.18), rgba(255,149,0,0.14), rgba(255,45,85,0.06), transparent 70%);
-            filter: blur(18px);
-            opacity: .9;
-            pointer-events:none;
-            animation: ${reduceMotion ? "none" : "glowFloat 3.6s ease-in-out infinite"};
-          }
-          .timeBox{
-            min-width: 70px; height: 40px; border-radius: 999px;
-            display:grid; place-items:center;
-            font-size: 18px; font-weight: 1000;
-            background: rgba(255,255,255,0.10);
-            border: 1px solid rgba(255,255,255,0.14);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
-          }
-          .grain{
-            position:absolute; inset:0;
-            background-image:
-              url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
-            opacity: .10;
-            mix-blend-mode: overlay;
-            pointer-events:none;
-          }
-          .orbs{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
-          .orb{ position:absolute; border-radius: 999px; filter: blur(24px); opacity: .75; mix-blend-mode: screen; }
-          .o1{
-            width: 420px; height: 420px; left: -120px; top: -120px;
-            background: radial-gradient(circle at 30% 30%, rgba(255,214,10,0.26), rgba(255,149,0,0.18), transparent 70%);
-            animation: ${reduceMotion ? "none" : "orbFloat 8s ease-in-out infinite"};
-          }
-          .o2{
-            width: 360px; height: 360px; right: -120px; top: 40px;
-            background: radial-gradient(circle at 30% 30%, rgba(34,211,238,0.18), rgba(167,139,250,0.12), transparent 72%);
-            animation: ${reduceMotion ? "none" : "orbFloat 9.5s ease-in-out infinite"};
-            animation-delay: ${reduceMotion ? "0s" : "-1.2s"};
-          }
-          .o3{
-            width: 520px; height: 520px; left: 20%; bottom: -220px;
-            background: radial-gradient(circle at 30% 30%, rgba(255,45,85,0.14), rgba(255,149,0,0.16), transparent 70%);
-            animation: ${reduceMotion ? "none" : "orbFloat 10.5s ease-in-out infinite"};
-            animation-delay: ${reduceMotion ? "0s" : "-2.1s"};
-          }
-          @keyframes fadeUp{ from{ opacity:0; transform: translateY(10px);} to{ opacity:1; transform: translateY(0);} }
-          @keyframes heroIn{
-            0%{ opacity:0; transform: translateY(12px) scale(0.985); filter: blur(1px); }
-            100%{ opacity:1; transform: translateY(0) scale(1); filter: blur(0); }
-          }
-          @keyframes cardIn{ 0%{ opacity:0; transform: translateY(16px) scale(0.985);} 100%{ opacity:1; transform: translateY(0) scale(1);} }
-          @keyframes dockIn{ 0%{ opacity:0; transform: translateY(16px);} 100%{ opacity:1; transform: translateY(0);} }
-          @keyframes glowFloat{ 0%,100%{ transform: translateY(0); opacity: .82;} 50%{ transform: translateY(-6px); opacity: 1;} }
-          @keyframes shineSweep{ 0%,100%{ transform: translateX(-10px) rotate(12deg); opacity: .60;} 50%{ transform: translateX(18px) rotate(12deg); opacity: .90;} }
-          @keyframes selectedBreath{ 0%,100%{ transform: scale(1.01); filter: brightness(1.06);} 50%{ transform: scale(1.025); filter: brightness(1.14);} }
-          @keyframes orbFloat{ 0%,100%{ transform: translateY(0) translateX(0);} 50%{ transform: translateY(18px) translateX(10px);} }
+          .kicker{font-size:12px;font-weight:950;letter-spacing:2.2px;opacity:.78;text-transform:uppercase;animation:${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};}
+          .headline{margin-top:10px;font-size:clamp(36px,4.8vw,70px);font-weight:1000;letter-spacing:-0.6px;position:relative;display:inline-block;text-shadow:0 24px 80px rgba(0,0,0,0.35);animation:${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};}
+          .headlineGlow{position:absolute;inset:-30px -60px;background:radial-gradient(circle at 40% 35%, rgba(255,214,10,0.25), rgba(255,149,0,0.18), rgba(255,45,85,0.06), transparent 70%);filter:blur(18px);opacity:.9;pointer-events:none;animation:${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};}
+          .topicGrid{margin-top:24px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;}
+          .glassCard{position:relative;width:100%;border-radius:38px;padding:24px 22px 22px;min-height:260px;text-align:left;cursor:pointer;border:1px solid rgba(255,255,255,0.18);background:linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),radial-gradient(circle at 30% 20%, rgba(255,214,10,0.14), rgba(255,149,0,0.08), rgba(0,0,0,0.16) 70%);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);box-shadow:0 18px 70px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.20);overflow:hidden;transform:translateZ(0);transition:transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease;animation:${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};}
+          .glassCard:nth-child(2){animation-delay:${reduceMotion ? "0ms" : "70ms"};}
+          .glassCard:nth-child(3){animation-delay:${reduceMotion ? "0ms" : "140ms"};}
+          .glassCard:hover{transform:scale(1.035);border-color:rgba(255,255,255,0.30);box-shadow:0 26px 90px rgba(0,0,0,0.34),inset 0 1px 0 rgba(255,255,255,0.22);filter:brightness(1.03);}
+          .glassCard:active{transform:scale(1.015);}
+          .glassCard:disabled{opacity:.78;cursor:not-allowed;transform:none;filter:none;}
+          .glassShine{position:absolute;inset:-120px;background:radial-gradient(circle at 20% 20%, rgba(255,255,255,0.24), rgba(255,255,255,0.06), transparent 60%);opacity:.75;filter:blur(18px);pointer-events:none;animation:${reduceMotion ? "none" : "shineSweep 5.2s ease-in-out infinite"};}
+          .cardTop{display:flex;justify-content:space-between;align-items:center;gap:10px;position:relative;z-index:2;}
+          .chip{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 14px;border-radius:999px;font-weight:1000;background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.16);box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);}
+          .micro{font-size:12px;font-weight:950;letter-spacing:1.2px;opacity:.78;text-transform:uppercase;}
+          .cardTitle{margin-top:20px;font-size:clamp(24px,2.8vw,40px);font-weight:1000;letter-spacing:-0.2px;position:relative;z-index:2;text-shadow:0 18px 60px rgba(0,0,0,0.26);}
+          .cardHint{margin-top:12px;font-size:13px;font-weight:900;opacity:.78;position:relative;z-index:2;}
+          .glassCard.active{border-color:rgba(255,255,255,0.44);background:radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), rgba(0,0,0,0.10) 55%),linear-gradient(135deg, rgba(255,214,10,0.28), rgba(255,149,0,0.22), rgba(255,45,85,0.12));box-shadow:0 30px 110px rgba(0,0,0,0.40),0 0 0 1px rgba(255,255,255,0.06) inset;animation:${reduceMotion ? "none" : "selectedBreath 1.05s ease-in-out infinite"};}
+          .statusLine{margin-top:14px;font-weight:900;opacity:.86;font-size:13px;animation:${reduceMotion ? "none" : "fadeUp 520ms ease both"};}
+          .toastInline{margin-top:14px;font-weight:950;opacity:.92;animation:${reduceMotion ? "none" : "fadeUp 480ms ease both"};}
+          .bottomBar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(980px,94vw);}
+          .bottomInner{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 14px;border-radius:999px;background:rgba(0,0,0,0.26);border:1px solid rgba(255,255,255,0.16);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);box-shadow:0 18px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.14);animation:${reduceMotion ? "none" : "dockIn 900ms cubic-bezier(.16,1,.3,1) both"};animation-delay:${reduceMotion ? "0ms" : "120ms"};}
+          .bottomLeft{display:flex;align-items:center;gap:10px;min-width:220px;}
+          .brandMark{width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18));border:1px solid rgba(255,255,255,0.14);box-shadow:0 10px 30px rgba(0,0,0,0.22);}
+          .bottomTitle{font-weight:1000;letter-spacing:1.2px;font-size:12px;text-transform:uppercase;opacity:.9;}
+          .bottomSub{font-weight:850;opacity:.78;font-size:12px;margin-top:2px;}
+          .barWrap{flex:1;min-width:180px;position:relative;}
+          .barTrack{height:12px;border-radius:999px;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.12);overflow:hidden;}
+          .barFill{height:100%;background:linear-gradient(90deg, rgba(255,214,10,0.95), rgba(255,149,0,0.95), rgba(255,45,85,0.80));filter:saturate(120%);}
+          .barGlow{position:absolute;inset:-18px -22px;background:radial-gradient(circle at 50% 50%, rgba(255,214,10,0.18), rgba(255,149,0,0.14), rgba(255,45,85,0.06), transparent 70%);filter:blur(18px);opacity:.9;pointer-events:none;animation:${reduceMotion ? "none" : "glowFloat 3.6s ease-in-out infinite"};}
+          .timeBox{min-width:70px;height:40px;border-radius:999px;display:grid;place-items:center;font-size:18px;font-weight:1000;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.14);box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);}
+          .grain{position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");opacity:.10;mix-blend-mode:overlay;pointer-events:none;}
+          .orbs{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+          .orb{position:absolute;border-radius:999px;filter:blur(24px);opacity:.75;mix-blend-mode:screen;}
+          .o1{width:420px;height:420px;left:-120px;top:-120px;background:radial-gradient(circle at 30% 30%, rgba(255,214,10,0.26), rgba(255,149,0,0.18), transparent 70%);animation:${reduceMotion ? "none" : "orbFloat 8s ease-in-out infinite"};}
+          .o2{width:360px;height:360px;right:-120px;top:40px;background:radial-gradient(circle at 30% 30%, rgba(34,211,238,0.18), rgba(167,139,250,0.12), transparent 72%);animation:${reduceMotion ? "none" : "orbFloat 9.5s ease-in-out infinite"};animation-delay:${reduceMotion ? "0s" : "-1.2s"};}
+          .o3{width:520px;height:520px;left:20%;bottom:-220px;background:radial-gradient(circle at 30% 30%, rgba(255,45,85,0.14), rgba(255,149,0,0.16), transparent 70%);animation:${reduceMotion ? "none" : "orbFloat 10.5s ease-in-out infinite"};animation-delay:${reduceMotion ? "0s" : "-2.1s"};}
+          @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+          @keyframes heroIn{0%{opacity:0;transform:translateY(12px) scale(0.985);filter:blur(1px);}100%{opacity:1;transform:translateY(0) scale(1);filter:blur(0);}}
+          @keyframes cardIn{0%{opacity:0;transform:translateY(16px) scale(0.985);}100%{opacity:1;transform:translateY(0) scale(1);}}
+          @keyframes dockIn{0%{opacity:0;transform:translateY(16px);}100%{opacity:1;transform:translateY(0);}}
+          @keyframes glowFloat{0%,100%{transform:translateY(0);opacity:.82;}50%{transform:translateY(-6px);opacity:1;}}
+          @keyframes shineSweep{0%,100%{transform:translateX(-10px) rotate(12deg);opacity:.60;}50%{transform:translateX(18px) rotate(12deg);opacity:.90;}}
+          @keyframes selectedBreath{0%,100%{transform:scale(1.01);filter:brightness(1.06);}50%{transform:scale(1.025);filter:brightness(1.14);}}
+          @keyframes orbFloat{0%,100%{transform:translateY(0) translateX(0);}50%{transform:translateY(18px) translateX(10px);}}
           @media (max-width: 980px){ .glassCard{ min-height: 230px; } }
           @media (max-width: 860px){
             .topicGrid{ grid-template-columns: 1fr; }
@@ -975,7 +870,7 @@ export default function GamePage() {
         const labelForChoice = (c: number) => {
             if (c === 1) return `① ${aLabel}`;
             if (c === 2) return `② ${bLabel}`;
-            if (c === 3) return `🎲 ${rLabel}`; // bleibt “Zufällig” (nicht der echte Topic-Text)
+            if (c === 3) return `🎲 ${rLabel}`;
             return String(c);
         };
 
@@ -995,35 +890,22 @@ export default function GamePage() {
                 <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
-                    <div
-                        style={{
-                            marginTop: 16,
-                            display: "grid",
-                            gridTemplateColumns: "repeat(3, minmax(0,1fr))",
-                            gap: 14,
-                            alignItems: "stretch",
-                        }}
-                    >
+                    <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 14, alignItems: "stretch" }}>
                         <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`}>
                             <div className="resultBadge">①</div>
                             <div className="resultTitle">{aLabel}</div>
                         </div>
-
                         <div className={`resultTile ${isWinner(2) ? "win" : "lose"}`}>
                             <div className="resultBadge">②</div>
                             <div className="resultTitle">{bLabel}</div>
                         </div>
-
                         <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
                             <div className="resultBadge">🎲</div>
                             <div className="resultTitle">{rLabel}</div>
                         </div>
                     </div>
 
-                    {/* HIER passiert der Trick: Wenn 🎲 gewinnt, steht in topic_selected der echte Pool-Topic */}
-                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>
-                        {selectedTopic}
-                    </div>
+                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>{selectedTopic}</div>
 
                     {tie ? (
                         <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 850 }}>
@@ -1037,15 +919,7 @@ export default function GamePage() {
                     )}
 
                     <div style={{ marginTop: 22, fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>START IN</div>
-                    <div
-                        style={{
-                            marginTop: 10,
-                            fontSize: "clamp(80px, 10vw, 140px)",
-                            fontWeight: 950,
-                            letterSpacing: 2,
-                            textShadow: "0 18px 70px rgba(0,0,0,0.35)",
-                        }}
-                    >
+                    <div style={{ marginTop: 10, fontSize: "clamp(80px, 10vw, 140px)", fontWeight: 950, letterSpacing: 2, textShadow: "0 18px 70px rgba(0,0,0,0.35)" }}>
                         {Math.max(0, countdownSecondsLeft ?? 5)}
                     </div>
 
@@ -1053,67 +927,24 @@ export default function GamePage() {
                 </div>
 
                 <style>{`
-          .resultTile{
-            border-radius: 28px;
-            border: 1px solid rgba(255,255,255,0.14);
-            background: rgba(0,0,0,0.18);
-            padding: 16px 14px;
-            text-align:left;
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            overflow:hidden;
-            position:relative;
-            transform-origin: center;
-          }
-          .resultBadge{
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            height: 34px;
-            padding: 0 12px;
-            border-radius: 999px;
-            font-weight: 950;
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.14);
-          }
-          .resultTitle{
-            margin-top: 14px;
-            font-size: clamp(18px, 2.2vw, 28px);
-            font-weight: 950;
-            text-shadow: 0 10px 30px rgba(0,0,0,0.22);
-          }
-          @keyframes winPop {
-            0% { transform: scale(1); filter: brightness(1); }
-            70% { transform: scale(1.06); filter: brightness(1.18); }
-            100% { transform: scale(1.04); filter: brightness(1.12); }
-          }
-          @keyframes loseSlide {
-            0% { transform: scale(1); opacity: 1; }
-            100% { transform: translateY(14px) scale(0.92); opacity: 0.12; }
-          }
-          .resultTile.win{
-            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18)),
-                        linear-gradient(135deg, rgba(52,199,89,0.18), rgba(10,132,255,0.10), rgba(255,214,10,0.12));
-            border-color: rgba(255,255,255,0.28);
-            box-shadow: 0 18px 70px rgba(0,0,0,0.25);
-            animation: winPop .55s ease-out forwards;
-          }
-          .resultTile.lose{ animation: loseSlide .55s ease-out forwards; }
-          @media (max-width: 860px){
-            main div[style*="gridTemplateColumns: repeat(3"]{ grid-template-columns: 1fr !important; }
-          }
+          .resultTile{border-radius:28px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.18);padding:16px 14px;text-align:left;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden;position:relative;transform-origin:center;}
+          .resultBadge{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:999px;font-weight:950;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.14);}
+          .resultTitle{margin-top:14px;font-size:clamp(18px,2.2vw,28px);font-weight:950;text-shadow:0 10px 30px rgba(0,0,0,0.22);}
+          @keyframes winPop {0%{transform:scale(1);filter:brightness(1);}70%{transform:scale(1.06);filter:brightness(1.18);}100%{transform:scale(1.04);filter:brightness(1.12);}}
+          @keyframes loseSlide {0%{transform:scale(1);opacity:1;}100%{transform:translateY(14px) scale(0.92);opacity:0.12;}}
+          .resultTile.win{background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18)),linear-gradient(135deg, rgba(52,199,89,0.18), rgba(10,132,255,0.10), rgba(255,214,10,0.12));border-color:rgba(255,255,255,0.28);box-shadow:0 18px 70px rgba(0,0,0,0.25);animation:winPop .55s ease-out forwards;}
+          .resultTile.lose{animation:loseSlide .55s ease-out forwards;}
+          @media (max-width: 860px){ main div[style*="gridTemplateColumns: repeat(3"]{ grid-template-columns: 1fr !important; } }
         `}</style>
             </main>
         );
     }
 
     // =========================================================
-// PHASE: FINISHED
-// =========================================================
+    // PHASE: FINISHED (Winner big + MVP + Ranking System)
+    // =========================================================
     if (lobby.phase === "finished") {
-        const winner = lobby.holder_player_id
-            ? players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "Unbekannt"
-            : "Unbekannt";
+        const winnerName = winnerPlayer?.name ?? "Unbekannt";
 
         return (
             <main
@@ -1123,75 +954,433 @@ export default function GamePage() {
                     placeItems: "center",
                     padding: 24,
                     background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.55) 0%, rgba(192,106,0,0.88) 80%)",
+                        "radial-gradient(circle at 50% 18%, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.20) 58%)," +
+                        "radial-gradient(circle at 50% 85%, rgba(255,214,10,0.35) 0%, rgba(240,138,26,0.62) 45%, rgba(143,15,15,0.92) 100%)",
                 }}
             >
-                <div style={{ textAlign: "center", width: "min(900px, 96vw)" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>SPIEL BEENDET</div>
-                    <div style={{ fontSize: "clamp(44px, 6vw, 82px)", fontWeight: 950, marginTop: 14 }}>🏆 {winner}</div>
-                    <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>
-                        {iAmEliminated ? "Du bist raus – aber du konntest zuschauen." : "GG."}
+                <div style={{ width: "min(1120px, 96vw)" }}>
+                    {/* HERO */}
+                    <div className="finishHero">
+                        <div className="finishKicker">SPIEL BEENDET</div>
+                        <div className="finishWinner">🏆 {winnerName}</div>
+
+                        <div className="finishMeta">
+              <span>
+                Runde: <b>{lobby.round_number ?? "—"}</b>
+              </span>
+                            <span className="dot">•</span>
+                            <span>
+                Thema: <b>{selectedTopic}</b>
+              </span>
+                        </div>
+
+                        <div className="finishChips">
+                            <div className="chipPill">
+                                ⭐ MVP <span className="dot">•</span> <b>{mvp?.name ?? "—"}</b> <span className="muted">(Score {mvp?.score ?? 0})</span>
+                            </div>
+                            {myRankRow ? (
+                                <div className="chipPill alt">
+                                    📌 Dein Platz <span className="dot">•</span> <b>#{myRankRow.rank}</b> <span className="muted">(Score {myRankRow.row.score})</span>
+                                </div>
+                            ) : null}
+                        </div>
+
+                        <div className="finishButtons">
+                            <button
+                                className="btn btnPrimary btnXL"
+                                onClick={async () => {
+                                    const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
+                                    if (error) return showToast(`❌ Reset: ${error.message}`, 2400);
+                                    window.location.href = `/lobby/${encodeURIComponent(code)}`;
+                                }}
+                                type="button"
+                            >
+                                Zurück zur Lobby
+                            </button>
+
+                            <button
+                                className="btn btnSecondary btnXL"
+                                onClick={async () => {
+                                    const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
+                                    if (error) return showToast(`❌ Rematch: ${error.message}`, 2400);
+                                    showToast("🔁 Rematch gestartet", 1200);
+                                }}
+                                type="button"
+                            >
+                                🔁 Rematch
+                            </button>
+                        </div>
+
+                        <div className="finishOrbs" aria-hidden />
                     </div>
 
-                    <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 22 }}>
-                        <button
-                            className="btn btnPrimary btnXL"
-                            onClick={async () => {
-                                console.log("Back to lobby clicked -> rpc_reset_lobby", code);
-                                const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
-                                if (error) {
-                                    console.error("rpc_reset_lobby failed:", error);
-                                    showToast(`❌ Reset: ${error.message}`, 2400);
-                                    return;
-                                }
-                                window.location.href = `/lobby/${encodeURIComponent(code)}`;
-                            }}
-                            type="button"
-                        >
-                            Zurück zur Lobby
-                        </button>
+                    {/* CONTENT GRID */}
+                    <div className="finishGrid">
+                        {/* Ranking */}
+                        <div className="panel">
+                            <div className="panelHead">
+                                <div>
+                                    <div className="panelTitle">📊 Ranking</div>
+                                    <div className="panelSub">Score basiert auf Passes, Clutch, Streak & Fastest Pass (tweakbar).</div>
+                                </div>
 
-                        <button
-                            className="btn btnSecondary btnXL"
-                            onClick={async () => {
-                                const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
-                                if (error) {
-                                    showToast(`❌ Rematch: ${error.message}`, 2400);
-                                    return;
-                                }
-                                showToast("🔁 Rematch gestartet", 1200);
-                            }}
-                            type="button"
-                        >
-                            🔁 Rematch
-                        </button>
+                                <button className="btn btnGhost" type="button" onClick={() => setShowFullRanking((v) => !v)}>
+                                    {showFullRanking ? "Top 5" : "Alle anzeigen"}
+                                </button>
+                            </div>
+
+                            <div className="rankTable">
+                                <div className="rankRow rankHeader">
+                                    <div>#</div>
+                                    <div>Player</div>
+                                    <div className="right">Score</div>
+                                    <div className="right">Pass</div>
+                                    <div className="right">Clutch</div>
+                                    <div className="right">Fastest</div>
+                                    <div className="right">Hold</div>
+                                    <div className="right">Streak</div>
+                                </div>
+
+                                {(showFullRanking ? ranking : top5).map((p, i) => {
+                                    const idx = showFullRanking ? i : ranking.findIndex((r) => r.player_id === p.player_id);
+                                    const rank = idx >= 0 ? idx + 1 : i + 1;
+                                    const isWinner = p.player_id === lobby.holder_player_id;
+                                    const isMe = !!mePlayerId && p.player_id === mePlayerId;
+
+                                    return (
+                                        <div key={p.player_id} className={`rankRow ${isWinner ? "winner" : ""} ${isMe ? "me" : ""}`}>
+                                            <div className="rankNum">{rank}</div>
+                                            <div className="rankName">
+                        <span className="badge">
+                          {isWinner ? "🏆" : p.is_alive ? "🟢" : "⚫"}
+                        </span>
+                                                <span className="nm">{p.name}</span>
+                                                {isMe ? <span className="meTag">YOU</span> : null}
+                                            </div>
+                                            <div className="right">{p.score}</div>
+                                            <div className="right">{p.pass}</div>
+                                            <div className="right">{p.clutch}</div>
+                                            <div className="right">{fmtMs(p.fastest)}</div>
+                                            <div className="right">{fmtHold(p.holdMs)}</div>
+                                            <div className="right">{p.streak}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* MVP / Highlights */}
+                        <div className="panel">
+                            <div className="panelHead">
+                                <div>
+                                    <div className="panelTitle">⭐ Match Highlights</div>
+                                    <div className="panelSub">Wichtigste Infos, nicht übertrieben.</div>
+                                </div>
+                            </div>
+
+                            <div className="cards">
+                                <div className="statCard">
+                                    <div className="statK">Winner</div>
+                                    <div className="statV">{winnerName}</div>
+                                    <div className="statS">Letzter Holder (Phase finished)</div>
+                                </div>
+
+                                <div className="statCard">
+                                    <div className="statK">MVP</div>
+                                    <div className="statV">{mvp?.name ?? "—"}</div>
+                                    <div className="statS">
+                                        Score {mvp?.score ?? 0} • Pass {mvp?.pass ?? 0} • Clutch {mvp?.clutch ?? 0}
+                                    </div>
+                                </div>
+
+                                <div className="statCard">
+                                    <div className="statK">Fastest Pass</div>
+                                    <div className="statV">
+                                        {(() => {
+                                            const best = [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0];
+                                            if (!best) return "—";
+                                            return `${best.name} • ${fmtMs(best.fastest)}`;
+                                        })()}
+                                    </div>
+                                    <div className="statS">Speed / Reaktion</div>
+                                </div>
+
+                                <div className="statCard">
+                                    <div className="statK">Most Passes</div>
+                                    <div className="statV">
+                                        {(() => {
+                                            const best = [...ranking].sort((a, b) => b.pass - a.pass)[0];
+                                            if (!best) return "—";
+                                            return `${best.name} • ${best.pass}`;
+                                        })()}
+                                    </div>
+                                    <div className="statS">Aggressives Spiel</div>
+                                </div>
+
+                                <div className="statCard">
+                                    <div className="statK">Most Clutch</div>
+                                    <div className="statV">
+                                        {(() => {
+                                            const best = [...ranking].sort((a, b) => b.clutch - a.clutch)[0];
+                                            if (!best) return "—";
+                                            return `${best.name} • ${best.clutch}`;
+                                        })()}
+                                    </div>
+                                    <div className="statS">Pass unter Druck</div>
+                                </div>
+
+                                <div className="statCard">
+                                    <div className="statK">Round Scaling</div>
+                                    <div className="statV">Dynamic</div>
+                                    <div className="statS">Timer wird serverseitig pro Runde leicht schneller</div>
+                                </div>
+                            </div>
+
+                            <div className="noteBox">
+                                <div className="noteTitle">🧩 Prepared</div>
+                                <div className="noteText">
+                                    Ranking nutzt Felder aus <code>players</code>: <b>pass_count</b>, <b>clutch_pass_count</b>, <b>fastest_pass_ms</b>, <b>total_hold_ms</b>, <b>survival_streak</b>.
+                                    Wenn einzelne Felder noch null sind, bleibt UI stabil.
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* WICHTIG: Toast auch im FINISHED Screen rendern */}
+                {/* Toast also on finished */}
                 {toast ? (
-                    <div
-                        style={{
-                            position: "fixed",
-                            left: "50%",
-                            bottom: 22,
-                            transform: "translateX(-50%)",
-                            zIndex: 9999,
-                            padding: "10px 14px",
-                            borderRadius: 999,
-                            background: "rgba(0,0,0,0.55)",
-                            border: "1px solid rgba(255,255,255,0.10)",
-                            fontWeight: 900,
-                            backdropFilter: "blur(10px)",
-                            WebkitBackdropFilter: "blur(10px)",
-                        }}
-                    >
+                    <div className="toastFixed" role="status" aria-live="polite">
                         {toast}
                     </div>
                 ) : null}
+
+                <style>{`
+          .finishHero{
+            position: relative;
+            border-radius: 34px;
+            padding: 22px 22px;
+            background: rgba(0,0,0,0.28);
+            border: 1px solid rgba(255,255,255,0.14);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            box-shadow: 0 22px 90px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
+            text-align: center;
+            overflow: hidden;
+          }
+          .finishKicker{ font-size: 13px; font-weight: 950; letter-spacing: 2px; opacity: .82; }
+          .finishWinner{
+            margin-top: 10px;
+            font-size: clamp(54px, 7vw, 98px);
+            font-weight: 1000;
+            text-shadow: 0 22px 90px rgba(0,0,0,0.45);
+          }
+          .finishMeta{
+            margin-top: 10px;
+            font-weight: 900;
+            opacity: .86;
+            display:flex;
+            justify-content:center;
+            gap: 10px;
+            flex-wrap: wrap;
+          }
+          .dot{ opacity: .65; }
+          .finishChips{
+            margin-top: 16px;
+            display:flex;
+            justify-content:center;
+            gap: 10px;
+            flex-wrap: wrap;
+          }
+          .chipPill{
+            display:inline-flex;
+            align-items:center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.10);
+            border: 1px solid rgba(255,255,255,0.14);
+            font-weight: 950;
+          }
+          .chipPill.alt{
+            background: rgba(0,0,0,0.18);
+            border: 1px solid rgba(255,255,255,0.12);
+          }
+          .muted{ opacity: .75; font-weight: 850; }
+          .finishButtons{
+            margin-top: 18px;
+            display:flex;
+            justify-content:center;
+            gap: 12px;
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 2;
+          }
+          .finishOrbs{
+            position:absolute;
+            inset:-60px;
+            background:
+              radial-gradient(circle at 30% 30%, rgba(255,214,10,0.18), transparent 55%),
+              radial-gradient(circle at 70% 40%, rgba(34,211,238,0.10), transparent 58%),
+              radial-gradient(circle at 50% 80%, rgba(255,45,85,0.10), transparent 60%);
+            filter: blur(22px);
+            opacity: .92;
+            pointer-events:none;
+          }
+          .finishGrid{
+            margin-top: 16px;
+            display:grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 14px;
+          }
+          .panel{
+            border-radius: 28px;
+            background: rgba(0,0,0,0.22);
+            border: 1px solid rgba(255,255,255,0.14);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 18px 70px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.10);
+            overflow: hidden;
+          }
+          .panelHead{
+            padding: 16px 16px;
+            display:flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.10);
+          }
+          .panelTitle{ font-weight: 1000; font-size: 16px; }
+          .panelSub{ margin-top: 2px; font-weight: 850; opacity: .72; font-size: 12px; }
+          .rankTable{ padding: 10px 10px 12px; }
+          .rankRow{
+            display:grid;
+            grid-template-columns: 42px 1.3fr 70px 58px 64px 86px 74px 64px;
+            gap: 10px;
+            align-items:center;
+            padding: 10px 10px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.10);
+            background: rgba(0,0,0,0.14);
+            margin-top: 8px;
+          }
+          .rankHeader{
+            margin-top: 0;
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.12);
+            font-weight: 950;
+            opacity: .86;
+          }
+          .right{ text-align: right; font-weight: 900; }
+          .rankNum{ font-weight: 1000; opacity: .9; text-align:center; }
+          .rankName{ display:flex; align-items:center; gap: 10px; min-width: 0; }
+          .nm{ font-weight: 950; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .badge{
+            width: 28px; height: 28px;
+            border-radius: 999px;
+            display:grid; place-items:center;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+          }
+          .meTag{
+            margin-left: 8px;
+            font-size: 11px;
+            font-weight: 1000;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(34,211,238,0.14);
+            border: 1px solid rgba(34,211,238,0.22);
+            opacity: .95;
+          }
+          .rankRow.winner{
+            background: radial-gradient(circle at 20% 20%, rgba(255,214,10,0.18), rgba(0,0,0,0.14) 70%);
+            border-color: rgba(255,214,10,0.22);
+          }
+          .rankRow.me{
+            border-color: rgba(34,211,238,0.22);
+            background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.12), rgba(0,0,0,0.14) 70%);
+          }
+          .cards{ padding: 12px 12px 14px; display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+          .statCard{
+            border-radius: 22px;
+            padding: 12px 12px;
+            background: rgba(0,0,0,0.16);
+            border: 1px solid rgba(255,255,255,0.12);
+          }
+          .statK{ font-weight: 950; opacity: .78; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+          .statV{ margin-top: 6px; font-weight: 1000; font-size: 18px; }
+          .statS{ margin-top: 4px; font-weight: 850; opacity: .70; font-size: 12px; }
+          .noteBox{
+            margin: 0 12px 14px;
+            border-radius: 22px;
+            padding: 12px 12px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+          }
+          .noteTitle{ font-weight: 1000; }
+          .noteText{ margin-top: 6px; font-weight: 850; opacity: .78; font-size: 12px; line-height: 1.35; }
+          code{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+          .toastFixed{
+            position: fixed;
+            left: 50%;
+            bottom: 22px;
+            transform: translateX(-50%);
+            z-index: 9999;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(0,0,0,0.55);
+            border: 1px solid rgba(255,255,255,0.10);
+            font-weight: 900;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+          }
+
+          /* Buttons (self-contained so MVP works even if global styles differ) */
+          .btn{
+            appearance:none;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: rgba(0,0,0,0.22);
+            color: white;
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-weight: 950;
+            cursor: pointer;
+            transition: transform .14s ease, filter .14s ease, border-color .14s ease;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+          }
+          .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
+          .btn:active{ transform: translateY(0px) scale(0.99); }
+          .btn:disabled{ opacity: .65; cursor:not-allowed; transform:none; filter:none; }
+          .btnXL{ padding: 12px 18px; font-size: 14px; }
+          .btnPrimary{
+            background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95));
+            border-color: rgba(255,255,255,0.14);
+            box-shadow: 0 18px 60px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14);
+          }
+          .btnSecondary{
+            background: linear-gradient(135deg, rgba(214,162,92,0.96), rgba(148,92,54,0.96));
+            border-color: rgba(255,255,255,0.14);
+          }
+          .btnGhost{
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.12);
+            padding: 10px 12px;
+            font-size: 13px;
+          }
+
+          @media (max-width: 980px){
+            .finishGrid{ grid-template-columns: 1fr; }
+          }
+          @media (max-width: 760px){
+            .rankRow{ grid-template-columns: 42px 1.3fr 70px 58px; }
+            .rankHeader div:nth-child(n+5){ display:none; }
+            .rankRow div:nth-child(n+5){ display:none; }
+            .cards{ grid-template-columns: 1fr; }
+          }
+        `}</style>
             </main>
         );
     }
+
     // =========================================================
     // PHASE: NOT RUNNING (WARTEN)
     // =========================================================
@@ -1216,14 +1405,26 @@ export default function GamePage() {
         );
     }
 
+    // =========================================================
+    // PHASE: RUNNING (Safe Window + Pass Cooldown + Clutch + Spectator HUD)
+    // =========================================================
     const runningBg = iAmEliminated
         ? "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.35) 60%), radial-gradient(circle at 50% 85%, rgba(180,180,180,0.14) 0%, rgba(25,25,25,0.92) 80%)"
         : isMeHolder
             ? "radial-gradient(circle at 50% 35%, rgba(255,120,80,0.55) 0%, rgba(143,15,15,0.96) 72%)"
             : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.26) 0%, rgba(0,130,60,0.78) 80%)";
-    // =========================================================
-    // PHASE: RUNNING
-    // =========================================================
+
+    const passDisabledReason =
+        iAmEliminated
+            ? "Du bist raus"
+            : !isMeHolder
+                ? "Nicht dein Turn"
+                : passBusy
+                    ? "Busy"
+                    : passCooldownMsLeft > 0
+                        ? "Cooldown"
+                        : null;
+
     return (
         <main
             style={{
@@ -1234,114 +1435,174 @@ export default function GamePage() {
                 background: runningBg,
             }}
         >
+            {/* ring overlay */}
             <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} passEvent={passEvent} />
 
             {isMeHolder && !iAmEliminated ? <div className="holderPulseLayer" aria-hidden /> : null}
+
+            {/* Turn overlay */}
             {turnOverlay ? (
-                <div
-                    style={{
-                        position: "fixed",
-                        left: "50%",
-                        top: 22,
-                        transform: "translateX(-50%)",
-                        zIndex: 9999,
-                        padding: "12px 16px",
-                        borderRadius: 999,
-                        background: "rgba(0,0,0,0.62)",
-                        border: "1px solid rgba(255,255,255,0.14)",
-                        fontWeight: 950,
-                        letterSpacing: 0.3,
-                        backdropFilter: "blur(10px)",
-                        WebkitBackdropFilter: "blur(10px)",
-                    }}
-                >
+                <div className="turnOverlay" role="status" aria-live="polite">
                     ✅ Du bist dran
                 </div>
             ) : null}
 
+            {/* Toast */}
             {toast ? (
-                <div
-                    style={{
-                        position: "fixed",
-                        left: "50%",
-                        bottom: 22,
-                        transform: "translateX(-50%)",
-                        zIndex: 9999,
-                        padding: "10px 14px",
-                        borderRadius: 999,
-                        background: "rgba(0,0,0,0.55)",
-                        border: "1px solid rgba(255,255,255,0.10)",
-                        fontWeight: 900,
-                        backdropFilter: "blur(10px)",
-                        WebkitBackdropFilter: "blur(10px)",
-                    }}
-                >
+                <div className="toastFixed" role="status" aria-live="polite">
                     {toast}
                 </div>
             ) : null}
 
-            <div style={{ position: "relative", zIndex: 3, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-                <div style={{ width: "min(920px, 96vw)", textAlign: "center" }}>
+            {/* HUD */}
+            <div className="hud">
+                <div className="hudTop">
+                    <div className="hudTitle">RUNNING</div>
+                    <div className="hudTopic">{selectedTopic}</div>
+
+                    <div className="hudLine">
+                        Holder: <b>{holderName}</b>
+                        {typeof explodeSecondsLeft === "number" ? (
+                            <>
+                                <span className="dot">•</span> 💣 <b>{explodeSecondsLeft}s</b>
+                            </>
+                        ) : null}
+                        {typeof safeSecondsLeft === "number" && safeSecondsLeft > 0 ? (
+                            <>
+                                <span className="dot">•</span> 🛡️ Safe <b>{safeSecondsLeft}s</b>
+                            </>
+                        ) : null}
+                        {clutchNow ? (
+                            <>
+                                <span className="dot">•</span> <span className="clutch">🔥 CLUTCH</span>
+                            </>
+                        ) : null}
+                    </div>
+
+                    {/* Spectator bar */}
                     {iAmEliminated ? (
-                        <div
-                            style={{
-                                marginBottom: 14,
-                                display: "inline-flex",
-                                gap: 10,
-                                alignItems: "center",
-                                padding: "10px 12px",
-                                borderRadius: 999,
-                                background: "rgba(0,0,0,0.30)",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                backdropFilter: "blur(10px)",
-                                WebkitBackdropFilter: "blur(10px)",
-                                fontWeight: 900,
-                            }}
-                        >
-                            <span style={{ opacity: 0.9 }}>👁️ Spectator</span>
-                            <span style={{ opacity: 0.75 }}>•</span>
-                            <span style={{ opacity: 0.9 }}>
+                        <div className="spectatorBar">
+                            <span>👁️ Spectator</span>
+                            <span className="dot">•</span>
+                            <span>
                 Jetzt: <b>{holderName}</b>
               </span>
                             {nextUp ? (
                                 <>
-                                    <span style={{ opacity: 0.75 }}>•</span>
-                                    <span style={{ opacity: 0.9 }}>
+                                    <span className="dot">•</span>
+                                    <span>
                     Next: <b>{nextUp.name}</b>
                   </span>
                                 </>
                             ) : null}
                             {typeof explodeSecondsLeft === "number" ? (
                                 <>
-                                    <span style={{ opacity: 0.75 }}>•</span>
-                                    <span style={{ opacity: 0.9 }}>💣 {explodeSecondsLeft}s</span>
+                                    <span className="dot">•</span>
+                                    <span>💣 {explodeSecondsLeft}s</span>
                                 </>
                             ) : null}
                         </div>
                     ) : null}
 
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>RUNNING</div>
-                    <div style={{ fontSize: "clamp(28px, 4.2vw, 56px)", fontWeight: 950, marginTop: 12 }}>{selectedTopic}</div>
-
-                    <div style={{ marginTop: 12, opacity: 0.9, fontWeight: 850 }}>
-                        Holder: <b>{holderName}</b>
-                    </div>
-
+                    {/* Action */}
                     {isMeHolder && !iAmEliminated ? (
-                        <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
-                            <button className="btn btnPrimary btnXL" onClick={() => void handlePass()} type="button" disabled={!mePlayerId || passBusy} title="Weitergeben">
-                                {passBusy ? "…" : "🥔 Weitergeben (Space)"}
+                        <div className="actions">
+                            <button
+                                className="btn btnPrimary btnXL"
+                                onClick={() => void handlePass()}
+                                type="button"
+                                disabled={!!passDisabledReason}
+                                title={passDisabledReason ?? "Weitergeben"}
+                            >
+                                {passBusy ? "…" : passCooldownMsLeft > 0 ? `⏱️ Cooldown ${Math.ceil(passCooldownMsLeft / 100) / 10}s` : "🥔 Weitergeben (Space)"}
                             </button>
-                        </div>
-                    ) : null}
 
-                    <div style={{ marginTop: 12, opacity: 0.8, fontWeight: 800 }}>
-                        {iAmEliminated ? "Du schaust zu." : isMeHolder ? "Du hast die Kartoffel. Drück Space oder Button." : "Warte, bis du die Kartoffel bekommst."}
-                    </div>
+                            <div className="helper">
+                                {typeof safeSecondsLeft === "number" && safeSecondsLeft > 0 ? (
+                                    <span>🛡️ Safe Window aktiv</span>
+                                ) : clutchNow ? (
+                                    <span>🔥 Unter 2s = Clutch zählt</span>
+                                ) : (
+                                    <span>Tip: schneller passen = besser</span>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="helper">
+                            {iAmEliminated ? "Du schaust zu." : "Warte, bis du die Kartoffel bekommst."}
+                        </div>
+                    )}
                 </div>
             </div>
 
             <style>{`
+        .hud{
+          position: relative;
+          z-index: 3;
+          min-height: 100vh;
+          display: grid;
+          place-items: center;
+          padding: 24px;
+          pointer-events: none;
+        }
+        .hudTop{
+          width: min(980px, 96vw);
+          text-align: center;
+          pointer-events: auto;
+        }
+        .hudTitle{
+          font-size: 14px;
+          font-weight: 900;
+          letter-spacing: 1.6px;
+          opacity: 0.75;
+        }
+        .hudTopic{
+          margin-top: 10px;
+          font-size: clamp(28px, 4.2vw, 56px);
+          font-weight: 950;
+          text-shadow: 0 18px 70px rgba(0,0,0,0.35);
+        }
+        .hudLine{
+          margin-top: 10px;
+          font-weight: 900;
+          opacity: .90;
+          display:flex;
+          justify-content:center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .clutch{
+          font-weight: 1000;
+          letter-spacing: .4px;
+          text-shadow: 0 12px 50px rgba(0,0,0,0.25);
+        }
+        .spectatorBar{
+          margin: 14px auto 0;
+          display: inline-flex;
+          gap: 10px;
+          align-items: center;
+          padding: 10px 12px;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.30);
+          border: 1px solid rgba(255,255,255,0.12);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          font-weight: 900;
+          opacity: .96;
+        }
+
+        .actions{
+          margin-top: 16px;
+          display: grid;
+          justify-items: center;
+          gap: 10px;
+        }
+        .helper{
+          margin-top: 10px;
+          font-weight: 850;
+          opacity: .80;
+        }
+
         @keyframes holderPulse {
           0% { transform: scale(1); opacity: .55; }
           50% { transform: scale(1.03); opacity: .90; }
@@ -1355,6 +1616,60 @@ export default function GamePage() {
           animation: holderPulse 1.2s ease-in-out infinite;
           pointer-events:none;
           z-index: 1;
+        }
+
+        .turnOverlay{
+          position: fixed;
+          left: 50%;
+          top: 22px;
+          transform: translateX(-50%);
+          z-index: 9999;
+          padding: 12px 16px;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.62);
+          border: 1px solid rgba(255,255,255,0.14);
+          font-weight: 950;
+          letter-spacing: 0.3px;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
+
+        .toastFixed{
+          position: fixed;
+          left: 50%;
+          bottom: 22px;
+          transform: translateX(-50%);
+          z-index: 9999;
+          padding: 10px 14px;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.55);
+          border: 1px solid rgba(255,255,255,0.10);
+          font-weight: 900;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
+
+        /* Buttons (same as finished) */
+        .btn{
+          appearance:none;
+          border: 1px solid rgba(255,255,255,0.14);
+          background: rgba(0,0,0,0.22);
+          color: white;
+          border-radius: 999px;
+          padding: 10px 14px;
+          font-weight: 950;
+          cursor: pointer;
+          transition: transform .14s ease, filter .14s ease, border-color .14s ease;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+        }
+        .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
+        .btn:active{ transform: translateY(0px) scale(0.99); }
+        .btn:disabled{ opacity: .65; cursor:not-allowed; transform:none; filter:none; }
+        .btnXL{ padding: 12px 18px; font-size: 14px; }
+        .btnPrimary{
+          background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95));
+          border-color: rgba(255,255,255,0.14);
+          box-shadow: 0 18px 60px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14);
         }
       `}</style>
         </main>
