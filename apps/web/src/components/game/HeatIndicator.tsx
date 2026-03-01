@@ -6,10 +6,7 @@ type HeatIndicatorProps = {
     level: HeatLevel;
 };
 
-const HEAT_MAP: Record<
-    HeatLevel,
-    { label: string; color: string; glow: string }
-> = {
+const HEAT_MAP: Record<HeatLevel, { label: string; color: string; glow: string }> = {
     low: {
         label: "🟢 Ruhig",
         color: "rgba(52,199,89,0.85)",
