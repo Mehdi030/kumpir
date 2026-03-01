@@ -149,8 +149,11 @@ export default function GamePage() {
     const [turnOverlay, setTurnOverlay] = useState(false);
     const lastShownTurnNonceRef = useRef<number>(0);
 
-    // Pass animation event (optional PlayerRing usage)
+    // Pass animation event
     const [passEvent, setPassEvent] = useState<PassEvent | null>(null);
+
+    // HUD pulse on pass
+    const [hudPulseNonce, setHudPulseNonce] = useState(0);
 
     const inFlightRef = useRef(false);
     const prevHolderRef = useRef<string | null>(null);
@@ -257,8 +260,6 @@ export default function GamePage() {
         if (idx < 0) return null;
         return { row: ranking[idx], rank: idx + 1 };
     }, [ranking, mePlayerId]);
-
-    const mvp = useMemo(() => winnerPlayer ?? null, [winnerPlayer]);
 
     // -----------------------------
     // RPC wrappers
@@ -379,10 +380,7 @@ export default function GamePage() {
                 };
 
                 // Post-round loser toast (once)
-                if (
-                    nextLobby.last_loser_player_id &&
-                    nextLobby.last_loser_player_id !== lastLoserRef.current
-                ) {
+                if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
                     lastLoserRef.current = nextLobby.last_loser_player_id;
                     const loserName =
                         players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
@@ -400,6 +398,9 @@ export default function GamePage() {
                         toPlayerId: nextHolder,
                         nonce: passNonceRef.current,
                     });
+
+                    // HUD pulse
+                    setHudPulseNonce(passNonceRef.current);
                 }
 
                 // “Your turn” overlay
@@ -415,7 +416,8 @@ export default function GamePage() {
                 prevHolderRef.current = nextHolder;
                 setLobby(nextLobby);
 
-                const playersRes = await supabase
+                // IMPORTANT: finished => do NOT filter by status=active
+                const playersQuery = supabase
                     .from("players")
                     .select(
                         [
@@ -434,8 +436,10 @@ export default function GamePage() {
                         ].join(",")
                     )
                     .eq("lobby_id", nextLobby.id)
-                    .eq("status", "active")
                     .order("seat_index", { ascending: true });
+
+                const playersRes =
+                    nextLobby.phase === "finished" ? await playersQuery : await playersQuery.eq("status", "active");
 
                 if (!alive) return;
 
@@ -472,8 +476,7 @@ export default function GamePage() {
                             else if (row.choice === 3) r++;
 
                             if (mePlayerId && row.player_id === mePlayerId) {
-                                if (row.choice === 1 || row.choice === 2 || row.choice === 3)
-                                    mine = row.choice as 1 | 2 | 3;
+                                if (row.choice === 1 || row.choice === 2 || row.choice === 3) mine = row.choice as 1 | 2 | 3;
                             }
                         }
                         setVoteCounts({ a, b, r });
@@ -486,8 +489,7 @@ export default function GamePage() {
 
                 // Best-effort phase automations
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
-                    const meAlive =
-                        nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
+                    const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
                     const iAmHolderNow = nextLobby.holder_player_id === mePlayerId;
 
                     if (iAmHolderNow) {
@@ -501,9 +503,7 @@ export default function GamePage() {
                     const dueMs = msUntil(nextLobby.topic_vote_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !finalizeInFlightRef.current) {
                         finalizeInFlightRef.current = true;
-                        void rpcFinalizeTopicVote(nextLobby.id).finally(
-                            () => (finalizeInFlightRef.current = false)
-                        );
+                        void rpcFinalizeTopicVote(nextLobby.id).finally(() => (finalizeInFlightRef.current = false));
                     }
                 }
 
@@ -511,9 +511,7 @@ export default function GamePage() {
                     const dueMs = msUntil(nextLobby.countdown_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !advanceInFlightRef.current) {
                         advanceInFlightRef.current = true;
-                        void rpcAdvanceFromCountdown(nextLobby.id).finally(
-                            () => (advanceInFlightRef.current = false)
-                        );
+                        void rpcAdvanceFromCountdown(nextLobby.id).finally(() => (advanceInFlightRef.current = false));
                     }
                 }
             } finally {
@@ -581,7 +579,6 @@ export default function GamePage() {
             if (lobby.phase !== "topic_vote") return;
             if (voteBusy) return;
 
-            // Direkt markieren, damit es sich sofort gut anfühlt (kein Toast nötig)
             setMyVote(choice);
 
             setVoteBusy(true);
@@ -594,13 +591,10 @@ export default function GamePage() {
 
                 if (error) {
                     console.error("rpc_vote_topic failed:", error);
-                    // Bei Fehler wieder zurücksetzen
                     setMyVote(null);
                     showToast(`❌ ${error.message}`, 2600);
                     return;
                 }
-
-                // Kein "Vote gespeichert" mehr
             } catch (e: unknown) {
                 setMyVote(null);
                 showToast(`❌ ${getErrorMessage(e)}`, 2600);
@@ -667,9 +661,7 @@ export default function GamePage() {
     const rLabel = "Zufällig";
 
     // =========================================================
-    // PHASE: TOPIC VOTE
-    // - Kein Toast "Vote gespeichert"
-    // - Auswahl wird nur über active-Markierung gezeigt
+    // PHASE: TOPIC VOTE  (dein UI unverändert)
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
@@ -758,7 +750,6 @@ export default function GamePage() {
                             {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
                         </div>
 
-                        {/* Toast bleibt für Errors etc., aber nicht mehr für Vote-OK */}
                         {toast ? <div className="toastInline">{toast}</div> : null}
                     </div>
                 </div>
@@ -793,7 +784,6 @@ export default function GamePage() {
                 </div>
 
                 <style>{`
-          /* (dein CSS bleibt unverändert) */
           .kicker{font-size:12px;font-weight:950;letter-spacing:2.2px;opacity:.78;text-transform:uppercase;animation:${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};}
           .headline{margin-top:10px;font-size:clamp(36px,4.8vw,70px);font-weight:1000;letter-spacing:-0.6px;position:relative;display:inline-block;text-shadow:0 24px 80px rgba(0,0,0,0.35);animation:${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};}
           .headlineGlow{position:absolute;inset:-30px -60px;background:radial-gradient(circle at 40% 35%, rgba(255,214,10,0.25), rgba(255,149,0,0.18), rgba(255,45,85,0.06), transparent 70%);filter:blur(18px);opacity:.9;pointer-events:none;animation:${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};}
@@ -850,10 +840,8 @@ export default function GamePage() {
         );
     }
 
-    // (ab hier: countdown/finished/… bleibt wie bei dir)
-
     // =========================================================
-    // PHASE: COUNTDOWN
+    // PHASE: COUNTDOWN (dein UI unverändert)
     // =========================================================
     if (lobby.phase === "countdown") {
         const tie = lobby.topic_tie_choices && lobby.topic_tie_choices.length > 1;
@@ -881,9 +869,7 @@ export default function GamePage() {
                 }}
             >
                 <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>
-                        THEMA GEWÄHLT
-                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
                     <div
                         style={{
@@ -908,9 +894,7 @@ export default function GamePage() {
                         </div>
                     </div>
 
-                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>
-                        {selectedTopic}
-                    </div>
+                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>{selectedTopic}</div>
 
                     {tie ? (
                         <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 850 }}>
@@ -924,9 +908,7 @@ export default function GamePage() {
                         <div style={{ marginTop: 10, opacity: 0.85, fontWeight: 800 }}>Sag gleich was zum Thema.</div>
                     )}
 
-                    <div style={{ marginTop: 22, fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>
-                        START IN
-                    </div>
+                    <div style={{ marginTop: 22, fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>START IN</div>
                     <div
                         style={{
                             marginTop: 10,
@@ -957,10 +939,12 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: FINISHED (unverändert bei dir, außer: gleich unten)
+    // PHASE: FINISHED  (STATS BLEIBEN)
     // =========================================================
     if (lobby.phase === "finished") {
         const winnerName = winnerPlayer?.name ?? "Unbekannt";
+
+        const shown = showFullRanking ? ranking : top5;
 
         return (
             <main
@@ -974,8 +958,6 @@ export default function GamePage() {
                         "radial-gradient(circle at 50% 85%, rgba(255,214,10,0.35) 0%, rgba(240,138,26,0.62) 45%, rgba(143,15,15,0.92) 100%)",
                 }}
             >
-                {/* ...dein Finished UI bleibt 1:1 ... */}
-                {/* (Ich lasse den Rest hier bewusst weg, weil du nur Topic+Running wolltest) */}
                 <div style={{ width: "min(1120px, 96vw)" }}>
                     <div className="finishHero">
                         <div className="finishKicker">SPIEL BEENDET</div>
@@ -989,35 +971,139 @@ export default function GamePage() {
                             <span>
                 Thema: <b>{selectedTopic}</b>
               </span>
+                            {myRankRow ? (
+                                <>
+                                    <span className="dot">•</span>
+                                    <span>
+                    Du: <b>#{myRankRow.rank}</b>
+                  </span>
+                                </>
+                            ) : null}
                         </div>
 
-                        <div className="finishButtons">
-                            <button
-                                className="btn btnPrimary btnXL"
-                                onClick={async () => {
-                                    const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
-                                    if (error) return showToast(`❌ Reset: ${error.message}`, 2400);
-                                    window.location.href = `/lobby/${encodeURIComponent(code)}`;
-                                }}
-                                type="button"
-                            >
-                                Zurück zur Lobby
-                            </button>
+                        <div className="finishGrid">
+                            <div className="card">
+                                <div className="cardTitle">🏅 Ranking</div>
+                                <div className="table">
+                                    <div className="row head">
+                                        <div>#</div>
+                                        <div>Player</div>
+                                        <div className="r">Score</div>
+                                        <div className="r">Pass</div>
+                                        <div className="r">Clutch</div>
+                                        <div className="r">Fastest</div>
+                                        <div className="r">Hold</div>
+                                    </div>
 
-                            <button
-                                className="btn btnSecondary btnXL"
-                                onClick={async () => {
-                                    const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
-                                    if (error) return showToast(`❌ Rematch: ${error.message}`, 2400);
-                                    showToast("🔁 Rematch gestartet", 1200);
-                                }}
-                                type="button"
-                            >
-                                🔁 Rematch
-                            </button>
+                                    {shown.map((p, idx) => (
+                                        <div key={p.player_id} className={`row ${p.player_id === mePlayerId ? "me" : ""}`}>
+                                            <div>{idx + 1}{!showFullRanking ? "" : ""}</div>
+                                            <div className="name">
+                                                {p.name} {!p.is_alive ? <span className="tag dead">💀</span> : null}
+                                                {p.player_id === lobby.holder_player_id ? <span className="tag holder">🥔</span> : null}
+                                            </div>
+                                            <div className="r"><b>{p.score}</b></div>
+                                            <div className="r">{p.pass}</div>
+                                            <div className="r">{p.clutch}</div>
+                                            <div className="r">{fmtMs(p.fastest)}</div>
+                                            <div className="r">{fmtHold(p.holdMs)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="cardActions">
+                                    <button className="btn btnSecondary" type="button" onClick={() => setShowFullRanking((v) => !v)}>
+                                        {showFullRanking ? "Nur Top 5" : "Alle anzeigen"}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="card">
+                                <div className="cardTitle">🎯 Summary</div>
+                                <div className="statsGrid">
+                                    <div className="stat">
+                                        <div className="k">Winner</div>
+                                        <div className="v">{winnerName}</div>
+                                    </div>
+                                    <div className="stat">
+                                        <div className="k">Alive</div>
+                                        <div className="v">{players.filter((p) => p.is_alive).length}</div>
+                                    </div>
+                                    <div className="stat">
+                                        <div className="k">Players</div>
+                                        <div className="v">{players.length}</div>
+                                    </div>
+                                    <div className="stat">
+                                        <div className="k">Topic</div>
+                                        <div className="v">{selectedTopic}</div>
+                                    </div>
+                                </div>
+
+                                <div className="cardActions" style={{ marginTop: 14 }}>
+                                    <button
+                                        className="btn btnPrimary"
+                                        onClick={async () => {
+                                            const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
+                                            if (error) return showToast(`❌ Reset: ${error.message}`, 2400);
+                                            window.location.href = `/lobby/${encodeURIComponent(code)}`;
+                                        }}
+                                        type="button"
+                                    >
+                                        Zurück zur Lobby
+                                    </button>
+
+                                    <button
+                                        className="btn btnSecondary"
+                                        onClick={async () => {
+                                            const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
+                                            if (error) return showToast(`❌ Rematch: ${error.message}`, 2400);
+                                            showToast("🔁 Rematch gestartet", 1200);
+                                        }}
+                                        type="button"
+                                    >
+                                        🔁 Rematch
+                                    </button>
+                                </div>
+
+                                {toast ? <div style={{ marginTop: 12, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <style>{`
+          .finishHero{ text-align:center; }
+          .finishKicker{ font-size:12px; font-weight:950; letter-spacing:2.2px; opacity:.76; }
+          .finishWinner{ margin-top:10px; font-size:clamp(42px,5vw,78px); font-weight:1000; text-shadow:0 24px 90px rgba(0,0,0,0.35); }
+          .finishMeta{ margin-top:10px; font-weight:900; opacity:.88; display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
+          .dot{ opacity:.55; }
+          .finishGrid{ margin-top:22px; display:grid; grid-template-columns: 1.4fr 1fr; gap:14px; align-items:start; }
+          .card{ border-radius:28px; background:rgba(0,0,0,0.22); border:1px solid rgba(255,255,255,0.14); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding:16px; box-shadow: 0 18px 70px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.12); }
+          .cardTitle{ font-weight:1000; letter-spacing:.2px; opacity:.95; text-align:left; }
+          .table{ margin-top:12px; display:grid; gap:8px; }
+          .row{ display:grid; grid-template-columns: 42px 1fr 90px 70px 80px 110px 90px; gap:10px; padding:10px 10px; border-radius:16px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); align-items:center; }
+          .row.head{ background:rgba(255,255,255,0.04); border-color:rgba(255,255,255,0.06); font-size:12px; font-weight:950; letter-spacing:1.2px; text-transform:uppercase; opacity:.86; }
+          .row.me{ border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.08); }
+          .name{ display:flex; gap:8px; align-items:center; font-weight:950; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .r{ text-align:right; font-weight:900; opacity:.92; }
+          .tag{ display:inline-flex; align-items:center; justify-content:center; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:950; border:1px solid rgba(255,255,255,0.14); background:rgba(0,0,0,0.18); }
+          .tag.dead{ opacity:.75; }
+          .tag.holder{ background: rgba(255,214,10,0.16); }
+          .cardActions{ margin-top:12px; display:flex; gap:10px; justify-content:flex-start; flex-wrap:wrap; }
+          .statsGrid{ margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+          .stat{ padding:12px; border-radius:18px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); text-align:left; }
+          .stat .k{ font-size:12px; font-weight:950; letter-spacing:1.2px; text-transform:uppercase; opacity:.75; }
+          .stat .v{ margin-top:6px; font-size:16px; font-weight:1000; opacity:.95; }
+          .btn{ appearance:none; border:1px solid rgba(255,255,255,0.14); background:rgba(0,0,0,0.22); color:white; border-radius:999px; padding:10px 14px; font-weight:950; cursor:pointer; transition: transform .14s ease, filter .14s ease, border-color .14s ease; box-shadow: inset 0 1px 0 rgba(255,255,255,0.10); }
+          .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
+          .btn:active{ transform: translateY(0px) scale(0.99); }
+          .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
+          .btnSecondary{ background: rgba(0,0,0,0.22); }
+          @media (max-width: 980px){
+            .finishGrid{ grid-template-columns: 1fr; }
+            .row{ grid-template-columns: 38px 1fr 70px 56px 68px 96px 76px; }
+          }
+        `}</style>
             </main>
         );
     }
@@ -1048,8 +1134,7 @@ export default function GamePage() {
 
     // =========================================================
     // PHASE: RUNNING
-    // - Nur zeigen, wer die Kumpir hat
-    // - KEIN Timer / KEINE Sekundenanzeige
+    // - Bigger Now/Next + pulse on pass
     // =========================================================
     const runningBg = iAmEliminated
         ? "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.35) 60%), radial-gradient(circle at 50% 85%, rgba(180,180,180,0.14) 0%, rgba(25,25,25,0.92) 80%)"
@@ -1061,7 +1146,12 @@ export default function GamePage() {
 
     return (
         <main style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg }}>
-            <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} passEvent={passEvent} />
+            <PlayerRing
+                players={players}
+                holderPlayerId={lobby.holder_player_id}
+                mePlayerId={mePlayerId}
+                passEvent={passEvent}
+            />
 
             {turnOverlay ? (
                 <div className="turnOverlay" role="status" aria-live="polite">
@@ -1080,15 +1170,29 @@ export default function GamePage() {
                     <div className="hudTitle">RUNNING</div>
                     <div className="hudTopic">{selectedTopic}</div>
 
-                    {/* Nur Holder anzeigen, kein Timer */}
-                    <div className="hudLine">
-                        Kumpir bei: <b>{holderName}</b>
+                    <div key={hudPulseNonce} className={`whoCard ${reduceMotion ? "" : "pulse"}`}>
+                        <div className="whoRow">
+                            <span className="chip">NOW</span>
+                            <div className="whoName">
+                                <span className="pot">🥔</span> <b>{holderName}</b>
+                            </div>
+                        </div>
+
                         {nextUp ? (
-                            <>
-                                <span className="dot">•</span>
-                                Next: <b>{nextUp.name}</b>
-                            </>
-                        ) : null}
+                            <div className="whoRow">
+                                <span className="chip ghost">NEXT</span>
+                                <div className="whoName">
+                                    <span className="pot ghost">⏭</span> <b>{nextUp.name}</b>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="whoRow">
+                                <span className="chip ghost">NEXT</span>
+                                <div className="whoName" style={{ opacity: 0.8 }}>
+                                    —
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {iAmEliminated ? (
@@ -1155,15 +1259,67 @@ export default function GamePage() {
           font-weight: 950;
           text-shadow: 0 18px 70px rgba(0,0,0,0.35);
         }
-        .hudLine{
-          margin-top: 10px;
-          font-weight: 900;
-          opacity: .90;
-          display:flex;
-          justify-content:center;
+        .whoCard{
+          margin: 14px auto 0;
+          width: min(640px, 94vw);
+          padding: 14px 14px;
+          border-radius: 26px;
+          background: rgba(0,0,0,0.32);
+          border: 1px solid rgba(255,255,255,0.14);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          box-shadow: 0 18px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.12);
+          display: grid;
           gap: 10px;
-          flex-wrap: wrap;
         }
+        .whoRow{
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap: 12px;
+        }
+        .chip{
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          height: 30px;
+          padding: 0 12px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 1000;
+          letter-spacing: 1.4px;
+          background: rgba(255,255,255,0.10);
+          border: 1px solid rgba(255,255,255,0.12);
+        }
+        .chip.ghost{ opacity: .75; }
+        .whoName{
+          font-size: clamp(20px, 2.4vw, 30px);
+          font-weight: 1000;
+          letter-spacing: -0.2px;
+          display:flex;
+          align-items:center;
+          gap: 10px;
+        }
+        .pot{
+          width: 36px;
+          height: 36px;
+          display:grid;
+          place-items:center;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.22);
+          border: 1px solid rgba(255,255,255,0.12);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+        }
+        .pot.ghost{ opacity:.75; }
+        .pulse{
+          animation: pulsePop 420ms cubic-bezier(.2,1,.2,1) both;
+        }
+        @keyframes pulsePop{
+          0%{ transform: translateY(10px) scale(.98); opacity: .0; }
+          60%{ transform: translateY(0) scale(1.02); opacity: 1; }
+          100%{ transform: translateY(0) scale(1); opacity: 1; }
+        }
+
         .spectatorBar{
           margin: 14px auto 0;
           display: inline-flex;
