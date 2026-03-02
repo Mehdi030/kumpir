@@ -104,6 +104,18 @@ function fmtHold(ms?: number) {
     return `${m}m ${r}s`;
 }
 
+function fmtTimeAgo(ts: string | null | undefined) {
+    if (!ts) return "—";
+    const diff = Date.now() - Date.parse(ts);
+    if (!Number.isFinite(diff)) return "—";
+    const s = Math.max(0, Math.floor(diff / 1000));
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    return `${h}h ago`;
+}
+
 function pickNextAlive(players: Player[], holderId: string | null): Player | null {
     if (!holderId) return null;
     const alive = players.filter((p) => p.is_alive);
@@ -261,6 +273,43 @@ export default function GamePage() {
         return { row: ranking[idx], rank: idx + 1 };
     }, [ranking, mePlayerId]);
 
+    // -------- Running stats (NOW / NEXT) ----------
+    const holderRow = useMemo(() => {
+        if (!lobby?.holder_player_id) return null;
+        return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
+    }, [players, lobby?.holder_player_id]);
+
+    const nextRow = useMemo(() => {
+        if (!nextUp) return null;
+        return players.find((p) => p.player_id === nextUp.player_id) ?? null;
+    }, [players, nextUp]);
+
+    const holderStats = useMemo(() => {
+        const p = holderRow;
+        if (!p) return null;
+        return {
+            pass: p.pass_count ?? 0,
+            clutch: p.clutch_pass_count ?? 0,
+            fastest: p.fastest_pass_ms ?? null,
+            hold: p.total_hold_ms ?? 0,
+            streak: p.survival_streak ?? 0,
+            lastPassAt: p.last_pass_at ?? null,
+        };
+    }, [holderRow]);
+
+    const nextStats = useMemo(() => {
+        const p = nextRow;
+        if (!p) return null;
+        return {
+            pass: p.pass_count ?? 0,
+            clutch: p.clutch_pass_count ?? 0,
+            fastest: p.fastest_pass_ms ?? null,
+            hold: p.total_hold_ms ?? 0,
+            streak: p.survival_streak ?? 0,
+            lastPassAt: p.last_pass_at ?? null,
+        };
+    }, [nextRow]);
+
     // -----------------------------
     // RPC wrappers
     // -----------------------------
@@ -382,8 +431,7 @@ export default function GamePage() {
                 // Post-round loser toast (once)
                 if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
                     lastLoserRef.current = nextLobby.last_loser_player_id;
-                    const loserName =
-                        players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
+                    const loserName = players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
                     showToast(`💥 ${loserName} ist raus`, 1500);
                 }
 
@@ -454,10 +502,7 @@ export default function GamePage() {
 
                 // Votes
                 if (nextLobby.phase === "topic_vote") {
-                    const votesRes = await supabase
-                        .from("topic_votes")
-                        .select("choice,player_id")
-                        .eq("lobby_id", nextLobby.id);
+                    const votesRes = await supabase.from("topic_votes").select("choice,player_id").eq("lobby_id", nextLobby.id);
 
                     if (!alive) return;
 
@@ -898,8 +943,7 @@ export default function GamePage() {
 
                     {tie ? (
                         <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 850 }}>
-                            Tie zwischen:{" "}
-                            <span style={{ opacity: 0.98 }}>{tieChoices.map((c) => labelForChoice(c)).join(" · ")}</span>
+                            Tie zwischen: <span style={{ opacity: 0.98 }}>{tieChoices.map((c) => labelForChoice(c)).join(" · ")}</span>
                             <div style={{ marginTop: 6, opacity: 0.92 }}>
                                 Zufällig gewählt: <b>{pick ? labelForChoice(pick) : "…"}</b>
                             </div>
@@ -997,12 +1041,17 @@ export default function GamePage() {
 
                                     {shown.map((p, idx) => (
                                         <div key={p.player_id} className={`row ${p.player_id === mePlayerId ? "me" : ""}`}>
-                                            <div>{idx + 1}{!showFullRanking ? "" : ""}</div>
+                                            <div>
+                                                {idx + 1}
+                                                {!showFullRanking ? "" : ""}
+                                            </div>
                                             <div className="name">
                                                 {p.name} {!p.is_alive ? <span className="tag dead">💀</span> : null}
                                                 {p.player_id === lobby.holder_player_id ? <span className="tag holder">🥔</span> : null}
                                             </div>
-                                            <div className="r"><b>{p.score}</b></div>
+                                            <div className="r">
+                                                <b>{p.score}</b>
+                                            </div>
                                             <div className="r">{p.pass}</div>
                                             <div className="r">{p.clutch}</div>
                                             <div className="r">{fmtMs(p.fastest)}</div>
@@ -1134,7 +1183,7 @@ export default function GamePage() {
 
     // =========================================================
     // PHASE: RUNNING
-    // - Bigger Now/Next + pulse on pass
+    // - Holder im Zentrum groß / Next kleiner / großes Stats-System
     // =========================================================
     const runningBg = iAmEliminated
         ? "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.35) 60%), radial-gradient(circle at 50% 85%, rgba(180,180,180,0.14) 0%, rgba(25,25,25,0.92) 80%)"
@@ -1146,12 +1195,7 @@ export default function GamePage() {
 
     return (
         <main style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg }}>
-            <PlayerRing
-                players={players}
-                holderPlayerId={lobby.holder_player_id}
-                mePlayerId={mePlayerId}
-                passEvent={passEvent}
-            />
+            <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} passEvent={passEvent} />
 
             {turnOverlay ? (
                 <div className="turnOverlay" role="status" aria-live="polite">
@@ -1170,65 +1214,123 @@ export default function GamePage() {
                     <div className="hudTitle">RUNNING</div>
                     <div className="hudTopic">{selectedTopic}</div>
 
-                    <div key={hudPulseNonce} className={`whoCard ${reduceMotion ? "" : "pulse"}`}>
-                        <div className="whoRow">
-                            <span className="chip">NOW</span>
-                            <div className="whoName">
-                                <span className="pot">🥔</span> <b>{holderName}</b>
+                    {/* CENTER STACK */}
+                    <div className="centerStack" key={hudPulseNonce}>
+                        {/* HOLDER HERO */}
+                        <div className={`holderHero ${reduceMotion ? "" : "pulseHero"}`}>
+                            <div className="heroKicker">KUMPIR BEI</div>
+                            <div className="heroName">
+                <span className="heroPot" aria-hidden>
+                  🥔
+                </span>
+                                {holderName}
+                            </div>
+
+                            <div className="heroMetaRow">
+                                <div className="pill">
+                                    Runden <b>{lobby.round_number ?? "—"}</b>
+                                </div>
+                                <div className="pill">
+                                    Alive <b>{players.filter((p) => p.is_alive).length}</b>/<b>{players.length}</b>
+                                </div>
+                                <div className="pill">
+                                    Last Pass <b>{holderStats ? fmtTimeAgo(holderStats.lastPassAt) : "—"}</b>
+                                </div>
                             </div>
                         </div>
 
-                        {nextUp ? (
-                            <div className="whoRow">
-                                <span className="chip ghost">NEXT</span>
-                                <div className="whoName">
-                                    <span className="pot ghost">⏭</span> <b>{nextUp.name}</b>
+                        {/* NEXT CARD */}
+                        <div className="nextCard">
+                            <div className="nextLeft">
+                                <div className="nextKicker">NEXT</div>
+                                <div className="nextName">{nextUp?.name ?? "—"}</div>
+                            </div>
+                            <div className="nextRight">
+                                <div className="miniStat">
+                                    <span className="miniLabel">Fastest</span>
+                                    <span className="miniValue">{nextStats ? fmtMs(nextStats.fastest) : "—"}</span>
                                 </div>
+                                <div className="miniStat">
+                                    <span className="miniLabel">Streak</span>
+                                    <span className="miniValue">{nextStats ? nextStats.streak : "—"}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* BIG STATS GRID */}
+                        <div className="statsGridBig">
+                            <div className="statTile">
+                                <div className="statLabel">Holder Passes</div>
+                                <div className="statValue">{holderStats ? holderStats.pass : "—"}</div>
+                                <div className="statHint">Weitergaben insgesamt</div>
+                            </div>
+
+                            <div className="statTile">
+                                <div className="statLabel">Clutch</div>
+                                <div className="statValue">{holderStats ? holderStats.clutch : "—"}</div>
+                                <div className="statHint">Knapp vor Explosion</div>
+                            </div>
+
+                            <div className="statTile">
+                                <div className="statLabel">Fastest Pass</div>
+                                <div className="statValue">{holderStats ? fmtMs(holderStats.fastest) : "—"}</div>
+                                <div className="statHint">Reaktionszeit</div>
+                            </div>
+
+                            <div className="statTile">
+                                <div className="statLabel">Total Hold</div>
+                                <div className="statValue">{holderStats ? fmtHold(holderStats.hold) : "—"}</div>
+                                <div className="statHint">Gesamte Haltezeit</div>
+                            </div>
+
+                            <div className="statTile">
+                                <div className="statLabel">Survival Streak</div>
+                                <div className="statValue">{holderStats ? holderStats.streak : "—"}</div>
+                                <div className="statHint">Runden am Stück</div>
+                            </div>
+
+                            <div className="statTile">
+                                <div className="statLabel">You</div>
+                                <div className="statValue">{meRow ? (meRow.is_alive ? "ALIVE" : "OUT") : "—"}</div>
+                                <div className="statHint">{iAmEliminated ? "Zuschauer" : isMeHolder ? "Du hältst die Kumpir" : "Warte auf Turn"}</div>
+                            </div>
+                        </div>
+
+                        {iAmEliminated ? (
+                            <div className="spectatorBar">
+                                <span>👁️ Spectator</span>
+                                <span className="dot">•</span>
+                                <span>
+                  Jetzt: <b>{holderName}</b>
+                </span>
+                                {nextUp ? (
+                                    <>
+                                        <span className="dot">•</span>
+                                        <span>
+                      Next: <b>{nextUp.name}</b>
+                    </span>
+                                    </>
+                                ) : null}
+                            </div>
+                        ) : null}
+
+                        {isMeHolder && !iAmEliminated ? (
+                            <div className="actions">
+                                <button
+                                    className="btn btnPrimary btnXL"
+                                    onClick={() => void handlePass()}
+                                    type="button"
+                                    disabled={!!passDisabledReason}
+                                    title={passDisabledReason ?? "Weitergeben"}
+                                >
+                                    {passBusy ? "…" : "🥔 Weitergeben (Space)"}
+                                </button>
+                                <div className="helper">Weitergeben wenn du dran bist.</div>
                             </div>
                         ) : (
-                            <div className="whoRow">
-                                <span className="chip ghost">NEXT</span>
-                                <div className="whoName" style={{ opacity: 0.8 }}>
-                                    —
-                                </div>
-                            </div>
+                            <div className="helper">{iAmEliminated ? "Du schaust zu." : "Warte, bis du die Kartoffel bekommst."}</div>
                         )}
                     </div>
-
-                    {iAmEliminated ? (
-                        <div className="spectatorBar">
-                            <span>👁️ Spectator</span>
-                            <span className="dot">•</span>
-                            <span>
-                Jetzt: <b>{holderName}</b>
-              </span>
-                            {nextUp ? (
-                                <>
-                                    <span className="dot">•</span>
-                                    <span>
-                    Next: <b>{nextUp.name}</b>
-                  </span>
-                                </>
-                            ) : null}
-                        </div>
-                    ) : null}
-
-                    {isMeHolder && !iAmEliminated ? (
-                        <div className="actions">
-                            <button
-                                className="btn btnPrimary btnXL"
-                                onClick={() => void handlePass()}
-                                type="button"
-                                disabled={!!passDisabledReason}
-                                title={passDisabledReason ?? "Weitergeben"}
-                            >
-                                {passBusy ? "…" : "🥔 Weitergeben (Space)"}
-                            </button>
-                            <div className="helper">Weitergeben wenn du dran bist.</div>
-                        </div>
-                    ) : (
-                        <div className="helper">{iAmEliminated ? "Du schaust zu." : "Warte, bis du die Kartoffel bekommst."}</div>
-                    )}
                 </div>
             </div>
 
@@ -1259,69 +1361,173 @@ export default function GamePage() {
           font-weight: 950;
           text-shadow: 0 18px 70px rgba(0,0,0,0.35);
         }
-        .whoCard{
-          margin: 14px auto 0;
-          width: min(640px, 94vw);
-          padding: 14px 14px;
-          border-radius: 26px;
-          background: rgba(0,0,0,0.32);
-          border: 1px solid rgba(255,255,255,0.14);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          box-shadow: 0 18px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.12);
+
+        .centerStack{
+          margin-top: 14px;
           display: grid;
-          gap: 10px;
+          justify-items: center;
+          gap: 14px;
         }
-        .whoRow{
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-          gap: 12px;
+
+        .holderHero{
+          width: min(860px, 96vw);
+          border-radius: 40px;
+          padding: 22px 22px 18px;
+          background: rgba(0,0,0,0.28);
+          border: 1px solid rgba(255,255,255,0.14);
+          backdrop-filter: blur(14px) saturate(140%);
+          -webkit-backdrop-filter: blur(14px) saturate(140%);
+          box-shadow: 0 22px 90px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.12);
         }
-        .chip{
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          height: 30px;
-          padding: 0 12px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 1000;
-          letter-spacing: 1.4px;
-          background: rgba(255,255,255,0.10);
-          border: 1px solid rgba(255,255,255,0.12);
-        }
-        .chip.ghost{ opacity: .75; }
-        .whoName{
-          font-size: clamp(20px, 2.4vw, 30px);
-          font-weight: 1000;
-          letter-spacing: -0.2px;
-          display:flex;
-          align-items:center;
-          gap: 10px;
-        }
-        .pot{
-          width: 36px;
-          height: 36px;
-          display:grid;
-          place-items:center;
-          border-radius: 999px;
-          background: rgba(0,0,0,0.22);
-          border: 1px solid rgba(255,255,255,0.12);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-        }
-        .pot.ghost{ opacity:.75; }
-        .pulse{
+        .pulseHero{
           animation: pulsePop 420ms cubic-bezier(.2,1,.2,1) both;
         }
         @keyframes pulsePop{
-          0%{ transform: translateY(10px) scale(.98); opacity: .0; }
+          0%{ transform: translateY(10px) scale(.985); opacity: .0; }
           60%{ transform: translateY(0) scale(1.02); opacity: 1; }
           100%{ transform: translateY(0) scale(1); opacity: 1; }
         }
 
+        .heroKicker{
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: 2px;
+          opacity: .78;
+          text-transform: uppercase;
+        }
+        .heroName{
+          margin-top: 10px;
+          font-size: clamp(44px, 6.2vw, 82px);
+          font-weight: 1000;
+          letter-spacing: -0.8px;
+          text-shadow: 0 22px 90px rgba(0,0,0,0.38);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+        .heroPot{
+          width: 54px;
+          height: 54px;
+          display: grid;
+          place-items: center;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.22);
+          border: 1px solid rgba(255,255,255,0.12);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+          font-size: 28px;
+        }
+
+        .heroMetaRow{
+          margin-top: 14px;
+          display: flex;
+          gap: 10px;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
+        .pill{
+          display: inline-flex;
+          gap: 8px;
+          align-items: center;
+          padding: 10px 12px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.12);
+          font-weight: 900;
+          opacity: .95;
+        }
+
+        .nextCard{
+          width: min(860px, 96vw);
+          border-radius: 28px;
+          padding: 14px 16px;
+          background: rgba(0,0,0,0.20);
+          border: 1px solid rgba(255,255,255,0.12);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .nextKicker{
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: 2px;
+          opacity: .72;
+          text-transform: uppercase;
+        }
+        .nextName{
+          margin-top: 6px;
+          font-size: clamp(20px, 2.8vw, 34px);
+          font-weight: 1000;
+        }
+        .nextRight{
+          display: inline-flex;
+          gap: 10px;
+          align-items: center;
+        }
+        .miniStat{
+          padding: 10px 12px;
+          border-radius: 16px;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.10);
+          display: grid;
+          gap: 2px;
+          min-width: 120px;
+          text-align: left;
+        }
+        .miniLabel{
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 1.4px;
+          opacity: .72;
+          text-transform: uppercase;
+        }
+        .miniValue{
+          font-weight: 1000;
+          font-size: 14px;
+        }
+
+        .statsGridBig{
+          width: min(860px, 96vw);
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .statTile{
+          border-radius: 26px;
+          padding: 14px 14px 12px;
+          background: rgba(0,0,0,0.20);
+          border: 1px solid rgba(255,255,255,0.12);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          box-shadow: 0 18px 70px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.10);
+          text-align: left;
+        }
+        .statLabel{
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: 1.6px;
+          opacity: .72;
+          text-transform: uppercase;
+        }
+        .statValue{
+          margin-top: 10px;
+          font-size: clamp(22px, 2.6vw, 34px);
+          font-weight: 1000;
+          letter-spacing: -0.3px;
+        }
+        .statHint{
+          margin-top: 6px;
+          font-size: 12px;
+          font-weight: 850;
+          opacity: .72;
+        }
+
         .spectatorBar{
-          margin: 14px auto 0;
+          margin: 6px auto 0;
           display: inline-flex;
           gap: 10px;
           align-items: center;
@@ -1335,7 +1541,7 @@ export default function GamePage() {
           opacity: .96;
         }
         .actions{
-          margin-top: 16px;
+          margin-top: 8px;
           display: grid;
           justify-items: center;
           gap: 10px;
@@ -1345,6 +1551,7 @@ export default function GamePage() {
           font-weight: 850;
           opacity: .80;
         }
+
         .turnOverlay{
           position: fixed;
           left: 50%;
@@ -1374,6 +1581,7 @@ export default function GamePage() {
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
         }
+
         .btn{
           appearance:none;
           border: 1px solid rgba(255,255,255,0.14);
@@ -1391,6 +1599,12 @@ export default function GamePage() {
         .btn:disabled{ opacity: .65; cursor:not-allowed; transform:none; filter:none; }
         .btnXL{ padding: 12px 18px; font-size: 14px; }
         .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
+
+        @media (max-width: 860px){
+          .statsGridBig{ grid-template-columns: 1fr; }
+          .miniStat{ min-width: 108px; }
+          .heroPot{ width: 48px; height: 48px; font-size: 24px; }
+        }
       `}</style>
         </main>
     );
