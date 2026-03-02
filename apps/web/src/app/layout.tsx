@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Bricolage_Grotesque, Inter } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
+import { Analytics } from "@vercel/analytics/next"
 
 const displayFont = Bricolage_Grotesque({
     subsets: ["latin"],
