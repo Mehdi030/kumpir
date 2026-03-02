@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
     if (!AUTH_DISABLED) return NextResponse.next();
 
     const p = req.nextUrl.pathname;
