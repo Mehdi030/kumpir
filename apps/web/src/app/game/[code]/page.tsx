@@ -7,7 +7,14 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 
-type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
+type LobbyPhase =
+    | "waiting"
+    | "lobby"
+    | "topic_vote"
+    | "countdown"
+    | "running"
+    | "finished"
+    | string;
 
 type LobbyState = {
     id: string;
@@ -107,13 +114,6 @@ function pickNextAlive(players: Player[], holderId: string | null): Player | nul
     return alive[(idx + 1) % alive.length] ?? null;
 }
 
-// heuristic: treat any player named "AI" / "BOT" as AI
-function isAiName(name: string | null | undefined) {
-    if (!name) return false;
-    const n = name.trim().toLowerCase();
-    return n === "ai" || n.startsWith("ai ") || n.includes(" bot") || n.startsWith("bot");
-}
-
 export default function GamePage() {
     const supabase = getSupabaseClient();
     const params = useParams<{ code: string }>();
@@ -152,7 +152,7 @@ export default function GamePage() {
     // Pass animation event
     const [passEvent, setPassEvent] = useState<PassEvent | null>(null);
 
-    // HUD swap animation trigger
+    // HUD pulse on holder change
     const [hudPulseNonce, setHudPulseNonce] = useState(0);
 
     const inFlightRef = useRef(false);
@@ -164,9 +164,6 @@ export default function GamePage() {
 
     // Finished screen UI
     const [showFullRanking, setShowFullRanking] = useState(false);
-
-    // AI controls
-    const [aiBusy, setAiBusy] = useState(false);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -194,12 +191,10 @@ export default function GamePage() {
         return lobby.holder_player_id === mePlayerId;
     }, [lobby?.holder_player_id, mePlayerId]);
 
-    const holderRow = useMemo(() => {
-        if (!lobby?.holder_player_id) return null;
-        return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
+    const holderName = useMemo(() => {
+        if (!lobby?.holder_player_id) return "…";
+        return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
     }, [players, lobby?.holder_player_id]);
-
-    const holderName = useMemo(() => holderRow?.name ?? "…", [holderRow]);
 
     const selectedTopic = useMemo(() => {
         if (lobby?.phase === "topic_vote") return lobby?.topic_a ?? "…";
@@ -220,7 +215,10 @@ export default function GamePage() {
     const votedPlayers = voteCounts.a + voteCounts.b + voteCounts.r;
     const allVoted = totalPlayers > 0 && votedPlayers >= totalPlayers;
 
-    const nextUp = useMemo(() => pickNextAlive(players, lobby?.holder_player_id ?? null), [players, lobby?.holder_player_id]);
+    const nextUp = useMemo(
+        () => pickNextAlive(players, lobby?.holder_player_id ?? null),
+        [players, lobby?.holder_player_id]
+    );
 
     // Winner / Ranking
     const winnerPlayer = useMemo(() => {
@@ -235,7 +233,8 @@ export default function GamePage() {
             const streak = p.survival_streak ?? 0;
             const fastest = p.fastest_pass_ms ?? null;
 
-            const fastestBonus = fastest == null ? 0 : Math.max(0, Math.min(12, Math.round((2200 - fastest) / 200)));
+            const fastestBonus =
+                fastest == null ? 0 : Math.max(0, Math.min(12, Math.round((2200 - fastest) / 200)));
             const score = pass * 10 + clutch * 18 + streak * 6 + fastestBonus;
 
             return {
@@ -305,27 +304,6 @@ export default function GamePage() {
                 p_code: codeUpper,
                 p_player_id: playerId,
             });
-            return error;
-        },
-        [supabase]
-    );
-
-    // AI topic generation (best-effort; backend RPC optional)
-    const rpcAiGenerateTopics = useCallback(
-        async (lobbyId: string) => {
-            // If you implement this RPC later, UI will instantly start working.
-            // Expected: updates topic_a/topic_b on lobbies + resets votes.
-            const { error } = await supabase.rpc("rpc_ai_generate_topics", { p_lobby_id: lobbyId });
-            return error;
-        },
-        [supabase]
-    );
-
-    // AI auto-turn (best-effort; assumes backend handles AI if holder is AI)
-    const rpcAiTakeTurn = useCallback(
-        async (codeUpper: string) => {
-            // If you implement rpc_ai_take_turn later, swap to that.
-            const { error } = await supabase.rpc("rpc_ai_take_turn", { p_code: codeUpper });
             return error;
         },
         [supabase]
@@ -402,11 +380,12 @@ export default function GamePage() {
                 // Post-round loser toast (once)
                 if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
                     lastLoserRef.current = nextLobby.last_loser_player_id;
-                    const loserName = players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
+                    const loserName =
+                        players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
                     showToast(`💥 ${loserName} ist raus`, 1500);
                 }
 
-                // Holder transition (passEvent) + HUD swap animation
+                // Holder transition (passEvent) + HUD pulse
                 const prevHolder = prevHolderRef.current;
                 const nextHolder = nextLobby.holder_player_id ?? null;
 
@@ -433,7 +412,7 @@ export default function GamePage() {
                 prevHolderRef.current = nextHolder;
                 setLobby(nextLobby);
 
-                // IMPORTANT: finished => do NOT filter by status=active (so stats still show)
+                // IMPORTANT: finished => do NOT filter by status=active
                 const playersQuery = supabase
                     .from("players")
                     .select(
@@ -455,7 +434,8 @@ export default function GamePage() {
                     .eq("lobby_id", nextLobby.id)
                     .order("seat_index", { ascending: true });
 
-                const playersRes = nextLobby.phase === "finished" ? await playersQuery : await playersQuery.eq("status", "active");
+                const playersRes =
+                    nextLobby.phase === "finished" ? await playersQuery : await playersQuery.eq("status", "active");
 
                 if (!alive) return;
 
@@ -468,20 +448,22 @@ export default function GamePage() {
                 setPlayers(nextPlayers);
                 setFatalError("");
 
-                // Votes
+                // Votes (keep myVote stable -> prevents green border flicker)
                 if (nextLobby.phase === "topic_vote") {
-                    const votesRes = await supabase.from("topic_votes").select("choice,player_id").eq("lobby_id", nextLobby.id);
+                    const votesRes = await supabase
+                        .from("topic_votes")
+                        .select("choice,player_id")
+                        .eq("lobby_id", nextLobby.id);
+
                     if (!alive) return;
 
                     if (votesRes.error) {
                         console.error("topic_votes select failed:", votesRes.error);
                         showToast(`❌ Votes laden: ${votesRes.error.message}`, 2400);
                     } else if (votesRes.data) {
-                        let a = 0,
-                            b = 0,
-                            r = 0;
-
+                        let a = 0, b = 0, r = 0;
                         let mine: 1 | 2 | 3 | null = null;
+
                         for (const row of votesRes.data as Array<{ choice: number; player_id: string }>) {
                             if (row.choice === 1) a++;
                             else if (row.choice === 2) b++;
@@ -493,21 +475,18 @@ export default function GamePage() {
                         }
 
                         setVoteCounts({ a, b, r });
-
-                        // ✅ PERMA highlight: never overwrite to null during topic_vote
-                        setMyVote((prev) => mine ?? prev);
+                        setMyVote((prev) => mine ?? prev); // <-- key: keep selection stable
                     }
                 } else {
                     setVoteCounts({ a: 0, b: 0, r: 0 });
                     setMyVote(null);
                 }
 
-                // Best-effort phase automations
+                // Best-effort phase automations (keep backend logic; UI shows no bomb timer)
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
                     const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
                     const iAmHolderNow = nextLobby.holder_player_id === mePlayerId;
 
-                    // Keep backend tick logic as-is (server decides explosions, etc.)
                     if (iAmHolderNow) {
                         const explodeMs = Date.parse(nextLobby.explode_at);
                         const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
@@ -515,7 +494,6 @@ export default function GamePage() {
                     }
                 }
 
-                // topic_vote finalize
                 if (nextLobby.phase === "topic_vote" && nextLobby.topic_vote_ends_at) {
                     const dueMs = msUntil(nextLobby.topic_vote_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !finalizeInFlightRef.current) {
@@ -524,7 +502,6 @@ export default function GamePage() {
                     }
                 }
 
-                // countdown advance
                 if (nextLobby.phase === "countdown" && nextLobby.countdown_ends_at) {
                     const dueMs = msUntil(nextLobby.countdown_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !advanceInFlightRef.current) {
@@ -589,7 +566,7 @@ export default function GamePage() {
         };
     }, [lobby]);
 
-    // Vote action (optimistic local state so highlight is instant)
+    // Vote action (optimistic + permanent green outline via myVote)
     const vote = useCallback(
         async (choice: 1 | 2 | 3) => {
             if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
@@ -597,9 +574,8 @@ export default function GamePage() {
             if (lobby.phase !== "topic_vote") return;
             if (voteBusy) return;
 
-            setMyVote(choice);
+            setMyVote(choice); // optimistic
             setVoteBusy(true);
-
             try {
                 const { error } = await supabase.rpc("rpc_vote_topic", {
                     p_lobby_id: lobby.id,
@@ -609,12 +585,14 @@ export default function GamePage() {
 
                 if (error) {
                     console.error("rpc_vote_topic failed:", error);
-                    // keep highlight, but inform user; backend will correct if needed
                     showToast(`❌ ${error.message}`, 2600);
+                    // keep selection visually (optional). If you prefer strict revert, uncomment:
+                    // setMyVote(null);
                     return;
                 }
             } catch (e: unknown) {
                 showToast(`❌ ${getErrorMessage(e)}`, 2600);
+                // setMyVote(null);
             } finally {
                 setVoteBusy(false);
             }
@@ -656,28 +634,6 @@ export default function GamePage() {
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [handlePass, lobby, isMeHolder]);
 
-    // AI auto-turn trigger (best-effort):
-    // If holder is AI, gently ping server to make it act.
-    useEffect(() => {
-        if (!lobby) return;
-        if (lobby.phase !== "running") return;
-        if (!holderRow) return;
-
-        if (!isAiName(holderRow.name)) return;
-
-        // throttle (simple)
-        let cancelled = false;
-        const t = window.setTimeout(() => {
-            if (cancelled) return;
-            void rpcAiTakeTurn(code); // optional RPC
-        }, 380);
-
-        return () => {
-            cancelled = true;
-            window.clearTimeout(t);
-        };
-    }, [lobby, holderRow, code, rpcAiTakeTurn]);
-
     // -----------------------------
     // UI: fatal / loading
     // -----------------------------
@@ -685,14 +641,14 @@ export default function GamePage() {
         return (
             <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(720px, 96vw)", textAlign: "center" }}>
-                    <div style={{ fontWeight: 950, fontSize: 22 }}>⚠️ Spiel konnte nicht geladen werden</div>
-                    <div style={{ marginTop: 10, opacity: 0.8 }}>{fatalError}</div>
+                    <div style={{ fontWeight: 950, fontSize: 22, color: "white" }}>⚠️ Spiel konnte nicht geladen werden</div>
+                    <div style={{ marginTop: 10, opacity: 0.85, color: "white" }}>{fatalError}</div>
                 </div>
             </main>
         );
     }
 
-    if (!lobby) return <div className="p-6 opacity-70">Lade Spiel…</div>;
+    if (!lobby) return <div className="p-6 opacity-70 text-white">Lade Spiel…</div>;
 
     // Labels
     const aLabel = lobby.topic_a ?? "…";
@@ -700,7 +656,7 @@ export default function GamePage() {
     const rLabel = "Zufällig";
 
     // =========================================================
-    // PHASE: TOPIC VOTE  (perma green highlight + optional AI topics)
+    // PHASE: TOPIC VOTE
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
@@ -790,34 +746,6 @@ export default function GamePage() {
                             {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
                         </div>
 
-                        {/* AI Topic Generator (Feature 22) */}
-                        <div className="aiRow">
-                            <button
-                                className="aiBtn"
-                                type="button"
-                                disabled={aiBusy}
-                                onClick={async () => {
-                                    if (!lobby?.id) return;
-                                    setAiBusy(true);
-                                    try {
-                                        const err = await rpcAiGenerateTopics(lobby.id);
-                                        if (err) {
-                                            // fallback: just inform; RPC may not exist yet
-                                            showToast(`⚠️ AI Topics: ${err.message}`, 2400);
-                                        } else {
-                                            showToast("✨ AI hat neue Themen generiert", 1400);
-                                            // keep vote selection; next poll updates topics
-                                        }
-                                    } finally {
-                                        setAiBusy(false);
-                                    }
-                                }}
-                            >
-                                {aiBusy ? "…" : "✨ AI Themen (Beta)"}
-                            </button>
-                            <div className="aiHint">Optional: funktioniert sobald du rpc_ai_generate_topics implementierst.</div>
-                        </div>
-
                         {toast ? <div className="toastInline">{toast}</div> : null}
                     </div>
                 </div>
@@ -856,7 +784,7 @@ export default function GamePage() {
           .headline{margin-top:10px;font-size:clamp(36px,4.8vw,70px);font-weight:1000;letter-spacing:-0.6px;position:relative;display:inline-block;text-shadow:0 24px 80px rgba(0,0,0,0.35);animation:${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};}
           .headlineGlow{position:absolute;inset:-30px -60px;background:radial-gradient(circle at 40% 35%, rgba(255,214,10,0.25), rgba(255,149,0,0.18), rgba(255,45,85,0.06), transparent 70%);filter:blur(18px);opacity:.9;pointer-events:none;animation:${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};}
           .topicGrid{margin-top:24px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;}
-          .glassCard{color:white;position:relative;width:100%;border-radius:38px;padding:24px 22px 22px;min-height:260px;text-align:left;cursor:pointer;border:1px solid rgba(255,255,255,0.18);background:linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),radial-gradient(circle at 30% 20%, rgba(255,214,10,0.14), rgba(255,149,0,0.08), rgba(0,0,0,0.16) 70%);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);box-shadow:0 18px 70px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.20);overflow:hidden;transform:translateZ(0);transition:transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease;animation:${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};}
+          .glassCard{position:relative;width:100%;border-radius:38px;padding:24px 22px 22px;min-height:260px;text-align:left;cursor:pointer;border:1px solid rgba(255,255,255,0.18);color:white;background:linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),radial-gradient(circle at 30% 20%, rgba(255,214,10,0.14), rgba(255,149,0,0.08), rgba(0,0,0,0.16) 70%);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);box-shadow:0 18px 70px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.20);overflow:hidden;transform:translateZ(0);transition:transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease, outline-color .22s ease;animation:${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};}
           .glassCard:nth-child(2){animation-delay:${reduceMotion ? "0ms" : "70ms"};}
           .glassCard:nth-child(3){animation-delay:${reduceMotion ? "0ms" : "140ms"};}
           .glassCard:hover{transform:scale(1.035);border-color:rgba(255,255,255,0.30);box-shadow:0 26px 90px rgba(0,0,0,0.34),inset 0 1px 0 rgba(255,255,255,0.22);filter:brightness(1.03);}
@@ -865,48 +793,27 @@ export default function GamePage() {
           .glassShine{position:absolute;inset:-120px;background:radial-gradient(circle at 20% 20%, rgba(255,255,255,0.24), rgba(255,255,255,0.06), transparent 60%);opacity:.75;filter:blur(18px);pointer-events:none;animation:${reduceMotion ? "none" : "shineSweep 5.2s ease-in-out infinite"};}
           .cardTop{display:flex;justify-content:space-between;align-items:center;gap:10px;position:relative;z-index:2;}
           .chip{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 14px;border-radius:999px;font-weight:1000;background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.16);box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);}
-          .micro{font-size:12px;font-weight:950;letter-spacing:1.2px;opacity:.82;text-transform:uppercase;}
+          .micro{font-size:12px;font-weight:950;letter-spacing:1.2px;opacity:.78;text-transform:uppercase;}
           .cardTitle{margin-top:20px;font-size:clamp(24px,2.8vw,40px);font-weight:1000;letter-spacing:-0.2px;position:relative;z-index:2;text-shadow:0 18px 60px rgba(0,0,0,0.26);}
-          .cardHint{margin-top:12px;font-size:13px;font-weight:900;opacity:.85;position:relative;z-index:2;}
+          .cardHint{margin-top:12px;font-size:13px;font-weight:900;opacity:.78;position:relative;z-index:2;}
 
-          /* ✅ PERMA GREEN OUTLINE */
+          /* PERMANENT GREEN OUTLINE */
           .glassCard.active{
-            outline: 3px solid rgba(52,199,89,0.95);
+            border-color: rgba(52,199,89,0.70);
+            outline: 3px solid rgba(52,199,89,0.92);
             outline-offset: 2px;
-            border-color: rgba(52,199,89,0.65);
             box-shadow:
               0 30px 110px rgba(0,0,0,0.40),
-              0 0 0 2px rgba(52,199,89,0.28) inset,
-              0 0 46px rgba(52,199,89,0.22);
+              0 0 0 1px rgba(255,255,255,0.06) inset,
+              0 0 0 10px rgba(52,199,89,0.12);
             background:
-              radial-gradient(circle at 18% 18%, rgba(52,199,89,0.20), rgba(0,0,0,0.10) 58%),
-              linear-gradient(135deg, rgba(52,199,89,0.14), rgba(255,255,255,0.08), rgba(0,0,0,0.10));
-            filter: brightness(1.06) saturate(1.06);
-            animation: selectedPulse 1.25s ease-in-out infinite;
+              radial-gradient(circle at 20% 20%, rgba(255,255,255,0.14), rgba(0,0,0,0.10) 55%),
+              linear-gradient(135deg, rgba(52,199,89,0.22), rgba(255,214,10,0.14), rgba(255,45,85,0.10));
+            animation:${reduceMotion ? "none" : "selectedBreath 1.05s ease-in-out infinite"};
           }
-          @keyframes selectedPulse{0%,100%{transform:scale(1.01);}50%{transform:scale(1.025);}}
 
-          .statusLine{margin-top:14px;font-weight:900;opacity:.88;font-size:13px;animation:${reduceMotion ? "none" : "fadeUp 520ms ease both"};}
+          .statusLine{margin-top:14px;font-weight:900;opacity:.90;font-size:13px;animation:${reduceMotion ? "none" : "fadeUp 520ms ease both"};}
           .toastInline{margin-top:14px;font-weight:950;opacity:.92;animation:${reduceMotion ? "none" : "fadeUp 480ms ease both"};}
-
-          .aiRow{margin-top:14px;display:grid;gap:8px;justify-items:center;}
-          .aiBtn{
-            appearance:none;
-            border:1px solid rgba(255,255,255,0.16);
-            background: rgba(0,0,0,0.22);
-            color:white;
-            border-radius:999px;
-            padding:10px 14px;
-            font-weight:950;
-            cursor:pointer;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-            transition: transform .14s ease, filter .14s ease, border-color .14s ease;
-          }
-          .aiBtn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
-          .aiBtn:active{ transform: translateY(0px) scale(0.99); }
-          .aiBtn:disabled{ opacity:.65; cursor:not-allowed; transform:none; filter:none; }
-          .aiHint{font-size:12px;font-weight:850;opacity:.76;max-width:520px;}
-
           .bottomBar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(980px,94vw);}
           .bottomInner{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 14px;border-radius:999px;background:rgba(0,0,0,0.26);border:1px solid rgba(255,255,255,0.16);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);box-shadow:0 18px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.14);animation:${reduceMotion ? "none" : "dockIn 900ms cubic-bezier(.16,1,.3,1) both"};animation-delay:${reduceMotion ? "0ms" : "120ms"};}
           .bottomLeft{display:flex;align-items:center;gap:10px;min-width:220px;}
@@ -930,6 +837,7 @@ export default function GamePage() {
           @keyframes dockIn{0%{opacity:0;transform:translateY(16px);}100%{opacity:1;transform:translateY(0);}}
           @keyframes glowFloat{0%,100%{transform:translateY(0);opacity:.82;}50%{transform:translateY(-6px);opacity:1;}}
           @keyframes shineSweep{0%,100%{transform:translateX(-10px) rotate(12deg);opacity:.60;}50%{transform:translateX(18px) rotate(12deg);opacity:.90;}}
+          @keyframes selectedBreath{0%,100%{transform:scale(1.01);filter:brightness(1.06);}50%{transform:scale(1.025);filter:brightness(1.14);}}
           @keyframes orbFloat{0%,100%{transform:translateY(0) translateX(0);}50%{transform:translateY(18px) translateX(10px);}}
           @media (max-width: 980px){ .glassCard{ min-height: 230px; } }
           @media (max-width: 860px){
@@ -990,7 +898,9 @@ export default function GamePage() {
                         </div>
                     </div>
 
-                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>{selectedTopic}</div>
+                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>
+                        {selectedTopic}
+                    </div>
 
                     {tie ? (
                         <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 850 }}>
@@ -1026,20 +936,11 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: FINISHED  (Feature 9: advanced analytics + stats)
+    // PHASE: FINISHED (Stats/Ranks bleiben)
     // =========================================================
     if (lobby.phase === "finished") {
         const winnerName = winnerPlayer?.name ?? "Unbekannt";
         const shown = showFullRanking ? ranking : top5;
-
-        // Analytics (best possible with available fields)
-        const holdMax = Math.max(1, ...ranking.map((r) => r.holdMs ?? 0));
-        const passMax = Math.max(1, ...ranking.map((r) => r.pass ?? 0));
-
-        const fastestOverall = [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] ?? null;
-        const mostClutch = [...ranking].sort((a, b) => (b.clutch ?? 0) - (a.clutch ?? 0))[0] ?? null;
-        const mostHold = [...ranking].sort((a, b) => (b.holdMs ?? 0) - (a.holdMs ?? 0))[0] ?? null;
-        const mostPass = [...ranking].sort((a, b) => (b.pass ?? 0) - (a.pass ?? 0))[0] ?? null;
 
         return (
             <main
@@ -1054,155 +955,109 @@ export default function GamePage() {
                         "radial-gradient(circle at 50% 85%, rgba(255,214,10,0.35) 0%, rgba(240,138,26,0.62) 45%, rgba(143,15,15,0.92) 100%)",
                 }}
             >
-                <div style={{ width: "min(1180px, 96vw)" }}>
+                <div style={{ width: "min(1120px, 96vw)" }}>
                     <div className="finishHero">
                         <div className="finishKicker">SPIEL BEENDET</div>
                         <div className="finishWinner">🏆 {winnerName}</div>
 
                         <div className="finishMeta">
-              <span>
-                Runden: <b>{lobby.round_number ?? "—"}</b>
-              </span>
+                            <span>Runden: <b>{lobby.round_number ?? "—"}</b></span>
                             <span className="dot">•</span>
-                            <span>
-                Thema: <b>{selectedTopic}</b>
-              </span>
+                            <span>Thema: <b>{selectedTopic}</b></span>
                             {myRankRow ? (
                                 <>
                                     <span className="dot">•</span>
-                                    <span>
-                    Du: <b>#{myRankRow.rank}</b>
-                  </span>
+                                    <span>Du: <b>#{myRankRow.rank}</b></span>
                                 </>
                             ) : null}
                         </div>
-                    </div>
 
-                    <div className="finishGrid">
-                        <div className="card">
-                            <div className="cardTitle">🏅 Ranking</div>
-                            <div className="table">
-                                <div className="row head">
-                                    <div>#</div>
-                                    <div>Player</div>
-                                    <div className="r">Score</div>
-                                    <div className="r">Pass</div>
-                                    <div className="r">Clutch</div>
-                                    <div className="r">Fastest</div>
-                                    <div className="r">Hold</div>
-                                </div>
-
-                                {shown.map((p, idx) => (
-                                    <div key={p.player_id} className={`row ${p.player_id === mePlayerId ? "me" : ""}`}>
-                                        <div>{idx + 1}</div>
-                                        <div className="name">
-                                            {p.name}
-                                            {!p.is_alive ? <span className="tag dead">💀</span> : null}
-                                            {p.player_id === lobby.holder_player_id ? <span className="tag holder">🥔</span> : null}
-                                        </div>
-                                        <div className="r">
-                                            <b>{p.score}</b>
-                                        </div>
-                                        <div className="r">{p.pass}</div>
-                                        <div className="r">{p.clutch}</div>
-                                        <div className="r">{fmtMs(p.fastest)}</div>
-                                        <div className="r">{fmtHold(p.holdMs)}</div>
+                        <div className="finishGrid">
+                            <div className="card">
+                                <div className="cardTitle">🏅 Ranking</div>
+                                <div className="table">
+                                    <div className="row head">
+                                        <div>#</div>
+                                        <div>Player</div>
+                                        <div className="r">Score</div>
+                                        <div className="r">Pass</div>
+                                        <div className="r">Clutch</div>
+                                        <div className="r">Fastest</div>
+                                        <div className="r">Hold</div>
                                     </div>
-                                ))}
-                            </div>
 
-                            <div className="cardActions">
-                                <button className="btn btnSecondary" type="button" onClick={() => setShowFullRanking((v) => !v)}>
-                                    {showFullRanking ? "Nur Top 5" : "Alle anzeigen"}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="card">
-                            <div className="cardTitle">📊 Post-Match Analytics</div>
-
-                            <div className="insights">
-                                <div className="ins">
-                                    <div className="k">Most Clutch</div>
-                                    <div className="v">{mostClutch ? `${mostClutch.name} • ${mostClutch.clutch}` : "—"}</div>
-                                    <div className="s">Clutch Passes</div>
-                                </div>
-                                <div className="ins">
-                                    <div className="k">Fastest Pass</div>
-                                    <div className="v">{fastestOverall ? `${fastestOverall.name} • ${fmtMs(fastestOverall.fastest)}` : "—"}</div>
-                                    <div className="s">Best reaction</div>
-                                </div>
-                                <div className="ins">
-                                    <div className="k">Most Hold</div>
-                                    <div className="v">{mostHold ? `${mostHold.name} • ${fmtHold(mostHold.holdMs)}` : "—"}</div>
-                                    <div className="s">Total hold time</div>
-                                </div>
-                                <div className="ins">
-                                    <div className="k">Most Passes</div>
-                                    <div className="v">{mostPass ? `${mostPass.name} • ${mostPass.pass}` : "—"}</div>
-                                    <div className="s">Aggression</div>
-                                </div>
-                            </div>
-
-                            <div className="subTitle">Heatmap (Hold Time)</div>
-                            <div className="heat">
-                                {ranking.map((p) => {
-                                    const pct = clamp(((p.holdMs ?? 0) / holdMax) * 100, 0, 100);
-                                    return (
-                                        <div className="heatRow" key={p.player_id}>
-                                            <div className="heatName">{p.name}</div>
-                                            <div className="heatBar">
-                                                <div className="heatFill" style={{ width: `${pct}%` }} />
+                                    {shown.map((p, idx) => (
+                                        <div key={p.player_id} className={`row ${p.player_id === mePlayerId ? "me" : ""}`}>
+                                            <div>{idx + 1}</div>
+                                            <div className="name">
+                                                {p.name} {!p.is_alive ? <span className="tag dead">💀</span> : null}
+                                                {p.player_id === lobby.holder_player_id ? <span className="tag holder">🥔</span> : null}
                                             </div>
-                                            <div className="heatVal">{fmtHold(p.holdMs)}</div>
+                                            <div className="r"><b>{p.score}</b></div>
+                                            <div className="r">{p.pass}</div>
+                                            <div className="r">{p.clutch}</div>
+                                            <div className="r">{fmtMs(p.fastest)}</div>
+                                            <div className="r">{fmtHold(p.holdMs)}</div>
                                         </div>
-                                    );
-                                })}
+                                    ))}
+                                </div>
+
+                                <div className="cardActions">
+                                    <button className="btn btnSecondary" type="button" onClick={() => setShowFullRanking((v) => !v)}>
+                                        {showFullRanking ? "Nur Top 5" : "Alle anzeigen"}
+                                    </button>
+                                </div>
                             </div>
 
-                            <div className="subTitle">Pressure (Pass Count)</div>
-                            <div className="heat">
-                                {ranking.map((p) => {
-                                    const pct = clamp(((p.pass ?? 0) / passMax) * 100, 0, 100);
-                                    return (
-                                        <div className="heatRow" key={p.player_id + "_pass"}>
-                                            <div className="heatName">{p.name}</div>
-                                            <div className="heatBar">
-                                                <div className="heatFill" style={{ width: `${pct}%`, opacity: 0.7 }} />
-                                            </div>
-                                            <div className="heatVal">{p.pass ?? 0}</div>
-                                        </div>
-                                    );
-                                })}
+                            <div className="card">
+                                <div className="cardTitle">🎯 Summary</div>
+                                <div className="statsGrid">
+                                    <div className="stat">
+                                        <div className="k">Winner</div>
+                                        <div className="v">{winnerName}</div>
+                                    </div>
+                                    <div className="stat">
+                                        <div className="k">Alive</div>
+                                        <div className="v">{players.filter((p) => p.is_alive).length}</div>
+                                    </div>
+                                    <div className="stat">
+                                        <div className="k">Players</div>
+                                        <div className="v">{players.length}</div>
+                                    </div>
+                                    <div className="stat">
+                                        <div className="k">Topic</div>
+                                        <div className="v">{selectedTopic}</div>
+                                    </div>
+                                </div>
+
+                                <div className="cardActions" style={{ marginTop: 14 }}>
+                                    <button
+                                        className="btn btnPrimary"
+                                        onClick={async () => {
+                                            const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
+                                            if (error) return showToast(`❌ Reset: ${error.message}`, 2400);
+                                            window.location.href = `/lobby/${encodeURIComponent(code)}`;
+                                        }}
+                                        type="button"
+                                    >
+                                        Zurück zur Lobby
+                                    </button>
+
+                                    <button
+                                        className="btn btnSecondary"
+                                        onClick={async () => {
+                                            const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
+                                            if (error) return showToast(`❌ Rematch: ${error.message}`, 2400);
+                                            showToast("🔁 Rematch gestartet", 1200);
+                                        }}
+                                        type="button"
+                                    >
+                                        🔁 Rematch
+                                    </button>
+                                </div>
+
+                                {toast ? <div style={{ marginTop: 12, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
                             </div>
-
-                            <div className="cardActions" style={{ marginTop: 14 }}>
-                                <button
-                                    className="btn btnPrimary"
-                                    onClick={async () => {
-                                        const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
-                                        if (error) return showToast(`❌ Reset: ${error.message}`, 2400);
-                                        window.location.href = `/lobby/${encodeURIComponent(code)}`;
-                                    }}
-                                    type="button"
-                                >
-                                    Zurück zur Lobby
-                                </button>
-
-                                <button
-                                    className="btn btnSecondary"
-                                    onClick={async () => {
-                                        const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
-                                        if (error) return showToast(`❌ Rematch: ${error.message}`, 2400);
-                                        showToast("🔁 Rematch gestartet", 1200);
-                                    }}
-                                    type="button"
-                                >
-                                    🔁 Rematch
-                                </button>
-                            </div>
-
-                            {toast ? <div style={{ marginTop: 12, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
                         </div>
                     </div>
                 </div>
@@ -1213,50 +1068,31 @@ export default function GamePage() {
           .finishWinner{ margin-top:10px; font-size:clamp(42px,5vw,78px); font-weight:1000; text-shadow:0 24px 90px rgba(0,0,0,0.35); }
           .finishMeta{ margin-top:10px; font-weight:900; opacity:.88; display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
           .dot{ opacity:.55; }
-
-          .finishGrid{ margin-top:22px; display:grid; grid-template-columns: 1.35fr 1fr; gap:14px; align-items:start; }
+          .finishGrid{ margin-top:22px; display:grid; grid-template-columns: 1.4fr 1fr; gap:14px; align-items:start; }
           .card{ border-radius:28px; background:rgba(0,0,0,0.22); border:1px solid rgba(255,255,255,0.14); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding:16px; box-shadow: 0 18px 70px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.12); }
           .cardTitle{ font-weight:1000; letter-spacing:.2px; opacity:.95; text-align:left; }
-          .subTitle{ margin-top: 14px; text-align:left; font-weight: 1000; opacity: .92; }
-
           .table{ margin-top:12px; display:grid; gap:8px; }
           .row{ display:grid; grid-template-columns: 42px 1fr 90px 70px 80px 110px 90px; gap:10px; padding:10px 10px; border-radius:16px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); align-items:center; }
           .row.head{ background:rgba(255,255,255,0.04); border-color:rgba(255,255,255,0.06); font-size:12px; font-weight:950; letter-spacing:1.2px; text-transform:uppercase; opacity:.86; }
-          .row.me{ border-color: rgba(34,211,238,0.22); background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.10), rgba(255,255,255,0.06)); }
+          .row.me{ border-color: rgba(52,199,89,0.35); background: rgba(52,199,89,0.08); }
           .name{ display:flex; gap:8px; align-items:center; font-weight:950; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
           .r{ text-align:right; font-weight:900; opacity:.92; }
           .tag{ display:inline-flex; align-items:center; justify-content:center; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:950; border:1px solid rgba(255,255,255,0.14); background:rgba(0,0,0,0.18); }
           .tag.dead{ opacity:.75; }
-          .tag.holder{ background: rgba(255,214,10,0.16); }
-
+          .tag.holder{ background: rgba(255,214,10,0.16); border-color: rgba(255,214,10,0.26); }
           .cardActions{ margin-top:12px; display:flex; gap:10px; justify-content:flex-start; flex-wrap:wrap; }
-
-          .insights{ margin-top: 12px; display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-          .ins{ padding: 12px; border-radius: 18px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); text-align:left; }
-          .ins .k{ font-size: 12px; font-weight: 950; letter-spacing: 1.2px; text-transform: uppercase; opacity: .75; }
-          .ins .v{ margin-top: 6px; font-size: 16px; font-weight: 1000; }
-          .ins .s{ margin-top: 4px; font-size: 12px; font-weight: 850; opacity: .72; }
-
-          .heat{ margin-top: 10px; display:grid; gap: 8px; }
-          .heatRow{ display:grid; grid-template-columns: 1fr 1.6fr 86px; gap: 10px; align-items:center; padding: 10px 10px; border-radius: 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
-          .heatName{ font-weight: 950; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-          .heatBar{ height: 12px; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.10); overflow:hidden; }
-          .heatFill{ height: 100%; background: linear-gradient(90deg, rgba(34,211,238,0.80), rgba(255,214,10,0.85), rgba(52,199,89,0.85)); }
-          .heatVal{ text-align:right; font-weight: 950; opacity: .9; }
-
+          .statsGrid{ margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+          .stat{ padding:12px; border-radius:18px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); text-align:left; }
+          .stat .k{ font-size:12px; font-weight:950; letter-spacing:1.2px; text-transform:uppercase; opacity:.75; }
+          .stat .v{ margin-top:6px; font-size:16px; font-weight:1000; opacity:.95; }
           .btn{ appearance:none; border:1px solid rgba(255,255,255,0.14); background:rgba(0,0,0,0.22); color:white; border-radius:999px; padding:10px 14px; font-weight:950; cursor:pointer; transition: transform .14s ease, filter .14s ease, border-color .14s ease; box-shadow: inset 0 1px 0 rgba(255,255,255,0.10); }
           .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
           .btn:active{ transform: translateY(0px) scale(0.99); }
           .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
           .btnSecondary{ background: rgba(0,0,0,0.22); }
-
           @media (max-width: 980px){
             .finishGrid{ grid-template-columns: 1fr; }
             .row{ grid-template-columns: 38px 1fr 70px 56px 68px 96px 76px; }
-          }
-          @media (max-width: 520px){
-            .insights{ grid-template-columns: 1fr; }
-            .heatRow{ grid-template-columns: 1fr 1.2fr 76px; }
           }
         `}</style>
             </main>
@@ -1264,7 +1100,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: NOT RUNNING
+    // PHASE: NOT RUNNING (WAITING)
     // =========================================================
     if (lobby.phase !== "running") {
         return (
@@ -1289,7 +1125,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: RUNNING (MINIMAL names only + smooth swap)
+    // PHASE: RUNNING (clean: Holder -> Next only, no bomb time, no stats)
     // =========================================================
     const runningBg = iAmEliminated
         ? "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.35) 60%), radial-gradient(circle at 50% 85%, rgba(180,180,180,0.14) 0%, rgba(25,25,25,0.92) 80%)"
@@ -1316,57 +1152,58 @@ export default function GamePage() {
             ) : null}
 
             <div className="hud">
-                <div className="hudInner">
-                    <div className="topic">{selectedTopic}</div>
+                <div className="hudTop">
+                    <div className="hudTitle">RUNNING</div>
+                    <div className="hudTopic">{selectedTopic}</div>
 
-                    <div className="strip" key={hudPulseNonce}>
-                        <div className="now">
-                            <span className="dotNow" aria-hidden />
-                            <span className="label">JETZT</span>
-                            <span className="name">{holderName}</span>
+                    <div className="centerStack" key={hudPulseNonce}>
+                        {/* HOLDER */}
+                        <div className={`holderHero ${reduceMotion ? "" : "pulseHero"}`}>
+                            <div className="heroKicker">KUMPIR BEI</div>
+                            <div className="heroName">
+                                <span className="heroPot" aria-hidden>🥔</span>
+                                {holderName}
+                            </div>
+
+                            {/* NEXT (simple) */}
+                            <div className="nextLine" aria-label="Nächster Spieler">
+                                <span className="nextChip">NEXT</span>
+                                <span className="arrow" aria-hidden>→</span>
+                                <span className="nextName">{nextUp?.name ?? "—"}</span>
+                            </div>
                         </div>
 
-                        <div className="arrow" aria-hidden>
-                            →
-                        </div>
+                        {iAmEliminated ? (
+                            <div className="spectatorBar">
+                                <span>👁️ Spectator</span>
+                                <span className="dot">•</span>
+                                <span>Jetzt: <b>{holderName}</b></span>
+                                {nextUp ? (
+                                    <>
+                                        <span className="dot">•</span>
+                                        <span>Next: <b>{nextUp.name}</b></span>
+                                    </>
+                                ) : null}
+                            </div>
+                        ) : null}
 
-                        <div className="next">
-                            <span className="label">DANACH</span>
-                            <span className="name">{nextUp?.name ?? "—"}</span>
-                        </div>
+                        {isMeHolder && !iAmEliminated ? (
+                            <div className="actions">
+                                <button
+                                    className="btn btnPrimary btnXL"
+                                    onClick={() => void handlePass()}
+                                    type="button"
+                                    disabled={!!passDisabledReason}
+                                    title={passDisabledReason ?? "Weitergeben"}
+                                >
+                                    {passBusy ? "…" : "🥔 Weitergeben (Space)"}
+                                </button>
+                                <div className="helper">Weitergeben wenn du dran bist.</div>
+                            </div>
+                        ) : (
+                            <div className="helper">{iAmEliminated ? "Du schaust zu." : "Warte, bis du die Kartoffel bekommst."}</div>
+                        )}
                     </div>
-
-                    {/* AI info (Feature 21) */}
-                    {holderRow && isAiName(holderRow.name) ? <div className="aiLive">🤖 AI am Zug</div> : null}
-
-                    {isMeHolder && !iAmEliminated ? (
-                        <div className="actions">
-                            <button className="btn btnPrimary" onClick={() => void handlePass()} type="button" disabled={!!passDisabledReason} title={passDisabledReason ?? "Weitergeben"}>
-                                {passBusy ? "…" : "🥔 Weitergeben (Space)"}
-                            </button>
-
-                            <button
-                                className="btn btnGhost"
-                                type="button"
-                                disabled={aiBusy}
-                                onClick={async () => {
-                                    // manual nudge for AI systems / debugging
-                                    setAiBusy(true);
-                                    try {
-                                        const err = await rpcAiTakeTurn(code);
-                                        if (err) showToast(`⚠️ AI Turn: ${err.message}`, 2200);
-                                        else showToast("🤖 AI ping", 1000);
-                                    } finally {
-                                        setAiBusy(false);
-                                    }
-                                }}
-                            >
-                                {aiBusy ? "…" : "🤖 AI Ping"}
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="hint">{iAmEliminated ? "Du schaust zu." : "Warte, bis du dran bist."}</div>
-                    )}
                 </div>
             </div>
 
@@ -1377,106 +1214,139 @@ export default function GamePage() {
           min-height: 100vh;
           display: grid;
           place-items: center;
-          padding: 22px;
+          padding: 24px;
+          pointer-events: none;
         }
-        .hudInner{
-          width: min(920px, 94vw);
+        .hudTop{
+          width: min(980px, 96vw);
+          text-align: center;
+          pointer-events: auto;
+        }
+        .hudTitle{
+          font-size: 14px;
+          font-weight: 900;
+          letter-spacing: 1.6px;
+          opacity: 0.75;
+        }
+        .hudTopic{
+          margin-top: 10px;
+          font-size: clamp(28px, 4.2vw, 56px);
+          font-weight: 950;
+          text-shadow: 0 18px 70px rgba(0,0,0,0.35);
+        }
+
+        .centerStack{
+          margin-top: 14px;
           display: grid;
           justify-items: center;
           gap: 14px;
-          text-align: center;
-        }
-        .topic{
-          font-size: clamp(22px, 3.6vw, 46px);
-          font-weight: 950;
-          text-shadow: 0 18px 70px rgba(0,0,0,0.35);
-          opacity: .98;
         }
 
-        .strip{
-          width: min(920px, 94vw);
-          border-radius: 999px;
-          padding: 14px 16px;
+        .holderHero{
+          width: min(860px, 96vw);
+          border-radius: 40px;
+          padding: 22px 22px 18px;
           background: rgba(0,0,0,0.28);
           border: 1px solid rgba(255,255,255,0.14);
           backdrop-filter: blur(14px) saturate(140%);
           -webkit-backdrop-filter: blur(14px) saturate(140%);
-          box-shadow: 0 22px 90px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.10);
-
-          display: grid;
-          grid-template-columns: 1fr auto 1fr;
-          align-items: center;
-          gap: 12px;
-
-          animation: ${reduceMotion ? "none" : "stripSwap 520ms cubic-bezier(.16,1,.3,1) both"};
+          box-shadow: 0 22px 90px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.12);
         }
-        @keyframes stripSwap{
-          0%{ opacity: 0; transform: translateY(8px) scale(.985); filter: blur(1px); }
-          100%{ opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+        .pulseHero{
+          animation: pulsePop 420ms cubic-bezier(.2,1,.2,1) both;
+        }
+        @keyframes pulsePop{
+          0%{ transform: translateY(10px) scale(.985); opacity: .0; }
+          60%{ transform: translateY(0) scale(1.02); opacity: 1; }
+          100%{ transform: translateY(0) scale(1); opacity: 1; }
         }
 
-        .now,.next{
-          display:flex;
-          align-items: baseline;
-          gap: 10px;
-          justify-content: center;
-          min-width: 0;
-        }
-        .dotNow{
-          width: 10px;
-          height: 10px;
-          border-radius: 999px;
-          background: rgba(52,199,89,0.95);
-          box-shadow: 0 0 18px rgba(52,199,89,0.26);
-          flex: 0 0 auto;
-        }
-        .label{
-          font-size: 11px;
+        .heroKicker{
+          font-size: 12px;
           font-weight: 950;
-          letter-spacing: 1.6px;
-          opacity: .72;
+          letter-spacing: 2px;
+          opacity: .78;
           text-transform: uppercase;
-          flex: 0 0 auto;
         }
-        .name{
-          font-size: clamp(18px, 2.6vw, 30px);
+        .heroName{
+          margin-top: 10px;
+          font-size: clamp(44px, 6.2vw, 82px);
           font-weight: 1000;
-          letter-spacing: -0.2px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          max-width: 100%;
+          letter-spacing: -0.8px;
+          text-shadow: 0 22px 90px rgba(0,0,0,0.38);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap: 14px;
+          flex-wrap: wrap;
         }
-
-        .arrow{
-          font-size: 26px;
-          font-weight: 900;
-          opacity: .72;
-          transform: translateY(-1px);
-        }
-
-        .aiLive{
-          font-weight: 950;
-          opacity: .88;
-          padding: 8px 12px;
+        .heroPot{
+          width: 54px;
+          height: 54px;
+          display: grid;
+          place-items: center;
           border-radius: 999px;
           background: rgba(0,0,0,0.22);
           border: 1px solid rgba(255,255,255,0.12);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+          font-size: 28px;
         }
 
-        .actions{
-          margin-top: 6px;
-          display:flex;
+        .nextLine{
+          margin-top: 14px;
+          display: inline-flex;
+          align-items: center;
           gap: 10px;
-          flex-wrap: wrap;
-          justify-content: center;
+          padding: 10px 12px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.12);
+          font-weight: 950;
+          opacity: .95;
         }
-        .hint{
-          margin-top: 6px;
+        .nextChip{
+          font-size: 11px;
+          letter-spacing: 1.8px;
+          text-transform: uppercase;
+          opacity: .80;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.18);
+          border: 1px solid rgba(255,255,255,0.12);
+        }
+        .arrow{ opacity: .85; font-weight: 1000; }
+        .nextName{
+          font-size: 14px;
+          font-weight: 1000;
+          letter-spacing: .2px;
+        }
+
+        .spectatorBar{
+          margin: 6px auto 0;
+          display: inline-flex;
+          gap: 10px;
+          align-items: center;
+          padding: 10px 12px;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.30);
+          border: 1px solid rgba(255,255,255,0.12);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          font-weight: 900;
+          opacity: .96;
+        }
+        .dot{ opacity: .65; }
+
+        .actions{
+          margin-top: 8px;
+          display: grid;
+          justify-items: center;
+          gap: 10px;
+        }
+        .helper{
+          margin-top: 10px;
           font-weight: 850;
-          opacity: .82;
+          opacity: .80;
         }
 
         .turnOverlay{
@@ -1515,7 +1385,7 @@ export default function GamePage() {
           background: rgba(0,0,0,0.22);
           color: white;
           border-radius: 999px;
-          padding: 12px 18px;
+          padding: 10px 14px;
           font-weight: 950;
           cursor: pointer;
           transition: transform .14s ease, filter .14s ease, border-color .14s ease;
@@ -1524,13 +1394,11 @@ export default function GamePage() {
         .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
         .btn:active{ transform: translateY(0px) scale(0.99); }
         .btn:disabled{ opacity: .65; cursor:not-allowed; transform:none; filter:none; }
+        .btnXL{ padding: 12px 18px; font-size: 14px; }
         .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
-        .btnGhost{ background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
 
-        @media (max-width: 520px){
-          .strip{ grid-template-columns: 1fr; gap: 10px; border-radius: 28px; }
-          .arrow{ display:none; }
-          .now,.next{ justify-content: center; }
+        @media (max-width: 860px){
+          .heroPot{ width: 48px; height: 48px; font-size: 24px; }
         }
       `}</style>
         </main>
