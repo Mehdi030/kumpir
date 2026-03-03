@@ -107,13 +107,6 @@ function pickNextAlive(players: Player[], holderId: string | null): Player | nul
     return alive[(idx + 1) % alive.length] ?? null;
 }
 
-// heuristic: treat any player named "AI" / "BOT" as AI
-function isAiName(name: string | null | undefined) {
-    if (!name) return false;
-    const n = name.trim().toLowerCase();
-    return n === "ai" || n.startsWith("ai ") || n.includes(" bot") || n.startsWith("bot");
-}
-
 export default function GamePage() {
     const supabase = getSupabaseClient();
     const params = useParams<{ code: string }>();
@@ -164,9 +157,6 @@ export default function GamePage() {
 
     // Finished screen UI
     const [showFullRanking, setShowFullRanking] = useState(false);
-
-    // AI controls
-    const [aiBusy, setAiBusy] = useState(false);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -305,27 +295,6 @@ export default function GamePage() {
                 p_code: codeUpper,
                 p_player_id: playerId,
             });
-            return error;
-        },
-        [supabase]
-    );
-
-    // AI topic generation (best-effort; backend RPC optional)
-    const rpcAiGenerateTopics = useCallback(
-        async (lobbyId: string) => {
-            // If you implement this RPC later, UI will instantly start working.
-            // Expected: updates topic_a/topic_b on lobbies + resets votes.
-            const { error } = await supabase.rpc("rpc_ai_generate_topics", { p_lobby_id: lobbyId });
-            return error;
-        },
-        [supabase]
-    );
-
-    // AI auto-turn (best-effort; assumes backend handles AI if holder is AI)
-    const rpcAiTakeTurn = useCallback(
-        async (codeUpper: string) => {
-            // If you implement rpc_ai_take_turn later, swap to that.
-            const { error } = await supabase.rpc("rpc_ai_take_turn", { p_code: codeUpper });
             return error;
         },
         [supabase]
@@ -494,7 +463,7 @@ export default function GamePage() {
 
                         setVoteCounts({ a, b, r });
 
-                        // ✅ PERMA highlight: never overwrite to null during topic_vote
+                        // PERMA highlight: never overwrite to null during topic_vote
                         setMyVote((prev) => mine ?? prev);
                     }
                 } else {
@@ -656,28 +625,6 @@ export default function GamePage() {
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [handlePass, lobby, isMeHolder]);
 
-    // AI auto-turn trigger (best-effort):
-    // If holder is AI, gently ping server to make it act.
-    useEffect(() => {
-        if (!lobby) return;
-        if (lobby.phase !== "running") return;
-        if (!holderRow) return;
-
-        if (!isAiName(holderRow.name)) return;
-
-        // throttle (simple)
-        let cancelled = false;
-        const t = window.setTimeout(() => {
-            if (cancelled) return;
-            void rpcAiTakeTurn(code); // optional RPC
-        }, 380);
-
-        return () => {
-            cancelled = true;
-            window.clearTimeout(t);
-        };
-    }, [lobby, holderRow, code, rpcAiTakeTurn]);
-
     // -----------------------------
     // UI: fatal / loading
     // -----------------------------
@@ -700,7 +647,7 @@ export default function GamePage() {
     const rLabel = "Zufällig";
 
     // =========================================================
-    // PHASE: TOPIC VOTE  (perma green highlight + optional AI topics)
+    // PHASE: TOPIC VOTE  (NO blinking)
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
@@ -790,34 +737,6 @@ export default function GamePage() {
                             {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
                         </div>
 
-                        {/* AI Topic Generator (Feature 22) */}
-                        <div className="aiRow">
-                            <button
-                                className="aiBtn"
-                                type="button"
-                                disabled={aiBusy}
-                                onClick={async () => {
-                                    if (!lobby?.id) return;
-                                    setAiBusy(true);
-                                    try {
-                                        const err = await rpcAiGenerateTopics(lobby.id);
-                                        if (err) {
-                                            // fallback: just inform; RPC may not exist yet
-                                            showToast(`⚠️ AI Topics: ${err.message}`, 2400);
-                                        } else {
-                                            showToast("✨ AI hat neue Themen generiert", 1400);
-                                            // keep vote selection; next poll updates topics
-                                        }
-                                    } finally {
-                                        setAiBusy(false);
-                                    }
-                                }}
-                            >
-                                {aiBusy ? "…" : "✨ AI Themen (Beta)"}
-                            </button>
-                            <div className="aiHint">Optional: funktioniert sobald du rpc_ai_generate_topics implementierst.</div>
-                        </div>
-
                         {toast ? <div className="toastInline">{toast}</div> : null}
                     </div>
                 </div>
@@ -869,7 +788,7 @@ export default function GamePage() {
           .cardTitle{margin-top:20px;font-size:clamp(24px,2.8vw,40px);font-weight:1000;letter-spacing:-0.2px;position:relative;z-index:2;text-shadow:0 18px 60px rgba(0,0,0,0.26);}
           .cardHint{margin-top:12px;font-size:13px;font-weight:900;opacity:.85;position:relative;z-index:2;}
 
-          /* ✅ PERMA GREEN OUTLINE */
+          /* ✅ PERMA GREEN OUTLINE (NO blink/pulse) */
           .glassCard.active{
             outline: 3px solid rgba(52,199,89,0.95);
             outline-offset: 2px;
@@ -882,30 +801,10 @@ export default function GamePage() {
               radial-gradient(circle at 18% 18%, rgba(52,199,89,0.20), rgba(0,0,0,0.10) 58%),
               linear-gradient(135deg, rgba(52,199,89,0.14), rgba(255,255,255,0.08), rgba(0,0,0,0.10));
             filter: brightness(1.06) saturate(1.06);
-            animation: selectedPulse 1.25s ease-in-out infinite;
           }
-          @keyframes selectedPulse{0%,100%{transform:scale(1.01);}50%{transform:scale(1.025);}}
 
           .statusLine{margin-top:14px;font-weight:900;opacity:.88;font-size:13px;animation:${reduceMotion ? "none" : "fadeUp 520ms ease both"};}
           .toastInline{margin-top:14px;font-weight:950;opacity:.92;animation:${reduceMotion ? "none" : "fadeUp 480ms ease both"};}
-
-          .aiRow{margin-top:14px;display:grid;gap:8px;justify-items:center;}
-          .aiBtn{
-            appearance:none;
-            border:1px solid rgba(255,255,255,0.16);
-            background: rgba(0,0,0,0.22);
-            color:white;
-            border-radius:999px;
-            padding:10px 14px;
-            font-weight:950;
-            cursor:pointer;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-            transition: transform .14s ease, filter .14s ease, border-color .14s ease;
-          }
-          .aiBtn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
-          .aiBtn:active{ transform: translateY(0px) scale(0.99); }
-          .aiBtn:disabled{ opacity:.65; cursor:not-allowed; transform:none; filter:none; }
-          .aiHint{font-size:12px;font-weight:850;opacity:.76;max-width:520px;}
 
           .bottomBar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(980px,94vw);}
           .bottomInner{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 14px;border-radius:999px;background:rgba(0,0,0,0.26);border:1px solid rgba(255,255,255,0.16);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);box-shadow:0 18px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.14);animation:${reduceMotion ? "none" : "dockIn 900ms cubic-bezier(.16,1,.3,1) both"};animation-delay:${reduceMotion ? "0ms" : "120ms"};}
@@ -1025,29 +924,19 @@ export default function GamePage() {
         );
     }
 
-// =========================================================
-// PHASE: FINISHED  (Preset M — MAXIMAL CINEMATIC)
-// - Hero + Podium Top3
-// - Awards: Fastest Pass + Longest Hold
-// - Ranking: # | Name | Score | Fastest
-// =========================================================
+    // =========================================================
+    // PHASE: FINISHED  (Winner-only hero, NO Top3 podium)
+    // - Awards: Fastest Pass + Longest Hold
+    // - Ranking: # | Name | Score | Fastest
+    // =========================================================
     if (lobby.phase === "finished") {
         const winnerName = winnerPlayer?.name ?? "Unbekannt";
-
         const shown = showFullRanking ? ranking : top5;
 
-        // Awards
         const fastestOverall =
             [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] ?? null;
 
-        const longestHold =
-            [...ranking].sort((a, b) => (b.holdMs ?? 0) - (a.holdMs ?? 0))[0] ?? null;
-
-        // Podium: top3 by score (already sorted)
-        const podium = ranking.slice(0, 3);
-        const p1 = podium[0] ?? null;
-        const p2 = podium[1] ?? null;
-        const p3 = podium[2] ?? null;
+        const longestHold = [...ranking].sort((a, b) => (b.holdMs ?? 0) - (a.holdMs ?? 0))[0] ?? null;
 
         return (
             <main
@@ -1066,7 +955,6 @@ export default function GamePage() {
                         "radial-gradient(circle at 50% 88%, rgba(255,214,10,0.34) 0%, rgba(240,138,26,0.58) 40%, rgba(143,15,15,0.92) 100%)",
                 }}
             >
-                {/* ambient layers */}
                 <div className="fxGrain" aria-hidden />
                 <div className="fxOrbs" aria-hidden>
                     <span className="fxOrb o1" />
@@ -1077,64 +965,35 @@ export default function GamePage() {
                 <div className="fxVignette" aria-hidden />
 
                 <div style={{ width: "min(1180px, 96vw)", position: "relative", zIndex: 2 }}>
-                    {/* HERO */}
+                    {/* HERO (Winner only) */}
                     <div className="finishHero">
                         <div className="finishKicker">SPIEL BEENDET</div>
 
                         <div className="finishWinner">
-                        <span className="trophy" aria-hidden>
-                            🏆
-                        </span>
+                            <span className="trophy" aria-hidden>
+                                🏆
+                            </span>
                             <span className="winnerName">{winnerName}</span>
                             <span className="winnerGlow" aria-hidden />
                         </div>
 
                         <div className="finishMeta">
-                        <span className="metaPill">
-                            Runden <b>{lobby.round_number ?? "—"}</b>
-                        </span>
                             <span className="metaPill">
-                            Thema <b>{selectedTopic}</b>
-                        </span>
+                                Runden <b>{lobby.round_number ?? "—"}</b>
+                            </span>
+                            <span className="metaPill">
+                                Thema <b>{selectedTopic}</b>
+                            </span>
                             {myRankRow ? (
                                 <span className="metaPill metaMe">
-                                Du <b>#{myRankRow.rank}</b>
-                            </span>
+                                    Du <b>#{myRankRow.rank}</b>
+                                </span>
                             ) : null}
                         </div>
                     </div>
 
-                    {/* PODIUM */}
-                    <div className="podiumWrap" aria-label="Podium">
-                        <div className="podiumGrid">
-                            <div className={`podiumCard place2 ${p2 ? "" : "empty"}`}>
-                                <div className="placeBadge">🥈</div>
-                                <div className="podiumName">{p2?.name ?? "—"}</div>
-                                <div className="podiumScore">{p2 ? `${p2.score} Score` : ""}</div>
-                                <div className="podiumBase" aria-hidden />
-                            </div>
-
-                            <div className={`podiumCard place1 ${p1 ? "" : "empty"}`}>
-                                <div className="placeBadge">🥇</div>
-                                <div className="podiumName">{p1?.name ?? "—"}</div>
-                                <div className="podiumScore">{p1 ? `${p1.score} Score` : ""}</div>
-                                <div className="podiumBase" aria-hidden />
-                                <div className="crown" aria-hidden>
-                                    ✨
-                                </div>
-                            </div>
-
-                            <div className={`podiumCard place3 ${p3 ? "" : "empty"}`}>
-                                <div className="placeBadge">🥉</div>
-                                <div className="podiumName">{p3?.name ?? "—"}</div>
-                                <div className="podiumScore">{p3 ? `${p3.score} Score` : ""}</div>
-                                <div className="podiumBase" aria-hidden />
-                            </div>
-                        </div>
-                    </div>
-
                     {/* MAIN GRID */}
-                    <div className="finishGrid">
+                    <div className="finishGrid" style={{ marginTop: 18 }}>
                         {/* Ranking */}
                         <div className="card">
                             <div className="cardTitle">🏅 Ranking</div>
@@ -1242,7 +1101,6 @@ export default function GamePage() {
                 </div>
 
                 <style>{`
-        /* ===== Ambient FX ===== */
         .fxGrain{
           position:absolute; inset:0;
           background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
@@ -1297,7 +1155,6 @@ export default function GamePage() {
           100%{ transform: rotate(360deg); }
         }
 
-        /* ===== Hero ===== */
         .finishHero{ text-align:center; }
         .finishKicker{
           font-size:12px;
@@ -1363,107 +1220,7 @@ export default function GamePage() {
           background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.10), rgba(0,0,0,0.22));
         }
 
-        /* ===== Podium ===== */
-        .podiumWrap{ margin-top: 18px; }
-        .podiumGrid{
-          display:grid;
-          grid-template-columns: 1fr 1.1fr 1fr;
-          gap: 14px;
-          align-items: end;
-        }
-        .podiumCard{
-          position: relative;
-          border-radius: 28px;
-          padding: 16px 14px 14px;
-          background: rgba(0,0,0,0.22);
-          border: 1px solid rgba(255,255,255,0.14);
-          backdrop-filter: blur(12px) saturate(140%);
-          -webkit-backdrop-filter: blur(12px) saturate(140%);
-          box-shadow: 0 18px 70px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.12);
-          overflow:hidden;
-          transform: translateZ(0);
-          animation: podiumIn 850ms cubic-bezier(.16,1,.3,1) both;
-        }
-        .podiumCard.place1{
-          padding-top: 22px;
-          border-color: rgba(255,214,10,0.28);
-          background:
-            radial-gradient(circle at 22% 18%, rgba(255,214,10,0.20), rgba(0,0,0,0.22) 56%),
-            rgba(0,0,0,0.22);
-          animation-delay: 120ms;
-        }
-        .podiumCard.place2{
-          border-color: rgba(255,255,255,0.18);
-          background:
-            radial-gradient(circle at 22% 18%, rgba(255,255,255,0.12), rgba(0,0,0,0.22) 60%),
-            rgba(0,0,0,0.22);
-          animation-delay: 40ms;
-        }
-        .podiumCard.place3{
-          border-color: rgba(255,149,0,0.20);
-          background:
-            radial-gradient(circle at 22% 18%, rgba(255,149,0,0.14), rgba(0,0,0,0.22) 60%),
-            rgba(0,0,0,0.22);
-          animation-delay: 80ms;
-        }
-        .podiumCard.empty{ opacity: .75; }
-        .placeBadge{
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          height: 36px;
-          padding: 0 12px;
-          border-radius: 999px;
-          font-weight: 1000;
-          background: rgba(255,255,255,0.10);
-          border: 1px solid rgba(255,255,255,0.14);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-        }
-        .podiumName{
-          margin-top: 12px;
-          font-size: clamp(18px, 2.2vw, 28px);
-          font-weight: 1000;
-          letter-spacing: -0.2px;
-          text-shadow: 0 16px 60px rgba(0,0,0,0.28);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .podiumScore{
-          margin-top: 6px;
-          font-weight: 900;
-          opacity: .82;
-          font-size: 13px;
-        }
-        .podiumBase{
-          position:absolute;
-          left:-40px; right:-40px; bottom:-38px;
-          height: 80px;
-          background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.14), rgba(0,0,0,0) 72%);
-          filter: blur(10px);
-          opacity:.75;
-          pointer-events:none;
-        }
-        .crown{
-          position:absolute;
-          right: 14px;
-          top: 12px;
-          opacity: .9;
-          filter: drop-shadow(0 14px 40px rgba(255,214,10,0.24));
-          animation: twinkle 1.9s ease-in-out infinite;
-        }
-        @keyframes twinkle{
-          0%,100%{ transform: translateY(0) scale(1); opacity:.85; }
-          50%{ transform: translateY(-2px) scale(1.06); opacity:1; }
-        }
-        @keyframes podiumIn{
-          0%{ opacity: 0; transform: translateY(14px) scale(.985); filter: blur(1px); }
-          100%{ opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-        }
-
-        /* ===== Grid / Cards ===== */
         .finishGrid{
-          margin-top: 16px;
           display:grid;
           grid-template-columns: 1.3fr 1fr;
           gap: 14px;
@@ -1487,7 +1244,6 @@ export default function GamePage() {
           text-align:left;
         }
 
-        /* ===== Ranking Table ===== */
         .table{ margin-top: 12px; display:grid; gap: 8px; }
         .row{
           display:grid;
@@ -1536,12 +1292,7 @@ export default function GamePage() {
         .tag.dead{ opacity: .75; }
         .tag.holder{ background: rgba(255,214,10,0.16); }
 
-        /* ===== Awards ===== */
-        .awards{
-          margin-top: 12px;
-          display:grid;
-          gap: 10px;
-        }
+        .awards{ margin-top: 12px; display:grid; gap: 10px; }
         .awardTile{
           position:relative;
           padding: 14px 14px 12px;
@@ -1584,15 +1335,12 @@ export default function GamePage() {
           pointer-events:none;
           animation: glowFloat 4.2s ease-in-out infinite;
         }
-        .awardGlow.g1{
-          background: radial-gradient(circle at 30% 25%, rgba(34,211,238,0.16), rgba(255,255,255,0.06), transparent 70%);
-        }
+        .awardGlow.g1{ background: radial-gradient(circle at 30% 25%, rgba(34,211,238,0.16), rgba(255,255,255,0.06), transparent 70%); }
         .awardGlow.g2{
           background: radial-gradient(circle at 30% 25%, rgba(52,199,89,0.14), rgba(255,214,10,0.10), transparent 72%);
           animation-delay: -1.4s;
         }
 
-        /* ===== Buttons ===== */
         .cardActions{
           margin-top: 12px;
           display:flex;
@@ -1617,7 +1365,6 @@ export default function GamePage() {
         .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
         .btnSecondary{ background: rgba(0,0,0,0.22); }
 
-        /* ===== Core anims ===== */
         @keyframes fadeUp{ from{ opacity:0; transform: translateY(10px); } to{ opacity:1; transform: translateY(0); } }
         @keyframes heroIn{
           0%{ opacity:0; transform: translateY(14px) scale(.985); filter: blur(1px); }
@@ -1627,18 +1374,8 @@ export default function GamePage() {
           0%,100%{ transform: translateY(0); opacity:.75; }
           50%{ transform: translateY(-6px); opacity:1; }
         }
-
-        /* ===== Responsive ===== */
-        @media (max-width: 980px){
-          .finishGrid{ grid-template-columns: 1fr; }
-        }
-        @media (max-width: 860px){
-          .podiumGrid{ grid-template-columns: 1fr; }
-        }
-        @media (max-width: 520px){
-          .row{ grid-template-columns: 34px 1fr 90px 110px; }
-          .trophy{ width: 48px; height: 48px; font-size: 24px; }
-        }
+        @media (max-width: 980px){ .finishGrid{ grid-template-columns: 1fr; } }
+        @keyframes raysSpin{ 0%{ transform: rotate(0deg); } 100%{ transform: rotate(360deg); } }
       `}</style>
             </main>
         );
@@ -1717,32 +1454,10 @@ export default function GamePage() {
                         </div>
                     </div>
 
-                    {/* AI info (Feature 21) */}
-                    {holderRow && isAiName(holderRow.name) ? <div className="aiLive">🤖 AI am Zug</div> : null}
-
                     {isMeHolder && !iAmEliminated ? (
                         <div className="actions">
                             <button className="btn btnPrimary" onClick={() => void handlePass()} type="button" disabled={!!passDisabledReason} title={passDisabledReason ?? "Weitergeben"}>
                                 {passBusy ? "…" : "🥔 Weitergeben (Space)"}
-                            </button>
-
-                            <button
-                                className="btn btnGhost"
-                                type="button"
-                                disabled={aiBusy}
-                                onClick={async () => {
-                                    // manual nudge for AI systems / debugging
-                                    setAiBusy(true);
-                                    try {
-                                        const err = await rpcAiTakeTurn(code);
-                                        if (err) showToast(`⚠️ AI Turn: ${err.message}`, 2200);
-                                        else showToast("🤖 AI ping", 1000);
-                                    } finally {
-                                        setAiBusy(false);
-                                    }
-                                }}
-                            >
-                                {aiBusy ? "…" : "🤖 AI Ping"}
                             </button>
                         </div>
                     ) : (
@@ -1836,17 +1551,6 @@ export default function GamePage() {
           transform: translateY(-1px);
         }
 
-        .aiLive{
-          font-weight: 950;
-          opacity: .88;
-          padding: 8px 12px;
-          border-radius: 999px;
-          background: rgba(0,0,0,0.22);
-          border: 1px solid rgba(255,255,255,0.12);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-        }
-
         .actions{
           margin-top: 6px;
           display:flex;
@@ -1906,7 +1610,6 @@ export default function GamePage() {
         .btn:active{ transform: translateY(0px) scale(0.99); }
         .btn:disabled{ opacity: .65; cursor:not-allowed; transform:none; filter:none; }
         .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
-        .btnGhost{ background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
 
         @media (max-width: 520px){
           .strip{ grid-template-columns: 1fr; gap: 10px; border-radius: 28px; }
