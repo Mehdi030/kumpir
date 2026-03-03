@@ -7,14 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 
-type LobbyPhase =
-    | "waiting"
-    | "lobby"
-    | "topic_vote"
-    | "countdown"
-    | "running"
-    | "finished"
-    | string;
+type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
 
 type LobbyState = {
     id: string;
@@ -104,18 +97,6 @@ function fmtHold(ms?: number) {
     return `${m}m ${r}s`;
 }
 
-function fmtTimeAgo(ts: string | null | undefined) {
-    if (!ts) return "—";
-    const diff = Date.now() - Date.parse(ts);
-    if (!Number.isFinite(diff)) return "—";
-    const s = Math.max(0, Math.floor(diff / 1000));
-    if (s < 60) return `${s}s ago`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    return `${h}h ago`;
-}
-
 function pickNextAlive(players: Player[], holderId: string | null): Player | null {
     if (!holderId) return null;
     const alive = players.filter((p) => p.is_alive);
@@ -124,6 +105,13 @@ function pickNextAlive(players: Player[], holderId: string | null): Player | nul
     const idx = alive.findIndex((p) => p.player_id === holderId);
     if (idx < 0) return alive[0] ?? null;
     return alive[(idx + 1) % alive.length] ?? null;
+}
+
+// heuristic: treat any player named "AI" / "BOT" as AI
+function isAiName(name: string | null | undefined) {
+    if (!name) return false;
+    const n = name.trim().toLowerCase();
+    return n === "ai" || n.startsWith("ai ") || n.includes(" bot") || n.startsWith("bot");
 }
 
 export default function GamePage() {
@@ -150,7 +138,7 @@ export default function GamePage() {
     const finalizeInFlightRef = useRef(false);
     const advanceInFlightRef = useRef(false);
 
-    // Pass UX (NO COOLDOWN)
+    // Pass UX
     const [toast, setToast] = useState("");
     const [passBusy, setPassBusy] = useState(false);
 
@@ -164,7 +152,7 @@ export default function GamePage() {
     // Pass animation event
     const [passEvent, setPassEvent] = useState<PassEvent | null>(null);
 
-    // HUD pulse on pass
+    // HUD swap animation trigger
     const [hudPulseNonce, setHudPulseNonce] = useState(0);
 
     const inFlightRef = useRef(false);
@@ -176,6 +164,9 @@ export default function GamePage() {
 
     // Finished screen UI
     const [showFullRanking, setShowFullRanking] = useState(false);
+
+    // AI controls
+    const [aiBusy, setAiBusy] = useState(false);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -203,10 +194,12 @@ export default function GamePage() {
         return lobby.holder_player_id === mePlayerId;
     }, [lobby?.holder_player_id, mePlayerId]);
 
-    const holderName = useMemo(() => {
-        if (!lobby?.holder_player_id) return "…";
-        return players.find((p) => p.player_id === lobby.holder_player_id)?.name ?? "…";
+    const holderRow = useMemo(() => {
+        if (!lobby?.holder_player_id) return null;
+        return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
     }, [players, lobby?.holder_player_id]);
+
+    const holderName = useMemo(() => holderRow?.name ?? "…", [holderRow]);
 
     const selectedTopic = useMemo(() => {
         if (lobby?.phase === "topic_vote") return lobby?.topic_a ?? "…";
@@ -227,12 +220,9 @@ export default function GamePage() {
     const votedPlayers = voteCounts.a + voteCounts.b + voteCounts.r;
     const allVoted = totalPlayers > 0 && votedPlayers >= totalPlayers;
 
-    const nextUp = useMemo(
-        () => pickNextAlive(players, lobby?.holder_player_id ?? null),
-        [players, lobby?.holder_player_id]
-    );
+    const nextUp = useMemo(() => pickNextAlive(players, lobby?.holder_player_id ?? null), [players, lobby?.holder_player_id]);
 
-    // Winner / MVP / Ranking
+    // Winner / Ranking
     const winnerPlayer = useMemo(() => {
         if (!lobby?.holder_player_id) return null;
         return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
@@ -245,8 +235,7 @@ export default function GamePage() {
             const streak = p.survival_streak ?? 0;
             const fastest = p.fastest_pass_ms ?? null;
 
-            const fastestBonus =
-                fastest == null ? 0 : Math.max(0, Math.min(12, Math.round((2200 - fastest) / 200)));
+            const fastestBonus = fastest == null ? 0 : Math.max(0, Math.min(12, Math.round((2200 - fastest) / 200)));
             const score = pass * 10 + clutch * 18 + streak * 6 + fastestBonus;
 
             return {
@@ -273,53 +262,12 @@ export default function GamePage() {
         return { row: ranking[idx], rank: idx + 1 };
     }, [ranking, mePlayerId]);
 
-    const mvp = useMemo(() => winnerPlayer ?? null, [winnerPlayer]);
-
-    // -------- Running stats (NOW / NEXT) ----------
-    const holderRow = useMemo(() => {
-        if (!lobby?.holder_player_id) return null;
-        return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
-    }, [players, lobby?.holder_player_id]);
-
-    const nextRow = useMemo(() => {
-        if (!nextUp) return null;
-        return players.find((p) => p.player_id === nextUp.player_id) ?? null;
-    }, [players, nextUp]);
-
-    const holderStats = useMemo(() => {
-        const p = holderRow;
-        if (!p) return null;
-        return {
-            pass: p.pass_count ?? 0,
-            clutch: p.clutch_pass_count ?? 0,
-            fastest: p.fastest_pass_ms ?? null,
-            hold: p.total_hold_ms ?? 0,
-            streak: p.survival_streak ?? 0,
-            lastPassAt: p.last_pass_at ?? null,
-        };
-    }, [holderRow]);
-
-    const nextStats = useMemo(() => {
-        const p = nextRow;
-        if (!p) return null;
-        return {
-            pass: p.pass_count ?? 0,
-            clutch: p.clutch_pass_count ?? 0,
-            fastest: p.fastest_pass_ms ?? null,
-            hold: p.total_hold_ms ?? 0,
-            streak: p.survival_streak ?? 0,
-            lastPassAt: p.last_pass_at ?? null,
-        };
-    }, [nextRow]);
-
     // -----------------------------
     // RPC wrappers
     // -----------------------------
     const rpcFinalizeTopicVote = useCallback(
         async (lobbyId: string) => {
-            const { error } = await supabase.rpc("rpc_finalize_topic_vote", {
-                p_lobby_id: lobbyId,
-            });
+            const { error } = await supabase.rpc("rpc_finalize_topic_vote", { p_lobby_id: lobbyId });
             if (error) {
                 console.error("rpc_finalize_topic_vote failed:", error);
                 showToast(`❌ Finalize: ${error.message}`, 2400);
@@ -357,6 +305,27 @@ export default function GamePage() {
                 p_code: codeUpper,
                 p_player_id: playerId,
             });
+            return error;
+        },
+        [supabase]
+    );
+
+    // AI topic generation (best-effort; backend RPC optional)
+    const rpcAiGenerateTopics = useCallback(
+        async (lobbyId: string) => {
+            // If you implement this RPC later, UI will instantly start working.
+            // Expected: updates topic_a/topic_b on lobbies + resets votes.
+            const { error } = await supabase.rpc("rpc_ai_generate_topics", { p_lobby_id: lobbyId });
+            return error;
+        },
+        [supabase]
+    );
+
+    // AI auto-turn (best-effort; assumes backend handles AI if holder is AI)
+    const rpcAiTakeTurn = useCallback(
+        async (codeUpper: string) => {
+            // If you implement rpc_ai_take_turn later, swap to that.
+            const { error } = await supabase.rpc("rpc_ai_take_turn", { p_code: codeUpper });
             return error;
         },
         [supabase]
@@ -433,12 +402,11 @@ export default function GamePage() {
                 // Post-round loser toast (once)
                 if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
                     lastLoserRef.current = nextLobby.last_loser_player_id;
-                    const loserName =
-                        players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
+                    const loserName = players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
                     showToast(`💥 ${loserName} ist raus`, 1500);
                 }
 
-                // Holder transition (passEvent)
+                // Holder transition (passEvent) + HUD swap animation
                 const prevHolder = prevHolderRef.current;
                 const nextHolder = nextLobby.holder_player_id ?? null;
 
@@ -449,8 +417,6 @@ export default function GamePage() {
                         toPlayerId: nextHolder,
                         nonce: passNonceRef.current,
                     });
-
-                    // HUD pulse
                     setHudPulseNonce(passNonceRef.current);
                 }
 
@@ -467,7 +433,7 @@ export default function GamePage() {
                 prevHolderRef.current = nextHolder;
                 setLobby(nextLobby);
 
-                // IMPORTANT: finished => do NOT filter by status=active
+                // IMPORTANT: finished => do NOT filter by status=active (so stats still show)
                 const playersQuery = supabase
                     .from("players")
                     .select(
@@ -489,8 +455,7 @@ export default function GamePage() {
                     .eq("lobby_id", nextLobby.id)
                     .order("seat_index", { ascending: true });
 
-                const playersRes =
-                    nextLobby.phase === "finished" ? await playersQuery : await playersQuery.eq("status", "active");
+                const playersRes = nextLobby.phase === "finished" ? await playersQuery : await playersQuery.eq("status", "active");
 
                 if (!alive) return;
 
@@ -505,11 +470,7 @@ export default function GamePage() {
 
                 // Votes
                 if (nextLobby.phase === "topic_vote") {
-                    const votesRes = await supabase
-                        .from("topic_votes")
-                        .select("choice,player_id")
-                        .eq("lobby_id", nextLobby.id);
-
+                    const votesRes = await supabase.from("topic_votes").select("choice,player_id").eq("lobby_id", nextLobby.id);
                     if (!alive) return;
 
                     if (votesRes.error) {
@@ -530,19 +491,23 @@ export default function GamePage() {
                                 if (row.choice === 1 || row.choice === 2 || row.choice === 3) mine = row.choice as 1 | 2 | 3;
                             }
                         }
+
                         setVoteCounts({ a, b, r });
-                        setMyVote(mine);
+
+                        // ✅ PERMA highlight: never overwrite to null during topic_vote
+                        setMyVote((prev) => mine ?? prev);
                     }
                 } else {
                     setVoteCounts({ a: 0, b: 0, r: 0 });
                     setMyVote(null);
                 }
 
-                // Best-effort phase automations (game ticking stays; we just do NOT display bomb timer in UI)
+                // Best-effort phase automations
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
                     const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
                     const iAmHolderNow = nextLobby.holder_player_id === mePlayerId;
 
+                    // Keep backend tick logic as-is (server decides explosions, etc.)
                     if (iAmHolderNow) {
                         const explodeMs = Date.parse(nextLobby.explode_at);
                         const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
@@ -550,6 +515,7 @@ export default function GamePage() {
                     }
                 }
 
+                // topic_vote finalize
                 if (nextLobby.phase === "topic_vote" && nextLobby.topic_vote_ends_at) {
                     const dueMs = msUntil(nextLobby.topic_vote_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !finalizeInFlightRef.current) {
@@ -558,6 +524,7 @@ export default function GamePage() {
                     }
                 }
 
+                // countdown advance
                 if (nextLobby.phase === "countdown" && nextLobby.countdown_ends_at) {
                     const dueMs = msUntil(nextLobby.countdown_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !advanceInFlightRef.current) {
@@ -622,7 +589,7 @@ export default function GamePage() {
         };
     }, [lobby]);
 
-    // Vote action (optimistic UI: setMyVote immediately; rollback on error)
+    // Vote action (optimistic local state so highlight is instant)
     const vote = useCallback(
         async (choice: 1 | 2 | 3) => {
             if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
@@ -632,6 +599,7 @@ export default function GamePage() {
 
             setMyVote(choice);
             setVoteBusy(true);
+
             try {
                 const { error } = await supabase.rpc("rpc_vote_topic", {
                     p_lobby_id: lobby.id,
@@ -641,12 +609,11 @@ export default function GamePage() {
 
                 if (error) {
                     console.error("rpc_vote_topic failed:", error);
-                    setMyVote(null);
+                    // keep highlight, but inform user; backend will correct if needed
                     showToast(`❌ ${error.message}`, 2600);
                     return;
                 }
             } catch (e: unknown) {
-                setMyVote(null);
                 showToast(`❌ ${getErrorMessage(e)}`, 2600);
             } finally {
                 setVoteBusy(false);
@@ -655,7 +622,7 @@ export default function GamePage() {
         [mePlayerId, lobby, voteBusy, supabase, showToast]
     );
 
-    // PASS handler (NO cooldown; only in-flight guard)
+    // PASS handler
     const handlePass = useCallback(async () => {
         if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
         if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
@@ -689,6 +656,28 @@ export default function GamePage() {
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [handlePass, lobby, isMeHolder]);
 
+    // AI auto-turn trigger (best-effort):
+    // If holder is AI, gently ping server to make it act.
+    useEffect(() => {
+        if (!lobby) return;
+        if (lobby.phase !== "running") return;
+        if (!holderRow) return;
+
+        if (!isAiName(holderRow.name)) return;
+
+        // throttle (simple)
+        let cancelled = false;
+        const t = window.setTimeout(() => {
+            if (cancelled) return;
+            void rpcAiTakeTurn(code); // optional RPC
+        }, 380);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(t);
+        };
+    }, [lobby, holderRow, code, rpcAiTakeTurn]);
+
     // -----------------------------
     // UI: fatal / loading
     // -----------------------------
@@ -711,9 +700,7 @@ export default function GamePage() {
     const rLabel = "Zufällig";
 
     // =========================================================
-    // PHASE: TOPIC VOTE
-    // - Active: grün umrandet + glow (klar erkennbar)
-    // - Text: weiß
+    // PHASE: TOPIC VOTE  (perma green highlight + optional AI topics)
     // =========================================================
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
@@ -729,6 +716,7 @@ export default function GamePage() {
                     padding: 24,
                     position: "relative",
                     overflow: "hidden",
+                    color: "white",
                     background:
                         "radial-gradient(circle at 25% 15%, rgba(255,255,255,0.16) 0%, rgba(0,0,0,0) 55%)," +
                         "radial-gradient(circle at 80% 10%, rgba(34,211,238,0.10) 0%, rgba(0,0,0,0) 58%)," +
@@ -798,8 +786,36 @@ export default function GamePage() {
                             </button>
                         </div>
 
-                        <div className={`statusLine ${myVote ? "voted" : ""}`}>
+                        <div className="statusLine">
                             {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
+                        </div>
+
+                        {/* AI Topic Generator (Feature 22) */}
+                        <div className="aiRow">
+                            <button
+                                className="aiBtn"
+                                type="button"
+                                disabled={aiBusy}
+                                onClick={async () => {
+                                    if (!lobby?.id) return;
+                                    setAiBusy(true);
+                                    try {
+                                        const err = await rpcAiGenerateTopics(lobby.id);
+                                        if (err) {
+                                            // fallback: just inform; RPC may not exist yet
+                                            showToast(`⚠️ AI Topics: ${err.message}`, 2400);
+                                        } else {
+                                            showToast("✨ AI hat neue Themen generiert", 1400);
+                                            // keep vote selection; next poll updates topics
+                                        }
+                                    } finally {
+                                        setAiBusy(false);
+                                    }
+                                }}
+                            >
+                                {aiBusy ? "…" : "✨ AI Themen (Beta)"}
+                            </button>
+                            <div className="aiHint">Optional: funktioniert sobald du rpc_ai_generate_topics implementierst.</div>
                         </div>
 
                         {toast ? <div className="toastInline">{toast}</div> : null}
@@ -840,98 +856,81 @@ export default function GamePage() {
           .headline{margin-top:10px;font-size:clamp(36px,4.8vw,70px);font-weight:1000;letter-spacing:-0.6px;position:relative;display:inline-block;text-shadow:0 24px 80px rgba(0,0,0,0.35);animation:${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};}
           .headlineGlow{position:absolute;inset:-30px -60px;background:radial-gradient(circle at 40% 35%, rgba(255,214,10,0.25), rgba(255,149,0,0.18), rgba(255,45,85,0.06), transparent 70%);filter:blur(18px);opacity:.9;pointer-events:none;animation:${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};}
           .topicGrid{margin-top:24px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;}
-
-          /* Card base: white text */
-          .glassCard{
-            position:relative;width:100%;
-            border-radius:38px;padding:24px 22px 22px;min-height:260px;text-align:left;
-            cursor:pointer;
-            color: rgba(255,255,255,0.92);
-            border:1px solid rgba(255,255,255,0.18);
-            background:
-              linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),
-              radial-gradient(circle at 30% 20%, rgba(255,214,10,0.14), rgba(255,149,0,0.08), rgba(0,0,0,0.16) 70%);
-            backdrop-filter:blur(16px) saturate(140%);
-            -webkit-backdrop-filter:blur(16px) saturate(140%);
-            box-shadow:0 18px 70px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.20);
-            overflow:hidden;transform:translateZ(0);
-            transition:transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease;
-            animation:${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};
-          }
+          .glassCard{color:white;position:relative;width:100%;border-radius:38px;padding:24px 22px 22px;min-height:260px;text-align:left;cursor:pointer;border:1px solid rgba(255,255,255,0.18);background:linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),radial-gradient(circle at 30% 20%, rgba(255,214,10,0.14), rgba(255,149,0,0.08), rgba(0,0,0,0.16) 70%);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);box-shadow:0 18px 70px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.20);overflow:hidden;transform:translateZ(0);transition:transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease;animation:${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};}
           .glassCard:nth-child(2){animation-delay:${reduceMotion ? "0ms" : "70ms"};}
           .glassCard:nth-child(3){animation-delay:${reduceMotion ? "0ms" : "140ms"};}
           .glassCard:hover{transform:scale(1.035);border-color:rgba(255,255,255,0.30);box-shadow:0 26px 90px rgba(0,0,0,0.34),inset 0 1px 0 rgba(255,255,255,0.22);filter:brightness(1.03);}
           .glassCard:active{transform:scale(1.015);}
           .glassCard:disabled{opacity:.78;cursor:not-allowed;transform:none;filter:none;}
-
           .glassShine{position:absolute;inset:-120px;background:radial-gradient(circle at 20% 20%, rgba(255,255,255,0.24), rgba(255,255,255,0.06), transparent 60%);opacity:.75;filter:blur(18px);pointer-events:none;animation:${reduceMotion ? "none" : "shineSweep 5.2s ease-in-out infinite"};}
           .cardTop{display:flex;justify-content:space-between;align-items:center;gap:10px;position:relative;z-index:2;}
-          .chip{
-            display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 14px;border-radius:999px;font-weight:1000;
-            background:rgba(0,0,0,0.18);
-            border:1px solid rgba(255,255,255,0.16);
-            box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);
-            color: rgba(255,255,255,0.94);
-          }
-          .micro{font-size:12px;font-weight:950;letter-spacing:1.2px;text-transform:uppercase;color: rgba(255,255,255,0.78);}
-          .cardTitle{margin-top:20px;font-size:clamp(24px,2.8vw,40px);font-weight:1000;letter-spacing:-0.2px;position:relative;z-index:2;text-shadow:0 18px 60px rgba(0,0,0,0.26);color: rgba(255,255,255,0.96);}
-          .cardHint{margin-top:12px;font-size:13px;font-weight:900;position:relative;z-index:2;color: rgba(255,255,255,0.78);}
+          .chip{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 14px;border-radius:999px;font-weight:1000;background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.16);box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);}
+          .micro{font-size:12px;font-weight:950;letter-spacing:1.2px;opacity:.82;text-transform:uppercase;}
+          .cardTitle{margin-top:20px;font-size:clamp(24px,2.8vw,40px);font-weight:1000;letter-spacing:-0.2px;position:relative;z-index:2;text-shadow:0 18px 60px rgba(0,0,0,0.26);}
+          .cardHint{margin-top:12px;font-size:13px;font-weight:900;opacity:.85;position:relative;z-index:2;}
 
-          /* Active: green outline + glow (very clear) */
+          /* ✅ PERMA GREEN OUTLINE */
           .glassCard.active{
-            border-color: rgba(52,199,89,0.95);
+            outline: 3px solid rgba(52,199,89,0.95);
+            outline-offset: 2px;
+            border-color: rgba(52,199,89,0.65);
             box-shadow:
               0 30px 110px rgba(0,0,0,0.40),
-              0 0 0 2px rgba(52,199,89,0.55) inset,
-              0 0 0 1px rgba(255,255,255,0.08) inset,
-              0 0 38px rgba(52,199,89,0.22);
+              0 0 0 2px rgba(52,199,89,0.28) inset,
+              0 0 46px rgba(52,199,89,0.22);
             background:
               radial-gradient(circle at 18% 18%, rgba(52,199,89,0.20), rgba(0,0,0,0.10) 58%),
               linear-gradient(135deg, rgba(52,199,89,0.14), rgba(255,255,255,0.08), rgba(0,0,0,0.10));
             filter: brightness(1.06) saturate(1.06);
-            animation: ${reduceMotion ? "none" : "selectedPulse 1.25s ease-in-out infinite"};
+            animation: selectedPulse 1.25s ease-in-out infinite;
           }
-          .glassCard.active .chip{
-            border-color: rgba(52,199,89,0.75);
-            box-shadow: 0 0 0 1px rgba(52,199,89,0.25) inset;
-          }
-          .glassCard.active:hover{
-            transform:scale(1.035);
-            filter: brightness(1.08) saturate(1.08);
-          }
+          @keyframes selectedPulse{0%,100%{transform:scale(1.01);}50%{transform:scale(1.025);}}
 
-          .statusLine{margin-top:14px;font-weight:900;opacity:.86;font-size:13px;animation:${reduceMotion ? "none" : "fadeUp 520ms ease both"};color: rgba(255,255,255,0.86);}
-          .statusLine.voted{color: rgba(152,255,185,0.92);}
+          .statusLine{margin-top:14px;font-weight:900;opacity:.88;font-size:13px;animation:${reduceMotion ? "none" : "fadeUp 520ms ease both"};}
           .toastInline{margin-top:14px;font-weight:950;opacity:.92;animation:${reduceMotion ? "none" : "fadeUp 480ms ease both"};}
+
+          .aiRow{margin-top:14px;display:grid;gap:8px;justify-items:center;}
+          .aiBtn{
+            appearance:none;
+            border:1px solid rgba(255,255,255,0.16);
+            background: rgba(0,0,0,0.22);
+            color:white;
+            border-radius:999px;
+            padding:10px 14px;
+            font-weight:950;
+            cursor:pointer;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+            transition: transform .14s ease, filter .14s ease, border-color .14s ease;
+          }
+          .aiBtn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
+          .aiBtn:active{ transform: translateY(0px) scale(0.99); }
+          .aiBtn:disabled{ opacity:.65; cursor:not-allowed; transform:none; filter:none; }
+          .aiHint{font-size:12px;font-weight:850;opacity:.76;max-width:520px;}
 
           .bottomBar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(980px,94vw);}
           .bottomInner{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 14px;border-radius:999px;background:rgba(0,0,0,0.26);border:1px solid rgba(255,255,255,0.16);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);box-shadow:0 18px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.14);animation:${reduceMotion ? "none" : "dockIn 900ms cubic-bezier(.16,1,.3,1) both"};animation-delay:${reduceMotion ? "0ms" : "120ms"};}
           .bottomLeft{display:flex;align-items:center;gap:10px;min-width:220px;}
           .brandMark{width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18));border:1px solid rgba(255,255,255,0.14);box-shadow:0 10px 30px rgba(0,0,0,0.22);}
-          .bottomTitle{font-weight:1000;letter-spacing:1.2px;font-size:12px;text-transform:uppercase;opacity:.9;color: rgba(255,255,255,0.92);}
-          .bottomSub{font-weight:850;opacity:.78;font-size:12px;margin-top:2px;color: rgba(255,255,255,0.80);}
+          .bottomTitle{font-weight:1000;letter-spacing:1.2px;font-size:12px;text-transform:uppercase;opacity:.9;}
+          .bottomSub{font-weight:850;opacity:.78;font-size:12px;margin-top:2px;}
           .barWrap{flex:1;min-width:180px;position:relative;}
           .barTrack{height:12px;border-radius:999px;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.12);overflow:hidden;}
           .barFill{height:100%;background:linear-gradient(90deg, rgba(255,214,10,0.95), rgba(255,149,0,0.95), rgba(255,45,85,0.80));filter:saturate(120%);}
           .barGlow{position:absolute;inset:-18px -22px;background:radial-gradient(circle at 50% 50%, rgba(255,214,10,0.18), rgba(255,149,0,0.14), rgba(255,45,85,0.06), transparent 70%);filter:blur(18px);opacity:.9;pointer-events:none;animation:${reduceMotion ? "none" : "glowFloat 3.6s ease-in-out infinite"};}
-          .timeBox{min-width:70px;height:40px;border-radius:999px;display:grid;place-items:center;font-size:18px;font-weight:1000;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.14);box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);color: rgba(255,255,255,0.96);}
-
+          .timeBox{min-width:70px;height:40px;border-radius:999px;display:grid;place-items:center;font-size:18px;font-weight:1000;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.14);box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);}
           .grain{position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");opacity:.10;mix-blend-mode:overlay;pointer-events:none;}
           .orbs{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
           .orb{position:absolute;border-radius:999px;filter:blur(24px);opacity:.75;mix-blend-mode:screen;}
           .o1{width:420px;height:420px;left:-120px;top:-120px;background:radial-gradient(circle at 30% 30%, rgba(255,214,10,0.26), rgba(255,149,0,0.18), transparent 70%);animation:${reduceMotion ? "none" : "orbFloat 8s ease-in-out infinite"};}
           .o2{width:360px;height:360px;right:-120px;top:40px;background:radial-gradient(circle at 30% 30%, rgba(34,211,238,0.18), rgba(167,139,250,0.12), transparent 72%);animation:${reduceMotion ? "none" : "orbFloat 9.5s ease-in-out infinite"};animation-delay:${reduceMotion ? "0s" : "-1.2s"};}
           .o3{width:520px;height:520px;left:20%;bottom:-220px;background:radial-gradient(circle at 30% 30%, rgba(255,45,85,0.14), rgba(255,149,0,0.16), transparent 70%);animation:${reduceMotion ? "none" : "orbFloat 10.5s ease-in-out infinite"};animation-delay:${reduceMotion ? "0s" : "-2.1s"};}
-
           @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
           @keyframes heroIn{0%{opacity:0;transform:translateY(12px) scale(0.985);filter:blur(1px);}100%{opacity:1;transform:translateY(0) scale(1);filter:blur(0);}}
           @keyframes cardIn{0%{opacity:0;transform:translateY(16px) scale(0.985);}100%{opacity:1;transform:translateY(0) scale(1);}}
           @keyframes dockIn{0%{opacity:0;transform:translateY(16px);}100%{opacity:1;transform:translateY(0);}}
           @keyframes glowFloat{0%,100%{transform:translateY(0);opacity:.82;}50%{transform:translateY(-6px);opacity:1;}}
           @keyframes shineSweep{0%,100%{transform:translateX(-10px) rotate(12deg);opacity:.60;}50%{transform:translateX(18px) rotate(12deg);opacity:.90;}}
-          @keyframes selectedPulse{0%,100%{filter:brightness(1.06) saturate(1.06);}50%{filter:brightness(1.12) saturate(1.10);}}
           @keyframes orbFloat{0%,100%{transform:translateY(0) translateX(0);}50%{transform:translateY(18px) translateX(10px);}}
-
           @media (max-width: 980px){ .glassCard{ min-height: 230px; } }
           @media (max-width: 860px){
             .topicGrid{ grid-template-columns: 1fr; }
@@ -945,7 +944,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: COUNTDOWN (unverändert)
+    // PHASE: COUNTDOWN
     // =========================================================
     if (lobby.phase === "countdown") {
         const tie = lobby.topic_tie_choices && lobby.topic_tie_choices.length > 1;
@@ -968,6 +967,7 @@ export default function GamePage() {
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
+                    color: "white",
                     background:
                         "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.22) 0%, rgba(0,120,45,0.68) 80%)",
                 }}
@@ -975,15 +975,7 @@ export default function GamePage() {
                 <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
-                    <div
-                        style={{
-                            marginTop: 16,
-                            display: "grid",
-                            gridTemplateColumns: "repeat(3, minmax(0,1fr))",
-                            gap: 14,
-                            alignItems: "stretch",
-                        }}
-                    >
+                    <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 14, alignItems: "stretch" }}>
                         <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`}>
                             <div className="resultBadge">①</div>
                             <div className="resultTitle">{aLabel}</div>
@@ -998,9 +990,7 @@ export default function GamePage() {
                         </div>
                     </div>
 
-                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>
-                        {selectedTopic}
-                    </div>
+                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>{selectedTopic}</div>
 
                     {tie ? (
                         <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 850 }}>
@@ -1014,15 +1004,7 @@ export default function GamePage() {
                     )}
 
                     <div style={{ marginTop: 22, fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>START IN</div>
-                    <div
-                        style={{
-                            marginTop: 10,
-                            fontSize: "clamp(80px, 10vw, 140px)",
-                            fontWeight: 950,
-                            letterSpacing: 2,
-                            textShadow: "0 18px 70px rgba(0,0,0,0.35)",
-                        }}
-                    >
+                    <div style={{ marginTop: 10, fontSize: "clamp(80px, 10vw, 140px)", fontWeight: 950, letterSpacing: 2, textShadow: "0 18px 70px rgba(0,0,0,0.35)" }}>
                         {Math.max(0, countdownSecondsLeft ?? 5)}
                     </div>
 
@@ -1044,11 +1026,20 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: FINISHED
-    // - "Endding" mit Stats/Ranking/Highlights wie gewünscht
+    // PHASE: FINISHED  (Feature 9: advanced analytics + stats)
     // =========================================================
     if (lobby.phase === "finished") {
         const winnerName = winnerPlayer?.name ?? "Unbekannt";
+        const shown = showFullRanking ? ranking : top5;
+
+        // Analytics (best possible with available fields)
+        const holdMax = Math.max(1, ...ranking.map((r) => r.holdMs ?? 0));
+        const passMax = Math.max(1, ...ranking.map((r) => r.pass ?? 0));
+
+        const fastestOverall = [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] ?? null;
+        const mostClutch = [...ranking].sort((a, b) => (b.clutch ?? 0) - (a.clutch ?? 0))[0] ?? null;
+        const mostHold = [...ranking].sort((a, b) => (b.holdMs ?? 0) - (a.holdMs ?? 0))[0] ?? null;
+        const mostPass = [...ranking].sort((a, b) => (b.pass ?? 0) - (a.pass ?? 0))[0] ?? null;
 
         return (
             <main
@@ -1057,16 +1048,16 @@ export default function GamePage() {
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
+                    color: "white",
                     background:
                         "radial-gradient(circle at 50% 18%, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.20) 58%)," +
                         "radial-gradient(circle at 50% 85%, rgba(255,214,10,0.35) 0%, rgba(240,138,26,0.62) 45%, rgba(143,15,15,0.92) 100%)",
                 }}
             >
-                <div style={{ width: "min(1120px, 96vw)" }}>
+                <div style={{ width: "min(1180px, 96vw)" }}>
                     <div className="finishHero">
                         <div className="finishKicker">SPIEL BEENDET</div>
                         <div className="finishWinner">🏆 {winnerName}</div>
-                        <div className="finishSubMvp">⭐ MVP</div>
 
                         <div className="finishMeta">
               <span>
@@ -1076,380 +1067,196 @@ export default function GamePage() {
                             <span>
                 Thema: <b>{selectedTopic}</b>
               </span>
+                            {myRankRow ? (
+                                <>
+                                    <span className="dot">•</span>
+                                    <span>
+                    Du: <b>#{myRankRow.rank}</b>
+                  </span>
+                                </>
+                            ) : null}
                         </div>
-
-                        {myRankRow ? (
-                            <div className="finishChips single">
-                                <div className="chipPill alt">
-                                    📌 Dein Platz <span className="dot">•</span>
-                                    <b>#{myRankRow.rank}</b>
-                                    <span className="muted"> (Score {myRankRow.row.score})</span>
-                                </div>
-                            </div>
-                        ) : null}
-
-                        <div className="finishButtons">
-                            <button
-                                className="btn btnPrimary btnXL"
-                                onClick={async () => {
-                                    const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
-                                    if (error) return showToast(`❌ Reset: ${error.message}`, 2400);
-                                    window.location.href = `/lobby/${encodeURIComponent(code)}`;
-                                }}
-                                type="button"
-                            >
-                                Zurück zur Lobby
-                            </button>
-
-                            <button
-                                className="btn btnSecondary btnXL"
-                                onClick={async () => {
-                                    const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
-                                    if (error) return showToast(`❌ Rematch: ${error.message}`, 2400);
-                                    showToast("🔁 Rematch gestartet", 1200);
-                                }}
-                                type="button"
-                            >
-                                🔁 Rematch
-                            </button>
-                        </div>
-
-                        <div className="finishOrbs" aria-hidden />
                     </div>
 
                     <div className="finishGrid">
-                        <div className="panel">
-                            <div className="panelHead">
-                                <div>
-                                    <div className="panelTitle">📊 Ranking</div>
-                                    <div className="panelSub">Score basiert auf Passes, Clutch, Streak & Fastest Pass.</div>
-                                </div>
-
-                                <button className="btn btnGhost" type="button" onClick={() => setShowFullRanking((v) => !v)}>
-                                    {showFullRanking ? "Top 5" : "Alle anzeigen"}
-                                </button>
-                            </div>
-
-                            <div className="rankTable">
-                                <div className="rankRow rankHeader">
+                        <div className="card">
+                            <div className="cardTitle">🏅 Ranking</div>
+                            <div className="table">
+                                <div className="row head">
                                     <div>#</div>
                                     <div>Player</div>
-                                    <div className="right">Score</div>
-                                    <div className="right">Pass</div>
-                                    <div className="right">Clutch</div>
-                                    <div className="right">Fastest</div>
-                                    <div className="right">Hold</div>
-                                    <div className="right">Streak</div>
+                                    <div className="r">Score</div>
+                                    <div className="r">Pass</div>
+                                    <div className="r">Clutch</div>
+                                    <div className="r">Fastest</div>
+                                    <div className="r">Hold</div>
                                 </div>
 
-                                {(showFullRanking ? ranking : top5).map((p, i) => {
-                                    const idx = showFullRanking ? i : ranking.findIndex((r) => r.player_id === p.player_id);
-                                    const rank = idx >= 0 ? idx + 1 : i + 1;
-                                    const isWinner = p.player_id === lobby.holder_player_id;
-                                    const isMe = !!mePlayerId && p.player_id === mePlayerId;
+                                {shown.map((p, idx) => (
+                                    <div key={p.player_id} className={`row ${p.player_id === mePlayerId ? "me" : ""}`}>
+                                        <div>{idx + 1}</div>
+                                        <div className="name">
+                                            {p.name}
+                                            {!p.is_alive ? <span className="tag dead">💀</span> : null}
+                                            {p.player_id === lobby.holder_player_id ? <span className="tag holder">🥔</span> : null}
+                                        </div>
+                                        <div className="r">
+                                            <b>{p.score}</b>
+                                        </div>
+                                        <div className="r">{p.pass}</div>
+                                        <div className="r">{p.clutch}</div>
+                                        <div className="r">{fmtMs(p.fastest)}</div>
+                                        <div className="r">{fmtHold(p.holdMs)}</div>
+                                    </div>
+                                ))}
+                            </div>
 
+                            <div className="cardActions">
+                                <button className="btn btnSecondary" type="button" onClick={() => setShowFullRanking((v) => !v)}>
+                                    {showFullRanking ? "Nur Top 5" : "Alle anzeigen"}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="card">
+                            <div className="cardTitle">📊 Post-Match Analytics</div>
+
+                            <div className="insights">
+                                <div className="ins">
+                                    <div className="k">Most Clutch</div>
+                                    <div className="v">{mostClutch ? `${mostClutch.name} • ${mostClutch.clutch}` : "—"}</div>
+                                    <div className="s">Clutch Passes</div>
+                                </div>
+                                <div className="ins">
+                                    <div className="k">Fastest Pass</div>
+                                    <div className="v">{fastestOverall ? `${fastestOverall.name} • ${fmtMs(fastestOverall.fastest)}` : "—"}</div>
+                                    <div className="s">Best reaction</div>
+                                </div>
+                                <div className="ins">
+                                    <div className="k">Most Hold</div>
+                                    <div className="v">{mostHold ? `${mostHold.name} • ${fmtHold(mostHold.holdMs)}` : "—"}</div>
+                                    <div className="s">Total hold time</div>
+                                </div>
+                                <div className="ins">
+                                    <div className="k">Most Passes</div>
+                                    <div className="v">{mostPass ? `${mostPass.name} • ${mostPass.pass}` : "—"}</div>
+                                    <div className="s">Aggression</div>
+                                </div>
+                            </div>
+
+                            <div className="subTitle">Heatmap (Hold Time)</div>
+                            <div className="heat">
+                                {ranking.map((p) => {
+                                    const pct = clamp(((p.holdMs ?? 0) / holdMax) * 100, 0, 100);
                                     return (
-                                        <div key={p.player_id} className={`rankRow ${isWinner ? "winner" : ""} ${isMe ? "me" : ""}`}>
-                                            <div className="rankNum">{rank}</div>
-                                            <div className="rankName">
-                                                <span className="badge">{isWinner ? "🏆" : p.is_alive ? "🟢" : "⚫"}</span>
-                                                <span className="nm">{p.name}</span>
-                                                {isMe ? <span className="meTag">YOU</span> : null}
+                                        <div className="heatRow" key={p.player_id}>
+                                            <div className="heatName">{p.name}</div>
+                                            <div className="heatBar">
+                                                <div className="heatFill" style={{ width: `${pct}%` }} />
                                             </div>
-                                            <div className="right">{p.score}</div>
-                                            <div className="right">{p.pass}</div>
-                                            <div className="right">{p.clutch}</div>
-                                            <div className="right">{fmtMs(p.fastest)}</div>
-                                            <div className="right">{fmtHold(p.holdMs)}</div>
-                                            <div className="right">{p.streak}</div>
+                                            <div className="heatVal">{fmtHold(p.holdMs)}</div>
                                         </div>
                                     );
                                 })}
                             </div>
-                        </div>
 
-                        <div className="panel">
-                            <div className="panelHead">
-                                <div>
-                                    <div className="panelTitle">⭐ Match Highlights</div>
-                                    <div className="panelSub">Wichtigste Infos.</div>
-                                </div>
+                            <div className="subTitle">Pressure (Pass Count)</div>
+                            <div className="heat">
+                                {ranking.map((p) => {
+                                    const pct = clamp(((p.pass ?? 0) / passMax) * 100, 0, 100);
+                                    return (
+                                        <div className="heatRow" key={p.player_id + "_pass"}>
+                                            <div className="heatName">{p.name}</div>
+                                            <div className="heatBar">
+                                                <div className="heatFill" style={{ width: `${pct}%`, opacity: 0.7 }} />
+                                            </div>
+                                            <div className="heatVal">{p.pass ?? 0}</div>
+                                        </div>
+                                    );
+                                })}
                             </div>
 
-                            <div className="cards">
-                                <div className="statCard">
-                                    <div className="statK">Winner</div>
-                                    <div className="statV">{winnerName}</div>
-                                    <div className="statS">Letzter Holder</div>
-                                </div>
+                            <div className="cardActions" style={{ marginTop: 14 }}>
+                                <button
+                                    className="btn btnPrimary"
+                                    onClick={async () => {
+                                        const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
+                                        if (error) return showToast(`❌ Reset: ${error.message}`, 2400);
+                                        window.location.href = `/lobby/${encodeURIComponent(code)}`;
+                                    }}
+                                    type="button"
+                                >
+                                    Zurück zur Lobby
+                                </button>
 
-                                <div className="statCard">
-                                    <div className="statK">MVP</div>
-                                    <div className="statV">{mvp?.name ?? "—"}</div>
-                                    <div className="statS">MVP = Winner</div>
-                                </div>
-
-                                <div className="statCard">
-                                    <div className="statK">Fastest Pass</div>
-                                    <div className="statV">
-                                        {(() => {
-                                            const best = [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0];
-                                            if (!best) return "—";
-                                            return `${best.name} • ${fmtMs(best.fastest)}`;
-                                        })()}
-                                    </div>
-                                    <div className="statS">Speed / Reaktion</div>
-                                </div>
-
-                                <div className="statCard">
-                                    <div className="statK">Most Passes</div>
-                                    <div className="statV">
-                                        {(() => {
-                                            const best = [...ranking].sort((a, b) => b.pass - a.pass)[0];
-                                            if (!best) return "—";
-                                            return `${best.name} • ${best.pass}`;
-                                        })()}
-                                    </div>
-                                    <div className="statS">Aggressives Spiel</div>
-                                </div>
+                                <button
+                                    className="btn btnSecondary"
+                                    onClick={async () => {
+                                        const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
+                                        if (error) return showToast(`❌ Rematch: ${error.message}`, 2400);
+                                        showToast("🔁 Rematch gestartet", 1200);
+                                    }}
+                                    type="button"
+                                >
+                                    🔁 Rematch
+                                </button>
                             </div>
 
-                            <div className="noteBox">
-                                <div className="noteTitle">🧩 Prepared</div>
-                                <div className="noteText">
-                                    Ranking nutzt Felder: <b>pass_count</b>, <b>clutch_pass_count</b>, <b>fastest_pass_ms</b>, <b>total_hold_ms</b>, <b>survival_streak</b>.
-                                </div>
-                            </div>
+                            {toast ? <div style={{ marginTop: 12, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
                         </div>
                     </div>
                 </div>
 
-                {toast ? (
-                    <div className="toastFixed" role="status" aria-live="polite">
-                        {toast}
-                    </div>
-                ) : null}
-
                 <style>{`
-          .finishHero{
-            position: relative;
-            border-radius: 34px;
-            padding: 22px 22px;
-            background: rgba(0,0,0,0.28);
-            border: 1px solid rgba(255,255,255,0.14);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            box-shadow: 0 22px 90px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
-            text-align: center;
-            overflow: hidden;
-          }
-          .finishKicker{ font-size: 13px; font-weight: 950; letter-spacing: 2px; opacity: .82; }
-          .finishWinner{
-            margin-top: 10px;
-            font-size: clamp(54px, 7vw, 98px);
-            font-weight: 1000;
-            text-shadow: 0 22px 90px rgba(0,0,0,0.45);
-          }
-          .finishSubMvp{
-            margin-top: 8px;
-            font-weight: 1000;
-            letter-spacing: .8px;
-            opacity: .92;
-          }
-          .finishMeta{
-            margin-top: 10px;
-            font-weight: 900;
-            opacity: .86;
-            display:flex;
-            justify-content:center;
-            gap: 10px;
-            flex-wrap: wrap;
-          }
-          .dot{ opacity: .65; }
-          .finishChips{
-            margin-top: 16px;
-            display:flex;
-            justify-content:center;
-            gap: 10px;
-            flex-wrap: wrap;
-          }
-          .finishChips.single{ justify-content:center; }
-          .chipPill{
-            display:inline-flex;
-            align-items:center;
-            gap: 10px;
-            padding: 10px 12px;
-            border-radius: 999px;
-            background: rgba(255,255,255,0.10);
-            border: 1px solid rgba(255,255,255,0.14);
-            font-weight: 950;
-          }
-          .chipPill.alt{
-            background: rgba(0,0,0,0.18);
-            border: 1px solid rgba(255,255,255,0.12);
-          }
-          .muted{ opacity: .75; font-weight: 850; }
-          .finishButtons{
-            margin-top: 18px;
-            display:flex;
-            justify-content:center;
-            gap: 12px;
-            flex-wrap: wrap;
-            position: relative;
-            z-index: 2;
-          }
-          .finishOrbs{
-            position:absolute;
-            inset:-60px;
-            background:
-              radial-gradient(circle at 30% 30%, rgba(255,214,10,0.18), transparent 55%),
-              radial-gradient(circle at 70% 40%, rgba(34,211,238,0.10), transparent 58%),
-              radial-gradient(circle at 50% 80%, rgba(255,45,85,0.10), transparent 60%);
-            filter: blur(22px);
-            opacity: .92;
-            pointer-events:none;
-          }
-          .finishGrid{
-            margin-top: 16px;
-            display:grid;
-            grid-template-columns: 1.15fr 0.85fr;
-            gap: 14px;
-          }
-          .panel{
-            border-radius: 28px;
-            background: rgba(0,0,0,0.22);
-            border: 1px solid rgba(255,255,255,0.14);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            box-shadow: 0 18px 70px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.10);
-            overflow: hidden;
-          }
-          .panelHead{
-            padding: 16px 16px;
-            display:flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: center;
-            border-bottom: 1px solid rgba(255,255,255,0.10);
-          }
-          .panelTitle{ font-weight: 1000; font-size: 16px; }
-          .panelSub{ margin-top: 2px; font-weight: 850; opacity: .72; font-size: 12px; }
-          .rankTable{ padding: 10px 10px 12px; }
-          .rankRow{
-            display:grid;
-            grid-template-columns: 42px 1.3fr 70px 58px 64px 86px 74px 64px;
-            gap: 10px;
-            align-items:center;
-            padding: 10px 10px;
-            border-radius: 18px;
-            border: 1px solid rgba(255,255,255,0.10);
-            background: rgba(0,0,0,0.14);
-            margin-top: 8px;
-          }
-          .rankHeader{
-            margin-top: 0;
-            background: rgba(255,255,255,0.06);
-            border-color: rgba(255,255,255,0.12);
-            font-weight: 950;
-            opacity: .86;
-          }
-          .right{ text-align: right; font-weight: 900; }
-          .rankNum{ font-weight: 1000; opacity: .9; text-align:center; }
-          .rankName{ display:flex; align-items:center; gap: 10px; min-width: 0; }
-          .nm{ font-weight: 950; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-          .badge{
-            width: 28px; height: 28px;
-            border-radius: 999px;
-            display:grid; place-items:center;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.12);
-          }
-          .meTag{
-            margin-left: 8px;
-            font-size: 11px;
-            font-weight: 1000;
-            padding: 4px 8px;
-            border-radius: 999px;
-            background: rgba(34,211,238,0.14);
-            border: 1px solid rgba(34,211,238,0.22);
-            opacity: .95;
-          }
-          .rankRow.winner{
-            background: radial-gradient(circle at 20% 20%, rgba(255,214,10,0.18), rgba(0,0,0,0.14) 70%);
-            border-color: rgba(255,214,10,0.22);
-          }
-          .rankRow.me{
-            border-color: rgba(34,211,238,0.22);
-            background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.12), rgba(0,0,0,0.14) 70%);
-          }
-          .cards{ padding: 12px 12px 14px; display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-          .statCard{
-            border-radius: 22px;
-            padding: 12px 12px;
-            background: rgba(0,0,0,0.16);
-            border: 1px solid rgba(255,255,255,0.12);
-          }
-          .statK{ font-weight: 950; opacity: .78; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
-          .statV{ margin-top: 6px; font-weight: 1000; font-size: 18px; }
-          .statS{ margin-top: 4px; font-weight: 850; opacity: .70; font-size: 12px; }
-          .noteBox{
-            margin: 0 12px 14px;
-            border-radius: 22px;
-            padding: 12px 12px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
-          }
-          .noteTitle{ font-weight: 1000; }
-          .noteText{ margin-top: 6px; font-weight: 850; opacity: .78; font-size: 12px; line-height: 1.35; }
+          .finishHero{ text-align:center; }
+          .finishKicker{ font-size:12px; font-weight:950; letter-spacing:2.2px; opacity:.76; }
+          .finishWinner{ margin-top:10px; font-size:clamp(42px,5vw,78px); font-weight:1000; text-shadow:0 24px 90px rgba(0,0,0,0.35); }
+          .finishMeta{ margin-top:10px; font-weight:900; opacity:.88; display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
+          .dot{ opacity:.55; }
 
-          .toastFixed{
-            position: fixed;
-            left: 50%;
-            bottom: 22px;
-            transform: translateX(-50%);
-            z-index: 9999;
-            padding: 10px 14px;
-            border-radius: 999px;
-            background: rgba(0,0,0,0.55);
-            border: 1px solid rgba(255,255,255,0.10);
-            font-weight: 900;
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-          }
+          .finishGrid{ margin-top:22px; display:grid; grid-template-columns: 1.35fr 1fr; gap:14px; align-items:start; }
+          .card{ border-radius:28px; background:rgba(0,0,0,0.22); border:1px solid rgba(255,255,255,0.14); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding:16px; box-shadow: 0 18px 70px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.12); }
+          .cardTitle{ font-weight:1000; letter-spacing:.2px; opacity:.95; text-align:left; }
+          .subTitle{ margin-top: 14px; text-align:left; font-weight: 1000; opacity: .92; }
 
-          .btn{
-            appearance:none;
-            border: 1px solid rgba(255,255,255,0.14);
-            background: rgba(0,0,0,0.22);
-            color: white;
-            border-radius: 999px;
-            padding: 10px 14px;
-            font-weight: 950;
-            cursor: pointer;
-            transition: transform .14s ease, filter .14s ease, border-color .14s ease;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-          }
+          .table{ margin-top:12px; display:grid; gap:8px; }
+          .row{ display:grid; grid-template-columns: 42px 1fr 90px 70px 80px 110px 90px; gap:10px; padding:10px 10px; border-radius:16px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); align-items:center; }
+          .row.head{ background:rgba(255,255,255,0.04); border-color:rgba(255,255,255,0.06); font-size:12px; font-weight:950; letter-spacing:1.2px; text-transform:uppercase; opacity:.86; }
+          .row.me{ border-color: rgba(34,211,238,0.22); background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.10), rgba(255,255,255,0.06)); }
+          .name{ display:flex; gap:8px; align-items:center; font-weight:950; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .r{ text-align:right; font-weight:900; opacity:.92; }
+          .tag{ display:inline-flex; align-items:center; justify-content:center; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:950; border:1px solid rgba(255,255,255,0.14); background:rgba(0,0,0,0.18); }
+          .tag.dead{ opacity:.75; }
+          .tag.holder{ background: rgba(255,214,10,0.16); }
+
+          .cardActions{ margin-top:12px; display:flex; gap:10px; justify-content:flex-start; flex-wrap:wrap; }
+
+          .insights{ margin-top: 12px; display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+          .ins{ padding: 12px; border-radius: 18px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); text-align:left; }
+          .ins .k{ font-size: 12px; font-weight: 950; letter-spacing: 1.2px; text-transform: uppercase; opacity: .75; }
+          .ins .v{ margin-top: 6px; font-size: 16px; font-weight: 1000; }
+          .ins .s{ margin-top: 4px; font-size: 12px; font-weight: 850; opacity: .72; }
+
+          .heat{ margin-top: 10px; display:grid; gap: 8px; }
+          .heatRow{ display:grid; grid-template-columns: 1fr 1.6fr 86px; gap: 10px; align-items:center; padding: 10px 10px; border-radius: 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
+          .heatName{ font-weight: 950; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .heatBar{ height: 12px; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.10); overflow:hidden; }
+          .heatFill{ height: 100%; background: linear-gradient(90deg, rgba(34,211,238,0.80), rgba(255,214,10,0.85), rgba(52,199,89,0.85)); }
+          .heatVal{ text-align:right; font-weight: 950; opacity: .9; }
+
+          .btn{ appearance:none; border:1px solid rgba(255,255,255,0.14); background:rgba(0,0,0,0.22); color:white; border-radius:999px; padding:10px 14px; font-weight:950; cursor:pointer; transition: transform .14s ease, filter .14s ease, border-color .14s ease; box-shadow: inset 0 1px 0 rgba(255,255,255,0.10); }
           .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
           .btn:active{ transform: translateY(0px) scale(0.99); }
-          .btn:disabled{ opacity: .65; cursor:not-allowed; transform:none; filter:none; }
-          .btnXL{ padding: 12px 18px; font-size: 14px; }
           .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
-          .btnSecondary{ background: linear-gradient(135deg, rgba(214,162,92,0.96), rgba(148,92,54,0.96)); }
-          .btnGhost{
-            background: rgba(255,255,255,0.06);
-            border-color: rgba(255,255,255,0.12);
-            padding: 10px 12px;
-            font-size: 13px;
-          }
+          .btnSecondary{ background: rgba(0,0,0,0.22); }
 
           @media (max-width: 980px){
             .finishGrid{ grid-template-columns: 1fr; }
+            .row{ grid-template-columns: 38px 1fr 70px 56px 68px 96px 76px; }
           }
-          @media (max-width: 760px){
-            .rankRow{ grid-template-columns: 42px 1.3fr 70px 58px; }
-            .rankHeader div:nth-child(n+5){ display:none; }
-            .rankRow div:nth-child(n+5){ display:none; }
-            .cards{ grid-template-columns: 1fr; }
+          @media (max-width: 520px){
+            .insights{ grid-template-columns: 1fr; }
+            .heatRow{ grid-template-columns: 1fr 1.2fr 76px; }
           }
         `}</style>
             </main>
@@ -1457,7 +1264,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: NOT RUNNING (WAITING)
+    // PHASE: NOT RUNNING
     // =========================================================
     if (lobby.phase !== "running") {
         return (
@@ -1467,6 +1274,7 @@ export default function GamePage() {
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
+                    color: "white",
                     background:
                         "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
                 }}
@@ -1481,9 +1289,7 @@ export default function GamePage() {
     }
 
     // =========================================================
-    // PHASE: RUNNING
-    // - Nur Namen: "Jetzt" (Holder) + "Danach" (Next)
-    // - KEIN Bomben/Explode-Timer im UI
+    // PHASE: RUNNING (MINIMAL names only + smooth swap)
     // =========================================================
     const runningBg = iAmEliminated
         ? "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.35) 60%), radial-gradient(circle at 50% 85%, rgba(180,180,180,0.14) 0%, rgba(25,25,25,0.92) 80%)"
@@ -1494,7 +1300,7 @@ export default function GamePage() {
     const passDisabledReason = iAmEliminated ? "Du bist raus" : !isMeHolder ? "Nicht dein Turn" : passBusy ? "Busy" : null;
 
     return (
-        <main style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg }}>
+        <main style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}>
             <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} passEvent={passEvent} />
 
             {turnOverlay ? (
@@ -1510,70 +1316,57 @@ export default function GamePage() {
             ) : null}
 
             <div className="hud">
-                <div className="hudTop">
-                    <div className="hudTitle">RUNNING</div>
-                    <div className="hudTopic">{selectedTopic}</div>
+                <div className="hudInner">
+                    <div className="topic">{selectedTopic}</div>
 
-                    <div className="centerStack" key={hudPulseNonce}>
-                        <div className={`holderHero ${reduceMotion ? "" : "pulseHero"}`}>
-                            <div className="heroKicker">JETZT</div>
-                            <div className="heroName">
-                <span className="heroPot" aria-hidden>
-                  🥔
-                </span>
-                                {holderName}
-                            </div>
-
-                            <div className="heroMetaRow">
-                                <div className="pill">
-                                    Danach <b>{nextUp?.name ?? "—"}</b>
-                                </div>
-                                <div className="pill">
-                                    Runden <b>{lobby.round_number ?? "—"}</b>
-                                </div>
-                                <div className="pill">
-                                    Alive <b>{players.filter((p) => p.is_alive).length}</b>/<b>{players.length}</b>
-                                </div>
-                                <div className="pill">
-                                    Last Pass <b>{holderStats ? fmtTimeAgo(holderStats.lastPassAt) : "—"}</b>
-                                </div>
-                            </div>
+                    <div className="strip" key={hudPulseNonce}>
+                        <div className="now">
+                            <span className="dotNow" aria-hidden />
+                            <span className="label">JETZT</span>
+                            <span className="name">{holderName}</span>
                         </div>
 
-                        <div className="nextCard">
-                            <div className="nextLeft">
-                                <div className="nextKicker">DANACH</div>
-                                <div className="nextName">{nextUp?.name ?? "—"}</div>
-                            </div>
-                            <div className="nextRight">
-                                <div className="miniStat">
-                                    <span className="miniLabel">Fastest</span>
-                                    <span className="miniValue">{nextStats ? fmtMs(nextStats.fastest) : "—"}</span>
-                                </div>
-                                <div className="miniStat">
-                                    <span className="miniLabel">Streak</span>
-                                    <span className="miniValue">{nextStats ? nextStats.streak : "—"}</span>
-                                </div>
-                            </div>
+                        <div className="arrow" aria-hidden>
+                            →
                         </div>
 
-                        {isMeHolder && !iAmEliminated ? (
-                            <div className="actions">
-                                <button
-                                    className="btn btnPrimary btnXL"
-                                    onClick={() => void handlePass()}
-                                    type="button"
-                                    disabled={!!passDisabledReason}
-                                    title={passDisabledReason ?? "Weitergeben"}
-                                >
-                                    {passBusy ? "…" : "🥔 Weitergeben (Space)"}
-                                </button>
-                                <div className="helper">Weitergeben wenn du dran bist.</div>
-                            </div>
-                        ) : (
-                            <div className="helper">{iAmEliminated ? "Du schaust zu." : "Warte, bis du die Kartoffel bekommst."}</div>
-                        )}
+                        <div className="next">
+                            <span className="label">DANACH</span>
+                            <span className="name">{nextUp?.name ?? "—"}</span>
+                        </div>
                     </div>
+
+                    {/* AI info (Feature 21) */}
+                    {holderRow && isAiName(holderRow.name) ? <div className="aiLive">🤖 AI am Zug</div> : null}
+
+                    {isMeHolder && !iAmEliminated ? (
+                        <div className="actions">
+                            <button className="btn btnPrimary" onClick={() => void handlePass()} type="button" disabled={!!passDisabledReason} title={passDisabledReason ?? "Weitergeben"}>
+                                {passBusy ? "…" : "🥔 Weitergeben (Space)"}
+                            </button>
+
+                            <button
+                                className="btn btnGhost"
+                                type="button"
+                                disabled={aiBusy}
+                                onClick={async () => {
+                                    // manual nudge for AI systems / debugging
+                                    setAiBusy(true);
+                                    try {
+                                        const err = await rpcAiTakeTurn(code);
+                                        if (err) showToast(`⚠️ AI Turn: ${err.message}`, 2200);
+                                        else showToast("🤖 AI ping", 1000);
+                                    } finally {
+                                        setAiBusy(false);
+                                    }
+                                }}
+                            >
+                                {aiBusy ? "…" : "🤖 AI Ping"}
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="hint">{iAmEliminated ? "Du schaust zu." : "Warte, bis du dran bist."}</div>
+                    )}
                 </div>
             </div>
 
@@ -1584,165 +1377,106 @@ export default function GamePage() {
           min-height: 100vh;
           display: grid;
           place-items: center;
-          padding: 24px;
-          pointer-events: none;
+          padding: 22px;
         }
-        .hudTop{
-          width: min(980px, 96vw);
-          text-align: center;
-          pointer-events: auto;
-        }
-        .hudTitle{
-          font-size: 14px;
-          font-weight: 900;
-          letter-spacing: 1.6px;
-          opacity: 0.75;
-        }
-        .hudTopic{
-          margin-top: 10px;
-          font-size: clamp(28px, 4.2vw, 56px);
-          font-weight: 950;
-          text-shadow: 0 18px 70px rgba(0,0,0,0.35);
-        }
-
-        .centerStack{
-          margin-top: 14px;
+        .hudInner{
+          width: min(920px, 94vw);
           display: grid;
           justify-items: center;
           gap: 14px;
+          text-align: center;
+        }
+        .topic{
+          font-size: clamp(22px, 3.6vw, 46px);
+          font-weight: 950;
+          text-shadow: 0 18px 70px rgba(0,0,0,0.35);
+          opacity: .98;
         }
 
-        .holderHero{
-          width: min(860px, 96vw);
-          border-radius: 40px;
-          padding: 22px 22px 18px;
+        .strip{
+          width: min(920px, 94vw);
+          border-radius: 999px;
+          padding: 14px 16px;
           background: rgba(0,0,0,0.28);
           border: 1px solid rgba(255,255,255,0.14);
           backdrop-filter: blur(14px) saturate(140%);
           -webkit-backdrop-filter: blur(14px) saturate(140%);
-          box-shadow: 0 22px 90px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.12);
+          box-shadow: 0 22px 90px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.10);
+
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items: center;
+          gap: 12px;
+
+          animation: ${reduceMotion ? "none" : "stripSwap 520ms cubic-bezier(.16,1,.3,1) both"};
         }
-        .pulseHero{
-          animation: pulsePop 420ms cubic-bezier(.2,1,.2,1) both;
-        }
-        @keyframes pulsePop{
-          0%{ transform: translateY(10px) scale(.985); opacity: .0; }
-          60%{ transform: translateY(0) scale(1.02); opacity: 1; }
-          100%{ transform: translateY(0) scale(1); opacity: 1; }
+        @keyframes stripSwap{
+          0%{ opacity: 0; transform: translateY(8px) scale(.985); filter: blur(1px); }
+          100%{ opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
         }
 
-        .heroKicker{
-          font-size: 12px;
-          font-weight: 950;
-          letter-spacing: 2px;
-          opacity: .78;
-          text-transform: uppercase;
-        }
-        .heroName{
-          margin-top: 10px;
-          font-size: clamp(44px, 6.2vw, 82px);
-          font-weight: 1000;
-          letter-spacing: -0.8px;
-          text-shadow: 0 22px 90px rgba(0,0,0,0.38);
+        .now,.next{
           display:flex;
-          align-items:center;
-          justify-content:center;
-          gap: 14px;
-          flex-wrap: wrap;
+          align-items: baseline;
+          gap: 10px;
+          justify-content: center;
+          min-width: 0;
         }
-        .heroPot{
-          width: 54px;
-          height: 54px;
-          display: grid;
-          place-items: center;
+        .dotNow{
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          background: rgba(52,199,89,0.95);
+          box-shadow: 0 0 18px rgba(52,199,89,0.26);
+          flex: 0 0 auto;
+        }
+        .label{
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 1.6px;
+          opacity: .72;
+          text-transform: uppercase;
+          flex: 0 0 auto;
+        }
+        .name{
+          font-size: clamp(18px, 2.6vw, 30px);
+          font-weight: 1000;
+          letter-spacing: -0.2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
+        }
+
+        .arrow{
+          font-size: 26px;
+          font-weight: 900;
+          opacity: .72;
+          transform: translateY(-1px);
+        }
+
+        .aiLive{
+          font-weight: 950;
+          opacity: .88;
+          padding: 8px 12px;
           border-radius: 999px;
           background: rgba(0,0,0,0.22);
           border: 1px solid rgba(255,255,255,0.12);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-          font-size: 28px;
-        }
-
-        .heroMetaRow{
-          margin-top: 14px;
-          display: flex;
-          gap: 10px;
-          justify-content: center;
-          flex-wrap: wrap;
-        }
-        .pill{
-          display: inline-flex;
-          gap: 8px;
-          align-items: center;
-          padding: 10px 12px;
-          border-radius: 999px;
-          background: rgba(255,255,255,0.08);
-          border: 1px solid rgba(255,255,255,0.12);
-          font-weight: 900;
-          opacity: .95;
-        }
-
-        .nextCard{
-          width: min(860px, 96vw);
-          border-radius: 28px;
-          padding: 14px 16px;
-          background: rgba(0,0,0,0.20);
-          border: 1px solid rgba(255,255,255,0.12);
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-        .nextKicker{
-          font-size: 12px;
-          font-weight: 950;
-          letter-spacing: 2px;
-          opacity: .72;
-          text-transform: uppercase;
-        }
-        .nextName{
-          margin-top: 6px;
-          font-size: clamp(20px, 2.8vw, 34px);
-          font-weight: 1000;
-        }
-        .nextRight{
-          display: inline-flex;
-          gap: 10px;
-          align-items: center;
-        }
-        .miniStat{
-          padding: 10px 12px;
-          border-radius: 16px;
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.10);
-          display: grid;
-          gap: 2px;
-          min-width: 120px;
-          text-align: left;
-        }
-        .miniLabel{
-          font-size: 11px;
-          font-weight: 950;
-          letter-spacing: 1.4px;
-          opacity: .72;
-          text-transform: uppercase;
-        }
-        .miniValue{
-          font-weight: 1000;
-          font-size: 14px;
         }
 
         .actions{
-          margin-top: 8px;
-          display: grid;
-          justify-items: center;
+          margin-top: 6px;
+          display:flex;
           gap: 10px;
+          flex-wrap: wrap;
+          justify-content: center;
         }
-        .helper{
-          margin-top: 10px;
+        .hint{
+          margin-top: 6px;
           font-weight: 850;
-          opacity: .80;
+          opacity: .82;
         }
 
         .turnOverlay{
@@ -1781,7 +1515,7 @@ export default function GamePage() {
           background: rgba(0,0,0,0.22);
           color: white;
           border-radius: 999px;
-          padding: 10px 14px;
+          padding: 12px 18px;
           font-weight: 950;
           cursor: pointer;
           transition: transform .14s ease, filter .14s ease, border-color .14s ease;
@@ -1790,12 +1524,13 @@ export default function GamePage() {
         .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
         .btn:active{ transform: translateY(0px) scale(0.99); }
         .btn:disabled{ opacity: .65; cursor:not-allowed; transform:none; filter:none; }
-        .btnXL{ padding: 12px 18px; font-size: 14px; }
         .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
+        .btnGhost{ background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
 
-        @media (max-width: 860px){
-          .miniStat{ min-width: 108px; }
-          .heroPot{ width: 48px; height: 48px; font-size: 24px; }
+        @media (max-width: 520px){
+          .strip{ grid-template-columns: 1fr; gap: 10px; border-radius: 28px; }
+          .arrow{ display:none; }
+          .now,.next{ justify-content: center; }
         }
       `}</style>
         </main>
