@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Player = {
     player_id: string;
@@ -19,10 +19,26 @@ type PassEvent = {
 
 type Props = {
     players: Player[];
-    holderPlayerId: string | null;
-    mePlayerId: string | null;
+    holderPlayerId?: string | null;
+    mePlayerId?: string | null;
     passEvent: PassEvent | null;
+    /** Player IDs that just got eliminated (animated burst). */
+    explodedPlayerId?: string | null;
 };
+
+function initialsFor(name: string): string {
+    const parts = name.trim().split(/\s+/);
+    const first = parts[0]?.[0] ?? "?";
+    const second = parts[1]?.[0] ?? "";
+    return (first + second).toUpperCase().slice(0, 2);
+}
+
+/** Stable hue per player_id so avatar colors stay consistent across renders. */
+function hueFor(id: string): number {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return h % 360;
+}
 
 type Pt = { x: number; y: number };
 
@@ -39,8 +55,26 @@ function bezier(p0: Pt, p1: Pt, p2: Pt, t: number): Pt {
     };
 }
 
-export function PlayerRing({ players, holderPlayerId, mePlayerId, passEvent }: Props) {
+export function PlayerRing({ players, passEvent, holderPlayerId = null, mePlayerId = null, explodedPlayerId = null }: Props) {
     const containerRef = useRef<HTMLDivElement | null>(null);
+
+    // Container size in state so we don't read refs during render
+    const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const measure = () => {
+            const rect = el.getBoundingClientRect();
+            setSize({ w: rect.width, h: rect.height });
+        };
+        measure();
+
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
 
     // Flying potato state
     const [fly, setFly] = useState<{
@@ -87,44 +121,52 @@ export function PlayerRing({ players, holderPlayerId, mePlayerId, passEvent }: P
         return map;
     }, [players]);
 
-    // Convert relative coords to px coords at runtime
-    const getPx = (id: string): Pt | null => {
-        const rel = positions.get(id);
-        const el = containerRef.current;
-        if (!rel || !el) return null;
+    // Convert relative coords to px coords using state-tracked size (no ref reads during render)
+    const getPx = useCallback(
+        (id: string): Pt | null => {
+            const rel = positions.get(id);
+            if (!rel) return null;
+            if (size.w <= 0 || size.h <= 0) return null;
 
-        const rect = el.getBoundingClientRect();
-        const size = Math.min(rect.width, rect.height);
+            const minSide = Math.min(size.w, size.h);
+            const cx = size.w / 2;
+            const cy = size.h / 2;
+            const r = minSide * 0.38;
 
-        const cx = rect.width / 2;
-        const cy = rect.height / 2;
-
-        // radius: leave padding for avatars
-        const r = size * 0.38;
-
-        return {
-            x: cx + rel.x * r,
-            y: cy + rel.y * r,
-        };
-    };
+            return {
+                x: cx + rel.x * r,
+                y: cy + rel.y * r,
+            };
+        },
+        [positions, size.w, size.h]
+    );
 
     // Trigger nicer animation on passEvent
     useEffect(() => {
         if (!passEvent) return;
+
         if (reduceMotion) {
-            // still pop receiver briefly
-            setPopPlayerId(passEvent.toPlayerId);
-            const t = window.setTimeout(() => setPopPlayerId(null), 380);
-            return () => window.clearTimeout(t);
+            // pop receiver briefly (defer setState off effect body)
+            const onShow = window.setTimeout(() => setPopPlayerId(passEvent.toPlayerId), 0);
+            const onHide = window.setTimeout(() => setPopPlayerId(null), 380);
+            return () => {
+                window.clearTimeout(onShow);
+                window.clearTimeout(onHide);
+            };
         }
 
-        // start fly
-        setFly({
-            nonce: passEvent.nonce,
-            fromId: passEvent.fromPlayerId,
-            toId: passEvent.toPlayerId,
-            t: 0,
-        });
+        // start fly (deferred so the effect doesn't synchronously setState)
+        const onStart = window.setTimeout(
+            () =>
+                setFly({
+                    nonce: passEvent.nonce,
+                    fromId: passEvent.fromPlayerId,
+                    toId: passEvent.toPlayerId,
+                    t: 0,
+                }),
+            0
+        );
+        return () => window.clearTimeout(onStart);
     }, [passEvent, reduceMotion]);
 
     // Animate fly.t with rAF
@@ -160,55 +202,81 @@ export function PlayerRing({ players, holderPlayerId, mePlayerId, passEvent }: P
 
         const from = getPx(fly.fromId);
         const to = getPx(fly.toId);
-        const el = containerRef.current;
-        if (!from || !to || !el) return null;
+        if (!from || !to) return null;
 
-        const rect = el.getBoundingClientRect();
-
-        // Points in local container coordinates
         const p0 = { x: from.x, y: from.y };
         const p2 = { x: to.x, y: to.y };
 
-        // control point: mid + lift upward a bit (nice arc)
         const mid = { x: (p0.x + p2.x) / 2, y: (p0.y + p2.y) / 2 };
         const dx = p2.x - p0.x;
         const dy = p2.y - p0.y;
         const dist = Math.max(1, Math.hypot(dx, dy));
 
-        // lift scales with distance (cap)
         const lift = Math.min(120, 0.28 * dist);
         const p1 = { x: mid.x, y: mid.y - lift };
 
         const t = easeInOutCubic(fly.t);
         const p = bezier(p0, p1, p2, t);
 
-        // rotation based on motion direction
         const pNext = bezier(p0, p1, p2, Math.min(1, t + 0.02));
         const ang = Math.atan2(pNext.y - p.y, pNext.x - p.x);
 
-        // slight scale pulse during flight
         const scale = 1 + Math.sin(Math.PI * t) * 0.12;
 
-        // convert to local pos within container
         return {
             x: p.x,
             y: p.y,
             rot: ang,
             scale,
-            // for trail opacity
             t,
-            w: rect.width,
-            h: rect.height,
+            w: size.w,
+            h: size.h,
             p0,
             p2,
             p1,
         };
-    }, [fly, players, positions]);
+    }, [fly, getPx, size.w, size.h]);
+
+    const popRender = useMemo(() => {
+        if (!popPlayerId) return null;
+        return getPx(popPlayerId);
+    }, [popPlayerId, getPx]);
 
     return (
         <div ref={containerRef} className="ringWrap">
-            {/* Your existing ring UI goes here (avatars etc.) */}
-            {/* Keep your current layout; only add the overlay layers below */}
+            {/* Player avatars positioned around the ring */}
+            {players.map((p) => {
+                const pos = getPx(p.player_id);
+                if (!pos) return null;
+
+                const isHolder = !!holderPlayerId && p.player_id === holderPlayerId;
+                const isMe = !!mePlayerId && p.player_id === mePlayerId;
+                const isExploded = !!explodedPlayerId && p.player_id === explodedPlayerId;
+                const hue = hueFor(p.player_id);
+
+                return (
+                    <div
+                        key={p.player_id}
+                        className={`seat ${isHolder ? "holder" : ""} ${isMe ? "me" : ""} ${!p.is_alive ? "dead" : ""} ${isExploded ? "exploded" : ""}`}
+                        style={{
+                            left: pos.x,
+                            top: pos.y,
+                            background: `radial-gradient(circle at 30% 30%, hsl(${hue},85%,68%), hsl(${(hue + 30) % 360},75%,42%))`,
+                        }}
+                        aria-label={p.name}
+                        title={p.name}
+                    >
+                        <span className="seatInitials">{initialsFor(p.name)}</span>
+                        <span className="seatName">
+                            {p.name}
+                            {isMe ? " (du)" : ""}
+                        </span>
+                        {isHolder ? <span className="seatBadge" aria-hidden>🥔</span> : null}
+                        {!p.is_alive ? <span className="seatDeadOverlay" aria-hidden>💀</span> : null}
+                        {isExploded ? <span className="seatBoom" aria-hidden>💥</span> : null}
+                    </div>
+                );
+            })}
 
             {/* Pass overlay */}
             {flyRender ? (
@@ -239,18 +307,14 @@ export function PlayerRing({ players, holderPlayerId, mePlayerId, passEvent }: P
             ) : null}
 
             {/* Receiver pop highlight */}
-            {popPlayerId ? (
+            {popPlayerId && popRender ? (
                 <div
                     className="receiverPop"
-                    style={(() => {
-                        const p = getPx(popPlayerId);
-                        if (!p) return { display: "none" } as React.CSSProperties;
-                        return {
-                            left: p.x,
-                            top: p.y,
-                            transform: "translate(-50%, -50%)",
-                        };
-                    })()}
+                    style={{
+                        left: popRender.x,
+                        top: popRender.y,
+                        transform: "translate(-50%, -50%)",
+                    }}
                     aria-hidden
                 />
             ) : null}
@@ -260,6 +324,116 @@ export function PlayerRing({ players, holderPlayerId, mePlayerId, passEvent }: P
           position: relative;
           width: 100%;
           height: 100%;
+        }
+
+        .seat{
+          position:absolute;
+          width: 64px;
+          height: 64px;
+          border-radius: 999px;
+          transform: translate(-50%, -50%);
+          display: grid;
+          place-items: center;
+          color: rgba(255,255,255,0.96);
+          font-weight: 1000;
+          font-size: 18px;
+          letter-spacing: 0.4px;
+          border: 2px solid rgba(255,255,255,0.18);
+          box-shadow: 0 14px 40px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.18);
+          z-index: 30;
+          transition: transform .25s cubic-bezier(.2,1,.2,1), box-shadow .25s ease, border-color .25s ease, opacity .25s ease;
+        }
+        .seat .seatInitials{
+          text-shadow: 0 4px 14px rgba(0,0,0,0.4);
+          user-select: none;
+        }
+        .seat .seatName{
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.2px;
+          padding: 2px 8px;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.42);
+          border: 1px solid rgba(255,255,255,0.10);
+          white-space: nowrap;
+          max-width: 130px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          opacity: 0.92;
+        }
+        .seat.me{
+          border-color: rgba(34,211,238,0.78);
+          box-shadow:
+            0 14px 50px rgba(0,0,0,0.35),
+            0 0 0 4px rgba(34,211,238,0.18),
+            inset 0 1px 0 rgba(255,255,255,0.18);
+        }
+        .seat.holder{
+          transform: translate(-50%, -50%) scale(1.18);
+          border-color: rgba(255,214,10,0.92);
+          box-shadow:
+            0 18px 60px rgba(0,0,0,0.40),
+            0 0 0 5px rgba(255,149,0,0.22),
+            0 0 36px rgba(255,90,40,0.55),
+            inset 0 1px 0 rgba(255,255,255,0.20);
+          animation: seatHolderPulse 1.4s ease-in-out infinite;
+        }
+        .seat.dead{
+          opacity: 0.34;
+          filter: grayscale(0.9);
+        }
+        .seat .seatBadge{
+          position: absolute;
+          top: -10px;
+          right: -10px;
+          background: rgba(0,0,0,0.62);
+          border: 1px solid rgba(255,255,255,0.18);
+          border-radius: 999px;
+          padding: 2px 6px;
+          font-size: 16px;
+          line-height: 1;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.32);
+        }
+        .seat .seatDeadOverlay{
+          position: absolute;
+          inset: 0;
+          display: grid;
+          place-items: center;
+          font-size: 26px;
+          background: rgba(0,0,0,0.32);
+          border-radius: 999px;
+        }
+        .seat .seatBoom{
+          position: absolute;
+          inset: -16px;
+          display: grid;
+          place-items: center;
+          font-size: 56px;
+          pointer-events: none;
+          animation: seatBoom 700ms cubic-bezier(.2,1,.2,1) both;
+        }
+        .seat.exploded{
+          animation: seatShake 700ms cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes seatHolderPulse{
+          0%,100% { box-shadow: 0 18px 60px rgba(0,0,0,0.40), 0 0 0 5px rgba(255,149,0,0.20), 0 0 30px rgba(255,90,40,0.45), inset 0 1px 0 rgba(255,255,255,0.20); }
+          50%     { box-shadow: 0 22px 70px rgba(0,0,0,0.46), 0 0 0 6px rgba(255,149,0,0.34), 0 0 50px rgba(255,90,40,0.75), inset 0 1px 0 rgba(255,255,255,0.22); }
+        }
+        @keyframes seatBoom{
+          0%   { opacity: 0; transform: scale(0.5); }
+          40%  { opacity: 1; transform: scale(1.4); }
+          100% { opacity: 0; transform: scale(1.8); }
+        }
+        @keyframes seatShake{
+          0%,100% { transform: translate(-50%, -50%); }
+          20%     { transform: translate(calc(-50% - 6px), calc(-50% - 4px)); }
+          40%     { transform: translate(calc(-50% + 6px), calc(-50% + 3px)); }
+          60%     { transform: translate(calc(-50% - 4px), calc(-50% + 5px)); }
+          80%     { transform: translate(calc(-50% + 4px), calc(-50% - 4px)); }
         }
 
         .passOverlay{

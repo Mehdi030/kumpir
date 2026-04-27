@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { startGame, type StartGameResult } from "@/actions/startGame";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -7,6 +8,8 @@ import { useParams, useRouter } from "next/navigation";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
+import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
+import { Spinner } from "@/components/Spinner";
 
 type ModeKey = "original" | "teleport" | "reverse";
 
@@ -78,6 +81,11 @@ export default function LobbyPage() {
         intervalMs: 8000,
         doCleanup: amIHost,
         staleSeconds: 25,
+    });
+
+    // Realtime: faster updates than 900ms polling (additive)
+    useLobbyRealtime(lobbyId, () => {
+        // Polling effect picks the change up on its next tick.
     });
 
     // ✅ game phases -> game
@@ -333,15 +341,18 @@ export default function LobbyPage() {
                                 </div>
 
                                 {amIHost ? (
-                                    <div
-                                        className="pillChip"
-                                        style={{ height: 32, display: "flex", alignItems: "center", gap: 8, opacity: 0.75, userSelect: "none", cursor: "not-allowed" }}
-                                        title="Admin ist aktuell deaktiviert (kommt später wieder)."
-                                        aria-disabled="true"
+                                    <Link
+                                        href={`/lobby/${encodeURIComponent(code)}/admin`}
+                                        className={`btn btnSecondary btnSmall ${starting || isRunning ? "btnDisabled" : ""}`}
+                                        aria-disabled={starting || isRunning}
+                                        tabIndex={starting || isRunning ? -1 : 0}
+                                        onClick={(e) => {
+                                            if (starting || isRunning) e.preventDefault();
+                                        }}
+                                        title="Admin Panel öffnen"
                                     >
-                                        <span>⚙️</span>
-                                        <span style={{ fontWeight: 900 }}>Admin (deaktiviert)</span>
-                                    </div>
+                                        ⚙️ Admin
+                                    </Link>
                                 ) : null}
                             </div>
                         </div>
@@ -365,8 +376,8 @@ export default function LobbyPage() {
                                     <tbody>
                                     {loading && players.length === 0 ? (
                                         <tr>
-                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>
-                                                Lädt…
+                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.85 }}>
+                                                <Spinner size={16} label="Lade Spieler…" />
                                             </td>
                                         </tr>
                                     ) : null}

@@ -44,8 +44,9 @@ export default function VerifiedPage() {
             setInfo(
                 "Deine E-Mail ist bestätigt. Falls du noch nicht eingeloggt bist: Öffne den Bestätigungslink im selben Browser, in dem du dich registriert hast, oder gehe zum Login und melde dich an."
             );
-        } catch (e: any) {
-            setError(e?.message ?? "Konnte Status nicht prüfen.");
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : null;
+            setError(msg ?? "Konnte Status nicht prüfen.");
         } finally {
             setLoading(false);
         }

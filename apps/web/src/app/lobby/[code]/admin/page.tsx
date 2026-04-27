@@ -1,25 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { startGame, type StartGameResult } from "@/actions/startGame";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
+import { useToastStack } from "@/hooks/useToastStack";
+import { ToastStack } from "@/components/ToastStack";
+import { Spinner } from "@/components/Spinner";
+import { kickPlayerAction, setLobbyLockAction, transferHostAction } from "@/actions/hostActions";
 
-type ModeKey = "original" | "teleport" | "reverse";
-
-const MODES: Record<ModeKey, { label: string; icon: string }> = {
-    original: { label: "Original", icon: "🥔" },
-    teleport: { label: "Teleport", icon: "🌀" },
-    reverse: { label: "Reverse", icon: "🔁" },
-};
-
-function fmtJoinLink(origin: string, code: string) {
-    return `${origin}/join?code=${encodeURIComponent(code)}`;
-}
+const GAME_PHASES = new Set(["topic_vote", "countdown", "running"]);
 
 function getErrorMessage(e: unknown): string {
     if (e instanceof Error) return e.message;
@@ -31,43 +24,13 @@ function getErrorMessage(e: unknown): string {
     }
 }
 
-function clearMyIdentityStorage() {
-    try {
-        localStorage.removeItem("kumpir_player_id");
-        sessionStorage.removeItem("kumpir_player_id");
-        localStorage.removeItem("kumpir_player_name");
-        sessionStorage.removeItem("kumpir_player_name");
-    } catch {}
-}
-
-export default function LobbyPage() {
+export default function LobbyAdminPage() {
     const params = useParams<{ code: string }>();
     const router = useRouter();
-
     const code = String(params.code ?? "").toUpperCase();
-    const {mePlayerId, meName} = usePlayerIdentity();
 
-    const suppressRunningRedirectRef = useRef(false);
-
-    // ✅ navigation helper (App Router)
-    const go = useCallback(
-        (url: string) => {
-            router.push(url);
-        },
-        [router]
-    );
-
-    const hardGoGame = useCallback(() => {
-        go(`/game/${encodeURIComponent(code)}?t=${Date.now()}`);
-    }, [code, go]);
-
-    const {lobby, players, loading, error} = useLobbyState(code, {
-        pollMs: 900,
-        onPhaseRunning: () => {
-            if (suppressRunningRedirectRef.current) return;
-            hardGoGame();
-        },
-    });
+    const { mePlayerId } = usePlayerIdentity();
+    const { lobby, players, loading, error } = useLobbyState(code, { pollMs: 1200 });
 
     const lobbyId = lobby?.id ?? null;
 
@@ -76,7 +39,7 @@ export default function LobbyPage() {
         return lobby.host_player_id === mePlayerId;
     }, [lobby?.host_player_id, mePlayerId]);
 
-    const isRunning = lobby?.phase === "running";
+    const isLocked = !!lobby?.locked;
 
     useHeartbeat({
         lobbyId,
@@ -86,439 +49,227 @@ export default function LobbyPage() {
         staleSeconds: 25,
     });
 
-    // running -> game
+    // Redirect non-hosts back to lobby
     useEffect(() => {
-        if (suppressRunningRedirectRef.current) return;
-        if (lobby?.phase === "running") hardGoGame();
-    }, [lobby?.phase, hardGoGame]);
-
-    // removed from lobby -> go /host with reason
-    useEffect(() => {
-        if (!mePlayerId) return;
-        if (!lobbyId) return;
         if (loading) return;
-
-        const stillInLobby = players.some((p) => p.player_id === mePlayerId);
-        if (stillInLobby) return;
-
-        (async () => {
-            try {
-                const {getSupabaseClient} = await import("@/lib/supabaseClient");
-                const supabase = getSupabaseClient();
-
-                const {data, error: statusErr} = await supabase
-                    .from("players")
-                    .select("status")
-                    .eq("lobby_id", lobbyId)
-                    .eq("player_id", mePlayerId)
-                    .maybeSingle();
-
-                const status = !statusErr ? (data?.status as string | undefined) : undefined;
-
-                clearMyIdentityStorage();
-                suppressRunningRedirectRef.current = true;
-
-                go(status === "kicked" ? `/host?kicked=1` : `/host?left=1`);
-            } catch {
-                clearMyIdentityStorage();
-                suppressRunningRedirectRef.current = true;
-                go(`/host`);
-            }
-        })();
-    }, [loading, players, mePlayerId, lobbyId, go]);
-
-    const [toast, setToast] = useState("");
-    const [busyReady, setBusyReady] = useState(false);
-    const [starting, setStarting] = useState(false);
-
-    const showToast = useCallback((msg: string, ms = 1800) => {
-        setToast(msg);
-        window.setTimeout(() => setToast(""), ms);
-    }, []);
-
-    const copyInviteByClick = useCallback(async () => {
-        try {
-            const origin = window.location.origin;
-            const link = fmtJoinLink(origin, code);
-            await navigator.clipboard.writeText(link);
-            showToast("✅ Link kopiert", 1200);
-        } catch {
-            showToast("⚠️ Kopieren nicht möglich", 1600);
-        }
-    }, [code, showToast]);
-
-    const meReady = useMemo(() => {
-        if (!mePlayerId) return false;
-        const row = players.find((p) => p.player_id === mePlayerId);
-        return !!row?.ready;
-    }, [players, mePlayerId]);
-
-    const MIN_PLAYERS = 2;
-    const allReady = useMemo(() => {
-        return players.length >= MIN_PLAYERS && players.every((p) => !!p.ready);
-    }, [players]);
-
-    const toggleReady = useCallback(async () => {
+        if (!lobby) return;
         if (!mePlayerId) return;
-        if (!lobbyId) return;
-        if (busyReady || starting || isRunning) return;
+        if (!amIHost) router.replace(`/lobby/${encodeURIComponent(code)}`);
+    }, [loading, lobby, mePlayerId, amIHost, router, code]);
 
-        setBusyReady(true);
-        try {
-            const {getSupabaseClient} = await import("@/lib/supabaseClient");
-            const supabase = getSupabaseClient();
+    // Redirect to game when phase advances
+    useEffect(() => {
+        const ph = lobby?.phase ?? null;
+        if (ph && GAME_PHASES.has(ph)) {
+            router.replace(`/game/${encodeURIComponent(code)}?t=${Date.now()}`);
+        }
+    }, [lobby?.phase, code, router]);
 
-            const {error: rpcErr} = await supabase.rpc("rpc_toggle_ready", {
-                p_lobby_id: lobbyId,
-                p_player_id: mePlayerId,
+    const { toasts, pushToast } = useToastStack({ maxVisible: 3 });
+    const showToast = useCallback((msg: string, ms = 1800) => pushToast(msg, ms), [pushToast]);
+
+    const [pending, startTransition] = useTransition();
+    const [busyTarget, setBusyTarget] = useState<string | null>(null);
+
+    const onKick = useCallback(
+        (targetPlayerId: string, targetName: string) => {
+            if (!mePlayerId || !lobbyId) return;
+            if (!confirm(`${targetName} wirklich aus der Lobby kicken?`)) return;
+
+            setBusyTarget(targetPlayerId);
+            startTransition(async () => {
+                try {
+                    const res = await kickPlayerAction({ lobbyId, mePlayerId, targetPlayerId });
+                    if (res.ok) {
+                        showToast(`👢 ${targetName} gekickt`, 1400);
+                    } else if ("error" in res) {
+                        showToast(`❌ ${res.error}`, 2600);
+                    }
+                } catch (e) {
+                    showToast(`❌ ${getErrorMessage(e)}`, 2600);
+                } finally {
+                    setBusyTarget(null);
+                }
             });
+        },
+        [mePlayerId, lobbyId, showToast]
+    );
 
-            if (rpcErr) showToast(`❌ ${rpcErr.message}`, 2500);
-        } catch (e: unknown) {
-            showToast(`❌ ${getErrorMessage(e)}`, 2500);
-        } finally {
-            setBusyReady(false);
-        }
-    }, [busyReady, starting, isRunning, lobbyId, mePlayerId, showToast]);
+    const onTransfer = useCallback(
+        (targetPlayerId: string, targetName: string) => {
+            if (!mePlayerId || !lobbyId) return;
+            if (!confirm(`Host-Rolle an ${targetName} übertragen?`)) return;
 
-    const startGameClick = useCallback(async () => {
-        if (!amIHost) return;
-        if (!mePlayerId) return;
-        if (starting || isRunning) return;
+            setBusyTarget(targetPlayerId);
+            startTransition(async () => {
+                try {
+                    const res = await transferHostAction({ lobbyId, mePlayerId, newHostPlayerId: targetPlayerId });
+                    if (res.ok) {
+                        showToast(`👑 ${targetName} ist jetzt Host`, 1600);
+                    } else if ("error" in res) {
+                        showToast(`❌ ${res.error}`, 2600);
+                    }
+                } catch (e) {
+                    showToast(`❌ ${getErrorMessage(e)}`, 2600);
+                } finally {
+                    setBusyTarget(null);
+                }
+            });
+        },
+        [mePlayerId, lobbyId, showToast]
+    );
 
-        setStarting(true);
-        try {
-            const res: StartGameResult = await startGame(code, mePlayerId);
-
-            if (!res.ok) {
-                const msg = "error" in res ? res.error : "Start fehlgeschlagen";
-                showToast(`❌ ${msg}`, 2500);
-                return;
+    const onToggleLock = useCallback(() => {
+        if (!mePlayerId || !lobbyId) return;
+        const next = !isLocked;
+        startTransition(async () => {
+            try {
+                const res = await setLobbyLockAction({ lobbyId, mePlayerId, locked: next });
+                if (res.ok) {
+                    showToast(next ? "🔒 Lobby gesperrt" : "🔓 Lobby offen", 1400);
+                } else if ("error" in res) {
+                    showToast(`❌ ${res.error}`, 2600);
+                }
+            } catch (e) {
+                showToast(`❌ ${getErrorMessage(e)}`, 2600);
             }
+        });
+    }, [mePlayerId, lobbyId, isLocked, showToast]);
 
-            showToast("✅ Spiel startet…", 900);
-            hardGoGame();
-        } catch (e: unknown) {
-            showToast(`❌ ${getErrorMessage(e)}`, 2500);
-        } finally {
-            setStarting(false);
-        }
-    }, [amIHost, mePlayerId, starting, isRunning, code, showToast, hardGoGame]);
+    if (loading && !lobby) {
+        return (
+            <main className="container">
+                <div style={{ display: "grid", placeItems: "center", padding: 32 }}>
+                    <Spinner size={28} label="Lade Admin Panel…" />
+                </div>
+            </main>
+        );
+    }
 
-    const leaveLobby = useCallback(async () => {
-        suppressRunningRedirectRef.current = true;
+    if (!lobby) {
+        return (
+            <main className="container">
+                <div style={{ display: "grid", placeItems: "center", padding: 32, color: "white" }}>
+                    <div style={{ fontWeight: 950 }}>{error || "Lobby nicht gefunden."}</div>
+                    <Link href="/host" className="btn btnSecondary btnSmall" style={{ marginTop: 12 }}>
+                        ← Hauptmenü
+                    </Link>
+                </div>
+            </main>
+        );
+    }
 
-        try {
-            if (mePlayerId && lobbyId) {
-                const {getSupabaseClient} = await import("@/lib/supabaseClient");
-                const supabase = getSupabaseClient();
-
-                await supabase.rpc("leave_lobby", {
-                    p_lobby_id: lobbyId,
-                    p_player_id: mePlayerId,
-                });
-            }
-        } catch {
-            // ignore
-        } finally {
-            clearMyIdentityStorage();
-            go("/host?left=1");
-        }
-    }, [mePlayerId, lobbyId, go]);
-
-    const meLabel = useMemo(() => {
-        return amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
-    }, [amIHost, meName]);
-
-    const maxPlayers = lobby?.max_players ?? 8;
-    const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
-
-    const adminHref = useMemo(() => `/lobby/${encodeURIComponent(code)}/admin`, [code]);
+    if (!amIHost) {
+        return null; // redirected
+    }
 
     return (
         <main className="container">
             <div className="landingWrap">
-                <section className="card" aria-label="Lobby" style={{position: "relative"}}>
-                    <div
-                        style={{
-                            position: "sticky",
-                            top: 0,
-                            zIndex: 5,
-                            paddingTop: 2,
-                            paddingBottom: 10,
-                            marginBottom: 6,
-                            backdropFilter: "blur(10px)",
-                            WebkitBackdropFilter: "blur(10px)",
-                        }}
-                    >
-                        {isRunning ? (
-                            <div className="pillChip" style={{marginBottom: 10, fontWeight: 950, opacity: 0.95}}>
-                                🚀 Spiel läuft – Lobby ist read-only
-                            </div>
-                        ) : null}
-
-                        <div
-                            style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: 14,
-                                alignItems: "flex-start",
-                                flexWrap: "wrap",
-                            }}
-                        >
-                            <div style={{flex: 1, minWidth: 280}}>
-                                <h1 className="h1" style={{marginBottom: 10}}>
-                                    Private Lobby
-                                </h1>
-
-                                <div style={{display: "grid", placeItems: "center", marginTop: 6}}>
-                                    <button
-                                        type="button"
-                                        onClick={copyInviteByClick}
-                                        title="Klick → Join-Link kopieren"
-                                        style={{
-                                            border: "none",
-                                            background: "transparent",
-                                            cursor: isRunning ? "not-allowed" : "pointer",
-                                            padding: 0,
-                                        }}
-                                        aria-label="Join-Link kopieren"
-                                        disabled={isRunning}
-                                    >
-                                        <div
-                                            style={{
-                                                fontSize: 58,
-                                                fontWeight: 950,
-                                                letterSpacing: 6,
-                                                lineHeight: 1,
-                                                backgroundImage:
-                                                    "linear-gradient(90deg,#ff2d55,#ff9500,#ffd60a,#34c759,#0a84ff,#bf5af2,#ff2d55)",
-                                                backgroundSize: "220% 100%",
-                                                WebkitBackgroundClip: "text",
-                                                backgroundClip: "text",
-                                                color: "transparent",
-                                                animation: "kumpir-rainbow 2.8s linear infinite",
-                                                textShadow: "0 10px 30px rgba(0,0,0,0.18)",
-                                                userSelect: "none",
-                                                opacity: isRunning ? 0.75 : 1,
-                                            }}
-                                        >
-                                            {code}
-                                        </div>
-                                    </button>
-
-                                    {toast ? (
-                                        <div className="fieldHelp" style={{
-                                            marginTop: 8,
-                                            fontWeight: 900,
-                                            opacity: 0.95,
-                                            textAlign: "center"
-                                        }}>
-                                            {toast}
-                                        </div>
-                                    ) : (
-                                        <div className="fieldHelp"
-                                             style={{marginTop: 8, opacity: 0.85, textAlign: "center"}}>
-                                            Klick auf den Code kopiert den Join-Link.
-                                        </div>
-                                    )}
-
-                                    <style>{`
-                    @keyframes kumpir-rainbow {
-                      0% { background-position: 0% 50%; }
-                      100% { background-position: 100% 50%; }
-                    }
-                  `}</style>
-                                </div>
-                            </div>
-
-                            <div style={{display: "grid", gap: 10, justifyItems: "end", minWidth: 240}}>
-                                <div className="pillChip" style={{
-                                    height: 34,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center"
-                                }}>
-                                    {meLabel}
-                                </div>
-
-                                <div style={{display: "grid", gap: 8, justifyItems: "end"}}>
-                                    <div className="pillChip"
-                                         style={{height: 32, display: "flex", alignItems: "center", gap: 8}}>
-                                        <span style={{opacity: 0.8}}>👥</span>
-                                        <span style={{fontWeight: 900}}>{players.length}</span>
-                                        <span style={{opacity: 0.8}}>/</span>
-                                        <span style={{fontWeight: 900}}>{maxPlayers}</span>
-                                    </div>
-
-                                    <div className="pillChip"
-                                         style={{height: 32, display: "flex", alignItems: "center", gap: 8}}>
-                                        <span>{MODES[mode]?.icon ?? "🥔"}</span>
-                                        <span style={{fontWeight: 900}}>{MODES[mode]?.label ?? mode}</span>
-                                    </div>
-
-                                    {lobby?.topic ? (
-                                        <div
-                                            className="pillChip"
-                                            style={{
-                                                height: 32,
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 8,
-                                                maxWidth: 260,
-                                            }}
-                                            title={lobby.topic}
-                                        >
-                                            <span style={{opacity: 0.8}}>🏷️</span>
-                                            <span
-                                                style={{
-                                                    fontWeight: 900,
-                                                    whiteSpace: "nowrap",
-                                                    overflow: "hidden",
-                                                    textOverflow: "ellipsis",
-                                                }}
-                                            >
-                        {lobby.topic}
-                      </span>
-                                        </div>
-                                    ) : null}
-                                </div>
-
-                                {/* ✅ Host: Admin (Link is the most reliable navigation) */}
-                                {amIHost ? (
-                                    <Link
-                                        href={adminHref}
-                                        className={`btn btnSecondary btnSmall ${starting || isRunning ? "btnDisabled" : ""}`}
-                                        aria-disabled={starting || isRunning}
-                                        tabIndex={starting || isRunning ? -1 : 0}
-                                        onClick={(e) => {
-                                            if (starting || isRunning) e.preventDefault();
-                                        }}
-                                        title="Lobby Admin"
-                                    >
-                                        ⚙️ Admin
-                                    </Link>
-                                ) : null}
-                            </div>
+                <section className="card" aria-label="Lobby Admin">
+                    <header className="hostHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                        <div>
+                            <h1 className="h1" style={{ marginBottom: 6 }}>⚙️ Admin</h1>
+                            <p className="p hostSub" style={{ marginTop: 0 }}>
+                                Lobby <b>{code}</b> · {players.length} Spieler
+                            </p>
                         </div>
-                    </div>
 
-                    <div className="stepsWrap">
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button
+                                type="button"
+                                onClick={onToggleLock}
+                                className={`btn btnSmall ${isLocked ? "btnReadyOff" : "btnSecondary"}`}
+                                disabled={pending}
+                                title={isLocked ? "Lobby ist gesperrt – klick zum Öffnen" : "Lobby offen – klick zum Sperren"}
+                            >
+                                {pending ? <Spinner size={14} /> : isLocked ? "🔒 Gesperrt" : "🔓 Offen"}
+                            </button>
+
+                            <Link href={`/lobby/${encodeURIComponent(code)}`} className="btn btnSecondary btnSmall">
+                                ← Zur Lobby
+                            </Link>
+                        </div>
+                    </header>
+
+                    <div className="stepsWrap" style={{ marginTop: 14 }}>
                         <div className="stepsBox">
-                            <div className="stepsTitle">Spieler</div>
-                            {error ? <p className="errorText">{error}</p> : null}
+                            <div className="stepsTitle">Spieler verwalten</div>
 
-                            <div style={{overflowX: "auto"}}>
-                                <table style={{width: "100%", borderCollapse: "collapse"}}>
+                            <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                     <thead>
-                                    <tr style={{textAlign: "left", opacity: 0.75}}>
-                                        <th style={{padding: "10px 8px"}}>#</th>
-                                        <th style={{padding: "10px 8px"}}>Name</th>
-                                        <th style={{padding: "10px 8px", textAlign: "right"}}>Zustand</th>
-                                    </tr>
-                                    </thead>
-
-                                    <tbody>
-                                    {loading && players.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={3} style={{padding: "12px 8px", opacity: 0.75}}>
-                                                Lädt…
-                                            </td>
+                                        <tr style={{ textAlign: "left", opacity: 0.75 }}>
+                                            <th style={{ padding: "10px 8px" }}>#</th>
+                                            <th style={{ padding: "10px 8px" }}>Name</th>
+                                            <th style={{ padding: "10px 8px" }}>Status</th>
+                                            <th style={{ padding: "10px 8px", textAlign: "right" }}>Aktionen</th>
                                         </tr>
-                                    ) : null}
+                                    </thead>
+                                    <tbody>
+                                        {players.map((p, idx) => {
+                                            const isMe = !!mePlayerId && p.player_id === mePlayerId;
+                                            const isHostRow = !!lobby.host_player_id && p.player_id === lobby.host_player_id;
+                                            const rowBusy = busyTarget === p.player_id && pending;
 
-                                    {players.map((p, idx) => {
-                                        const isMe = !!mePlayerId && p.player_id === mePlayerId;
-                                        const isHostRow = !!lobby?.host_player_id && p.player_id === lobby.host_player_id;
-
-                                        return (
-                                            <tr
-                                                key={p.player_id}
-                                                style={{
-                                                    borderTop: "1px solid rgba(255,255,255,0.08)",
-                                                    opacity: isMe ? 1 : 0.95,
-                                                    background: isHostRow ? "rgba(255,255,255,0.07)" : "transparent",
-                                                }}
-                                            >
-                                                <td style={{padding: "10px 8px"}}>{idx + 1}</td>
-
-                                                <td style={{padding: "10px 8px", fontWeight: 900}}>
-                                                    {p.name} {isMe ? <span style={{opacity: 0.6}}>(du)</span> : null}
-                                                    {isHostRow ? (
-                                                        <span
-                                                            style={{
-                                                                marginLeft: 10,
-                                                                fontWeight: 950,
-                                                                opacity: 0.98,
-                                                                padding: "4px 10px",
-                                                                borderRadius: 999,
-                                                                background: "rgba(255,255,255,0.08)",
-                                                                border: "1px solid rgba(255,255,255,0.10)",
-                                                            }}
-                                                        >
-                                👑 Host
-                              </span>
-                                                    ) : null}
-                                                </td>
-
-                                                <td style={{padding: "10px 8px", textAlign: "right", fontWeight: 950}}>
-                                                    {p.ready ? "✅ Bereit" : "⏳ nicht bereit"}
+                                            return (
+                                                <tr
+                                                    key={p.player_id}
+                                                    style={{
+                                                        borderTop: "1px solid rgba(255,255,255,0.08)",
+                                                        background: isHostRow ? "rgba(255,255,255,0.06)" : "transparent",
+                                                    }}
+                                                >
+                                                    <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
+                                                    <td style={{ padding: "10px 8px", fontWeight: 900 }}>
+                                                        {p.name}
+                                                        {isMe ? <span style={{ opacity: 0.6 }}> (du)</span> : null}
+                                                        {isHostRow ? <span style={{ marginLeft: 8 }}>👑</span> : null}
+                                                    </td>
+                                                    <td style={{ padding: "10px 8px", opacity: 0.85 }}>{p.ready ? "✅ Bereit" : "⏳ nicht bereit"}</td>
+                                                    <td style={{ padding: "10px 8px", textAlign: "right" }}>
+                                                        <div style={{ display: "inline-flex", gap: 6 }}>
+                                                            {!isHostRow ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btnSecondary btnSmall"
+                                                                    disabled={pending}
+                                                                    onClick={() => onTransfer(p.player_id, p.name)}
+                                                                    title="Host übertragen"
+                                                                >
+                                                                    {rowBusy ? <Spinner size={14} /> : "👑 Host"}
+                                                                </button>
+                                                            ) : null}
+                                                            {!isMe ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btnReadyOff btnSmall"
+                                                                    disabled={pending}
+                                                                    onClick={() => onKick(p.player_id, p.name)}
+                                                                    title="Aus der Lobby kicken"
+                                                                >
+                                                                    {rowBusy ? <Spinner size={14} /> : "👢 Kick"}
+                                                                </button>
+                                                            ) : null}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {players.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={4} style={{ padding: "12px 8px", opacity: 0.75 }}>
+                                                    Noch niemand beigetreten.
                                                 </td>
                                             </tr>
-                                        );
-                                    })}
-
-                                    {!loading && players.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={3} style={{padding: "12px 8px", opacity: 0.75}}>
-                                                Noch niemand beigetreten.
-                                            </td>
-                                        </tr>
-                                    ) : null}
+                                        ) : null}
                                     </tbody>
                                 </table>
                             </div>
-
-                            <div style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "flex-end",
-                                gap: 12,
-                                marginTop: 14
-                            }}>
-                                <button type="button" className="btn btnSecondary btnSmall"
-                                        onClick={() => void leaveLobby()} disabled={starting}>
-                                    ← Hauptmenü
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={toggleReady}
-                                    disabled={busyReady || !mePlayerId || starting || isRunning}
-                                    className={`btn btnXL ${busyReady || starting || isRunning ? "btnDisabled" : ""} ${
-                                        meReady ? "btnReadyOff" : "btnReadyOn"
-                                    }`}
-                                >
-                                    {isRunning ? "🚀 Läuft" : starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
-                                </button>
-                            </div>
-
-                            {amIHost && allReady && lobby?.phase !== "running" ? (
-                                <div style={{display: "flex", justifyContent: "flex-end", marginTop: 10}}>
-                                    <button type="button" className="btn btnPrimary btnSmall btnGlow"
-                                            onClick={() => void startGameClick()} disabled={starting || isRunning}>
-                                        🚀 Spiel starten
-                                    </button>
-                                </div>
-                            ) : null}
-
-                            {!allReady ? (
-                                <div style={{marginTop: 10, opacity: 0.75, fontWeight: 800, fontSize: 13}}>
-                                    Mindestens {MIN_PLAYERS} Spieler müssen beitreten und bereit sein.
-                                </div>
-                            ) : null}
                         </div>
                     </div>
+
+                    <ToastStack toasts={toasts} />
                 </section>
             </div>
         </main>

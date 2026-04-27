@@ -42,8 +42,9 @@ export default function ResetPasswordPage() {
 
             setMsg("Passwort wurde geändert. Du kannst dich jetzt einloggen.");
             window.location.href = nextPath;
-        } catch (e: any) {
-            setErr(e?.message ?? "Passwort ändern fehlgeschlagen.");
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : null;
+            setErr(msg ?? "Passwort ändern fehlgeschlagen.");
         } finally {
             setLoading(false);
         }

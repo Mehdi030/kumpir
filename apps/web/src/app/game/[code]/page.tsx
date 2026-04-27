@@ -6,6 +6,11 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
+import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
+import { useToastStack } from "@/hooks/useToastStack";
+import { ToastStack } from "@/components/ToastStack";
+import { Spinner } from "@/components/Spinner";
+import { playFx, getMuted, setMuted, unlockGameFx } from "@/lib/gameFx";
 
 type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
 
@@ -132,7 +137,7 @@ export default function GamePage() {
     const advanceInFlightRef = useRef(false);
 
     // Pass UX
-    const [toast, setToast] = useState("");
+    const { toasts, pushToast } = useToastStack({ maxVisible: 3 });
     const [passBusy, setPassBusy] = useState(false);
 
     // Motion
@@ -145,12 +150,28 @@ export default function GamePage() {
     // Pass animation event
     const [passEvent, setPassEvent] = useState<PassEvent | null>(null);
 
+    // Elimination animation: set when a player just transitions alive→dead
+    const [explodedPlayerId, setExplodedPlayerId] = useState<string | null>(null);
+
+    // Audio mute toggle (synced with localStorage)
+    const [audioMuted, setAudioMuted] = useState<boolean>(false);
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        setAudioMuted(getMuted());
+    }, []);
+
     // HUD swap animation trigger
     const [hudPulseNonce, setHudPulseNonce] = useState(0);
 
     const inFlightRef = useRef(false);
     const prevHolderRef = useRef<string | null>(null);
     const passNonceRef = useRef(0);
+    const prevAliveRef = useRef<Set<string>>(new Set());
+    const prevPhaseRef = useRef<LobbyPhase | null>(null);
+    const lastTickSecondRef = useRef<number>(-1);
+
+    // Rematch / reset busy
+    const [endActionBusy, setEndActionBusy] = useState<null | "rematch" | "reset">(null);
 
     // post-round feedback
     const lastLoserRef = useRef<string | null>(null);
@@ -167,9 +188,20 @@ export default function GamePage() {
         return () => mq?.removeEventListener?.("change", apply);
     }, []);
 
-    const showToast = useCallback((msg: string, ms = 1600) => {
-        setToast(msg);
-        window.setTimeout(() => setToast(""), ms);
+    const showToast = useCallback(
+        (msg: string, ms = 1600) => {
+            pushToast(msg, ms);
+        },
+        [pushToast]
+    );
+
+    const toggleMute = useCallback(() => {
+        setAudioMuted((prev) => {
+            const next = !prev;
+            setMuted(next);
+            if (!next) unlockGameFx();
+            return next;
+        });
     }, []);
 
     const meRow = useMemo(() => {
@@ -259,7 +291,6 @@ export default function GamePage() {
         async (lobbyId: string) => {
             const { error } = await supabase.rpc("rpc_finalize_topic_vote", { p_lobby_id: lobbyId });
             if (error) {
-                console.error("rpc_finalize_topic_vote failed:", error);
                 showToast(`❌ Finalize: ${error.message}`, 2400);
                 return { ok: false as const, error: error.message };
             }
@@ -272,7 +303,6 @@ export default function GamePage() {
         async (lobbyId: string) => {
             const { error } = await supabase.rpc("rpc_advance_from_countdown", { p_lobby_id: lobbyId });
             if (error) {
-                console.error("rpc_advance_from_countdown failed:", error);
                 showToast(`❌ Advance: ${error.message}`, 2400);
                 return { ok: false as const, error: error.message };
             }
@@ -283,8 +313,7 @@ export default function GamePage() {
 
     const rpcTickGame = useCallback(
         async (codeUpper: string) => {
-            const { error } = await supabase.rpc("rpc_tick_game", { p_code: codeUpper });
-            if (error) console.error("rpc_tick_game failed:", error);
+            await supabase.rpc("rpc_tick_game", { p_code: codeUpper });
         },
         [supabase]
     );
@@ -443,7 +472,6 @@ export default function GamePage() {
                     if (!alive) return;
 
                     if (votesRes.error) {
-                        console.error("topic_votes select failed:", votesRes.error);
                         showToast(`❌ Votes laden: ${votesRes.error.message}`, 2400);
                     } else if (votesRes.data) {
                         let a = 0,
@@ -527,6 +555,64 @@ export default function GamePage() {
         void rpcFinalizeTopicVote(lobby.id).finally(() => (finalizeInFlightRef.current = false));
     }, [allVoted, lobby, rpcFinalizeTopicVote]);
 
+    // ---------- Realtime (additive: polling stays as fallback) ----------
+    const reloadFromRealtime = useCallback(() => {
+        // Cheap kick: clearing in-flight allows the next interval tick to re-fetch immediately.
+        // We don't need to call load() directly here — the polling effect picks it up within 650ms.
+        inFlightRef.current = false;
+    }, []);
+    useLobbyRealtime(lobby?.id ?? null, reloadFromRealtime);
+
+    // ---------- FX: phase transitions ----------
+    useEffect(() => {
+        const next = lobby?.phase ?? null;
+        const prev = prevPhaseRef.current;
+        if (next !== prev) {
+            if (next === "countdown") playFx("voteWin");
+            else if (next === "finished") playFx("victory");
+            prevPhaseRef.current = next;
+        }
+    }, [lobby?.phase]);
+
+    // ---------- FX: countdown tick per second ----------
+    useEffect(() => {
+        if (lobby?.phase !== "countdown") {
+            lastTickSecondRef.current = -1;
+            return;
+        }
+        if (countdownSecondsLeft == null) return;
+        if (countdownSecondsLeft !== lastTickSecondRef.current && countdownSecondsLeft > 0) {
+            lastTickSecondRef.current = countdownSecondsLeft;
+            playFx("tick");
+        }
+    }, [lobby?.phase, countdownSecondsLeft]);
+
+    // ---------- FX + Animation: elimination detection ----------
+    useEffect(() => {
+        const prevAlive = prevAliveRef.current;
+        const currentAlive = new Set<string>();
+        for (const p of players) {
+            if (p.is_alive) currentAlive.add(p.player_id);
+        }
+
+        if (prevAlive.size > 0) {
+            for (const id of prevAlive) {
+                if (!currentAlive.has(id)) {
+                    setExplodedPlayerId(id);
+                    playFx("explode");
+                    window.setTimeout(() => setExplodedPlayerId((cur) => (cur === id ? null : cur)), 900);
+                    break;
+                }
+            }
+        }
+        prevAliveRef.current = currentAlive;
+    }, [players]);
+
+    // ---------- FX: pass sound when holder changes (only during running) ----------
+    useEffect(() => {
+        if (passEvent && lobby?.phase === "running") playFx("pass");
+    }, [passEvent, lobby?.phase]);
+
     // Synced timers
     useEffect(() => {
         let raf = 0;
@@ -566,8 +652,10 @@ export default function GamePage() {
             if (lobby.phase !== "topic_vote") return;
             if (voteBusy) return;
 
+            const prevVote = myVote;
             setMyVote(choice);
             setVoteBusy(true);
+            playFx("vote");
 
             try {
                 const { error } = await supabase.rpc("rpc_vote_topic", {
@@ -577,18 +665,18 @@ export default function GamePage() {
                 });
 
                 if (error) {
-                    console.error("rpc_vote_topic failed:", error);
-                    // keep highlight, but inform user; backend will correct if needed
+                    setMyVote(prevVote);
                     showToast(`❌ ${error.message}`, 2600);
                     return;
                 }
             } catch (e: unknown) {
+                setMyVote(prevVote);
                 showToast(`❌ ${getErrorMessage(e)}`, 2600);
             } finally {
                 setVoteBusy(false);
             }
         },
-        [mePlayerId, lobby, voteBusy, supabase, showToast]
+        [mePlayerId, lobby, voteBusy, myVote, supabase, showToast]
     );
 
     // PASS handler
@@ -611,19 +699,61 @@ export default function GamePage() {
         }
     }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, rpcPassPotato, showToast]);
 
-    // Spacebar pass
+    // Rematch handler (also bound to "R" key)
+    const handleRematch = useCallback(async () => {
+        if (endActionBusy) return;
+        setEndActionBusy("rematch");
+        const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
+        if (error) {
+            setEndActionBusy(null);
+            showToast(`❌ Rematch: ${error.message}`, 2400);
+            return;
+        }
+        showToast("🔁 Rematch gestartet", 1200);
+    }, [endActionBusy, supabase, code, showToast]);
+
+    // Keyboard shortcuts: Space (pass), 1/2/3 (vote), R (rematch), M (mute)
     useEffect(() => {
         const onKeyDown = (ev: KeyboardEvent) => {
-            if (ev.code !== "Space") return;
-            if (!lobby || lobby.phase !== "running") return;
-            if (!isMeHolder) return;
-            ev.preventDefault();
-            void handlePass();
+            // Don't capture keys while typing in inputs
+            const target = ev.target as HTMLElement | null;
+            if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+
+            if (ev.key === "m" || ev.key === "M") {
+                ev.preventDefault();
+                toggleMute();
+                return;
+            }
+
+            if (!lobby) return;
+
+            // Topic vote: 1 / 2 / 3
+            if (lobby.phase === "topic_vote" && (ev.key === "1" || ev.key === "2" || ev.key === "3")) {
+                ev.preventDefault();
+                const choice = Number(ev.key) as 1 | 2 | 3;
+                void vote(choice);
+                return;
+            }
+
+            // Running: Space passes
+            if (lobby.phase === "running" && ev.code === "Space") {
+                if (!isMeHolder) return;
+                ev.preventDefault();
+                void handlePass();
+                return;
+            }
+
+            // Finished: R triggers rematch
+            if (lobby.phase === "finished" && (ev.key === "r" || ev.key === "R")) {
+                ev.preventDefault();
+                void handleRematch();
+                return;
+            }
         };
 
         window.addEventListener("keydown", onKeyDown, { passive: false });
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [handlePass, lobby, isMeHolder]);
+    }, [handlePass, lobby, isMeHolder, vote, toggleMute, handleRematch]);
 
     // -----------------------------
     // UI: fatal / loading
@@ -639,7 +769,12 @@ export default function GamePage() {
         );
     }
 
-    if (!lobby) return <div className="p-6 opacity-70">Lade Spiel…</div>;
+    if (!lobby)
+        return (
+            <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, color: "white" }}>
+                <Spinner size={28} label="Lade Spiel…" />
+            </main>
+        );
 
     // Labels
     const aLabel = lobby.topic_a ?? "…";
@@ -737,7 +872,7 @@ export default function GamePage() {
                             {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
                         </div>
 
-                        {toast ? <div className="toastInline">{toast}</div> : null}
+                        <ToastStack toasts={toasts} inline />
                     </div>
                 </div>
 
@@ -907,7 +1042,7 @@ export default function GamePage() {
                         {Math.max(0, countdownSecondsLeft ?? 5)}
                     </div>
 
-                    {toast ? <div style={{ marginTop: 18, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
+                    <ToastStack toasts={toasts} inline />
                 </div>
 
                 <style>{`
@@ -1073,29 +1208,43 @@ export default function GamePage() {
                                 <button
                                     className="btn btnPrimary"
                                     onClick={async () => {
+                                        if (endActionBusy) return;
+                                        setEndActionBusy("reset");
                                         const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
-                                        if (error) return showToast(`❌ Reset: ${error.message}`, 2400);
+                                        if (error) {
+                                            setEndActionBusy(null);
+                                            return showToast(`❌ Reset: ${error.message}`, 2400);
+                                        }
                                         window.location.href = `/lobby/${encodeURIComponent(code)}`;
                                     }}
                                     type="button"
+                                    disabled={!!endActionBusy}
                                 >
-                                    Zurück zur Lobby
+                                    {endActionBusy === "reset" ? <Spinner size={16} label="Lade…" /> : "Zurück zur Lobby"}
                                 </button>
 
                                 <button
                                     className="btn btnSecondary"
                                     onClick={async () => {
+                                        if (endActionBusy) return;
+                                        setEndActionBusy("rematch");
                                         const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
-                                        if (error) return showToast(`❌ Rematch: ${error.message}`, 2400);
+                                        if (error) {
+                                            setEndActionBusy(null);
+                                            return showToast(`❌ Rematch: ${error.message}`, 2400);
+                                        }
                                         showToast("🔁 Rematch gestartet", 1200);
+                                        // Realtime / polling will move us to topic_vote phase shortly.
                                     }}
                                     type="button"
+                                    disabled={!!endActionBusy}
+                                    title="Direkt nochmal (Taste R)"
                                 >
-                                    🔁 Rematch
+                                    {endActionBusy === "rematch" ? <Spinner size={16} label="Starte…" /> : "🔁 Rematch (R)"}
                                 </button>
                             </div>
 
-                            {toast ? <div style={{ marginTop: 12, fontWeight: 900, opacity: 0.92 }}>{toast}</div> : null}
+                            <ToastStack toasts={toasts} inline />
                         </div>
                     </div>
                 </div>
@@ -1417,9 +1566,34 @@ export default function GamePage() {
 
     const passDisabledReason = iAmEliminated ? "Du bist raus" : !isMeHolder ? "Nicht dein Turn" : passBusy ? "Busy" : null;
 
+    // Heat level: derived from time-to-explode + player count (low/mid/high)
+    const heatLevel: "low" | "mid" | "high" = (() => {
+        if (!lobby.explode_at) return "low";
+        const ms = msUntil(lobby.explode_at);
+        if (ms == null) return "low";
+        const aliveCount = players.filter((p) => p.is_alive).length || 1;
+        const scaledThresholdHigh = 4500 + Math.max(0, 8 - aliveCount) * 250;
+        const scaledThresholdMid = 9000 + Math.max(0, 8 - aliveCount) * 400;
+        if (ms <= scaledThresholdHigh) return "high";
+        if (ms <= scaledThresholdMid) return "mid";
+        return "low";
+    })();
+
+    const heatStyle: Record<typeof heatLevel, { label: string; color: string; glow: string }> = {
+        low: { label: "🟢 Ruhig", color: "rgba(52,199,89,0.78)", glow: "0 0 12px rgba(52,199,89,0.32)" },
+        mid: { label: "🟠 Heiß", color: "rgba(255,149,0,0.85)", glow: "0 0 18px rgba(255,149,0,0.42)" },
+        high: { label: "🔴 KRITISCH", color: "rgba(255,69,58,0.92)", glow: "0 0 26px rgba(255,69,58,0.56)" },
+    };
+
     return (
         <main style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}>
-            <PlayerRing players={players} holderPlayerId={lobby.holder_player_id} mePlayerId={mePlayerId} passEvent={passEvent} />
+            <PlayerRing
+                players={players}
+                holderPlayerId={lobby.holder_player_id}
+                mePlayerId={mePlayerId}
+                passEvent={passEvent}
+                explodedPlayerId={explodedPlayerId}
+            />
 
             {turnOverlay ? (
                 <div className="turnOverlay" role="status" aria-live="polite">
@@ -1427,11 +1601,27 @@ export default function GamePage() {
                 </div>
             ) : null}
 
-            {toast ? (
-                <div className="toastFixed" role="status" aria-live="polite">
-                    {toast}
+            {/* Top-right: Heat + Mute */}
+            <div className="topRight" aria-hidden={false}>
+                <div
+                    className={`heatPill heat-${heatLevel}`}
+                    style={{ background: heatStyle[heatLevel].color, boxShadow: heatStyle[heatLevel].glow }}
+                    title="Hitzelevel"
+                >
+                    {heatStyle[heatLevel].label}
                 </div>
-            ) : null}
+                <button
+                    type="button"
+                    onClick={toggleMute}
+                    className="mutePill"
+                    title={audioMuted ? "Sound an (M)" : "Sound aus (M)"}
+                    aria-label={audioMuted ? "Sound einschalten" : "Sound ausschalten"}
+                >
+                    {audioMuted ? "🔇" : "🔊"}
+                </button>
+            </div>
+
+            <ToastStack toasts={toasts} />
 
             <div className="hud">
                 <div className="hudInner">
@@ -1579,20 +1769,50 @@ export default function GamePage() {
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
         }
-        .toastFixed{
+        .topRight{
           position: fixed;
-          left: 50%;
-          bottom: 22px;
-          transform: translateX(-50%);
-          z-index: 9999;
-          padding: 10px 14px;
+          top: 18px;
+          right: 18px;
+          z-index: 60;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .heatPill{
+          padding: 8px 14px;
           border-radius: 999px;
-          background: rgba(0,0,0,0.55);
-          border: 1px solid rgba(255,255,255,0.10);
-          font-weight: 900;
+          font-weight: 950;
+          font-size: 13px;
+          letter-spacing: 0.3px;
+          border: 1px solid rgba(255,255,255,0.16);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
+          user-select: none;
         }
+        .heatPill.heat-high{
+          animation: heatBlink 0.9s ease-in-out infinite;
+        }
+        @keyframes heatBlink{
+          0%,100% { filter: brightness(1.0); }
+          50%     { filter: brightness(1.32); }
+        }
+        .mutePill{
+          width: 38px;
+          height: 38px;
+          padding: 0;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.42);
+          border: 1px solid rgba(255,255,255,0.16);
+          color: white;
+          font-size: 16px;
+          cursor: pointer;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          display: grid;
+          place-items: center;
+          transition: transform .14s ease, filter .14s ease;
+        }
+        .mutePill:hover{ transform: translateY(-1px); filter: brightness(1.1); }
 
         .btn{
           appearance:none;

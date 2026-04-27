@@ -126,8 +126,14 @@ export default function RegisterPage() {
         return { ok: true, msg: "" };
     }
 
-    function mapSignupErrorToMessage(raw: any) {
-        const msg = String(raw?.message ?? raw ?? "").toLowerCase();
+    function mapSignupErrorToMessage(raw: unknown) {
+        const rawMsg =
+            raw instanceof Error
+                ? raw.message
+                : typeof raw === "object" && raw !== null && "message" in raw
+                    ? String((raw as { message?: unknown }).message ?? "")
+                    : String(raw ?? "");
+        const msg = rawMsg.toLowerCase();
 
         // Supabase typical message for email already exists
         if (msg.includes("user already registered") || msg.includes("already registered")) {
@@ -140,7 +146,7 @@ export default function RegisterPage() {
         }
 
         // Generic
-        return String(raw?.message ?? "Registrierung fehlgeschlagen.");
+        return rawMsg || "Registrierung fehlgeschlagen.";
     }
 
     async function onSubmit() {
@@ -189,7 +195,7 @@ export default function RegisterPage() {
                 `&email=${encodeURIComponent(e)}`;
 
             window.location.href = loginUrl;
-        } catch (e2: any) {
+        } catch (e2: unknown) {
             setError(mapSignupErrorToMessage(e2));
         } finally {
             setLoading(false);

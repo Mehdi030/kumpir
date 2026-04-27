@@ -13,7 +13,7 @@ type Props = {
     holderPlayerId: string | null;
     players: Player[];
     mePlayerId: string | null;
-    onPass: () => Promise<any> | void;
+    onPass: () => Promise<unknown> | void;
 };
 
 export function GameBoard({ holderPlayerId, players, mePlayerId, onPass }: Props) {
@@ -37,7 +37,7 @@ export function GameBoard({ holderPlayerId, players, mePlayerId, onPass }: Props
         }
 
         window.addEventListener("keydown", onKeyDown, { passive: false });
-        return () => window.removeEventListener("keydown", onKeyDown as any);
+        return () => window.removeEventListener("keydown", onKeyDown);
     }, [isMeHolder, onPass]);
 
     return (

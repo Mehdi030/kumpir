@@ -12,22 +12,17 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true });
 
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = useMemo(() => getSupabaseClient(), []);
     const [session, setSession] = useState<Session | null>(null);
     const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!AUTH_DISABLED);
 
     useEffect(() => {
-        const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
-
         // ✅ Auth aus: sofort fertig, keine Subscriptions
-        if (authDisabled) {
-            setSession(null);
-            setUser(null);
-            setLoading(false);
-            return;
-        }
+        if (AUTH_DISABLED) return;
 
         let alive = true;
 

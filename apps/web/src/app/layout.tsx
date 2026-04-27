@@ -20,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <html lang="de" className={`${displayFont.variable} ${bodyFont.variable}`}>
         <body>
         <AuthProvider>{children}</AuthProvider>
+        <Analytics />
         </body>
         </html>
     );

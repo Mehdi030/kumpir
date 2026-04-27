@@ -7,24 +7,28 @@ export function HostNotice() {
     const router = useRouter();
     const sp = useSearchParams();
 
-    const [topToast, setTopToast] = useState<string>("");
+    const kicked = sp.get("kicked") === "1";
+    const left = sp.get("left") === "1";
+
+    const [dismissed, setDismissed] = useState(false);
 
     const dismissTopToast = useCallback(() => {
-        setTopToast("");
+        setDismissed(true);
     }, []);
 
     useEffect(() => {
-        const kicked = sp.get("kicked");
-        const left = sp.get("left");
-
-        if (kicked === "1") setTopToast("⛔ Du wurdest gekickt.");
-        else if (left === "1") setTopToast("ℹ️ Du hast die Lobby verlassen.");
-
-        // cleanup URL so message doesn't re-trigger on refresh
-        if (kicked === "1" || left === "1") {
+        if (kicked || left) {
             router.replace("/host");
         }
-    }, [sp, router]);
+    }, [kicked, left, router]);
+
+    const topToast = dismissed
+        ? ""
+        : kicked
+            ? "⛔ Du wurdest gekickt."
+            : left
+                ? "ℹ️ Du hast die Lobby verlassen."
+                : "";
 
     if (!topToast) return null;
 
