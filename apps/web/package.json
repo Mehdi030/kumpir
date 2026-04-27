@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "set NEXT_DISABLE_TURBOPACK=1&& next dev",
-    "play": "node scripts/play.mjs",
+    "play": "node scripts/play.mjs && npm run dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
- * One-shot dev launcher.
- *
- *  - Beim ersten Lauf: fragt nach Supabase-URL + Anon-Key, schreibt apps/web/.env.local
- *  - Bei jedem Lauf: startet `next dev`
+ * One-shot env-setup. Writes apps/web/.env.local interactively if it's missing.
+ * The dev server is started afterwards by the npm script (`&& next dev`)
+ * so we don't have to deal with cross-platform child_process spawn quirks.
  *
  * Use: `npm run play` (vom apps/web Verzeichnis)
  */
@@ -11,7 +10,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -103,48 +101,17 @@ async function ensureEnv() {
     console.log(C.green(`\n✓ ${ENV_PATH} geschrieben.\n`));
 }
 
-function startDev() {
-    const isWin = process.platform === "win32";
-
-    console.log(C.bold("🚀 Starte Dev-Server …"));
-    console.log(C.dim("   ⤷ http://localhost:3000"));
-    console.log(C.dim("   ⤷ Tipp: 3 Inkognito-Fenster für 3 Spieler"));
-    console.log(C.dim("   ⤷ Stop: Strg+C"));
-    console.log("");
-
-    // On Windows, npx is `.cmd` and Node refuses to spawn it without a shell
-    // (since the CVE-2024-27980 fix). On POSIX, just call npx directly.
-    const child = isWin
-        ? spawn("npx", ["next", "dev"], {
-              cwd: ROOT,
-              stdio: "inherit",
-              env: { ...process.env, NEXT_DISABLE_TURBOPACK: "1" },
-              shell: true,
-          })
-        : spawn("npx", ["next", "dev"], {
-              cwd: ROOT,
-              stdio: "inherit",
-              env: { ...process.env, NEXT_DISABLE_TURBOPACK: "1" },
-              shell: false,
-          });
-
-    child.on("exit", (code) => process.exit(code ?? 0));
-    child.on("error", (err) => {
-        console.error(C.red(`\n✗ Konnte next dev nicht starten: ${err?.message ?? err}`));
-        process.exit(1);
-    });
-
-    process.on("SIGINT", () => {
-        child.kill("SIGINT");
-    });
-}
-
 (async () => {
     try {
         await ensureEnv();
-        startDev();
+        console.log(C.bold("🚀 Dev-Server startet gleich …"));
+        console.log(C.dim("   ⤷ http://localhost:3000"));
+        console.log(C.dim("   ⤷ Tipp: 3 Inkognito-Fenster für 3 Spieler"));
+        console.log(C.dim("   ⤷ Stop: Strg+C"));
+        console.log("");
+        process.exit(0);
     } catch (e) {
-        console.error(C.red(`\n✗ Setup fehlgeschlagen: ${e?.message ?? e}`));
+        console.error(C.red(`\n✗ Env-Setup fehlgeschlagen: ${e?.message ?? e}`));
         process.exit(1);
     }
 })();
