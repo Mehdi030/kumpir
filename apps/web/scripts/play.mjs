@@ -105,7 +105,6 @@ async function ensureEnv() {
 
 function startDev() {
     const isWin = process.platform === "win32";
-    const cmd = isWin ? "npx.cmd" : "npx";
 
     console.log(C.bold("🚀 Starte Dev-Server …"));
     console.log(C.dim("   ⤷ http://localhost:3000"));
@@ -113,14 +112,27 @@ function startDev() {
     console.log(C.dim("   ⤷ Stop: Strg+C"));
     console.log("");
 
-    const child = spawn(cmd, ["next", "dev"], {
-        cwd: ROOT,
-        stdio: "inherit",
-        env: { ...process.env, NEXT_DISABLE_TURBOPACK: "1" },
-        shell: false,
-    });
+    // On Windows, npx is `.cmd` and Node refuses to spawn it without a shell
+    // (since the CVE-2024-27980 fix). On POSIX, just call npx directly.
+    const child = isWin
+        ? spawn("npx", ["next", "dev"], {
+              cwd: ROOT,
+              stdio: "inherit",
+              env: { ...process.env, NEXT_DISABLE_TURBOPACK: "1" },
+              shell: true,
+          })
+        : spawn("npx", ["next", "dev"], {
+              cwd: ROOT,
+              stdio: "inherit",
+              env: { ...process.env, NEXT_DISABLE_TURBOPACK: "1" },
+              shell: false,
+          });
 
     child.on("exit", (code) => process.exit(code ?? 0));
+    child.on("error", (err) => {
+        console.error(C.red(`\n✗ Konnte next dev nicht starten: ${err?.message ?? err}`));
+        process.exit(1);
+    });
 
     process.on("SIGINT", () => {
         child.kill("SIGINT");
