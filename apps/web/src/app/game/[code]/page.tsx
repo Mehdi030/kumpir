@@ -10,7 +10,10 @@ import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
-import { playFx, getMuted, setMuted, unlockGameFx } from "@/lib/gameFx";
+import { Confetti } from "@/components/Confetti";
+import { ConnectionPill } from "@/components/ConnectionPill";
+import { AudioControl } from "@/components/AudioControl";
+import { playFx } from "@/lib/gameFx";
 
 type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
 
@@ -152,13 +155,7 @@ export default function GamePage() {
 
     // Elimination animation: set when a player just transitions alive→dead
     const [explodedPlayerId, setExplodedPlayerId] = useState<string | null>(null);
-
-    // Audio mute toggle (synced with localStorage)
-    const [audioMuted, setAudioMuted] = useState<boolean>(false);
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-        setAudioMuted(getMuted());
-    }, []);
+    const [selfShake, setSelfShake] = useState(false);
 
     // HUD swap animation trigger
     const [hudPulseNonce, setHudPulseNonce] = useState(0);
@@ -194,15 +191,6 @@ export default function GamePage() {
         },
         [pushToast]
     );
-
-    const toggleMute = useCallback(() => {
-        setAudioMuted((prev) => {
-            const next = !prev;
-            setMuted(next);
-            if (!next) unlockGameFx();
-            return next;
-        });
-    }, []);
 
     const meRow = useMemo(() => {
         if (!mePlayerId) return null;
@@ -561,7 +549,7 @@ export default function GamePage() {
         // We don't need to call load() directly here — the polling effect picks it up within 650ms.
         inFlightRef.current = false;
     }, []);
-    useLobbyRealtime(lobby?.id ?? null, reloadFromRealtime);
+    const realtimeStatus = useLobbyRealtime(lobby?.id ?? null, reloadFromRealtime);
 
     // ---------- FX: phase transitions ----------
     useEffect(() => {
@@ -599,14 +587,19 @@ export default function GamePage() {
             for (const id of prevAlive) {
                 if (!currentAlive.has(id)) {
                     setExplodedPlayerId(id);
-                    playFx("explode");
+                    const isMe = !!mePlayerId && id === mePlayerId;
+                    playFx(isMe ? "selfExplode" : "explode");
+                    if (isMe) {
+                        setSelfShake(true);
+                        window.setTimeout(() => setSelfShake(false), 700);
+                    }
                     window.setTimeout(() => setExplodedPlayerId((cur) => (cur === id ? null : cur)), 900);
                     break;
                 }
             }
         }
         prevAliveRef.current = currentAlive;
-    }, [players]);
+    }, [players, mePlayerId]);
 
     // ---------- FX: pass sound when holder changes (only during running) ----------
     useEffect(() => {
@@ -721,7 +714,12 @@ export default function GamePage() {
 
             if (ev.key === "m" || ev.key === "M") {
                 ev.preventDefault();
-                toggleMute();
+                // dynamic import to keep this small + not coupled to React state
+                import("@/lib/gameFx").then(({ getMuted, setMuted, unlockGameFx }) => {
+                    const next = !getMuted();
+                    setMuted(next);
+                    if (!next) unlockGameFx();
+                });
                 return;
             }
 
@@ -753,7 +751,7 @@ export default function GamePage() {
 
         window.addEventListener("keydown", onKeyDown, { passive: false });
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [handlePass, lobby, isMeHolder, vote, toggleMute, handleRematch]);
+    }, [handlePass, lobby, isMeHolder, vote, handleRematch]);
 
     // -----------------------------
     // UI: fatal / loading
@@ -1090,6 +1088,7 @@ export default function GamePage() {
                         "radial-gradient(circle at 50% 88%, rgba(255,214,10,0.34) 0%, rgba(240,138,26,0.58) 40%, rgba(143,15,15,0.92) 100%)",
                 }}
             >
+                <Confetti active />
                 <div className="fxGrain" aria-hidden />
                 <div className="fxOrbs" aria-hidden>
                     <span className="fxOrb o1" />
@@ -1547,10 +1546,26 @@ export default function GamePage() {
                 }}
             >
                 <div style={{ width: "min(820px, 96vw)", textAlign: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>WARTEN</div>
-                    <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>⏳ Warten…</div>
-                    <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>Der Host startet gleich das Spiel.</div>
+                    {players.length === 0 || (players.length === 1 && !!mePlayerId && players[0]?.player_id === mePlayerId) ? (
+                        <>
+                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>NIEMAND DA</div>
+                            <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>👻 Lobby leer</div>
+                            <div style={{ marginTop: 10, opacity: 0.82, fontWeight: 700 }}>Alle anderen sind weg. Zurück zur Lobby?</div>
+                            <div style={{ marginTop: 18 }}>
+                                <a className="btn btnPrimary" href={`/lobby/${encodeURIComponent(code)}`}>← Zur Lobby</a>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>WARTEN</div>
+                            <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>
+                                <Spinner size={28} label="Warten…" />
+                            </div>
+                            <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>Der Host startet gleich das Spiel.</div>
+                        </>
+                    )}
                 </div>
+                <ToastStack toasts={toasts} />
             </main>
         );
     }
@@ -1586,7 +1601,10 @@ export default function GamePage() {
     };
 
     return (
-        <main style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}>
+        <main
+            className={selfShake ? "kumpirSelfShake" : ""}
+            style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}
+        >
             <PlayerRing
                 players={players}
                 holderPlayerId={lobby.holder_player_id}
@@ -1601,7 +1619,7 @@ export default function GamePage() {
                 </div>
             ) : null}
 
-            {/* Top-right: Heat + Mute */}
+            {/* Top-right: Heat + Connection + Audio */}
             <div className="topRight" aria-hidden={false}>
                 <div
                     className={`heatPill heat-${heatLevel}`}
@@ -1610,16 +1628,12 @@ export default function GamePage() {
                 >
                     {heatStyle[heatLevel].label}
                 </div>
-                <button
-                    type="button"
-                    onClick={toggleMute}
-                    className="mutePill"
-                    title={audioMuted ? "Sound an (M)" : "Sound aus (M)"}
-                    aria-label={audioMuted ? "Sound einschalten" : "Sound ausschalten"}
-                >
-                    {audioMuted ? "🔇" : "🔊"}
-                </button>
+                <ConnectionPill status={realtimeStatus} onlyOnIssue />
+                <AudioControl />
             </div>
+
+            {/* Self-elimination flash overlay */}
+            {selfShake ? <div className="selfFlash" aria-hidden /> : null}
 
             <ToastStack toasts={toasts} />
 
@@ -1792,27 +1806,41 @@ export default function GamePage() {
         .heatPill.heat-high{
           animation: heatBlink 0.9s ease-in-out infinite;
         }
+        @media (prefers-reduced-motion: reduce){
+          .heatPill.heat-high{ animation: none; }
+        }
         @keyframes heatBlink{
           0%,100% { filter: brightness(1.0); }
           50%     { filter: brightness(1.32); }
         }
-        .mutePill{
-          width: 38px;
-          height: 38px;
-          padding: 0;
-          border-radius: 999px;
-          background: rgba(0,0,0,0.42);
-          border: 1px solid rgba(255,255,255,0.16);
-          color: white;
-          font-size: 16px;
-          cursor: pointer;
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          display: grid;
-          place-items: center;
-          transition: transform .14s ease, filter .14s ease;
+
+        .selfFlash{
+          position: fixed;
+          inset: 0;
+          z-index: 9997;
+          pointer-events: none;
+          background: radial-gradient(circle at 50% 45%, rgba(255,69,58,0.0) 0%, rgba(255,69,58,0.45) 65%, rgba(143,15,15,0.62) 100%);
+          animation: selfFlashIn 700ms ease-out both;
         }
-        .mutePill:hover{ transform: translateY(-1px); filter: brightness(1.1); }
+        @keyframes selfFlashIn{
+          0%   { opacity: 0; }
+          18%  { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        .kumpirSelfShake{ animation: kumpirShake 700ms cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes kumpirShake{
+          0%,100%{ transform: translateX(0); }
+          15%    { transform: translateX(-7px); }
+          30%    { transform: translateX(7px); }
+          45%    { transform: translateX(-5px); }
+          60%    { transform: translateX(5px); }
+          75%    { transform: translateX(-3px); }
+          90%    { transform: translateX(3px); }
+        }
+        @media (prefers-reduced-motion: reduce){
+          .selfFlash{ animation: none; opacity: 0.35; }
+          .kumpirSelfShake{ animation: none; }
+        }
 
         .btn{
           appearance:none;

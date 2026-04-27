@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { useMemo, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { validatePlayerName } from "@/lib/profanity";
 import { HostNotice } from "./HostNotice";
 
 type Privacy = "private" | "public";
@@ -106,12 +107,13 @@ export default function HostPage() {
 
     const inFlightRef = useRef(false);
 
-    const isNameValid = hostName.trim().length >= 2;
+    const nameValidation = useMemo(() => validatePlayerName(hostName), [hostName]);
+    const isNameValid = nameValidation.ok;
     const nameError = useMemo(() => {
         if (!hostName.length) return "";
-        if (!isNameValid) return "Mindestens 2 Zeichen.";
+        if ("message" in nameValidation) return nameValidation.message;
         return "";
-    }, [hostName, isNameValid]);
+    }, [hostName, nameValidation]);
 
     const canCreate = isNameValid && !!roundSpeed && !!mode && !creating;
 

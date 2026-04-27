@@ -9,10 +9,11 @@
  *  - prefers-reduced-motion (vibration only)
  */
 
-type FxKind = "vote" | "voteWin" | "tick" | "pass" | "explode" | "victory";
+type FxKind = "vote" | "voteWin" | "tick" | "pass" | "selfExplode" | "explode" | "victory";
 
 let ctx: AudioContext | null = null;
 let muted: boolean | null = null;
+let volume: number | null = null; // 0..1
 
 function isMuted(): boolean {
     if (muted !== null) return muted;
@@ -38,6 +39,29 @@ export function getMuted(): boolean {
     return isMuted();
 }
 
+export function getVolume(): number {
+    if (volume !== null) return volume;
+    if (typeof window === "undefined") return 0.7;
+    try {
+        const raw = window.localStorage.getItem("kumpir_volume");
+        const parsed = raw == null ? NaN : Number(raw);
+        volume = Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0.7;
+    } catch {
+        volume = 0.7;
+    }
+    return volume;
+}
+
+export function setVolume(next: number) {
+    const clamped = Math.max(0, Math.min(1, next));
+    volume = clamped;
+    try {
+        window.localStorage.setItem("kumpir_volume", String(clamped));
+    } catch {
+        // ignore
+    }
+}
+
 function getCtx(): AudioContext | null {
     if (typeof window === "undefined") return null;
     if (ctx) return ctx;
@@ -59,8 +83,9 @@ function tone(freq: number, durMs: number, opts?: { type?: OscillatorType; gain?
 
     const startAt = ac.currentTime + (opts?.delayMs ?? 0) / 1000;
     const dur = durMs / 1000;
-    const peak = opts?.gain ?? 0.18;
+    const peak = (opts?.gain ?? 0.18) * getVolume();
     const decay = opts?.decay ?? 0.7;
+    if (peak <= 0.0001) return;
 
     const osc = ac.createOscillator();
     const g = ac.createGain();
@@ -81,7 +106,8 @@ function noiseBurst(durMs: number, opts?: { gain?: number; lowpass?: number }) {
     if (!ac) return;
     const start = ac.currentTime;
     const dur = durMs / 1000;
-    const peak = opts?.gain ?? 0.35;
+    const peak = (opts?.gain ?? 0.35) * getVolume();
+    if (peak <= 0.0001) return;
 
     const sampleCount = Math.floor(ac.sampleRate * dur);
     const buf = ac.createBuffer(1, sampleCount, ac.sampleRate);
@@ -151,6 +177,13 @@ export function playFx(kind: FxKind) {
             noiseBurst(420, { gain: 0.45, lowpass: 2200 });
             tone(120, 380, { type: "sawtooth", gain: 0.22 });
             vibrate([60, 40, 120]);
+            return;
+        case "selfExplode":
+            // Lower-pitched, longer burst — gives the loser a distinct gut-punch.
+            noiseBurst(620, { gain: 0.55, lowpass: 1600 });
+            tone(80, 520, { type: "sawtooth", gain: 0.26 });
+            tone(160, 380, { type: "sine", gain: 0.18, delayMs: 80 });
+            vibrate([100, 60, 180, 60, 200]);
             return;
         case "victory":
             tone(660, 140, { type: "triangle", gain: 0.18 });

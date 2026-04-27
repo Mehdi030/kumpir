@@ -1,7 +1,32 @@
 import "./globals.css";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Inter } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import { Analytics } from "@vercel/analytics/next"
+
+export const metadata: Metadata = {
+    title: "Kumpir – Heiße Kartoffel",
+    description: "Browserbasiertes Partyspiel nach dem Prinzip der heißen Kartoffel.",
+    manifest: "/manifest.webmanifest",
+    applicationName: "Kumpir",
+    appleWebApp: {
+        capable: true,
+        title: "Kumpir",
+        statusBarStyle: "black-translucent",
+    },
+    icons: {
+        icon: "/LogoK.png",
+        apple: "/logo.png",
+    },
+};
+
+export const viewport: Viewport = {
+    themeColor: "#8f0f0f",
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+};
 
 const displayFont = Bricolage_Grotesque({
     subsets: ["latin"],

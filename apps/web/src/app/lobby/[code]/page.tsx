@@ -140,9 +140,23 @@ export default function LobbyPage() {
     }, []);
 
     const copyInviteByClick = useCallback(async () => {
+        const origin = window.location.origin;
+        const link = fmtJoinLink(origin, code);
+        const shareText = `Komm in meine Kumpir-Lobby! Code: ${code}\n${link}`;
+
+        // Prefer Web Share API on mobile (System-Share-Sheet → WhatsApp/iMessage/etc.)
+        const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+        if (typeof nav.share === "function") {
+            try {
+                await nav.share({ title: "Kumpir-Lobby", text: shareText, url: link });
+                return;
+            } catch (e) {
+                // user cancelled — silently fall through to clipboard
+                if (e instanceof Error && e.name === "AbortError") return;
+            }
+        }
+
         try {
-            const origin = window.location.origin;
-            const link = fmtJoinLink(origin, code);
             await navigator.clipboard.writeText(link);
             showToast("✅ Link kopiert", 1200);
         } catch {

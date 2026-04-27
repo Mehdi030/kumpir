@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { validatePlayerName } from "@/lib/profanity";
 
 function normalizeCode(input: string) {
     return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
@@ -74,11 +75,13 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
         return () => window.clearTimeout(t); // ✅ FIX: clearTimeout
     }, [showNameModal]);
 
+    const nameValidation = useMemo(() => validatePlayerName(name), [name]);
+
     const canJoin = useMemo(() => {
         if (!mounted) return false;
         const c = normalizeCode(code);
-        return c.length === 4 && name.trim().length >= 2;
-    }, [mounted, code, name]);
+        return c.length === 4 && nameValidation.ok;
+    }, [mounted, code, nameValidation]);
 
     async function joinLobby() {
         if (inFlightRef.current) return;
@@ -95,8 +98,9 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 setError("Bitte einen gültigen 4-stelligen Code eingeben.");
                 return;
             }
-            if (playerName.length < 2) {
-                setError("Name muss mindestens 2 Buchstaben haben.");
+            const v = validatePlayerName(playerName);
+            if (!v.ok && "message" in v) {
+                setError(v.message);
                 return;
             }
 
