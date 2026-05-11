@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
+import { usePassAttempt } from "@/hooks/usePassAttempt";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
@@ -44,6 +45,10 @@ type LobbyState = {
     // Tie visualization
     topic_tie_choices: number[] | null;
     topic_tie_pick: number | null;
+
+    // Topic-Mechanik B: Antwort-Validierung
+    current_attempt_id: string | null;
+    used_answers: string[];
 };
 
 type Player = {
@@ -142,6 +147,10 @@ export default function GamePage() {
     // Pass UX
     const { toasts, pushToast } = useToastStack({ maxVisible: 3 });
     const [passBusy, setPassBusy] = useState(false);
+
+    // Topic-Mechanik B: Antwort-Eingabe + Validierung
+    const [answerDraft, setAnswerDraft] = useState("");
+    const [voteBusyAttempt, setVoteBusyAttempt] = useState(false);
 
     // Motion
     const [reduceMotion, setReduceMotion] = useState(false);
@@ -306,11 +315,30 @@ export default function GamePage() {
         [supabase]
     );
 
-    const rpcPassPotato = useCallback(
-        async (codeUpper: string, playerId: string) => {
-            const { error } = await supabase.rpc("rpc_pass_potato", {
+    // Note: direct rpc_pass_potato is no longer called from the client — the
+    // server-side _finalize_attempt_accept triggers it once the answer has been
+    // validated by the other players (Topic-Mechanik B).
+
+    // Topic-Mechanik B: Halter sagt seine Antwort und startet einen Validierungs-Versuch.
+    const rpcAttemptPass = useCallback(
+        async (codeUpper: string, playerId: string, answer: string) => {
+            const { error } = await supabase.rpc("rpc_attempt_pass", {
                 p_code: codeUpper,
                 p_player_id: playerId,
+                p_answer: answer,
+            });
+            return error;
+        },
+        [supabase]
+    );
+
+    // Topic-Mechanik B: Mitspieler stimmt ab, ob die Antwort gilt.
+    const rpcVoteAnswer = useCallback(
+        async (attemptId: string, voterId: string, accept: boolean) => {
+            const { error } = await supabase.rpc("rpc_vote_answer", {
+                p_attempt_id: attemptId,
+                p_voter_id: voterId,
+                p_accept: accept,
             });
             return error;
         },
@@ -325,6 +353,15 @@ export default function GamePage() {
         inFlightRef.current = false;
     }, []);
     const realtimeStatus = useLobbyRealtime(lobby?.id ?? null, reloadFromRealtime);
+
+    // -----------------------------
+    // Topic-Mechanik B: aktueller Pass-Versuch + Vote-Status
+    // -----------------------------
+    const passAttempt = usePassAttempt(
+        lobby?.id ?? null,
+        lobby?.current_attempt_id ?? null,
+        mePlayerId
+    );
 
     // -----------------------------
     // Poll loop (fallback when realtime is offline)
@@ -357,6 +394,8 @@ export default function GamePage() {
                             "countdown_ends_at",
                             "topic_tie_choices",
                             "topic_tie_pick",
+                            "current_attempt_id",
+                            "used_answers",
                         ].join(",")
                     )
                     .eq("code", code)
@@ -396,6 +435,9 @@ export default function GamePage() {
 
                     topic_tie_choices: (raw.topic_tie_choices as number[] | null) ?? null,
                     topic_tie_pick: (raw.topic_tie_pick as number | null) ?? null,
+
+                    current_attempt_id: (raw.current_attempt_id as string | null) ?? null,
+                    used_answers: (raw.used_answers as string[] | null) ?? [],
                 };
 
                 // Post-round loser toast (once)
@@ -682,25 +724,57 @@ export default function GamePage() {
         [mePlayerId, lobby, voteBusy, myVote, supabase, showToast]
     );
 
-    // PASS handler
-    const handlePass = useCallback(async () => {
+    // Topic-Mechanik B: Halter sagt seine Antwort → triggert Validierungs-Voting.
+    const handleAttemptPass = useCallback(async () => {
         if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
         if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
         if (iAmEliminated) return showToast("💀 Du bist raus", 1400);
         if (!isMeHolder) return;
         if (passBusy) return;
 
+        const clean = answerDraft.trim();
+        if (!clean) return showToast("✍️ Antwort eingeben", 1400);
+        if (clean.length > 60) return showToast("Antwort zu lang (max 60)", 1800);
+
+        const used = (lobby.used_answers ?? []).map((a) => a.toLowerCase());
+        if (used.includes(clean.toLowerCase())) {
+            return showToast("⚠️ Schon gesagt — andere Antwort probieren", 2000);
+        }
+
         setPassBusy(true);
         try {
-            const err = await rpcPassPotato(code, mePlayerId);
+            const err = await rpcAttemptPass(code, mePlayerId, clean);
             if (err) return showToast(`❌ ${err.message}`, 2400);
-            showToast("✅ Weitergegeben", 900);
+            setAnswerDraft("");
+            showToast("⏳ Wird geprüft …", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
             setPassBusy(false);
         }
-    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, rpcPassPotato, showToast]);
+    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, answerDraft, rpcAttemptPass, showToast]);
+
+    // Topic-Mechanik B: Mitspieler stimmt ab, ob die Antwort gilt.
+    const handleVoteAnswer = useCallback(
+        async (accept: boolean) => {
+            if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
+            if (!passAttempt.attempt) return;
+            if (passAttempt.attempt.holder_player_id === mePlayerId) return;
+            if (passAttempt.myVote !== null) return showToast("Du hast schon abgestimmt", 1400);
+            if (voteBusyAttempt) return;
+
+            setVoteBusyAttempt(true);
+            try {
+                const err = await rpcVoteAnswer(passAttempt.attempt.id, mePlayerId, accept);
+                if (err) return showToast(`❌ ${err.message}`, 2400);
+            } catch (e: unknown) {
+                showToast(`❌ ${getErrorMessage(e)}`, 2400);
+            } finally {
+                setVoteBusyAttempt(false);
+            }
+        },
+        [mePlayerId, passAttempt, voteBusyAttempt, rpcVoteAnswer, showToast]
+    );
 
     // Rematch handler (also bound to "R" key)
     const handleRematch = useCallback(async () => {
@@ -743,13 +817,8 @@ export default function GamePage() {
                 return;
             }
 
-            // Running: Space passes
-            if (lobby.phase === "running" && ev.code === "Space") {
-                if (!isMeHolder) return;
-                ev.preventDefault();
-                void handlePass();
-                return;
-            }
+            // Running: Space ist deaktiviert (Halter muss Antwort eingeben).
+            // Enter im Antwort-Input löst handleAttemptPass aus — siehe Running-UI.
 
             // Finished: R triggers rematch
             if (lobby.phase === "finished" && (ev.key === "r" || ev.key === "R")) {
@@ -761,7 +830,7 @@ export default function GamePage() {
 
         window.addEventListener("keydown", onKeyDown, { passive: false });
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [handlePass, lobby, isMeHolder, vote, handleRematch]);
+    }, [lobby, vote, handleRematch]);
 
     // -----------------------------
     // UI: fatal / loading
@@ -1668,15 +1737,100 @@ export default function GamePage() {
                         </div>
                     </div>
 
-                    {isMeHolder && !iAmEliminated ? (
-                        <div className="actions">
-                            <button className="btn btnPrimary" onClick={() => void handlePass()} type="button" disabled={!!passDisabledReason} title={passDisabledReason ?? "Weitergeben"}>
-                                {passBusy ? "…" : "🥔 Weitergeben (Space)"}
+                    {/* Topic-Mechanik B: Antwort + Validierung */}
+                    {iAmEliminated ? (
+                        <div className="hint">Du schaust zu.</div>
+                    ) : passAttempt.attempt ? (
+                        // ─── Es läuft gerade ein Validierungs-Versuch ───
+                        isMeHolder ? (
+                            <div className="answerStatus">
+                                <div className="answerStatusLabel">Deine Antwort wird geprüft</div>
+                                <div className="answerStatusValue">{`„${passAttempt.attempt.answer}"`}</div>
+                                <div className="voteCounters">
+                                    <span className="voteCounter accept">✅ {passAttempt.attempt.accept_count}</span>
+                                    <span className="voteCounter reject">❌ {passAttempt.attempt.reject_count}</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="answerVote">
+                                <div className="answerStatusLabel">{holderName} sagt:</div>
+                                <div className="answerStatusValue">{`„${passAttempt.attempt.answer}"`}</div>
+                                {passAttempt.myVote === null ? (
+                                    <div className="actions" style={{ gap: 12 }}>
+                                        <button
+                                            type="button"
+                                            className="btn btnReadyOn"
+                                            onClick={() => void handleVoteAnswer(true)}
+                                            disabled={voteBusyAttempt}
+                                            title="Antwort akzeptieren"
+                                        >
+                                            ✅ Gilt
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btnReadyOff"
+                                            onClick={() => void handleVoteAnswer(false)}
+                                            disabled={voteBusyAttempt}
+                                            title="Antwort ablehnen"
+                                        >
+                                            ❌ Gilt nicht
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="hint">Du hast {passAttempt.myVote ? "✅ akzeptiert" : "❌ abgelehnt"}.</div>
+                                )}
+                                <div className="voteCounters">
+                                    <span className="voteCounter accept">✅ {passAttempt.attempt.accept_count}</span>
+                                    <span className="voteCounter reject">❌ {passAttempt.attempt.reject_count}</span>
+                                </div>
+                            </div>
+                        )
+                    ) : isMeHolder ? (
+                        // ─── Halter darf neue Antwort eingeben ───
+                        <div className="answerInputBox">
+                            <input
+                                type="text"
+                                className="input answerInput"
+                                value={answerDraft}
+                                onChange={(e) => setAnswerDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && !passBusy) {
+                                        e.preventDefault();
+                                        void handleAttemptPass();
+                                    }
+                                }}
+                                placeholder={`z.B. ${selectedTopic === "…" ? "deine Antwort" : "Antwort zu " + selectedTopic}`}
+                                maxLength={60}
+                                autoFocus
+                                autoComplete="off"
+                                spellCheck={false}
+                            />
+                            <button
+                                type="button"
+                                className="btn btnPrimary"
+                                onClick={() => void handleAttemptPass()}
+                                disabled={!!passDisabledReason || answerDraft.trim().length === 0}
+                                title={passDisabledReason ?? "Antwort senden"}
+                            >
+                                {passBusy ? "…" : "🥔 Antworten + Passen"}
                             </button>
                         </div>
                     ) : (
-                        <div className="hint">{iAmEliminated ? "Du schaust zu." : "Warte, bis du dran bist."}</div>
+                        <div className="hint">Warte, bis du dran bist.</div>
                     )}
+
+                    {/* Used-Answers: bisher genannte Antworten dieser Runde */}
+                    {lobby.used_answers && lobby.used_answers.length > 0 ? (
+                        <div className="usedAnswers" aria-label="Bisher genannte Antworten">
+                            <span className="usedAnswersLabel">Schon gesagt:</span>
+                            {lobby.used_answers.slice(-6).map((a, i) => (
+                                <span key={`${a}-${i}`} className="usedAnswerChip">{a}</span>
+                            ))}
+                            {lobby.used_answers.length > 6 ? (
+                                <span className="usedAnswerChip more">+{lobby.used_answers.length - 6}</span>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </div>
             </div>
 
@@ -1776,6 +1930,92 @@ export default function GamePage() {
           margin-top: 6px;
           font-weight: 850;
           opacity: .82;
+        }
+
+        /* Topic-Mechanik B */
+        .answerInputBox{
+          margin-top: 8px;
+          width: min(680px, 92vw);
+          display: flex;
+          gap: 10px;
+          flex-direction: column;
+        }
+        .answerInput{
+          font-size: clamp(18px, 2.4vw, 24px);
+          font-weight: 800;
+          padding: 14px 18px;
+          border-radius: 16px;
+          background: rgba(0,0,0,0.32);
+          border: 2px solid rgba(255,255,255,0.18);
+          color: white;
+          text-align: center;
+        }
+        .answerInput:focus{
+          outline: 3px solid rgba(255,214,10,0.7);
+          border-color: rgba(255,214,10,0.9);
+        }
+        .answerStatus,
+        .answerVote{
+          margin-top: 6px;
+          width: min(680px, 92vw);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 10px;
+        }
+        .answerStatusLabel{
+          font-weight: 850;
+          opacity: .8;
+          font-size: 14px;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+        }
+        .answerStatusValue{
+          font-size: clamp(22px, 3vw, 36px);
+          font-weight: 950;
+          text-shadow: 0 8px 28px rgba(0,0,0,0.36);
+        }
+        .voteCounters{
+          display: flex;
+          gap: 14px;
+          font-weight: 950;
+          font-size: 15px;
+        }
+        .voteCounter{
+          padding: 6px 14px;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.32);
+          border: 1px solid rgba(255,255,255,0.14);
+        }
+        .voteCounter.accept{ color: #34c759; }
+        .voteCounter.reject{ color: #ff453a; }
+
+        .usedAnswers{
+          margin-top: 10px;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 6px;
+          opacity: .78;
+        }
+        .usedAnswersLabel{
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          margin-right: 4px;
+          align-self: center;
+        }
+        .usedAnswerChip{
+          font-size: 12px;
+          font-weight: 800;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.10);
+          border: 1px solid rgba(255,255,255,0.14);
+        }
+        .usedAnswerChip.more{
+          opacity: .7;
         }
 
         .turnOverlay{
