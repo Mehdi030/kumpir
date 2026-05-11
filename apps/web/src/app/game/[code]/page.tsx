@@ -8,6 +8,7 @@ import { PlayerRing } from "@/components/game/PlayerRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
 import { usePassAttempt } from "@/hooks/usePassAttempt";
+import { useBotEngine } from "@/hooks/useBotEngine";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
@@ -20,8 +21,10 @@ type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" |
 
 type LobbyState = {
     id: string;
+    code: string;
 
     phase: LobbyPhase;
+    host_player_id: string | null;
     holder_player_id: string | null;
 
     explode_at: string | null;
@@ -56,6 +59,8 @@ type Player = {
     name: string;
     is_alive: boolean;
     ready?: boolean;
+    is_bot?: boolean;
+    status?: string;
 
     // optional stats (safe)
     last_pass_at?: string | null;
@@ -364,6 +369,31 @@ export default function GamePage() {
     );
 
     // -----------------------------
+    // Bot-Engine — läuft NUR im Host-Browser, steuert alle is_bot Spieler
+    // -----------------------------
+    const isHost = !!mePlayerId && lobby?.host_player_id === mePlayerId;
+    useBotEngine(
+        isHost,
+        lobby
+            ? {
+                  id: lobby.id,
+                  code: lobby.code,
+                  phase: lobby.phase,
+                  host_player_id: lobby.host_player_id,
+                  holder_player_id: lobby.holder_player_id,
+                  topic_selected: lobby.topic_selected,
+                  topic_a: lobby.topic_a,
+                  topic_b: lobby.topic_b,
+                  current_attempt_id: lobby.current_attempt_id,
+                  used_answers: lobby.used_answers ?? [],
+              }
+            : null,
+        players,
+        mePlayerId,
+        passAttempt.attempt
+    );
+
+    // -----------------------------
     // Poll loop (fallback when realtime is offline)
     // -----------------------------
     useEffect(() => {
@@ -397,7 +427,9 @@ export default function GamePage() {
 
                 const nextLobby: LobbyState = {
                     id: String(raw.id ?? ""),
+                    code: String(raw.code ?? code),
                     phase: (raw.phase as LobbyPhase) ?? "waiting",
+                    host_player_id: (raw.host_player_id as string | null) ?? null,
                     holder_player_id: (raw.holder_player_id as string | null) ?? null,
 
                     explode_at: (raw.explode_at as string | null) ?? null,
@@ -468,6 +500,7 @@ export default function GamePage() {
                             "status",
                             "seat_index",
                             "ready",
+                            "is_bot",
                             "last_pass_at",
                             "pass_count",
                             "clutch_pass_count",

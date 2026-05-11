@@ -217,6 +217,53 @@ export default function LobbyPage() {
         }
     }, [amIHost, mePlayerId, starting, isRunning, code, showToast]);
 
+    const [botBusy, setBotBusy] = useState(false);
+
+    const addBot = useCallback(async () => {
+        if (!amIHost || !mePlayerId || !lobbyId) return;
+        if (botBusy) return;
+        setBotBusy(true);
+        try {
+            const supabase = getSupabaseClient();
+            // Random Bot-Name aus einer kleinen Liste, server-side wird unique seat vergeben
+            const names = ["Bot Anna", "Bot Ben", "Bot Cleo", "Bot Dino", "Bot Echo", "Bot Fips", "Bot Gala", "Bot Hugo", "Bot Iris", "Bot Jay"];
+            const taken = new Set(players.map((p) => p.name));
+            const free = names.find((n) => !taken.has(n)) ?? `Bot ${Math.floor(Math.random() * 999)}`;
+
+            const { error: rpcErr } = await supabase.rpc("rpc_add_bot", {
+                p_lobby_id: lobbyId,
+                p_me_player_id: mePlayerId,
+                p_bot_name: free,
+            });
+            if (rpcErr) {
+                showToast(`❌ ${rpcErr.message}`, 2400);
+            }
+        } catch (e: unknown) {
+            showToast(`❌ ${getErrorMessage(e)}`, 2400);
+        } finally {
+            setBotBusy(false);
+        }
+    }, [amIHost, mePlayerId, lobbyId, players, botBusy, showToast]);
+
+    const removeBot = useCallback(async (botPlayerId: string) => {
+        if (!amIHost || !mePlayerId || !lobbyId) return;
+        if (botBusy) return;
+        setBotBusy(true);
+        try {
+            const supabase = getSupabaseClient();
+            const { error: rpcErr } = await supabase.rpc("rpc_remove_bot", {
+                p_lobby_id: lobbyId,
+                p_me_player_id: mePlayerId,
+                p_bot_player_id: botPlayerId,
+            });
+            if (rpcErr) showToast(`❌ ${rpcErr.message}`, 2400);
+        } catch (e: unknown) {
+            showToast(`❌ ${getErrorMessage(e)}`, 2400);
+        } finally {
+            setBotBusy(false);
+        }
+    }, [amIHost, mePlayerId, lobbyId, botBusy, showToast]);
+
     const leaveLobby = useCallback(async () => {
         suppressRedirectRef.current = true;
 
@@ -402,7 +449,7 @@ export default function LobbyPage() {
                                             >
                                                 <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
                                                 <td style={{ padding: "10px 8px", fontWeight: 900 }}>
-                                                    {p.name} {isMe ? <span style={{ opacity: 0.6 }}>(du)</span> : null}
+                                                    {p.is_bot ? "🤖 " : ""}{p.name} {isMe ? <span style={{ opacity: 0.6 }}>(du)</span> : null}
                                                     {isHostRow ? (
                                                         <span
                                                             style={{
@@ -420,7 +467,21 @@ export default function LobbyPage() {
                                                     ) : null}
                                                 </td>
 
-                                                <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>{p.ready ? "✅ Bereit" : "⏳ nicht bereit"}</td>
+                                                <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>
+                                                    {p.is_bot && amIHost ? (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btnReadyOff btnSmall"
+                                                            style={{ marginRight: 8 }}
+                                                            onClick={() => void removeBot(p.player_id)}
+                                                            disabled={botBusy || isRunning}
+                                                            title="Bot entfernen"
+                                                        >
+                                                            👋 raus
+                                                        </button>
+                                                    ) : null}
+                                                    {p.ready ? "✅ Bereit" : "⏳ nicht bereit"}
+                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -436,10 +497,23 @@ export default function LobbyPage() {
                                 </table>
                             </div>
 
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
-                                <button type="button" className="btn btnSecondary btnSmall" onClick={() => void leaveLobby()} disabled={starting}>
-                                    ← Hauptmenü
-                                </button>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+                                <div style={{ display: "flex", gap: 8 }}>
+                                    <button type="button" className="btn btnSecondary btnSmall" onClick={() => void leaveLobby()} disabled={starting}>
+                                        ← Hauptmenü
+                                    </button>
+                                    {amIHost && !isRunning ? (
+                                        <button
+                                            type="button"
+                                            className="btn btnSecondary btnSmall"
+                                            onClick={() => void addBot()}
+                                            disabled={botBusy || players.length >= (lobby?.max_players ?? 8)}
+                                            title="Bot zur Lobby hinzufügen (Practice-Mode)"
+                                        >
+                                            🤖 +Bot
+                                        </button>
+                                    ) : null}
+                                </div>
 
                                 <button
                                     type="button"
