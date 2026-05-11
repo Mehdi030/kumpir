@@ -39,7 +39,12 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
 
     return (
         <div className={variant === "header" ? "seg" : "actionsRow"}>
-            <span className={variant === "header" ? "segBtn segActive" : "btn btnSecondary"}>{user.email}</span>
+            <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href="/achievements" title="Achievements & Stats">
+                🏆
+            </Link>
+            <span className={variant === "header" ? "segBtn segActive" : "btn btnSecondary"} title={user.email ?? ""}>
+                {user.email}
+            </span>
             <button type="button" className={variant === "header" ? "segBtn" : "btn btnSecondary"} onClick={logout}>
                 Abmelden
             </button>
