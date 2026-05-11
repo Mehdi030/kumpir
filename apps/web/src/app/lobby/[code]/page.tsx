@@ -8,6 +8,8 @@ import { useParams, useRouter } from "next/navigation";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
+import { useSavedLobbies } from "@/hooks/useSavedLobbies";
+import { useAuth } from "@/components/AuthProvider";
 import { Spinner } from "@/components/Spinner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
@@ -50,6 +52,9 @@ export default function LobbyPage() {
 
     const code = String(params.code ?? "").toUpperCase();
     const { mePlayerId, meName } = usePlayerIdentity();
+    const { user } = useAuth();
+    const savedLobbies = useSavedLobbies(user?.id ?? null);
+    const isSaved = useMemo(() => savedLobbies.rows.some((s) => s.lobby_code === code), [savedLobbies.rows, code]);
 
     const suppressRedirectRef = useRef(false);
 
@@ -391,6 +396,27 @@ export default function LobbyPage() {
                                         </div>
                                     ) : null}
                                 </div>
+
+                                {user ? (
+                                    <button
+                                        type="button"
+                                        className="btn btnSecondary btnSmall"
+                                        onClick={async () => {
+                                            if (isSaved) {
+                                                await savedLobbies.unsave(code);
+                                                showToast("🗑️ Aus gespeicherten Lobbies entfernt", 1500);
+                                            } else {
+                                                const nick = window.prompt("Spitzname für diese Lobby?", `Lobby ${code}`);
+                                                if (!nick) return;
+                                                await savedLobbies.save(code, nick);
+                                                showToast("💾 Lobby gespeichert", 1500);
+                                            }
+                                        }}
+                                        title={isSaved ? "Lobby ist gespeichert" : "Diese Lobby speichern"}
+                                    >
+                                        {isSaved ? "💾 Gespeichert" : "🔖 Merken"}
+                                    </button>
+                                ) : null}
 
                                 {amIHost ? (
                                     <Link
