@@ -216,7 +216,16 @@ export default function LobbyPage() {
             // ✅ No immediate navigation; DB phase triggers redirect
             showToast("✅ Spiel startet…", 900);
         } catch (e: unknown) {
-            showToast(`❌ ${getErrorMessage(e)}`, 2500);
+            const msg = getErrorMessage(e);
+            // Race-Condition: Phase wechselt zu topic_vote → der useEffect oben
+            // navigiert zur Game-Page → die offene Server-Action-Response wird
+            // gecancelt → "Failed to fetch". Aber RPC ist eh durch (alle anderen
+            // sind schon im Spiel). Silent-fail mit freundlichem Toast.
+            if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+                showToast("⏳ Starte…", 1200);
+                return;
+            }
+            showToast(`❌ ${msg}`, 2500);
         } finally {
             setStarting(false);
         }
