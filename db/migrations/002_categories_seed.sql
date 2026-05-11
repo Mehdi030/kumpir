@@ -1,107 +1,125 @@
 -- ============================================================
--- Migration 002: Topic-Kategorien (Seed)
+-- Migration 002: Topic-Kategorien (Seed in EXISTIERENDE topic_pool)
 -- ============================================================
--- Legt die Tabelle `topic_categories` an und füllt sie mit dem
--- Inhalt aus `game-logic/content/questions_de.json`.
+-- Deine DB hat schon eine `topic_pool`-Tabelle. Wir nutzen diese
+-- statt eine neue topic_categories anzulegen. Wenn du sie noch leer
+-- hast, wird sie hier mit 49 deutschen Kategorien gefüllt.
 --
--- `rpc_begin_topic_vote` muss angepasst werden, damit topic_a und
--- topic_b zufällig aus dieser Tabelle gezogen werden:
+-- Idempotent: kann erneut ausgeführt werden, ohne Duplikate.
 --
---   SELECT label INTO v_a FROM topic_categories ORDER BY random() LIMIT 1;
---   SELECT label INTO v_b FROM topic_categories
---     WHERE label <> v_a ORDER BY random() LIMIT 1;
---
--- Wenn `questions_de.json` aktualisiert wird, muss diese Migration
--- als eigene Folge-Migration neu geseedet werden (UPSERT siehe unten).
+-- 🔎 Hinweis: Es gibt in deiner DB AUCH eine zweite Tabelle `topics`
+--    (mit `name` statt `text`). Sobald du mir die Funktions-Definitionen
+--    schickst (Query 2 aus HOW_TO_DUMP.md), klären wir welche der beiden
+--    von rpc_begin_topic_vote genutzt wird, und die andere kann weg.
 -- ============================================================
 
 BEGIN;
 
--- ------------------------------------------------------------
--- Tabelle: topic_categories
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.topic_categories (
-    id          TEXT PRIMARY KEY,            -- z.B. 'automarken'
-    label       TEXT NOT NULL,               -- z.B. 'Automarken'
-    example     TEXT,                        -- z.B. 'BMW'
-    locale      TEXT NOT NULL DEFAULT 'de',
-    enabled     BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- Beispiel-Spalte ergänzen, falls noch nicht vorhanden
+ALTER TABLE public.topic_pool
+    ADD COLUMN IF NOT EXISTS example TEXT;
+
+
+-- Idempotenter Seed: nur einfügen, wenn die Kategorie noch nicht da ist
+-- (LOWER-Vergleich, damit "Automarken" nicht zweimal landet).
+INSERT INTO public.topic_pool (text, example, active)
+SELECT v.text, v.example, TRUE
+FROM (VALUES
+    ('Automarken',             'BMW'),
+    ('Tiere in Afrika',        'Löwe'),
+    ('Haustiere',              'Hund'),
+    ('Fußball-Vereine',        'Bayern München'),
+    ('Länder in Europa',       'Frankreich'),
+    ('Hauptstädte',            'Berlin'),
+    ('Obst',                   'Apfel'),
+    ('Gemüse',                 'Karotte'),
+    ('Farben',                 'Blau'),
+    ('Filme',                  'Inception'),
+    ('Serien',                 'Breaking Bad'),
+    ('Musiker/Bands',          'Coldplay'),
+    ('Schauspieler',           'Tom Hanks'),
+    ('Berufe',                 'Arzt'),
+    ('Körperteile',            'Knie'),
+    ('Dinge in der Küche',     'Messer'),
+    ('Dinge im Supermarkt',    'Brot'),
+    ('Getränke',               'Cola'),
+    ('Alkoholische Getränke',  'Bier'),
+    ('Fast Food',              'Pizza'),
+    ('Schulfächer',            'Mathe'),
+    ('Sportarten',             'Tennis'),
+    ('Musikinstrumente',       'Gitarre'),
+    ('Bundesländer',           'Bayern'),
+    ('Deutsche Städte',        'Hamburg'),
+    ('Großstädte weltweit',    'Tokio'),
+    ('Flüsse',                 'Rhein'),
+    ('Berge',                  'Mount Everest'),
+    ('Meere und Ozeane',       'Atlantik'),
+    ('Comic-Helden',           'Spider-Man'),
+    ('Disney-Filme',           'Frozen'),
+    ('Videospiele',            'Mario Kart'),
+    ('Fast-Food-Ketten',       'McDonalds'),
+    ('Kleidungsstücke',        'Hose'),
+    ('Schuh-Arten',            'Sneaker'),
+    ('Wetter-Phänomene',       'Regen'),
+    ('Blumen',                 'Rose'),
+    ('Bäume',                  'Eiche'),
+    ('Fahrzeuge',              'Bus'),
+    ('Möbelstücke',            'Sofa'),
+    ('Elektrogeräte',          'Toaster'),
+    ('Smartphone-Hersteller',  'Samsung'),
+    ('Soziale Medien',         'Instagram'),
+    ('Bekannte YouTuber',      'MrBeast'),
+    ('Kleidungsmarken',        'Nike'),
+    ('Elektronik-Marken',      'Apple'),
+    ('Deutsche Rapper',        'Capital Bra'),
+    ('Kinderspiele',           'Verstecken'),
+    ('Brettspiele',            'Monopoly'),
+    ('Handwerks-Berufe',       'Tischler')
+) AS v(text, example)
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.topic_pool tp
+    WHERE LOWER(tp.text) = LOWER(v.text)
 );
 
-CREATE INDEX IF NOT EXISTS idx_topic_categories_enabled
-    ON public.topic_categories (enabled, locale);
+
+-- Beispiel von bestehenden Reihen ohne example nachpflegen
+UPDATE public.topic_pool tp
+SET example = v.example
+FROM (VALUES
+    ('Automarken',             'BMW'),
+    ('Tiere in Afrika',        'Löwe'),
+    ('Haustiere',              'Hund')
+    -- … (Liste oben kann der User bei Bedarf erweitern)
+) AS v(text, example)
+WHERE LOWER(tp.text) = LOWER(v.text)
+  AND tp.example IS NULL;
 
 
--- ------------------------------------------------------------
--- Seed (UPSERT — idempotent, kann sicher erneut ausgeführt werden)
--- ------------------------------------------------------------
-INSERT INTO public.topic_categories (id, label, example, locale, enabled) VALUES
-    ('automarken',           'Automarken',                'BMW',             'de', TRUE),
-    ('tiere_afrika',         'Tiere in Afrika',           'Löwe',            'de', TRUE),
-    ('haustiere',            'Haustiere',                 'Hund',            'de', TRUE),
-    ('fussball_vereine',     'Fußball-Vereine',           'Bayern München',  'de', TRUE),
-    ('laender_europa',       'Länder in Europa',          'Frankreich',      'de', TRUE),
-    ('hauptstaedte',         'Hauptstädte',               'Berlin',          'de', TRUE),
-    ('obst',                 'Obst',                      'Apfel',           'de', TRUE),
-    ('gemuese',              'Gemüse',                    'Karotte',         'de', TRUE),
-    ('farben',               'Farben',                    'Blau',            'de', TRUE),
-    ('filme',                'Filme',                     'Inception',       'de', TRUE),
-    ('serien',               'Serien',                    'Breaking Bad',    'de', TRUE),
-    ('musiker',              'Musiker/Bands',             'Coldplay',        'de', TRUE),
-    ('schauspieler',         'Schauspieler',              'Tom Hanks',       'de', TRUE),
-    ('berufe',               'Berufe',                    'Arzt',            'de', TRUE),
-    ('koerperteile',         'Körperteile',               'Knie',            'de', TRUE),
-    ('kueche',               'Dinge in der Küche',        'Messer',          'de', TRUE),
-    ('supermarkt',           'Dinge im Supermarkt',       'Brot',            'de', TRUE),
-    ('getraenke',            'Getränke',                  'Cola',            'de', TRUE),
-    ('alkohol',              'Alkoholische Getränke',     'Bier',            'de', TRUE),
-    ('fastfood',             'Fast Food',                 'Pizza',           'de', TRUE),
-    ('schule',               'Schulfächer',               'Mathe',           'de', TRUE),
-    ('sportarten',           'Sportarten',                'Tennis',          'de', TRUE),
-    ('instrumente',          'Musikinstrumente',          'Gitarre',         'de', TRUE),
-    ('bundeslaender',        'Bundesländer',              'Bayern',          'de', TRUE),
-    ('deutsche_staedte',     'Deutsche Städte',           'Hamburg',         'de', TRUE),
-    ('weltstaedte',          'Großstädte weltweit',       'Tokio',           'de', TRUE),
-    ('fluesse',              'Flüsse',                    'Rhein',           'de', TRUE),
-    ('berge',                'Berge',                     'Mount Everest',   'de', TRUE),
-    ('meere',                'Meere und Ozeane',          'Atlantik',        'de', TRUE),
-    ('comic_helden',         'Comic-Helden',              'Spider-Man',      'de', TRUE),
-    ('disney_filme',         'Disney-Filme',              'Frozen',          'de', TRUE),
-    ('videospiele',          'Videospiele',               'Mario Kart',      'de', TRUE),
-    ('fast_food_ketten',     'Fast-Food-Ketten',          'McDonalds',       'de', TRUE),
-    ('kleidung',             'Kleidungsstücke',           'Hose',            'de', TRUE),
-    ('schuhe',               'Schuh-Arten',               'Sneaker',         'de', TRUE),
-    ('wetter',               'Wetter-Phänomene',          'Regen',           'de', TRUE),
-    ('blumen',               'Blumen',                    'Rose',            'de', TRUE),
-    ('baeume',               'Bäume',                     'Eiche',           'de', TRUE),
-    ('fahrzeuge',            'Fahrzeuge',                 'Bus',             'de', TRUE),
-    ('moebel',               'Möbelstücke',               'Sofa',            'de', TRUE),
-    ('elektrogeraete',       'Elektrogeräte',             'Toaster',         'de', TRUE),
-    ('smartphones',          'Smartphone-Hersteller',     'Samsung',         'de', TRUE),
-    ('soziale_medien',       'Soziale Medien',            'Instagram',       'de', TRUE),
-    ('bekannte_youtuber',    'Bekannte YouTuber',         'MrBeast',         'de', TRUE),
-    ('marken_kleidung',      'Kleidungsmarken',           'Nike',            'de', TRUE),
-    ('marken_elektronik',    'Elektronik-Marken',         'Apple',           'de', TRUE),
-    ('deutsche_rapper',      'Deutsche Rapper',           'Capital Bra',     'de', TRUE),
-    ('kinder_spiele',        'Kinderspiele',              'Verstecken',      'de', TRUE),
-    ('brettspiele',          'Brettspiele',               'Monopoly',        'de', TRUE),
-    ('berufe_handwerk',      'Handwerks-Berufe',          'Tischler',        'de', TRUE)
-ON CONFLICT (id) DO UPDATE
-    SET label = EXCLUDED.label,
-        example = EXCLUDED.example,
-        enabled = EXCLUDED.enabled;
-
-
--- ------------------------------------------------------------
--- RLS
--- ------------------------------------------------------------
-ALTER TABLE public.topic_categories ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "topic_categories_read_all"
-    ON public.topic_categories
-    FOR SELECT
-    USING (TRUE);
+-- ============================================================
+-- Beispiel-Patch für rpc_begin_topic_vote
+-- ============================================================
+-- Zwei verschiedene aktive Kategorien zufällig wählen:
+--
+--   WITH picks AS (
+--     SELECT text FROM public.topic_pool
+--      WHERE active = TRUE
+--      ORDER BY random()
+--      LIMIT 2
+--   )
+--   SELECT
+--     (array_agg(text))[1] AS topic_a,
+--     (array_agg(text))[2] AS topic_b
+--   INTO v_a, v_b
+--   FROM picks;
+--
+--   UPDATE lobbies
+--   SET topic_a = v_a,
+--       topic_b = v_b,
+--       phase = 'topic_vote',
+--       topic_vote_started_at = NOW(),
+--       topic_vote_ends_at = NOW() + interval '15 seconds'
+--   WHERE id = p_lobby_id;
+-- ============================================================
 
 
 COMMIT;

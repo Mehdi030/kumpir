@@ -2,7 +2,7 @@
 
 Hier liegt das **Datenbank-Schema** als Code (SQL).
 
-> ⚠️ **Wichtig:** Die Dateien in `schema.reconstructed.sql` und `functions/` sind eine **Rekonstruktion** aus den RPC-Aufrufen im Frontend-Code. Sie sind **nicht** automatisch deine echte Supabase-DB. Bitte einmalig dein echtes Schema dumpen (siehe unten) und meine Rekonstruktion damit überschreiben.
+> ✅ **Stand 2026-05-11:** `schema.sql` enthält das echte Schema (User-Dump vom Supabase-Dashboard). Funktionen und Policies fehlen noch — siehe HOW_TO_DUMP.md.
 
 ---
 
@@ -11,15 +11,14 @@ Hier liegt das **Datenbank-Schema** als Code (SQL).
 ```
 db/
 ├── README.md                         ← diese Datei
-├── schema.reconstructed.sql          ← Tabellen + Indexes (REKONSTRUIERT, bitte ersetzen)
-├── policies.reconstructed.sql        ← RLS-Policies (REKONSTRUIERT, bitte ersetzen)
-├── seed.sql                          ← optional: Test-Daten
-├── functions/                        ← eine .sql pro RPC
-│   ├── rpc_create_lobby.sql
-│   ├── rpc_join_lobby.sql
-│   ├── ...
+├── HOW_TO_DUMP.md                    ← Anleitung um echtes Schema/Funktionen/Policies zu exportieren
+├── schema.sql                        ← echtes Tabellen-Schema (User-Dump 2026-05-11)
+├── functions.sql                     ← TODO: echte RPC-Funktionen (Query 2 ausstehend)
+├── policies.sql                      ← TODO: echte RLS-Policies (Query 3 ausstehend)
 └── migrations/                       ← neue Schema-Änderungen, chronologisch nummeriert
-    └── 001_topic_validation.sql      ← Etappe 2: Topic-Mechanik B (Antwort sagen + validieren)
+    ├── 001_topic_validation.sql      ← Topic-Mechanik B (Antwort sagen + validieren)
+    ├── 002_categories_seed.sql       ← 49 Kategorien für topic_pool
+    └── 003_teleport_reverse_modes.sql ← Helper für Teleport/Reverse Modi
 ```
 
 ---

@@ -374,30 +374,13 @@ export default function GamePage() {
             inFlightRef.current = true;
 
             try {
+                // select("*") statt fester Spaltenliste: macht den Code robust
+                // gegen fehlende Spalten (Migration 001 nicht ausgeführt →
+                // current_attempt_id / used_answers existieren noch nicht in DB).
+                // Werden später per Optional-Access behandelt.
                 const lobbyRes = await supabase
                     .from("lobbies")
-                    .select(
-                        [
-                            "id",
-                            "phase",
-                            "holder_player_id",
-                            "explode_at",
-                            "last_activity_at",
-                            "run_started_at",
-                            "round_number",
-                            "last_loser_player_id",
-                            "topic_a",
-                            "topic_b",
-                            "topic_selected",
-                            "topic_vote_ends_at",
-                            "countdown_started_at",
-                            "countdown_ends_at",
-                            "topic_tie_choices",
-                            "topic_tie_pick",
-                            "current_attempt_id",
-                            "used_answers",
-                        ].join(",")
-                    )
+                    .select("*")
                     .eq("code", code)
                     .single();
 
