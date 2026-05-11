@@ -277,9 +277,11 @@ $$;
 -- RLS für die neuen Tabellen
 -- ------------------------------------------------------------
 ALTER TABLE public.pass_attempts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "pass_attempts_read_all" ON public.pass_attempts;
 CREATE POLICY "pass_attempts_read_all" ON public.pass_attempts FOR SELECT USING (TRUE);
 
 ALTER TABLE public.pass_attempt_votes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "pass_attempt_votes_read_all" ON public.pass_attempt_votes;
 CREATE POLICY "pass_attempt_votes_read_all" ON public.pass_attempt_votes FOR SELECT USING (TRUE);
 
 
