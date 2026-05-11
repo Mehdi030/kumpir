@@ -7,8 +7,8 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
-import { usePassAttempt } from "@/hooks/usePassAttempt";
 import { useBotEngine } from "@/hooks/useBotEngine";
+import { useRecentPass } from "@/hooks/useRecentPass";
 import { useNewAchievements } from "@/hooks/useNewAchievements";
 import { useAuth } from "@/components/AuthProvider";
 import { AchievementToastPortal } from "@/components/AchievementToastPortal";
@@ -54,9 +54,14 @@ type LobbyState = {
     topic_tie_choices: number[] | null;
     topic_tie_pick: number | null;
 
-    // Topic-Mechanik B: Antwort-Validierung
+    // Topic-Mechanik B: Antwort-Validierung (legacy)
     current_attempt_id: string | null;
     used_answers: string[];
+
+    // Schnell-Pass + Ermahnung (Migration 010)
+    pass_counter: number;
+    last_pass_target_id: string | null;
+    last_pass_at: string | null;
 };
 
 type Player = {
@@ -74,6 +79,7 @@ type Player = {
     fastest_pass_ms?: number | null;
     total_hold_ms?: number;
     survival_streak?: number;
+    warnings_received?: number;
 };
 
 type VoteCounts = { a: number; b: number; r: number };
@@ -159,9 +165,7 @@ export default function GamePage() {
     const { toasts, pushToast } = useToastStack({ maxVisible: 3 });
     const [passBusy, setPassBusy] = useState(false);
 
-    // Topic-Mechanik B: Antwort-Eingabe + Validierung
-    const [answerDraft, setAnswerDraft] = useState("");
-    const [voteBusyAttempt, setVoteBusyAttempt] = useState(false);
+    // (Legacy Topic-B States entfernt — neue Schnell-Pass-Mechanik braucht sie nicht)
 
     // Motion
     const [reduceMotion, setReduceMotion] = useState(false);
@@ -326,30 +330,24 @@ export default function GamePage() {
         [supabase]
     );
 
-    // Note: direct rpc_pass_potato is no longer called from the client — the
-    // server-side _finalize_attempt_accept triggers it once the answer has been
-    // validated by the other players (Topic-Mechanik B).
-
-    // Topic-Mechanik B: Halter sagt seine Antwort und startet einen Validierungs-Versuch.
-    const rpcAttemptPass = useCallback(
-        async (codeUpper: string, playerId: string, answer: string) => {
-            const { error } = await supabase.rpc("rpc_attempt_pass", {
+    // Schnell-Pass: Halter klickt Pass → Kartoffel direkt weiter (Antwort mündlich)
+    const rpcPassPotato = useCallback(
+        async (codeUpper: string, playerId: string) => {
+            const { error } = await supabase.rpc("rpc_pass_potato", {
                 p_code: codeUpper,
                 p_player_id: playerId,
-                p_answer: answer,
             });
             return error;
         },
         [supabase]
     );
 
-    // Topic-Mechanik B: Mitspieler stimmt ab, ob die Antwort gilt.
-    const rpcVoteAnswer = useCallback(
-        async (attemptId: string, voterId: string, accept: boolean) => {
-            const { error } = await supabase.rpc("rpc_vote_answer", {
-                p_attempt_id: attemptId,
-                p_voter_id: voterId,
-                p_accept: accept,
+    // Ermahnung: andere können den letzten Halter ermahnen (5s Fenster)
+    const rpcWarnPlayer = useCallback(
+        async (codeUpper: string, warnerPlayerId: string) => {
+            const { error } = await supabase.rpc("rpc_warn_player", {
+                p_code: codeUpper,
+                p_warner_player_id: warnerPlayerId,
             });
             return error;
         },
@@ -366,13 +364,13 @@ export default function GamePage() {
     const realtimeStatus = useLobbyRealtime(lobby?.id ?? null, reloadFromRealtime);
 
     // -----------------------------
-    // Topic-Mechanik B: aktueller Pass-Versuch + Vote-Status
+    // Schnell-Pass + Ermahnen: 5s Window nach jedem Pass
     // -----------------------------
-    const passAttempt = usePassAttempt(
-        lobby?.id ?? null,
-        lobby?.current_attempt_id ?? null,
-        mePlayerId
-    );
+    const recentPass = useRecentPass({
+        lastPassTargetId: lobby?.last_pass_target_id ?? null,
+        lastPassAt: lobby?.last_pass_at ?? null,
+        passCounter: lobby?.pass_counter ?? 0,
+    });
 
     // -----------------------------
     // Achievement-Toast — beobachtet neue Unlocks beim Spielende
@@ -399,13 +397,13 @@ export default function GamePage() {
                   topic_selected: lobby.topic_selected,
                   topic_a: lobby.topic_a,
                   topic_b: lobby.topic_b,
-                  current_attempt_id: lobby.current_attempt_id,
-                  used_answers: lobby.used_answers ?? [],
+                  last_pass_target_id: lobby.last_pass_target_id,
+                  last_pass_at: lobby.last_pass_at,
+                  pass_counter: lobby.pass_counter,
               }
             : null,
         players,
-        mePlayerId,
-        passAttempt.attempt
+        mePlayerId
     );
 
     // -----------------------------
@@ -468,6 +466,10 @@ export default function GamePage() {
 
                     current_attempt_id: (raw.current_attempt_id as string | null) ?? null,
                     used_answers: (raw.used_answers as string[] | null) ?? [],
+
+                    pass_counter: Number(raw.pass_counter ?? 0),
+                    last_pass_target_id: (raw.last_pass_target_id as string | null) ?? null,
+                    last_pass_at: (raw.last_pass_at as string | null) ?? null,
                 };
 
                 // Post-round loser toast (once)
@@ -528,6 +530,7 @@ export default function GamePage() {
                             "fastest_pass_ms",
                             "total_hold_ms",
                             "survival_streak",
+                            "warnings_received",
                         ].join(",")
                     )
                     .eq("lobby_id", nextLobby.id)
@@ -772,57 +775,50 @@ export default function GamePage() {
         [mePlayerId, lobby, voteBusy, myVote, supabase, showToast]
     );
 
-    // Topic-Mechanik B: Halter sagt seine Antwort → triggert Validierungs-Voting.
-    const handleAttemptPass = useCallback(async () => {
+    // Schnell-Pass: Halter klickt → Kartoffel direkt weiter, kein Tippen, kein Blockieren
+    const handlePass = useCallback(async () => {
         if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
         if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
         if (iAmEliminated) return showToast("💀 Du bist raus", 1400);
         if (!isMeHolder) return;
         if (passBusy) return;
 
-        const clean = answerDraft.trim();
-        if (!clean) return showToast("✍️ Antwort eingeben", 1400);
-        if (clean.length > 60) return showToast("Antwort zu lang (max 60)", 1800);
-
-        const used = (lobby.used_answers ?? []).map((a) => a.toLowerCase());
-        if (used.includes(clean.toLowerCase())) {
-            return showToast("⚠️ Schon gesagt — andere Antwort probieren", 2000);
-        }
-
         setPassBusy(true);
         try {
-            const err = await rpcAttemptPass(code, mePlayerId, clean);
+            const err = await rpcPassPotato(code, mePlayerId);
             if (err) return showToast(`❌ ${err.message}`, 2400);
-            setAnswerDraft("");
-            showToast("⏳ Wird geprüft …", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
             setPassBusy(false);
         }
-    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, answerDraft, rpcAttemptPass, showToast]);
+    }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, rpcPassPotato, showToast]);
 
-    // Topic-Mechanik B: Mitspieler stimmt ab, ob die Antwort gilt.
-    const handleVoteAnswer = useCallback(
-        async (accept: boolean) => {
-            if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
-            if (!passAttempt.attempt) return;
-            if (passAttempt.attempt.holder_player_id === mePlayerId) return;
-            if (passAttempt.myVote !== null) return showToast("Du hast schon abgestimmt", 1400);
-            if (voteBusyAttempt) return;
+    // Ermahnung: stilles Voting auf den letzten Pass (5s Window)
+    const [warnBusy, setWarnBusy] = useState(false);
+    const handleWarn = useCallback(async () => {
+        if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
+        if (!lobby || lobby.phase !== "running") return;
+        if (warnBusy) return;
 
-            setVoteBusyAttempt(true);
-            try {
-                const err = await rpcVoteAnswer(passAttempt.attempt.id, mePlayerId, accept);
-                if (err) return showToast(`❌ ${err.message}`, 2400);
-            } catch (e: unknown) {
-                showToast(`❌ ${getErrorMessage(e)}`, 2400);
-            } finally {
-                setVoteBusyAttempt(false);
+        setWarnBusy(true);
+        try {
+            const err = await rpcWarnPlayer(code, mePlayerId);
+            if (err) {
+                const m = err.message;
+                if (m.includes("warning_window_expired")) showToast("⏱️ Zu spät", 1200);
+                else if (m.includes("cannot_warn_self")) showToast("Dich selbst? 😄", 1400);
+                else if (m.includes("warner_not_active")) showToast("Du musst lebendig sein", 1400);
+                else showToast(`❌ ${m}`, 2000);
+                return;
             }
-        },
-        [mePlayerId, passAttempt, voteBusyAttempt, rpcVoteAnswer, showToast]
-    );
+            showToast("⚠️ Ermahnt", 800);
+        } catch (e: unknown) {
+            showToast(`❌ ${getErrorMessage(e)}`, 2000);
+        } finally {
+            setWarnBusy(false);
+        }
+    }, [mePlayerId, lobby, warnBusy, code, rpcWarnPlayer, showToast]);
 
     // Rematch handler (also bound to "R" key)
     const handleRematch = useCallback(async () => {
@@ -865,8 +861,22 @@ export default function GamePage() {
                 return;
             }
 
-            // Running: Space ist deaktiviert (Halter muss Antwort eingeben).
-            // Enter im Antwort-Input löst handleAttemptPass aus — siehe Running-UI.
+            // Running: Space passt (Halter sagt mündlich, klickt Pass)
+            if (lobby.phase === "running" && ev.code === "Space") {
+                if (!isMeHolder) return;
+                ev.preventDefault();
+                void handlePass();
+                return;
+            }
+            // Optional: 'E'-Taste ermahnt (nur wenn 5s-Fenster offen + nicht Halter)
+            if (lobby.phase === "running" && (ev.key === "e" || ev.key === "E")) {
+                if (isMeHolder) return;
+                if (!recentPass.targetId) return;
+                if (recentPass.targetId === mePlayerId) return;
+                ev.preventDefault();
+                void handleWarn();
+                return;
+            }
 
             // Finished: R triggers rematch
             if (lobby.phase === "finished" && (ev.key === "r" || ev.key === "R")) {
@@ -878,7 +888,7 @@ export default function GamePage() {
 
         window.addEventListener("keydown", onKeyDown, { passive: false });
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [lobby, vote, handleRematch]);
+    }, [lobby, vote, handleRematch, handlePass, handleWarn, isMeHolder, mePlayerId, recentPass.targetId]);
 
     // -----------------------------
     // UI: fatal / loading
@@ -1724,103 +1734,71 @@ export default function GamePage() {
                         </div>
                     </div>
 
-                    {/* Topic-Mechanik B: Antwort + Validierung */}
+                    {/* Schnell-Pass + Ermahnung (Migration 010) */}
                     {iAmEliminated ? (
                         <div className="hint">Du schaust zu.</div>
-                    ) : passAttempt.attempt ? (
-                        // ─── Es läuft gerade ein Validierungs-Versuch ───
-                        isMeHolder ? (
-                            <div className="answerStatus">
-                                <div className="answerStatusLabel">Deine Antwort wird geprüft</div>
-                                <div className="answerStatusValue">{`„${passAttempt.attempt.answer}"`}</div>
-                                <div className="voteCounters">
-                                    <span className="voteCounter accept">✅ {passAttempt.attempt.accept_count}</span>
-                                    <span className="voteCounter reject">❌ {passAttempt.attempt.reject_count}</span>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="answerVote">
-                                <div className="answerStatusLabel">{holderName} sagt:</div>
-                                <div className="answerStatusValue">{`„${passAttempt.attempt.answer}"`}</div>
-                                {passAttempt.myVote === null ? (
-                                    <div className="actions" style={{ gap: 12 }}>
-                                        <button
-                                            type="button"
-                                            className="btn btnReadyOn"
-                                            onClick={() => void handleVoteAnswer(true)}
-                                            disabled={voteBusyAttempt}
-                                            title="Antwort akzeptieren"
-                                        >
-                                            ✅ Gilt
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="btn btnReadyOff"
-                                            onClick={() => void handleVoteAnswer(false)}
-                                            disabled={voteBusyAttempt}
-                                            title="Antwort ablehnen"
-                                        >
-                                            ❌ Gilt nicht
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="hint">Du hast {passAttempt.myVote ? "✅ akzeptiert" : "❌ abgelehnt"}.</div>
-                                )}
-                                <div className="voteCounters">
-                                    <span className="voteCounter accept">✅ {passAttempt.attempt.accept_count}</span>
-                                    <span className="voteCounter reject">❌ {passAttempt.attempt.reject_count}</span>
-                                </div>
-                            </div>
-                        )
                     ) : isMeHolder ? (
-                        // ─── Halter darf neue Antwort eingeben ───
+                        // Halter: direkter Pass-Button (Antwort wird mündlich gesagt)
                         <div className="answerInputBox">
-                            <input
-                                type="text"
-                                className="input answerInput"
-                                value={answerDraft}
-                                onChange={(e) => setAnswerDraft(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter" && !passBusy) {
-                                        e.preventDefault();
-                                        void handleAttemptPass();
-                                    }
-                                }}
-                                placeholder={`z.B. ${selectedTopic === "…" ? "deine Antwort" : "Antwort zu " + selectedTopic}`}
-                                maxLength={60}
-                                autoComplete="off"
-                                autoCapitalize="none"
-                                autoCorrect="off"
-                                spellCheck={false}
-                                inputMode="text"
-                                enterKeyHint="send"
-                            />
                             <button
                                 type="button"
                                 className="btn btnPrimary"
-                                onClick={() => void handleAttemptPass()}
-                                disabled={!!passDisabledReason || answerDraft.trim().length === 0}
-                                title={passDisabledReason ?? "Antwort senden"}
+                                onClick={() => void handlePass()}
+                                disabled={!!passDisabledReason}
+                                style={{ fontSize: "clamp(18px, 2.4vw, 24px)", padding: "16px 24px" }}
+                                title={passDisabledReason ?? "Antwort laut sagen, dann passen"}
                             >
-                                {passBusy ? "…" : "🥔 Antworten + Passen"}
+                                {passBusy ? "…" : "🥔 Antwort sagen + Passen (Space)"}
                             </button>
+                            <div className="hint" style={{ marginTop: 6 }}>
+                                Sag deine Antwort zum Thema laut — dann klick (oder Leertaste).
+                            </div>
                         </div>
+                    ) : recentPass.targetId && recentPass.targetId !== mePlayerId ? (
+                        // Andere: 5-Sekunden-Fenster zum Ermahnen
+                        (() => {
+                            const prevHolder = players.find((p) => p.player_id === recentPass.targetId);
+                            const prevName = prevHolder?.name ?? "Spieler";
+                            return (
+                                <div className="answerInputBox">
+                                    <div className="answerStatusLabel">
+                                        {prevName} hat gepasst — gilt&apos;s?
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="btn btnReadyOff"
+                                        onClick={() => void handleWarn()}
+                                        disabled={warnBusy}
+                                        style={{ fontSize: 16, padding: "12px 20px" }}
+                                        title="Ermahnen falls Antwort Mist war (oder gar keine kam)"
+                                    >
+                                        ⚠️ Ermahnen · {recentPass.secondsLeft}s
+                                    </button>
+                                </div>
+                            );
+                        })()
                     ) : (
                         <div className="hint">Warte, bis du dran bist.</div>
                     )}
 
-                    {/* Used-Answers: bisher genannte Antworten dieser Runde */}
-                    {lobby.used_answers && lobby.used_answers.length > 0 ? (
-                        <div className="usedAnswers" aria-label="Bisher genannte Antworten">
-                            <span className="usedAnswersLabel">Schon gesagt:</span>
-                            {lobby.used_answers.slice(-6).map((a, i) => (
-                                <span key={`${a}-${i}`} className="usedAnswerChip">{a}</span>
-                            ))}
-                            {lobby.used_answers.length > 6 ? (
-                                <span className="usedAnswerChip more">+{lobby.used_answers.length - 6}</span>
-                            ) : null}
-                        </div>
-                    ) : null}
+                    {/* Mogel-Counter: wer wurde wie oft ermahnt */}
+                    {(() => {
+                        const ranked = players
+                            .filter((p) => (p.warnings_received ?? 0) > 0)
+                            .sort((a, b) => (b.warnings_received ?? 0) - (a.warnings_received ?? 0))
+                            .slice(0, 4);
+                        if (ranked.length === 0) return null;
+                        return (
+                            <div className="usedAnswers" aria-label="Mogel-Counter">
+                                <span className="usedAnswersLabel">⚠️ Ermahnt:</span>
+                                {ranked.map((p) => (
+                                    <span key={p.player_id} className="usedAnswerChip">
+                                        {p.name} ×{p.warnings_received}
+                                    </span>
+                                ))}
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 
