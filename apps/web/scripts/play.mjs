@@ -93,7 +93,8 @@ async function ensureEnv() {
         "# Auto-erzeugt von npm run play",
         `NEXT_PUBLIC_SUPABASE_URL=${url.replace(/\/$/, "")}`,
         `NEXT_PUBLIC_SUPABASE_ANON_KEY=${key}`,
-        "NEXT_PUBLIC_AUTH_DISABLED=1",
+        "# Auth opt-in: setze auf 1 für strikten Gast-Modus",
+        "NEXT_PUBLIC_AUTH_DISABLED=0",
         "",
     ].join("\n");
 

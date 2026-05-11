@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { AuthMini } from "@/components/AuthMini";
+
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
 export default function Home() {
     return (
@@ -26,8 +29,12 @@ export default function Home() {
                         <div className="metaLeft">
                             <span className="metaPill">👥 2–10 Spieler</span>
                         </div>
-                        <div className="metaRight">
-                            <span className="metaPill">v0 • lokal</span>
+                        <div className="metaRight" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            {AUTH_DISABLED ? (
+                                <span className="metaPill">v0 • Gast-Modus</span>
+                            ) : (
+                                <AuthMini nextPath="/host" variant="header" />
+                            )}
                         </div>
                     </div>
 

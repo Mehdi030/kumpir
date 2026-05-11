@@ -6,6 +6,7 @@ import { useMemo, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
+import { useAuth } from "@/components/AuthProvider";
 import { HostNotice } from "./HostNotice";
 
 type Privacy = "private" | "public";
@@ -87,6 +88,7 @@ function getErrorMessage(err: unknown): string {
 export default function HostPage() {
     const supabase = getSupabaseClient();
     const router = useRouter();
+    const { user } = useAuth();
 
     const [hostName, setHostName] = useState("");
     const [privacy, setPrivacy] = useState<Privacy>("private");
@@ -113,7 +115,7 @@ export default function HostPage() {
 
     const canCreate = isNameValid && !!roundSpeed && !!mode && !creating;
 
-    const onCreate = useCallback(async () => {
+    const onCreate = useCallback<() => Promise<void>>(async () => {
         setCreateError("");
         if (!canCreate) return;
         if (inFlightRef.current) return;
@@ -132,6 +134,7 @@ export default function HostPage() {
                 p_privacy: privacy,
                 p_max_players: maxPlayers,
                 p_round_seconds: roundSeconds,
+                p_user_id: user?.id ?? null,
             });
 
             if (error) {
@@ -158,6 +161,7 @@ export default function HostPage() {
                 p_code: code,
                 p_player_id: hostPlayerId,
                 p_name: cleanName,
+                p_user_id: user?.id ?? null,
             });
 
             if (ensure.error) {
@@ -172,7 +176,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, supabase, privacy, maxPlayers, router]);
+    }, [canCreate, hostName, roundSpeed, supabase, privacy, maxPlayers, router, user?.id]);
 
     return (
         <main className="container">

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
+import { useAuth } from "@/components/AuthProvider";
 
 function normalizeCode(input: string) {
     return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
@@ -48,6 +49,7 @@ function getErrorMessage(err: unknown): string {
 export default function JoinClient({ initialCode }: { initialCode: string }) {
     const supabase = getSupabaseClient();
     const router = useRouter();
+    const { user } = useAuth();
 
     const fixedCodeFromLink = normalizeCode(initialCode);
     const hasFixedCode = fixedCodeFromLink.length === 4;
@@ -134,6 +136,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 p_code: lobbyCode,
                 p_player_id: myPlayerId,
                 p_name: playerName,
+                p_user_id: user?.id ?? null,
             });
 
             if (rpcErr) {
