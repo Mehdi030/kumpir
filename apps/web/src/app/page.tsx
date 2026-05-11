@@ -3,13 +3,17 @@
 import Link from "next/link";
 import Image from "next/image";
 import { AuthMini } from "@/components/AuthMini";
+import { PublicLobbiesPanel } from "@/components/PublicLobbiesPanel";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
 export default function Home() {
     return (
         <main className="container">
-            <div className="landingWrap landingWrapDecor">
+            <div
+                className="landingWrap landingWrapDecor"
+                style={{ display: "flex", alignItems: "flex-start", gap: 20, justifyContent: "center", flexWrap: "wrap" }}
+            >
                 {/* Decor / Mascot – hangs over the card */}
                 <div className="potatoBg" aria-hidden="true">
                     <Image
@@ -81,6 +85,8 @@ export default function Home() {
 
                     <p className="trustLine">Kein Download · Kein Account · Startet in Sekunden</p>
                 </section>
+
+                <PublicLobbiesPanel />
             </div>
         </main>
     );

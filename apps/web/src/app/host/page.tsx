@@ -256,7 +256,9 @@ export default function HostPage() {
                                 <div className="pillCard">
                                     <div className="pillCardTop">
                                         <div className="pillCardTitle">Privatsphäre</div>
-                                        <div className="pillCardHint">Public später</div>
+                                        <div className="pillCardHint">
+                                            {privacy === "public" ? "Im Hauptmenü sichtbar" : "Nur per Code"}
+                                        </div>
                                     </div>
                                     <div className="pillSeg">
                                         <button
@@ -266,7 +268,12 @@ export default function HostPage() {
                                         >
                                             🔒 Privat
                                         </button>
-                                        <button type="button" className="pillSegBtn" disabled aria-disabled="true" title="Kommt später">
+                                        <button
+                                            type="button"
+                                            className={`pillSegBtn ${privacy === "public" ? "pillSegActive" : ""}`}
+                                            onClick={() => setPrivacy("public")}
+                                            title="Lobby erscheint öffentlich im Hauptmenü"
+                                        >
                                             🌐 Public
                                         </button>
                                     </div>
