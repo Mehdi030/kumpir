@@ -42,6 +42,9 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
             <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href="/achievements" title="Achievements & Stats">
                 🏆
             </Link>
+            <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href="/leaderboard" title="Leaderboard">
+                📊
+            </Link>
             <span className={variant === "header" ? "segBtn segActive" : "btn btnSecondary"} title={user.email ?? ""}>
                 {user.email}
             </span>

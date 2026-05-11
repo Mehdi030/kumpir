@@ -15,7 +15,13 @@ const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true })
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const supabase = useMemo(() => getSupabaseClient(), []);
+    // Lazy-init: nur clientseitig den Supabase-Client erzeugen, sonst crashen
+    // statisch generierte Pages beim Build (createBrowserClient ruft window-only API auf).
+    const supabase = useMemo(() => {
+        if (typeof window === "undefined") return null;
+        return getSupabaseClient();
+    }, []);
+
     const [session, setSession] = useState<Session | null>(null);
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(!AUTH_DISABLED);
@@ -23,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         // ✅ Auth aus: sofort fertig, keine Subscriptions
         if (AUTH_DISABLED) return;
+        if (!supabase) return;
 
         let alive = true;
 
