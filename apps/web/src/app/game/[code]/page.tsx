@@ -13,6 +13,7 @@ import { useNewAchievements } from "@/hooks/useNewAchievements";
 import { useAuth } from "@/components/AuthProvider";
 import { AchievementToastPortal } from "@/components/AchievementToastPortal";
 import { BackdropFx } from "@/components/game/BackdropFx";
+import { notify } from "@/lib/notifications";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
@@ -490,13 +491,19 @@ export default function GamePage() {
                     setHudPulseNonce(passNonceRef.current);
                 }
 
-                // “Your turn” overlay
+                // “Your turn” overlay + Browser-Notification wenn Tab im Hintergrund
                 if (mePlayerId && nextHolder === mePlayerId && prevHolder !== mePlayerId) {
                     const nonce = Date.now();
                     if (nonce - lastShownTurnNonceRef.current > 700) {
                         lastShownTurnNonceRef.current = nonce;
                         setTurnOverlay(true);
                         window.setTimeout(() => setTurnOverlay(false), 1700);
+
+                        notify(
+                            "🥔 Du bist dran!",
+                            `Antworten zu „${nextLobby.topic_selected ?? nextLobby.topic_a ?? "der Kategorie"}".`,
+                            { tag: `turn:${nextLobby.id}` }
+                        );
                     }
                 }
 

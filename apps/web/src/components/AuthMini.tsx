@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { NotifyToggle } from "@/components/NotifyToggle";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Props = {
@@ -27,6 +28,7 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     if (!user?.email) {
         return (
             <div className={variant === "header" ? "seg" : "actionsRow"}>
+                <NotifyToggle className={variant === "header" ? "segBtn" : "btn btnSecondary btnSmall"} />
                 <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href={loginHref}>
                     Anmelden
                 </Link>
@@ -39,6 +41,7 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
 
     return (
         <div className={variant === "header" ? "seg" : "actionsRow"}>
+            <NotifyToggle className={variant === "header" ? "segBtn" : "btn btnSecondary btnSmall"} />
             <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href="/achievements" title="Achievements & Stats">
                 🏆
             </Link>
