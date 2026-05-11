@@ -11,8 +11,8 @@ type ModeKey = "original" | "teleport" | "reverse";
 
 const MODES: Record<ModeKey, { label: string; icon: string; disabled?: boolean; comingSoon?: boolean }> = {
     original: { label: "Original", icon: "🥔" },
-    teleport: { label: "Teleport", icon: "🌀", disabled: true, comingSoon: true },
-    reverse: { label: "Reverse", icon: "🔁", disabled: true, comingSoon: true },
+    teleport: { label: "Teleport", icon: "🌀" },
+    reverse: { label: "Reverse", icon: "🔁" },
 };
 
 function getErrorMessage(e: unknown): string {

@@ -1801,9 +1801,12 @@ export default function GamePage() {
                                 }}
                                 placeholder={`z.B. ${selectedTopic === "…" ? "deine Antwort" : "Antwort zu " + selectedTopic}`}
                                 maxLength={60}
-                                autoFocus
                                 autoComplete="off"
+                                autoCapitalize="none"
+                                autoCorrect="off"
                                 spellCheck={false}
+                                inputMode="text"
+                                enterKeyHint="send"
                             />
                             <button
                                 type="button"

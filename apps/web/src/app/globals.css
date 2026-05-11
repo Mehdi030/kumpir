@@ -1400,3 +1400,62 @@ body::after{
     animation: holderPulse 1.2s ease-in-out infinite;
     pointer-events: none;
 }
+/* ===============================
+   MOBILE UX (Etappe 2)
+   =============================== */
+
+/* Bessere Touch-Targets + kein 300ms-Delay auf Tap */
+.btn,
+.pillStepBtn,
+.pillSegBtn,
+.pillIconBtn,
+.segBtn {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Minimum-Touch-Target-Größe nach Apple HIG */
+@media (hover: none) and (pointer: coarse) {
+    .btn,
+    .pillSegBtn,
+    .pillStepBtn {
+        min-height: 44px;
+    }
+    .btnSmall {
+        min-height: 40px;
+    }
+}
+
+/* Topic-Mechanik-B Vote-Buttons auf mobile: nebeneinander, gleiche Breite */
+@media (max-width: 480px) {
+    .answerInputBox,
+    .answerStatus,
+    .answerVote {
+        width: 96vw !important;
+    }
+    .answerStatusValue {
+        font-size: clamp(20px, 6vw, 28px) !important;
+        word-break: break-word;
+        padding: 0 8px;
+    }
+    /* Stacked layout for vote action buttons */
+    .answerVote .actions {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px !important;
+        width: 100%;
+    }
+    .answerVote .actions .btn {
+        width: 100%;
+    }
+    .usedAnswers {
+        font-size: 11px;
+    }
+}
+
+/* Verhindere iOS-Zoom auf Input-Focus (Schriftgröße ≥ 16px) */
+.input,
+.pillInput,
+.answerInput {
+    font-size: max(16px, 1rem);
+}

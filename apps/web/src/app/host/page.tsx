@@ -43,17 +43,13 @@ const MODES: Record<
     teleport: {
         label: "Teleport",
         icon: "🌀",
-        desc: "Die Kartoffel teleportiert sich in Intervallen zu einem zufälligen Spieler.",
-        comingSoon: true,
-        disabled: true,
+        desc: "Die Kartoffel springt bei jedem Pass zu einem zufälligen Spieler.",
         variant: "teleport",
     },
     reverse: {
         label: "Reverse",
         icon: "🔁",
         desc: "Die Richtung wechselt gelegentlich. Mehr Chaos, mehr Lacher.",
-        comingSoon: true,
-        disabled: true,
         variant: "reverse",
     },
 };
