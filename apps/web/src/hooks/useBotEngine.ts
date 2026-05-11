@@ -90,7 +90,11 @@ export function useBotEngine(
 
         // Bot ist Halter und KEIN offener Attempt → tippe Antwort
         if (holder && !lobby.current_attempt_id) {
-            const attemptKey = `${lobby.id}|${lobby.holder_player_id}|${(lobby.used_answers ?? []).length}`;
+            // Key enthält used_answers.length UND eine "retry-Anzahl" über die Zeit:
+            // bei rejected attempt verschwindet current_attempt_id wieder, used_answers
+            // bleibt aber gleich → wir würden sonst hängen. Erlauben einen Retry alle 3s.
+            const retryBucket = Math.floor(Date.now() / 3000);
+            const attemptKey = `${lobby.id}|${holder.player_id}|${(lobby.used_answers ?? []).length}|${retryBucket}`;
             if (seenAttemptStartRef.current === attemptKey) return;
             seenAttemptStartRef.current = attemptKey;
 

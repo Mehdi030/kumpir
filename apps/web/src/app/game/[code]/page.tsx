@@ -584,11 +584,22 @@ export default function GamePage() {
                     const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
                     const iAmHolderNow = nextLobby.holder_player_id === mePlayerId;
 
-                    // Keep backend tick logic as-is (server decides explosions, etc.)
-                    if (iAmHolderNow) {
-                        const explodeMs = Date.parse(nextLobby.explode_at);
-                        const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
-                        if (meAlive && due) void rpcTickGame(code);
+                    const explodeMs = Date.parse(nextLobby.explode_at);
+                    const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
+
+                    // Halter ruft tick selbst auf wenn Zeit um.
+                    if (iAmHolderNow && meAlive && due) {
+                        void rpcTickGame(code);
+                    }
+
+                    // Bot-Halter haben keinen eigenen Browser → der Host triggert
+                    // den Tick stellvertretend, wenn explode_at überschritten ist.
+                    const iAmHost = nextLobby.host_player_id === mePlayerId;
+                    if (iAmHost && due) {
+                        const holderRow = nextPlayers.find((p) => p.player_id === nextLobby.holder_player_id);
+                        if (holderRow?.is_bot && holderRow.is_alive) {
+                            void rpcTickGame(code);
+                        }
                     }
                 }
 
