@@ -9,6 +9,9 @@ import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
 import { usePassAttempt } from "@/hooks/usePassAttempt";
 import { useBotEngine } from "@/hooks/useBotEngine";
+import { useNewAchievements } from "@/hooks/useNewAchievements";
+import { useAuth } from "@/components/AuthProvider";
+import { AchievementToastPortal } from "@/components/AchievementToastPortal";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
@@ -131,6 +134,7 @@ export default function GamePage() {
     const code = String(params.code ?? "").toUpperCase();
 
     const { mePlayerId } = usePlayerIdentity();
+    const { user } = useAuth();
 
     const [lobby, setLobby] = useState<LobbyState | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
@@ -366,6 +370,15 @@ export default function GamePage() {
         lobby?.id ?? null,
         lobby?.current_attempt_id ?? null,
         mePlayerId
+    );
+
+    // -----------------------------
+    // Achievement-Toast — beobachtet neue Unlocks beim Spielende
+    // -----------------------------
+    const achievementTrigger = lobby?.phase === "finished" ? `${lobby?.id}:${lobby?.round_number ?? 0}` : null;
+    const { newOnes: newAchievements, dismiss: dismissAchievement } = useNewAchievements(
+        user?.id ?? null,
+        achievementTrigger
     );
 
     // -----------------------------
@@ -1183,6 +1196,7 @@ export default function GamePage() {
                         "radial-gradient(circle at 50% 88%, rgba(255,214,10,0.34) 0%, rgba(240,138,26,0.58) 40%, rgba(143,15,15,0.92) 100%)",
                 }}
             >
+                <AchievementToastPortal achievements={newAchievements} onDismiss={dismissAchievement} />
                 <Confetti active />
                 <div className="fxGrain" aria-hidden />
                 <div className="fxOrbs" aria-hidden>
