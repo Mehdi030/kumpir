@@ -12,6 +12,7 @@ import { useBotEngine } from "@/hooks/useBotEngine";
 import { useNewAchievements } from "@/hooks/useNewAchievements";
 import { useAuth } from "@/components/AuthProvider";
 import { AchievementToastPortal } from "@/components/AchievementToastPortal";
+import { BackdropFx } from "@/components/game/BackdropFx";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
@@ -1198,14 +1199,7 @@ export default function GamePage() {
             >
                 <AchievementToastPortal achievements={newAchievements} onDismiss={dismissAchievement} />
                 <Confetti active />
-                <div className="fxGrain" aria-hidden />
-                <div className="fxOrbs" aria-hidden>
-                    <span className="fxOrb o1" />
-                    <span className="fxOrb o2" />
-                    <span className="fxOrb o3" />
-                </div>
-                <div className="fxRays" aria-hidden />
-                <div className="fxVignette" aria-hidden />
+                <BackdropFx variant="warm" rays vignette />
 
                 <div style={{ width: "min(1180px, 96vw)", position: "relative", zIndex: 2 }}>
                     {/* HERO (Winner only) */}
@@ -1358,60 +1352,6 @@ export default function GamePage() {
                 </div>
 
                 <style>{`
-        .fxGrain{
-          position:absolute; inset:0;
-          background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
-          opacity:.10; mix-blend-mode: overlay; pointer-events:none;
-        }
-        .fxOrbs{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
-        .fxOrb{ position:absolute; border-radius:999px; filter: blur(24px); opacity:.75; mix-blend-mode: screen; }
-        .fxOrb.o1{
-          width:520px; height:520px; left:-140px; top:-140px;
-          background: radial-gradient(circle at 30% 30%, rgba(255,214,10,0.22), rgba(255,149,0,0.16), transparent 72%);
-          animation: orbFloat 9s ease-in-out infinite;
-        }
-        .fxOrb.o2{
-          width:420px; height:420px; right:-160px; top:30px;
-          background: radial-gradient(circle at 30% 30%, rgba(34,211,238,0.16), rgba(167,139,250,0.12), transparent 72%);
-          animation: orbFloat 10.5s ease-in-out infinite;
-          animation-delay: -1.2s;
-        }
-        .fxOrb.o3{
-          width:720px; height:720px; left:18%; bottom:-340px;
-          background: radial-gradient(circle at 30% 30%, rgba(255,45,85,0.12), rgba(255,149,0,0.14), transparent 72%);
-          animation: orbFloat 12s ease-in-out infinite;
-          animation-delay: -2.0s;
-        }
-        .fxRays{
-          position:absolute; inset:-120px -120px;
-          background:
-            conic-gradient(from 210deg at 50% 18%,
-              rgba(255,255,255,0.10),
-              rgba(255,255,255,0.00) 22%,
-              rgba(255,214,10,0.08) 40%,
-              rgba(255,255,255,0.00) 60%,
-              rgba(34,211,238,0.08) 76%,
-              rgba(255,255,255,0.00) 100%);
-          filter: blur(12px);
-          opacity: .75;
-          mix-blend-mode: overlay;
-          animation: raysSpin 26s linear infinite;
-          pointer-events:none;
-        }
-        .fxVignette{
-          position:absolute; inset:0;
-          background: radial-gradient(circle at 50% 40%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.22) 60%, rgba(0,0,0,0.55) 100%);
-          pointer-events:none;
-        }
-        @keyframes orbFloat{
-          0%,100%{ transform: translateY(0) translateX(0); }
-          50%{ transform: translateY(18px) translateX(10px); }
-        }
-        @keyframes raysSpin{
-          0%{ transform: rotate(0deg); }
-          100%{ transform: rotate(360deg); }
-        }
-
         .finishHero{ text-align:center; }
         .finishKicker{
           font-size:12px;
@@ -1632,7 +1572,6 @@ export default function GamePage() {
           50%{ transform: translateY(-6px); opacity:1; }
         }
         @media (max-width: 980px){ .finishGrid{ grid-template-columns: 1fr; } }
-        @keyframes raysSpin{ 0%{ transform: rotate(0deg); } 100%{ transform: rotate(360deg); } }
       `}</style>
             </main>
         );
