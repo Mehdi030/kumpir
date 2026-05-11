@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, web, logic]
+  pull_request:
+    branches: [main]
+
+jobs:
+  web:
+    name: Web (lint + test + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies (root)
+        working-directory: .
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        # Build still runs without secrets — Next.js doesn't need them at compile time.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: build-time-placeholder
+          NEXT_PUBLIC_AUTH_DISABLED: "1"
+        run: npm run build

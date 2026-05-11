@@ -46,7 +46,7 @@ export default function LobbyAdminPage() {
         playerId: mePlayerId,
         intervalMs: 8000,
         doCleanup: amIHost,
-        staleSeconds: 25,
+        staleSeconds: 45,
     });
 
     // Redirect non-hosts back to lobby

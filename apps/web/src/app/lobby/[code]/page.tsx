@@ -8,8 +8,8 @@ import { useParams, useRouter } from "next/navigation";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
-import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
 import { Spinner } from "@/components/Spinner";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type ModeKey = "original" | "teleport" | "reverse";
 
@@ -80,13 +80,10 @@ export default function LobbyPage() {
         playerId: mePlayerId,
         intervalMs: 8000,
         doCleanup: amIHost,
-        staleSeconds: 25,
+        staleSeconds: 45,
     });
 
-    // Realtime: faster updates than 900ms polling (additive)
-    useLobbyRealtime(lobbyId, () => {
-        // Polling effect picks the change up on its next tick.
-    });
+    // Realtime + Polling werden zentral in useLobbyState orchestriert.
 
     // ✅ game phases -> game
     useEffect(() => {
@@ -106,7 +103,6 @@ export default function LobbyPage() {
 
         (async () => {
             try {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
                 const supabase = getSupabaseClient();
 
                 const { data, error: statusErr } = await supabase
@@ -182,7 +178,6 @@ export default function LobbyPage() {
 
         setBusyReady(true);
         try {
-            const { getSupabaseClient } = await import("@/lib/supabaseClient");
             const supabase = getSupabaseClient();
 
             const { error: rpcErr } = await supabase.rpc("rpc_toggle_ready", {
@@ -226,12 +221,8 @@ export default function LobbyPage() {
         suppressRedirectRef.current = true;
 
         try {
-            // Optional: falls ihr später eine echte RPC habt (rpc_leave_lobby), hier einsetzen.
-            // Aktuell nur best-effort: Spielerstatus auf left setzen (wenn RLS das erlaubt).
             if (mePlayerId && lobbyId) {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
                 const supabase = getSupabaseClient();
-
                 await supabase.from("players").update({ status: "left" }).eq("lobby_id", lobbyId).eq("player_id", mePlayerId);
             }
         } catch {

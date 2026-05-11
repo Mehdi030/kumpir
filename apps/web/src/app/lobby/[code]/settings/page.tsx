@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type ModeKey = "original" | "teleport" | "reverse";
 
@@ -70,7 +71,6 @@ export default function LobbySettingsPage() {
 
             setBusy(true);
             try {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
                 const supabase = getSupabaseClient();
 
                 const { error: rpcErr } = await supabase.rpc("set_max_players", {
@@ -103,7 +103,6 @@ export default function LobbySettingsPage() {
 
             setBusy(true);
             try {
-                const { getSupabaseClient } = await import("@/lib/supabaseClient");
                 const supabase = getSupabaseClient();
 
                 const { error: rpcErr } = await supabase.rpc("set_lobby_mode", {
@@ -134,7 +133,6 @@ export default function LobbySettingsPage() {
 
         setBusy(true);
         try {
-            const { getSupabaseClient } = await import("@/lib/supabaseClient");
             const supabase = getSupabaseClient();
 
             const { error: rpcErr } = await supabase.rpc("set_lobby_topic", {

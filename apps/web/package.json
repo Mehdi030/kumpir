@@ -10,7 +10,7 @@
     "play": "node scripts/play.mjs && npm run dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
   },

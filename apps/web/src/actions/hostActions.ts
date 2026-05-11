@@ -1,5 +1,11 @@
 "use server";
 
+// SECURITY NOTE: These actions currently accept `mePlayerId` from the client.
+// The Supabase RPCs (kick_player, set_lobby_lock, transfer_host) must validate
+// that `p_me_player_id == lobbies.host_player_id` server-side — never trust the
+// client value. Once real Supabase Auth is enabled (Etappe 3), replace the
+// `mePlayerId` argument with `auth.getUser().id` from the server cookie.
+
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 type Ok = { ok: true };

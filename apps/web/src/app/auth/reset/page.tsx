@@ -21,8 +21,8 @@ export default function ResetPasswordPage() {
     useEffect(() => {
         // Supabase Recovery setzt Session automatisch via URL-Params,
         // solange die Callback/Redirect URL stimmt.
-        supabase.auth.getSession().then(({ data }) => {
-            if (!data.session) {
+        void supabase.auth.getSession().then((res) => {
+            if (!res.data.session) {
                 setErr("Reset-Link ungültig oder abgelaufen. Bitte erneut anfordern.");
             }
         });

@@ -1,6 +1,6 @@
 # 🎮 KUMPIR
 
-KUMPIR ist ein browserbasiertes Partyspiel nach dem Prinzip der „heißen Kartoffel“.
+KUMPIR ist ein browserbasiertes Partyspiel nach dem Prinzip der „heißen Kartoffel".
 Eine Lobby, mehrere Spieler, ein unsichtbarer Timer – wer die Kartoffel beim Explodieren hält, verliert die Runde.
 
 Fokus: **einfach erklärt, gemeinsam gespielt, schnell gestartet**.
@@ -9,89 +9,119 @@ Fokus: **einfach erklärt, gemeinsam gespielt, schnell gestartet**.
 
 ## 🧠 Projektstruktur
 
-Das Projekt ist als **Monorepo** aufgebaut.
+Monorepo, npm workspaces.
 
-- `apps/web` → Web-Spiel (Next.js / TypeScript / Supabase)
-- `apps/logic` → Spiellogik & Content-Service (Python, separat)
-- `main` → gemeinsamer, stabiler Stand
+- `apps/web` → Web-Spiel (Next.js 16 + React 19 + Supabase + TypeScript)
+- `apps/discord-bot` → Discord-Bot für Preview-Notifications
+- `game-logic/` → Python-Simulator für Balance-Tests & Content (`questions_de.json`)
 
-**Wichtig:**  
-Web und Logic sind **klar getrennt** und werden nicht vermischt.
+**Web und Logic sind klar getrennt** und werden nicht vermischt.
+
+---
+
+## 🚀 Schnellstart
+
+```bash
+# Einmalig: Dependencies installieren
+npm install
+
+# Erstes Setup: legt .env.local an und startet Dev-Server
+cd apps/web
+npm run play
+```
+
+Die `play`-Befehl fragt nach deinen Supabase-Werten (URL + Anon Key), schreibt `apps/web/.env.local` und startet anschließend `next dev`. Du brauchst die Werte nur einmal — sie liegen unter Supabase → Project Settings → API.
+
+**Schon eingerichtet?** Einfach `npm run dev` (root) oder `npm --workspace apps/web run dev`.
+
+---
+
+## 🧪 Tests, Lint, Build
+
+```bash
+cd apps/web
+
+npm test          # Vitest, alle Unit-Tests
+npm run lint      # ESLint
+npm run build     # Next-Production-Build
+npx tsc --noEmit  # TypeScript strict check
+```
+
+CI läuft auf jedem Push/PR (siehe `.github/workflows/ci.yml`) und checkt alle vier.
 
 ---
 
 ## 👥 Team & Zuständigkeiten
 
-- **Medo** – Web / Game Lead  
-  → arbeitet ausschließlich in `apps/web`
+- **Medo** – Web / Game Lead → arbeitet in `apps/web`
+- **Sero** – Logic / Balance → arbeitet in `game-logic`
 
-- **Sero** – Logic / Balance  
-  → arbeitet ausschließlich in `apps/logic`
-
-Jeder arbeitet auf **seinem eigenen Branch**, `main` wird nur zum Zusammenführen genutzt.
+Jeder bleibt in seinem Ordner, `main` ist die gemeinsame Wahrheit.
 
 ---
 
-## 🌿 Git-Workflow (kurz & verbindlich)
+## 🌿 Git-Workflow
 
 ### Branches
 - `main` → gemeinsame Wahrheit (nie direkt bearbeiten)
-- `web` → Web-Entwicklung
+- `web` → Web-Entwicklung (Vercel-Preview hängt hier dran)
 - `logic` → Logic-Entwicklung
 
 ### Grundregeln
 - **Nie auf `main` arbeiten**
 - **Vor dem Arbeiten:** `git pull`
 - **Vor dem Merge in `main`:** `git pull` auf `main`
-- Jeder bleibt in seinem Ordner (`apps/web` bzw. `apps/logic`)
+- Jeder bleibt in seinem Workspace (`apps/web` bzw. `game-logic/`)
 
 ---
 
 ## 🧾 Commit-Konvention
 
-Wir nutzen eine **einfache, deutschsprachige Commit-Konvention**, um den Verlauf übersichtlich zu halten.
+Deutsche, einfache Konvention für einen sauberen Verlauf.
 
 ### Format
+```
 typ(bereich): beschreibung
-
-shell
-Code kopieren
+```
 
 ### Beispiel
+```
 feat(host): lobby erstellen
-
-markdown
-Code kopieren
+fix(setup): play-Script auf Windows fixen
+```
 
 ### Commit-Typen
 - **chore** – Setup & Organisation
 - **feat** – Neue Funktion
-- **core** – Spielkern / Spiellogik
 - **fix** – Fehlerbehebung
 - **refactor** – Code umstrukturieren
 - **docs** – Dokumentation
 - **style** – Optik / Formatierung
+- **test** – Tests
 
 ### Bereiche (optional)
-`setup · db · host · join · lobby · players · game · ui · realtime`
+`setup · db · host · join · lobby · players · game · ui · realtime · auth`
 
 ### Regeln
-- Deutsch
-- Präsens
-- Kurz & klar
+- Deutsch, Präsens, kurz & klar
 - 1 Commit = 1 Thema
 - Keine Emojis im Commit-Text
 
 ---
 
+## 🔐 Auth-Modus
+
+Aktuell läuft das Spiel im **Gast-Modus** (`NEXT_PUBLIC_AUTH_DISABLED=1` in `.env.local`).
+
+- Spielen ohne Account — Identität liegt nur in `localStorage` (`kumpir_player_id`)
+- Login/Register/Verified-Routen werden vom Proxy (`src/proxy.ts`, Next.js 16 Middleware-Konvention) auf `/` umgeleitet
+- Für die spätere Etappe 3 (Achievements, Leaderboards, Freundeslisten) wird Auth wieder aktiviert
+
+---
+
 ## 🚀 Ziel des Projekts
 
-Zuerst ein **stabiles Basisspiel**.  
-Danach optionale Modi, Genres und Erweiterungen.
+Erst ein **stabiles Basisspiel**.
+Danach Modi, Achievements, soziale Features.
 
 Kein Overengineering, kein Chaos – **Spaß zuerst**.
-
-
-
-
-

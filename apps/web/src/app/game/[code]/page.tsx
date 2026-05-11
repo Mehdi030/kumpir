@@ -318,7 +318,16 @@ export default function GamePage() {
     );
 
     // -----------------------------
-    // Poll loop
+    // Realtime status — must be declared before the poll loop because the
+    // polling cadence depends on it (slow when realtime is "live").
+    // -----------------------------
+    const reloadFromRealtime = useCallback(() => {
+        inFlightRef.current = false;
+    }, []);
+    const realtimeStatus = useLobbyRealtime(lobby?.id ?? null, reloadFromRealtime);
+
+    // -----------------------------
+    // Poll loop (fallback when realtime is offline)
     // -----------------------------
     useEffect(() => {
         let alive = true;
@@ -360,29 +369,33 @@ export default function GamePage() {
                     return;
                 }
 
+                // Supabase-js can't infer the shape from a runtime-joined select string,
+                // so we cast to a plain record for safe field access.
+                const raw = lobbyRes.data as unknown as Record<string, unknown>;
+
                 const nextLobby: LobbyState = {
-                    id: lobbyRes.data.id,
-                    phase: lobbyRes.data.phase,
-                    holder_player_id: lobbyRes.data.holder_player_id ?? null,
+                    id: String(raw.id ?? ""),
+                    phase: (raw.phase as LobbyPhase) ?? "waiting",
+                    holder_player_id: (raw.holder_player_id as string | null) ?? null,
 
-                    explode_at: lobbyRes.data.explode_at ?? null,
+                    explode_at: (raw.explode_at as string | null) ?? null,
 
-                    last_activity_at: lobbyRes.data.last_activity_at ?? null,
-                    run_started_at: lobbyRes.data.run_started_at ?? null,
+                    last_activity_at: (raw.last_activity_at as string | null) ?? null,
+                    run_started_at: (raw.run_started_at as string | null) ?? null,
 
-                    round_number: (lobbyRes.data.round_number as number | null) ?? null,
-                    last_loser_player_id: (lobbyRes.data.last_loser_player_id as string | null) ?? null,
+                    round_number: (raw.round_number as number | null) ?? null,
+                    last_loser_player_id: (raw.last_loser_player_id as string | null) ?? null,
 
-                    topic_a: lobbyRes.data.topic_a ?? null,
-                    topic_b: lobbyRes.data.topic_b ?? null,
-                    topic_selected: lobbyRes.data.topic_selected ?? null,
-                    topic_vote_ends_at: lobbyRes.data.topic_vote_ends_at ?? null,
+                    topic_a: (raw.topic_a as string | null) ?? null,
+                    topic_b: (raw.topic_b as string | null) ?? null,
+                    topic_selected: (raw.topic_selected as string | null) ?? null,
+                    topic_vote_ends_at: (raw.topic_vote_ends_at as string | null) ?? null,
 
-                    countdown_started_at: lobbyRes.data.countdown_started_at ?? null,
-                    countdown_ends_at: lobbyRes.data.countdown_ends_at ?? null,
+                    countdown_started_at: (raw.countdown_started_at as string | null) ?? null,
+                    countdown_ends_at: (raw.countdown_ends_at as string | null) ?? null,
 
-                    topic_tie_choices: (lobbyRes.data.topic_tie_choices as number[] | null) ?? null,
-                    topic_tie_pick: (lobbyRes.data.topic_tie_pick as number | null) ?? null,
+                    topic_tie_choices: (raw.topic_tie_choices as number[] | null) ?? null,
+                    topic_tie_pick: (raw.topic_tie_pick as number | null) ?? null,
                 };
 
                 // Post-round loser toast (once)
@@ -523,14 +536,17 @@ export default function GamePage() {
         };
 
         void load();
-        const t = window.setInterval(() => void load(), 650);
+        // When realtime is "live": slow polling (4s safety net).
+        // When offline/connecting: tight polling (650ms).
+        const effectiveMs = realtimeStatus === "live" ? 4000 : 650;
+        const t = window.setInterval(() => void load(), effectiveMs);
 
         return () => {
             alive = false;
             window.clearInterval(t);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [code, supabase, mePlayerId, rpcFinalizeTopicVote, rpcAdvanceFromCountdown, rpcTickGame, showToast]);
+    }, [code, supabase, mePlayerId, rpcFinalizeTopicVote, rpcAdvanceFromCountdown, rpcTickGame, showToast, realtimeStatus]);
 
     // Early finalize when all voted
     useEffect(() => {
@@ -543,13 +559,7 @@ export default function GamePage() {
         void rpcFinalizeTopicVote(lobby.id).finally(() => (finalizeInFlightRef.current = false));
     }, [allVoted, lobby, rpcFinalizeTopicVote]);
 
-    // ---------- Realtime (additive: polling stays as fallback) ----------
-    const reloadFromRealtime = useCallback(() => {
-        // Cheap kick: clearing in-flight allows the next interval tick to re-fetch immediately.
-        // We don't need to call load() directly here — the polling effect picks it up within 650ms.
-        inFlightRef.current = false;
-    }, []);
-    const realtimeStatus = useLobbyRealtime(lobby?.id ?? null, reloadFromRealtime);
+    // (realtimeStatus + reloadFromRealtime above, before the poll loop)
 
     // ---------- FX: phase transitions ----------
     useEffect(() => {

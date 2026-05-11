@@ -10,23 +10,23 @@ export function HostNotice() {
     const kicked = sp.get("kicked") === "1";
     const left = sp.get("left") === "1";
 
-    const [dismissed, setDismissed] = useState(false);
+    const initialReason = kicked ? "kicked" : left ? "left" : null;
+    const [reason, setReason] = useState<"kicked" | "left" | null>(initialReason);
 
     const dismissTopToast = useCallback(() => {
-        setDismissed(true);
+        setReason(null);
     }, []);
 
     useEffect(() => {
-        if (kicked || left) {
+        if (initialReason) {
             router.replace("/host");
         }
-    }, [kicked, left, router]);
+    }, [initialReason, router]);
 
-    const topToast = dismissed
-        ? ""
-        : kicked
+    const topToast =
+        reason === "kicked"
             ? "⛔ Du wurdest gekickt."
-            : left
+            : reason === "left"
                 ? "ℹ️ Du hast die Lobby verlassen."
                 : "";
 

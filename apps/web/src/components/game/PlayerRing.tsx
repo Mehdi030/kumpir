@@ -194,7 +194,10 @@ export function PlayerRing({ players, passEvent, holderPlayerId = null, mePlayer
 
         raf = requestAnimationFrame(step);
         return () => cancelAnimationFrame(raf);
-    }, [fly?.nonce]); // re-run per animation
+        // We intentionally key this animation off fly.nonce only; including the
+        // full `fly` object would restart the animation on every state update.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fly?.nonce]);
 
     // Flying potato render data
     const flyRender = useMemo(() => {

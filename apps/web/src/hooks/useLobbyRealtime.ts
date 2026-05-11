@@ -40,7 +40,7 @@ export function useLobbyRealtime(lobbyId: string | null | undefined, onChange: (
                 { event: "*", schema: "public", table: "topic_votes", filter: `lobby_id=eq.${lobbyId}` },
                 () => onChange()
             )
-            .subscribe((event) => {
+            .subscribe((event: string) => {
                 // Supabase Realtime status callback. Possible values include
                 // "SUBSCRIBED", "CHANNEL_ERROR", "TIMED_OUT", "CLOSED".
                 if (event === "SUBSCRIBED") setStatus("live");

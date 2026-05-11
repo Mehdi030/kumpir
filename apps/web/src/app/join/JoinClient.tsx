@@ -126,8 +126,13 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 return;
             }
 
-            const { data, error: rpcErr } = await supabase.rpc("join_lobby", {
-                p_lobby_code: lobbyCode,
+            // Client-generated UUID makes the join idempotent (same id on retry).
+            // Falls back to legacy join_lobby RPC if rpc_join_lobby ist nicht verfügbar.
+            const myPlayerId = crypto.randomUUID();
+
+            const { error: rpcErr } = await supabase.rpc("rpc_join_lobby", {
+                p_code: lobbyCode,
+                p_player_id: myPlayerId,
                 p_name: playerName,
             });
 
@@ -136,8 +141,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 return;
             }
 
-            const pid = typeof data === "string" ? data : String(data);
-            setStoredPlayerId(pid);
+            setStoredPlayerId(myPlayerId);
 
             router.push(`/lobby/${lobbyCode}`);
         } catch (err: unknown) {

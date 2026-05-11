@@ -1,6 +1,7 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactCompiler: true,
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+    reactCompiler: true,
 };
 
-module.exports = nextConfig;
+export default nextConfig;

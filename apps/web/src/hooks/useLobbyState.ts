@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLobbyRealtime, type RealtimeStatus } from "@/hooks/useLobbyRealtime";
 
 export type LobbyRow = {
     id: string;
@@ -23,6 +24,11 @@ export type PlayerRow = {
 };
 
 type UseLobbyStateOpts = {
+    /**
+     * Polling cadence (ms) when Realtime is NOT connected (fallback).
+     * When the Realtime channel reports "live", polling is paused.
+     * Default: 1200ms (only takes effect on offline/connecting).
+     */
     pollMs?: number;
     onPhaseRunning?: () => void;
 };
@@ -85,6 +91,12 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
         setPlayers((playersRes.data ?? []) as PlayerRow[]);
     }, [code, supabase]);
 
+    // Realtime-first: when the channel is "live", we react to events. Polling
+    // continues as a safety net but at a slower cadence.
+    const realtimeStatus: RealtimeStatus = useLobbyRealtime(lobby?.id ?? null, () => {
+        void load();
+    });
+
     useEffect(() => {
         let alive = true;
 
@@ -97,12 +109,16 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
             }
         })();
 
-        const t = window.setInterval(() => void load(), pollMs);
+        // Effective poll interval: tight when realtime is offline/connecting,
+        // relaxed (much slower) when realtime is live.
+        const effectiveMs = realtimeStatus === "live" ? Math.max(pollMs * 8, 6000) : pollMs;
+
+        const t = window.setInterval(() => void load(), effectiveMs);
         return () => {
             alive = false;
             window.clearInterval(t);
         };
-    }, [load, pollMs]);
+    }, [load, pollMs, realtimeStatus]);
 
-    return { lobby, players, loading, error, reload: load };
+    return { lobby, players, loading, error, reload: load, realtimeStatus };
 }
