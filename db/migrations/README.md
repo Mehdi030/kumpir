@@ -16,6 +16,7 @@ In dieser Reihenfolge ausführen. Jede Migration ist idempotent (kann wiederholt
 | 005 | [`005_achievements.sql`](005_achievements.sql) | Tabellen `achievements` + `player_lifetime_stats` + `player_achievements` + Aggregations-Trigger | Pflicht für die `/achievements`-Seite |
 | 006 | [`006_leaderboards.sql`](006_leaderboards.sql) | View `leaderboard_view` (joinet player_lifetime_stats × profiles.username) | Pflicht für die `/leaderboard`-Seite |
 | 007 | [`007_bots.sql`](007_bots.sql) | `players.is_bot` Spalte + `rpc_add_bot` + `rpc_remove_bot` | Pflicht für „🤖 +Bot" Button in der Lobby |
+| 008 | [`008_friends_and_saved_lobbies.sql`](008_friends_and_saved_lobbies.sql) | `friendships` + `saved_lobbies` Tabellen + 5 RPCs (send/accept/remove + save/unsave) + `friends_view` | Pflicht für `/friends`-Seite + Lobby-Merken-Button |
 
 ## Was du **NICHT** machen musst
 
