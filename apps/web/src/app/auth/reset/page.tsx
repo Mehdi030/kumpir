@@ -72,7 +72,7 @@ export default function ResetPasswordPage() {
                                     </div>
                                 </div>
 
-                                <div className="fieldRow" style={{ marginTop: 10 }}>
+                                <div className="fieldRow" style={{ marginTop: 12 }}>
                                     <label className="fieldLabel" htmlFor="pw2">Wiederholen</label>
                                     <div className="fieldControl">
                                         <input id="pw2" className="input" type="password" value={pw2}
