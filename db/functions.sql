@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — RPC-Funktionen (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 018 (Stand 2026-09-27).
+-- Migration 020 (Stand 2026-09-27).
 -- Quelle: User-Dump via SQL-Editor Query 2 aus db/HOW_TO_DUMP.md
 -- ============================================================
 
@@ -560,9 +560,13 @@ declare
   v_code text;
   v_host_player_id uuid := gen_random_uuid();
   v_round_speed text := btrim(coalesce(p_round_speed, 'normal'));
+  v_privacy text := btrim(coalesce(p_privacy, 'private'));
 begin
   if v_round_speed not in ('fast', 'normal', 'calm') then
     v_round_speed := 'normal';
+  end if;
+  if v_privacy not in ('private', 'public') then
+    v_privacy := 'private';
   end if;
 
   v_code := public.generate_lobby_code(4);
@@ -571,7 +575,7 @@ begin
     id, code, host_player_id, status, privacy, max_players, round_seconds, round_speed,
     created_at, last_activity_at, host_user_id
   ) values (
-    v_lobby_id, upper(v_code), v_host_player_id, 'waiting', p_privacy,
+    v_lobby_id, upper(v_code), v_host_player_id, 'waiting', v_privacy,
     greatest(2, least(p_max_players, 12)),
     coalesce(p_round_seconds, 25),
     v_round_speed,
@@ -650,17 +654,24 @@ end;
 $function$;
 
 
--- Stand nach Migration 010: used_answers/current_attempt_id werden mit
--- geleert (vorher blieben alte Antworten über den Rematch hinweg bestehen).
-CREATE OR REPLACE FUNCTION public.rpc_rematch(p_code text)
+-- Stand nach Migration 019: verlangt zusätzlich p_player_id (muss aktives
+-- Lobby-Mitglied sein) und wirkt nur noch aus phase='finished' -- vorher
+-- konnte jeder, der nur den Code kannte, damit jede laufende Partie
+-- jederzeit in den Rematch zwingen.
+CREATE OR REPLACE FUNCTION public.rpc_rematch(p_code text, p_player_id uuid)
  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
-declare v_lobby_id uuid;
+declare v_lobby_id uuid; v_phase text;
 begin
-  select id into v_lobby_id from public.lobbies
+  select id, phase into v_lobby_id, v_phase from public.lobbies
   where code = upper(trim(p_code)) limit 1;
 
   if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+  if v_phase is distinct from 'finished' then raise exception 'lobby_not_finished'; end if;
+  if not exists (
+    select 1 from public.players
+    where lobby_id = v_lobby_id and player_id = p_player_id and status = 'active'
+  ) then raise exception 'not_a_member'; end if;
 
   delete from public.topic_votes where lobby_id = v_lobby_id;
 
@@ -749,17 +760,27 @@ $function$;
 -- ============================================================
 -- Migration 009: rpc_reset_lobby (fehlte komplett, siehe TESTREPORT.md)
 -- Button "Zurück zur Lobby" auf dem Finished-Screen.
+-- Stand nach Migration 019: verlangt zusätzlich p_player_id (muss aktives
+-- Lobby-Mitglied sein) und wirkt nur noch aus phase='finished' -- vorher
+-- konnte jeder, der nur den Code kannte, damit jede laufende Partie
+-- jederzeit zurücksetzen.
 -- ============================================================
-CREATE OR REPLACE FUNCTION public.rpc_reset_lobby(p_code TEXT)
+CREATE OR REPLACE FUNCTION public.rpc_reset_lobby(p_code TEXT, p_player_id UUID)
  RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
   v_lobby_id uuid;
+  v_phase text;
 begin
-  select id into v_lobby_id from public.lobbies
+  select id, phase into v_lobby_id, v_phase from public.lobbies
   where code = upper(trim(p_code)) limit 1;
 
   if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+  if v_phase is distinct from 'finished' then raise exception 'lobby_not_finished'; end if;
+  if not exists (
+    select 1 from public.players
+    where lobby_id = v_lobby_id and player_id = p_player_id and status = 'active'
+  ) then raise exception 'not_a_member'; end if;
 
   delete from public.topic_votes where lobby_id = v_lobby_id;
 

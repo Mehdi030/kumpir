@@ -2,7 +2,10 @@
 
 Hier liegt das **Datenbank-Schema** als Code (SQL).
 
-> ✅ **Stand 2026-05-11:** `schema.sql` enthält das echte Schema (User-Dump vom Supabase-Dashboard). Funktionen und Policies fehlen noch — siehe HOW_TO_DUMP.md.
+> ✅ **Stand 2026-09-27 (Migration 020):** `schema.sql` (Tabellen) und
+> `functions.sql` (alle RPCs) sind beide aktuell und manuell gepflegt.
+> Nach jeder neuen `db/migrations/NNN_*.sql` bitte beide Dateien von
+> Hand nachziehen, siehe Kommentar am Kopf jeder Datei.
 
 ---
 
@@ -10,20 +13,22 @@ Hier liegt das **Datenbank-Schema** als Code (SQL).
 
 ```
 db/
-├── README.md                         ← diese Datei
-├── HOW_TO_DUMP.md                    ← Anleitung um echtes Schema/Funktionen/Policies zu exportieren
-├── schema.sql                        ← echtes Tabellen-Schema (User-Dump 2026-05-11)
-├── functions.sql                     ← TODO: echte RPC-Funktionen (Query 2 ausstehend)
-├── policies.sql                      ← TODO: echte RLS-Policies (Query 3 ausstehend)
-└── migrations/                       ← neue Schema-Änderungen, chronologisch nummeriert
-    ├── 001_topic_validation.sql      ← Topic-Mechanik B (Antwort sagen + validieren)
-    ├── 002_categories_seed.sql       ← 49 Kategorien für topic_pool
-    └── 003_teleport_reverse_modes.sql ← Helper für Teleport/Reverse Modi
+├── README.md          ← diese Datei
+├── HOW_TO_DUMP.md      ← Anleitung um das echte Schema/Funktionen erneut zu dumpen
+├── schema.sql          ← Tabellen-Referenz (Stand: siehe Kopf der Datei)
+├── functions.sql       ← RPC-Funktionen-Referenz (Stand: siehe Kopf der Datei)
+└── migrations/         ← alle Schema-Änderungen, chronologisch nummeriert
+    └── README.md       ← vollständige, aktuell gehaltene Liste + Anwendungs-Anleitung
 ```
+
+Für die aktuelle Liste aller Migrationen (was sie tun, ob Pflicht) siehe
+[`migrations/README.md`](migrations/README.md) — nicht hier duplizieren,
+sonst driftet es wieder auseinander wie zwischen 2026-05-11 und den
+ersten Migrationen.
 
 ---
 
-## 🔧 Dein echtes Schema dumpen
+## 🔧 Dein echtes Schema neu dumpen
 
 **Variante A — Supabase CLI (empfohlen, einmaliger Setup-Aufwand):**
 
@@ -61,52 +66,17 @@ WHERE pronamespace = 'public'::regnamespace
 ORDER BY proname;
 ```
 
-Output kopierst du in `db/functions/`, aufgeteilt nach Funktion.
+Output vergleichst du gegen `db/functions.sql` und pflegst Abweichungen nach.
 
 ---
 
 ## 📝 Migrationen anwenden
 
-Wenn ich eine neue Migration in `db/migrations/` lege:
+Wenn eine neue Migration in `db/migrations/` liegt:
 
 1. Datei öffnen, SQL prüfen
-2. Im Supabase-Dashboard → SQL Editor einfügen → ausführen
+2. Im Supabase-Dashboard → SQL Editor einfügen → ausführen (oder komplett
+   `db/migrations/_apply_all.sql` laufen lassen, idempotent)
 3. **Oder** mit CLI: `supabase db push`
 
 Migrationen sind **nummeriert + zeitstabil** — niemals umbenennen oder umordnen, sonst Chaos auf produktiven DBs.
-
----
-
-## 📦 Rekonstruierter Stand (was ich aus dem Code weiß)
-
-### Tabellen
-- `lobbies` — eine Lobby pro 4-Zeichen-Code
-- `players` — Spieler einer Lobby (Identität: client-generierte UUID in `kumpir_player_id` LocalStorage)
-- `topic_votes` — Voting-Stimmen während `phase = 'topic_vote'`
-- `profiles` — (vermutet) Profile für authentifizierte User mit Username
-
-### RPCs (21 Stück)
-
-| RPC | Aufrufer | Zweck |
-|-----|----------|-------|
-| `rpc_create_lobby(p_host_name, p_privacy, p_max_players, p_round_seconds)` | Host-Page | Lobby anlegen, gibt `{code, host_player_id}` zurück |
-| `rpc_join_lobby(p_code, p_player_id, p_name)` | Host + Join | Spieler beitreten (idempotent via Client-UUID) |
-| `rpc_toggle_ready(p_lobby_id, p_player_id)` | Lobby-Page | Ready-Status umschalten |
-| `rpc_begin_topic_vote(p_lobby_id, p_player_id)` | startGame action | Host startet, geht in `phase = topic_vote` |
-| `rpc_vote_topic(p_lobby_id, p_player_id, p_choice)` | Game-Page | Spieler wählt Thema (1, 2, 3) |
-| `rpc_finalize_topic_vote(p_lobby_id)` | Game-Page (Client-Tick) | Voting auswerten → Countdown |
-| `rpc_advance_from_countdown(p_lobby_id)` | Game-Page (Client-Tick) | Countdown durch → Running |
-| `rpc_tick_game(p_code)` | Game-Page (Holder bei Explosion) | Server prüft `explode_at`, eliminiert Halter, geht weiter |
-| `rpc_pass_potato(p_code, p_player_id)` | Game-Page (Halter) | Kartoffel an nächsten Spieler im Ring |
-| `rpc_rematch(p_code)` | Game-Page (Finished) | Neues Spiel mit gleicher Spielerliste |
-| `rpc_reset_lobby(p_code)` | Game-Page (Finished) | Lobby auf Anfang zurücksetzen |
-| `rpc_heartbeat(p_lobby_id, p_player_id)` | useHeartbeat | Alle 8s — markiert Spieler als "online" |
-| `cleanup_lobby(p_lobby_id, p_stale_seconds)` | useHeartbeat (Host) | Spieler ohne Heartbeat seit `staleSeconds` rauswerfen |
-| `kick_player(p_lobby_id, p_me_player_id, p_target_player_id)` | Admin-Page | Host kickt Spieler |
-| `set_lobby_lock(p_lobby_id, p_me_player_id, p_locked)` | Admin-Page | Host sperrt/öffnet Lobby |
-| `transfer_host(p_lobby_id, p_me_player_id, p_new_host_player_id)` | Admin-Page | Host-Rolle übertragen |
-| `set_max_players(p_lobby_id, p_me_player_id, p_max_players)` | Settings | Max-Spieler ändern |
-| `set_lobby_mode(p_lobby_id, p_me_player_id, p_mode)` | Settings | Game-Mode ändern |
-| `set_lobby_topic(p_lobby_id, p_me_player_id, p_topic)` | Settings | Thema setzen |
-| `is_username_available(p_username)` | Register | Username-Verfügbarkeit prüfen |
-| (legacy) `join_lobby(p_lobby_code, p_name)` | ehemals JoinClient | wurde durch `rpc_join_lobby` ersetzt — kann später entfernt werden |

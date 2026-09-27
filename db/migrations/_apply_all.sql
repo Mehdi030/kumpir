@@ -1,5 +1,5 @@
 -- ============================================================
--- KUMPIR — Alle 18 Migrationen in einem File
+-- KUMPIR — Alle 20 Migrationen in einem File
 -- ============================================================
 -- Einmal komplett kopieren, in Supabase SQL Editor einfügen, Run.
 -- Jede Sub-Migration ist idempotent — du kannst das File mehrfach laufen lassen.
@@ -2225,6 +2225,188 @@ begin
   else
     perform public._finalize_attempt_reject(v_attempt.id);
   end if;
+end;
+$function$;
+
+COMMIT;
+
+
+-- ============================================================
+-- 019_guard_reset_rematch.sql
+-- ============================================================
+-- ============================================================
+-- Migration 019: rpc_reset_lobby + rpc_rematch abgesichert
+-- ============================================================
+-- Beim Vollständigkeits-Audit gefunden (schwerwiegender als die
+-- bekannte Player-Impersonation-Problematik, weil hier nicht einmal
+-- eine Spieler-ID nötig war): rpc_reset_lobby(p_code) und
+-- rpc_rematch(p_code) nahmen NUR den 4-stelligen Lobby-Code entgegen
+-- -- keinerlei Prüfung, ob der Aufrufer überhaupt Mitglied dieser
+-- Lobby ist, geschweige denn in welcher Phase sie gerade ist. Der Code
+-- steht im Join-Link, den man mit jedem teilt -- jeder, der ihn je
+-- gesehen hat (auch nach dem Verlassen), konnte damit JEDE laufende
+-- Partie jederzeit zurücksetzen oder in den Rematch zwingen.
+--
+-- Fix: beide verlangen jetzt zusätzlich p_player_id und prüfen, dass
+-- diese Person aktiv Mitglied der Lobby ist (nicht nur Host --
+-- "Zurück zur Lobby" und "Rematch" sind im UI bewusst für alle
+-- Spieler verfügbar, nicht nur den Host). Zusätzlich: beide wirken
+-- nur noch aus phase='finished' -- vorher ließ sich damit auch eine
+-- laufende Partie mitten im Spiel abwürgen.
+--
+-- rpc_start_rematch_if_ready bleibt unverändert: sie prüft die
+-- Ready-Zahlen server-seitig und ist ohne echte Mehrheit ein No-Op,
+-- also schon von sich aus ungefährlich für Fremdaufrufe.
+-- ============================================================
+
+BEGIN;
+
+DROP FUNCTION IF EXISTS public.rpc_reset_lobby(text);
+DROP FUNCTION IF EXISTS public.rpc_rematch(text);
+
+CREATE OR REPLACE FUNCTION public.rpc_reset_lobby(p_code TEXT, p_player_id UUID)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid;
+  v_phase text;
+begin
+  select id, phase into v_lobby_id, v_phase from public.lobbies
+  where code = upper(trim(p_code)) limit 1;
+
+  if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+  if v_phase is distinct from 'finished' then raise exception 'lobby_not_finished'; end if;
+
+  if not exists (
+    select 1 from public.players
+    where lobby_id = v_lobby_id and player_id = p_player_id and status = 'active'
+  ) then raise exception 'not_a_member'; end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+
+  update public.players
+  set ready = coalesce(is_bot, false), is_alive = true,
+      pass_count = 0, clutch_pass_count = 0,
+      fastest_pass_ms = null, total_hold_ms = 0,
+      survival_streak = 0, last_pass_at = null
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'waiting', locked = false,
+      holder_player_id = null, explode_at = null,
+      run_started_at = null, last_loser_player_id = null,
+      topic_a = null, topic_b = null, topic_selected = null,
+      topic_vote_started_at = null, topic_vote_ends_at = null,
+      countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      current_attempt_id = null, used_answers = '{}',
+      round_number = 0, pass_direction = 1,
+      last_activity_at = now()
+  where id = v_lobby_id;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_rematch(p_code TEXT, p_player_id UUID)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid;
+  v_phase text;
+begin
+  select id, phase into v_lobby_id, v_phase from public.lobbies
+  where code = upper(trim(p_code)) limit 1;
+
+  if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+  if v_phase is distinct from 'finished' then raise exception 'lobby_not_finished'; end if;
+
+  if not exists (
+    select 1 from public.players
+    where lobby_id = v_lobby_id and player_id = p_player_id and status = 'active'
+  ) then raise exception 'not_a_member'; end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+
+  update public.players
+  set ready = coalesce(is_bot, false), is_alive = true,
+      pass_count = 0, clutch_pass_count = 0,
+      fastest_pass_ms = null, total_hold_ms = 0,
+      survival_streak = 0, last_pass_at = null
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'rematch_wait', holder_player_id = null, explode_at = null,
+      run_started_at = null, last_loser_player_id = null,
+      topic_a = null, topic_b = null, topic_selected = null,
+      topic_vote_ends_at = null, countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      current_attempt_id = null, used_answers = '{}',
+      round_number = 1, last_activity_at = now()
+  where id = v_lobby_id;
+end;
+$function$;
+
+COMMIT;
+
+
+-- ============================================================
+-- 020_validate_privacy.sql
+-- ============================================================
+-- ============================================================
+-- Migration 020: p_privacy in rpc_create_lobby validiert
+-- ============================================================
+-- Beim Vollständigkeits-Audit gefunden: anders als p_round_speed
+-- (bereits per Allow-List auf 'fast'/'normal'/'calm' geprüft) landete
+-- p_privacy ungeprüft in lobbies.privacy -- kein CHECK-Constraint,
+-- jeder beliebige String wäre durchgegangen. Aktuell nicht ausnutzbar
+-- (die "Public"-Option ist im Frontend noch deaktiviert, "Kommt
+-- später"), aber dieselbe Inkonsistenz wie beim runden_speed-Fund
+-- (Migration 011) -- jetzt einheitlich behandelt.
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.rpc_create_lobby(
+    p_host_name TEXT,
+    p_privacy TEXT,
+    p_max_players INTEGER,
+    p_round_seconds INTEGER,
+    p_user_id UUID DEFAULT NULL,
+    p_round_speed TEXT DEFAULT 'normal'
+) RETURNS TABLE(code TEXT, host_player_id UUID)
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid := gen_random_uuid();
+  v_code text;
+  v_host_player_id uuid := gen_random_uuid();
+  v_round_speed text := btrim(coalesce(p_round_speed, 'normal'));
+  v_privacy text := btrim(coalesce(p_privacy, 'private'));
+begin
+  if v_round_speed not in ('fast', 'normal', 'calm') then
+    v_round_speed := 'normal';
+  end if;
+  if v_privacy not in ('private', 'public') then
+    v_privacy := 'private';
+  end if;
+
+  v_code := public.generate_lobby_code(4);
+
+  insert into public.lobbies (
+    id, code, host_player_id, status, privacy, max_players, round_seconds, round_speed,
+    created_at, last_activity_at, host_user_id
+  ) values (
+    v_lobby_id, upper(v_code), v_host_player_id, 'waiting', v_privacy,
+    greatest(2, least(p_max_players, 12)),
+    coalesce(p_round_seconds, 25),
+    v_round_speed,
+    now(), now(), p_user_id
+  );
+
+  insert into public.players (id, lobby_id, player_id, name, ready, joined_at, last_seen_at, user_id)
+  values (gen_random_uuid(), v_lobby_id, v_host_player_id, left(trim(p_host_name), 24), false, now(), now(), p_user_id);
+
+  return query select upper(v_code), v_host_player_id;
 end;
 $function$;
 
