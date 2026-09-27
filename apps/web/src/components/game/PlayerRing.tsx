@@ -11,6 +11,8 @@ type Player = {
     // seat_index?: number;
 };
 
+type DisconnectedIds = Set<string> | string[];
+
 type PassEvent = {
     fromPlayerId: string;
     toPlayerId: string;
@@ -24,6 +26,8 @@ type Props = {
     passEvent: PassEvent | null;
     /** Player IDs that just got eliminated (animated burst). */
     explodedPlayerId?: string | null;
+    /** Player IDs whose last_seen_at heartbeat is stale (looks disconnected). */
+    disconnectedIds?: DisconnectedIds;
 };
 
 function initialsFor(name: string): string {
@@ -55,7 +59,19 @@ function bezier(p0: Pt, p1: Pt, p2: Pt, t: number): Pt {
     };
 }
 
-export function PlayerRing({ players, passEvent, holderPlayerId = null, mePlayerId = null, explodedPlayerId = null }: Props) {
+export function PlayerRing({
+    players,
+    passEvent,
+    holderPlayerId = null,
+    mePlayerId = null,
+    explodedPlayerId = null,
+    disconnectedIds,
+}: Props) {
+    const isDisconnected = useCallback(
+        (id: string) => (disconnectedIds instanceof Set ? disconnectedIds.has(id) : (disconnectedIds ?? []).includes(id)),
+        [disconnectedIds]
+    );
+
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     // Container size in state so we don't read refs during render
@@ -255,6 +271,7 @@ export function PlayerRing({ players, passEvent, holderPlayerId = null, mePlayer
                 const isHolder = !!holderPlayerId && p.player_id === holderPlayerId;
                 const isMe = !!mePlayerId && p.player_id === mePlayerId;
                 const isExploded = !!explodedPlayerId && p.player_id === explodedPlayerId;
+                const isStale = p.is_alive && isDisconnected(p.player_id);
                 const hue = hueFor(p.player_id);
 
                 return (
@@ -277,6 +294,11 @@ export function PlayerRing({ players, passEvent, holderPlayerId = null, mePlayer
                         {isHolder ? <span className="seatBadge" aria-hidden>🥔</span> : null}
                         {!p.is_alive ? <span className="seatDeadOverlay" aria-hidden>💀</span> : null}
                         {isExploded ? <span className="seatBoom" aria-hidden>💥</span> : null}
+                        {isStale ? (
+                            <span className="seatStale" title="Verbindung verloren?" aria-label="Verbindung verloren?">
+                                📡
+                            </span>
+                        ) : null}
                     </div>
                 );
             })}
@@ -421,6 +443,23 @@ export function PlayerRing({ players, passEvent, holderPlayerId = null, mePlayer
         }
         .seat.exploded{
           animation: seatShake 700ms cubic-bezier(.36,.07,.19,.97) both;
+        }
+        .seat .seatStale{
+          position: absolute;
+          bottom: -8px;
+          left: -8px;
+          background: rgba(120,20,20,0.78);
+          border: 1px solid rgba(255,255,255,0.24);
+          border-radius: 999px;
+          padding: 2px 5px;
+          font-size: 13px;
+          line-height: 1;
+          box-shadow: 0 6px 18px rgba(0,0,0,0.32);
+          animation: staleBlink 1.6s ease-in-out infinite;
+        }
+        @keyframes staleBlink{
+          0%,100% { opacity: 1; }
+          50% { opacity: 0.45; }
         }
         @keyframes seatHolderPulse{
           0%,100% { box-shadow: 0 18px 60px rgba(0,0,0,0.40), 0 0 0 5px rgba(255,149,0,0.20), 0 0 30px rgba(255,90,40,0.45), inset 0 1px 0 rgba(255,255,255,0.20); }

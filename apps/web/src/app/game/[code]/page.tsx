@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
+import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { usePassAttempt } from "@/hooks/usePassAttempt";
 import { useBotEngine } from "@/hooks/useBotEngine";
 import { useNewAchievements } from "@/hooks/useNewAchievements";
@@ -14,6 +15,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { AchievementToastPortal } from "@/components/AchievementToastPortal";
 import { BackdropFx } from "@/components/game/BackdropFx";
 import { notify } from "@/lib/notifications";
+import { GAME_MODES, type GameMode } from "@/lib/gameConfig";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
@@ -57,6 +59,10 @@ type LobbyState = {
     // Topic-Mechanik B: Antwort-Validierung
     current_attempt_id: string | null;
     used_answers: string[];
+
+    // Modus-Anzeige
+    game_mode: string | null;
+    pass_direction: number | null;
 };
 
 type Player = {
@@ -74,6 +80,7 @@ type Player = {
     fastest_pass_ms?: number | null;
     total_hold_ms?: number;
     survival_streak?: number;
+    last_seen_at?: string | null;
 };
 
 type VoteCounts = { a: number; b: number; r: number };
@@ -190,6 +197,10 @@ export default function GamePage() {
     // Rematch / reset busy
     const [endActionBusy, setEndActionBusy] = useState<null | "rematch" | "reset">(null);
 
+    // rematch_wait: Bereit-Toggle + Auto-Start sobald alle bereit sind
+    const [readyBusy, setReadyBusy] = useState(false);
+    const startRematchInFlightRef = useRef(false);
+
     // post-round feedback
     const lastLoserRef = useRef<string | null>(null);
 
@@ -251,6 +262,20 @@ export default function GamePage() {
     const allVoted = totalPlayers > 0 && votedPlayers >= totalPlayers;
 
     const nextUp = useMemo(() => pickNextAlive(players, lobby?.holder_player_id ?? null), [players, lobby?.holder_player_id]);
+
+    // Verbindung wirkt verloren: last_seen_at (Heartbeat alle ~8s) ist älter
+    // als 20s. Reines UI-Signal, ändert keine Server-Logik/Elimination.
+    const disconnectedIds = useMemo(() => {
+        const STALE_MS = 20000;
+        const now = Date.now();
+        const set = new Set<string>();
+        for (const p of players) {
+            if (!p.is_alive || !p.last_seen_at) continue;
+            const seen = Date.parse(p.last_seen_at);
+            if (!Number.isNaN(seen) && now - seen > STALE_MS) set.add(p.player_id);
+        }
+        return set;
+    }, [players]);
 
     // Winner / Ranking
     const winnerPlayer = useMemo(() => {
@@ -365,6 +390,13 @@ export default function GamePage() {
     }, []);
     const realtimeStatus = useLobbyRealtime(lobby?.id ?? null, reloadFromRealtime);
 
+    // Heartbeat: hält players.last_seen_at während des laufenden Spiels aktuell
+    // (auf der Lobby-Seite lief das schon, hier bisher nicht -> ohne das würde
+    // last_seen_at beim Rundenstart einfrieren und jeder Spieler sähe sofort
+    // als "getrennt" aus). Cleanup bleibt aus (rpc_cleanup_lobby fasst
+    // 'running' ohnehin nicht an) -- reine Sichtbarkeit hier.
+    useHeartbeat({ lobbyId: lobby?.id ?? null, playerId: mePlayerId, doCleanup: false });
+
     // -----------------------------
     // Topic-Mechanik B: aktueller Pass-Versuch + Vote-Status
     // -----------------------------
@@ -468,6 +500,9 @@ export default function GamePage() {
 
                     current_attempt_id: (raw.current_attempt_id as string | null) ?? null,
                     used_answers: (raw.used_answers as string[] | null) ?? [],
+
+                    game_mode: (raw.game_mode as string | null) ?? "original",
+                    pass_direction: (raw.pass_direction as number | null) ?? 1,
                 };
 
                 // Post-round loser toast (once)
@@ -528,6 +563,7 @@ export default function GamePage() {
                             "fastest_pass_ms",
                             "total_hold_ms",
                             "survival_streak",
+                            "last_seen_at",
                         ].join(",")
                     )
                     .eq("lobby_id", nextLobby.id)
@@ -695,6 +731,19 @@ export default function GamePage() {
         if (passEvent && lobby?.phase === "running") playFx("pass");
     }, [passEvent, lobby?.phase]);
 
+    // ---------- Teleport-Modus: sichtbares Signal statt Sync-Bug-Optik ----------
+    // Im Teleport-Modus springt die Kartoffel serverseitig bei JEDEM Pass zu
+    // einem zufälligen Spieler (rpc_pass_potato) -- ohne Hinweis sah das wie
+    // ein Realtime-Bug aus. Ein Toast pro Pass macht den Sprung als Feature
+    // erkennbar.
+    useEffect(() => {
+        if (!passEvent) return;
+        if (lobby?.phase !== "running") return;
+        if (lobby?.game_mode !== "teleport") return;
+        showToast("🌀 Teleport!", 1100);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [passEvent]);
+
     // Synced timers
     useEffect(() => {
         let raf = 0;
@@ -825,6 +874,47 @@ export default function GamePage() {
         }
         showToast("🔁 Rematch gestartet", 1200);
     }, [endActionBusy, supabase, code, showToast]);
+
+    // rematch_wait: Bereit-Toggle (gleiche RPC wie in der Lobby)
+    const handleToggleReady = useCallback(async () => {
+        if (!mePlayerId || !lobby) return;
+        if (readyBusy) return;
+
+        setReadyBusy(true);
+        try {
+            const { error } = await supabase.rpc("rpc_toggle_ready", {
+                p_lobby_id: lobby.id,
+                p_player_id: mePlayerId,
+            });
+            if (error) showToast(`❌ ${error.message}`, 2400);
+        } catch (e: unknown) {
+            showToast(`❌ ${getErrorMessage(e)}`, 2400);
+        } finally {
+            setReadyBusy(false);
+        }
+    }, [mePlayerId, lobby, readyBusy, supabase, showToast]);
+
+    const allReadyForRematch = useMemo(() => {
+        return players.length >= 2 && players.every((p) => !!p.ready);
+    }, [players]);
+
+    // rematch_wait: sobald alle bereit sind, Topic-Vote der nächsten Runde starten.
+    useEffect(() => {
+        if (!lobby) return;
+        if (lobby.phase !== "rematch_wait") return;
+        if (!allReadyForRematch) return;
+        if (startRematchInFlightRef.current) return;
+
+        startRematchInFlightRef.current = true;
+        void (async () => {
+            try {
+                const { error } = await supabase.rpc("rpc_start_rematch_if_ready", { p_code: code });
+                if (error) showToast(`❌ ${error.message}`, 2400);
+            } finally {
+                startRematchInFlightRef.current = false;
+            }
+        })();
+    }, [lobby, allReadyForRematch, supabase, code, showToast]);
 
     // Keyboard shortcuts: Space (pass), 1/2/3 (vote), R (rematch), M (mute)
     useEffect(() => {
@@ -1585,6 +1675,95 @@ export default function GamePage() {
     }
 
     // =========================================================
+    // PHASE: REMATCH_WAIT
+    // =========================================================
+    // rpc_rematch setzt diese Phase; vorher gab es dafür keinen eigenen
+    // Screen (sie fiel in den generischen "WARTEN"-Fallback), und
+    // rpc_start_rematch_if_ready wurde nie aufgerufen -> das Spiel blieb
+    // nach einem Rematch-Klick für immer hier stehen.
+    if (lobby.phase === "rematch_wait") {
+        const meReady = !!meRow?.ready;
+
+        return (
+            <main
+                style={{
+                    minHeight: "100vh",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 24,
+                    color: "white",
+                    background:
+                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.22) 0%, rgba(0,120,45,0.68) 80%)",
+                }}
+            >
+                <div style={{ width: "min(680px, 96vw)", textAlign: "center" }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>REMATCH</div>
+                    <div style={{ fontSize: "clamp(26px, 4vw, 42px)", fontWeight: 950, marginTop: 12 }}>🔁 Bereit für die nächste Runde?</div>
+                    <div style={{ marginTop: 8, opacity: 0.82, fontWeight: 700 }}>
+                        Sobald alle bereit sind, geht’s automatisch weiter zur Themenwahl.
+                    </div>
+
+                    <div style={{ marginTop: 22, display: "grid", gap: 8 }}>
+                        {players.map((p) => (
+                            <div
+                                key={p.player_id}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    padding: "10px 14px",
+                                    borderRadius: 14,
+                                    background: "rgba(0,0,0,0.22)",
+                                    border: "1px solid rgba(255,255,255,0.14)",
+                                    fontWeight: 800,
+                                }}
+                            >
+                                <span>
+                                    {p.name}
+                                    {mePlayerId === p.player_id ? " (du)" : ""}
+                                </span>
+                                <span>{p.ready ? "✅ Bereit" : "⏳ Wartet"}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div style={{ marginTop: 20 }}>
+                        <button
+                            type="button"
+                            className="btn btnPrimary"
+                            onClick={() => void handleToggleReady()}
+                            disabled={readyBusy || !mePlayerId}
+                        >
+                            {readyBusy ? <Spinner size={16} label="…" /> : meReady ? "❌ Nicht mehr bereit" : "✅ Bereit"}
+                        </button>
+                    </div>
+
+                    <ToastStack toasts={toasts} inline />
+                </div>
+
+                <style>{`
+          .btn{
+            appearance:none;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: rgba(0,0,0,0.22);
+            color: white;
+            border-radius: 999px;
+            padding: 10px 18px;
+            font-weight: 950;
+            cursor: pointer;
+            transition: transform .14s ease, filter .14s ease, border-color .14s ease;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+          }
+          .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
+          .btn:active{ transform: translateY(0px) scale(0.99); }
+          .btn:disabled{ opacity: .7; cursor: not-allowed; transform: none; }
+          .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
+        `}</style>
+            </main>
+        );
+    }
+
+    // =========================================================
     // PHASE: NOT RUNNING
     // =========================================================
     if (lobby.phase !== "running") {
@@ -1666,6 +1845,7 @@ export default function GamePage() {
                 mePlayerId={mePlayerId}
                 passEvent={passEvent}
                 explodedPlayerId={explodedPlayerId}
+                disconnectedIds={disconnectedIds}
             />
 
             {turnOverlay ? (
@@ -1674,8 +1854,21 @@ export default function GamePage() {
                 </div>
             ) : null}
 
-            {/* Top-right: Heat + Connection + Audio */}
+            {/* Top-right: Modus + Heat + Connection + Audio */}
             <div className="topRight" aria-hidden={false}>
+                <div className="modePill" title={GAME_MODES[(lobby.game_mode as GameMode) ?? "original"]?.desc ?? lobby.game_mode ?? "Original"}>
+                    <span>{GAME_MODES[(lobby.game_mode as GameMode) ?? "original"]?.icon ?? "🥔"}</span>
+                    <span>{GAME_MODES[(lobby.game_mode as GameMode) ?? "original"]?.label ?? lobby.game_mode ?? "Original"}</span>
+                    {lobby.game_mode === "reverse" ? (
+                        <span
+                            className="modeArrow"
+                            aria-hidden
+                            style={{ transform: `rotate(${(lobby.pass_direction ?? 1) < 0 ? 180 : 0}deg)` }}
+                        >
+                            ➜
+                        </span>
+                    ) : null}
+                </div>
                 <div
                     className={`heatPill heat-${heatLevel}`}
                     style={{ background: heatStyle[heatLevel].color, boxShadow: heatStyle[heatLevel].glow }}
@@ -2031,6 +2224,25 @@ export default function GamePage() {
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           user-select: none;
+        }
+        .modePill{
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 999px;
+          font-weight: 950;
+          font-size: 13px;
+          letter-spacing: 0.3px;
+          background: rgba(0,0,0,0.26);
+          border: 1px solid rgba(255,255,255,0.16);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          user-select: none;
+        }
+        .modeArrow{
+          display: inline-block;
+          transition: transform 260ms cubic-bezier(.2,1,.2,1);
         }
         .heatPill.heat-high{
           animation: heatBlink 0.9s ease-in-out infinite;
