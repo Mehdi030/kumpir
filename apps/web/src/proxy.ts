@@ -14,11 +14,17 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
 const AUTH_ROUTES = ["/login", "/register", "/verified", "/auth"];
 
+// Auth-only Features (Etappe 3): ohne Login nutzlos. Im Gast-Modus können
+// Nutzer eh nie einloggen (siehe oben), also direkt auf "/" umleiten statt
+// sie auf einer "Bitte einloggen"-Seite stranden zu lassen, deren Login-
+// Button ohnehin wieder hierher umgeleitet würde.
+const AUTH_ONLY_ROUTES = ["/achievements", "/leaderboard", "/friends"];
+
 export function proxy(req: NextRequest) {
     if (!AUTH_DISABLED) return NextResponse.next();
 
     const p = req.nextUrl.pathname;
-    const isAuthRoute = AUTH_ROUTES.some((route) => p.startsWith(route));
+    const isAuthRoute = AUTH_ROUTES.some((route) => p.startsWith(route)) || AUTH_ONLY_ROUTES.some((route) => p.startsWith(route));
 
     if (isAuthRoute) {
         const url = req.nextUrl.clone();

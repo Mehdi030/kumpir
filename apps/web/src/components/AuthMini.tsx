@@ -39,6 +39,12 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
         );
     }
 
+    // Achievements/Leaderboard/Friends sind Auth-only (Etappe 3). Diese
+    // Links rendern nur, wenn `user` gesetzt ist -- im aktuellen Gast-Modus
+    // (NEXT_PUBLIC_AUTH_DISABLED=1) kann niemand einloggen, also sind sie
+    // hier faktisch tot. Direkte URL-Aufrufe der drei Routen werden
+    // zusätzlich in src/proxy.ts auf "/" umgeleitet, damit niemand auf
+    // einer nutzlosen "Bitte einloggen"-Seite landet.
     return (
         <div className={variant === "header" ? "seg" : "actionsRow"}>
             <NotifyToggle className={variant === "header" ? "segBtn" : "btn btnSecondary btnSmall"} />
