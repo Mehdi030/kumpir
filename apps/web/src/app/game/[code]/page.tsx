@@ -894,15 +894,16 @@ export default function GamePage() {
     // Rematch handler (also bound to "R" key)
     const handleRematch = useCallback(async () => {
         if (endActionBusy) return;
+        if (!mePlayerId) return;
         setEndActionBusy("rematch");
-        const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
+        const { error } = await supabase.rpc("rpc_rematch", { p_code: code, p_player_id: mePlayerId });
         if (error) {
             setEndActionBusy(null);
             showToast(`❌ Rematch: ${error.message}`, 2400);
             return;
         }
         showToast("🔁 Rematch gestartet", 1200);
-    }, [endActionBusy, supabase, code, showToast]);
+    }, [endActionBusy, mePlayerId, supabase, code, showToast]);
 
     // rematch_wait: Bereit-Toggle (gleiche RPC wie in der Lobby)
     const handleToggleReady = useCallback(async () => {
@@ -1437,8 +1438,9 @@ export default function GamePage() {
                                     className="btn btnPrimary"
                                     onClick={async () => {
                                         if (endActionBusy) return;
+                                        if (!mePlayerId) return;
                                         setEndActionBusy("reset");
-                                        const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code });
+                                        const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code, p_player_id: mePlayerId });
                                         if (error) {
                                             setEndActionBusy(null);
                                             return showToast(`❌ Reset: ${error.message}`, 2400);
@@ -1455,8 +1457,9 @@ export default function GamePage() {
                                     className="btn btnSecondary"
                                     onClick={async () => {
                                         if (endActionBusy) return;
+                                        if (!mePlayerId) return;
                                         setEndActionBusy("rematch");
-                                        const { error } = await supabase.rpc("rpc_rematch", { p_code: code });
+                                        const { error } = await supabase.rpc("rpc_rematch", { p_code: code, p_player_id: mePlayerId });
                                         if (error) {
                                             setEndActionBusy(null);
                                             return showToast(`❌ Rematch: ${error.message}`, 2400);
