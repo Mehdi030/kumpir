@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kumpir-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--workspace", "apps/web", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}
