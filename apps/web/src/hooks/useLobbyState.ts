@@ -60,8 +60,9 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
             .single();
 
         if (lobbyRes.error || !lobbyRes.data) {
-            setLobby(null);
-            setPlayers([]);
+            // Transient fetch error: keep last known-good lobby/players so callers
+            // (e.g. the "removed from lobby" detection) don't misread a network
+            // blip as the player having left/been kicked.
             setError(lobbyRes.error?.message || "Lobby nicht gefunden.");
             return;
         }
@@ -84,7 +85,7 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
             .order("joined_at", { ascending: true });
 
         if (playersRes.error) {
-            setPlayers([]);
+            // Keep the last known-good players list on a transient error (see above).
             setError(playersRes.error.message || "Konnte Spieler nicht laden.");
             return;
         }
@@ -94,9 +95,10 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
 
     // Realtime-first: when the channel is "live", we react to events. Polling
     // continues as a safety net but at a slower cadence.
-    const realtimeStatus: RealtimeStatus = useLobbyRealtime(lobby?.id ?? null, () => {
-        void load();
-    });
+    // `load` is passed directly (not wrapped in a fresh arrow fn) because it's
+    // already stable via useCallback — a new callback identity here would make
+    // useLobbyRealtime's effect re-subscribe the channel on every render.
+    const realtimeStatus: RealtimeStatus = useLobbyRealtime(lobby?.id ?? null, load);
 
     useEffect(() => {
         let alive = true;
