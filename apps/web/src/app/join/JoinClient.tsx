@@ -37,6 +37,11 @@ function getStoredName() {
     return localStorage.getItem("kumpir_player_name") || "";
 }
 
+function getStoredPlayerId(): string | null {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("kumpir_player_id") || sessionStorage.getItem("kumpir_player_id");
+}
+
 function getErrorMessage(err: unknown): string {
     if (err instanceof Error) return err.message;
     if (typeof err === "object" && err !== null && "message" in err) {
@@ -128,9 +133,12 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 return;
             }
 
-            // Client-generated UUID makes the join idempotent (same id on retry).
-            // Falls back to legacy join_lobby RPC if rpc_join_lobby ist nicht verfügbar.
-            const myPlayerId = crypto.randomUUID();
+            // Wiederverwenden statt immer neu erzeugen: rpc_join_lobby reaktiviert per
+            // ON CONFLICT (lobby_id, player_id) dieselbe Zeile, wenn man denselben
+            // Join-Link nach einem Reload/Crash erneut öffnet. Eine neue player_id (wie
+            // zuvor bei jedem Aufruf) hätte stattdessen einen doppelten Geister-Spieler
+            // in der Lobby erzeugt.
+            const myPlayerId = getStoredPlayerId() ?? crypto.randomUUID();
 
             const { error: rpcErr } = await supabase.rpc("rpc_join_lobby", {
                 p_code: lobbyCode,
