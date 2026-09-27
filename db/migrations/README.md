@@ -26,6 +26,7 @@ In dieser Reihenfolge ausführen. Jede Migration ist idempotent (kann wiederholt
 | 015 | [`015_security_definer_views.sql`](015_security_definer_views.sql) | `leaderboard_view` + `friends_view` liefen ohne `security_invoker` (Supabase Advisor: CRITICAL) — RLS der referenzierten Tabellen wurde beim Zugriff über die View umgangen | **PFLICHT** (Sicherheit) |
 | 016 | [`016_function_search_path_hardening.sql`](016_function_search_path_hardening.sql) | 15 SECURITY DEFINER Funktionen ohne `SET search_path` gegen search_path-Hijacking abgesichert (reine Config-Änderung, kein Verhaltens-Unterschied) | Empfohlen (Härtung) |
 | 017 | [`017_restrict_email_lookup.sql`](017_restrict_email_lookup.sql) | `get_email_for_username` gab für JEDEN bekannten Username die Klartext-Email an anon/authenticated heraus (Username→Email-Harvesting) — EXECUTE entzogen, Username-Login läuft jetzt über `actions/login.ts` + `SUPABASE_SERVICE_ROLE_KEY` | **PFLICHT** (Sicherheit) — braucht `SUPABASE_SERVICE_ROLE_KEY` in der Server-Umgebung, sonst funktioniert nur noch Email-Login |
+| 018 | [`018_resolve_stale_attempts.sql`](018_resolve_stale_attempts.sql) | Neue RPC `rpc_resolve_stale_attempt`: löst einen hängenden Pass-Versuch nach 8s per Mehrheit der bis dahin abgegebenen Stimmen auf (bei 0:0 im Zweifel für den Halter) — ohne das blockierte ein einzelner Non-Voter/Ablehner bei 3 lebenden Spielern jeden Pass für immer | **PFLICHT** — sonst bleibt die in BALANCE_REPORT.md (Fund #2) beschriebene Blockade bestehen |
 
 ## Was du **NICHT** machen musst
 

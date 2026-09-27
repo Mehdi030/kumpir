@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — RPC-Funktionen (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 017 (Stand 2026-09-27).
+-- Migration 018 (Stand 2026-09-27).
 -- Quelle: User-Dump via SQL-Editor Query 2 aus db/HOW_TO_DUMP.md
 -- ============================================================
 
@@ -1158,6 +1158,29 @@ AS $function$
 begin
   update public.pass_attempts set status = 'rejected', decided_at = now() where id = p_attempt_id;
   update public.lobbies set current_attempt_id = null where current_attempt_id = p_attempt_id;
+end;
+$function$;
+
+
+-- ============================================================
+-- Migration 018: Timeout für hängende Pass-Versuche (siehe BALANCE_REPORT.md Fund #2)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.rpc_resolve_stale_attempt(p_attempt_id UUID)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_attempt public.pass_attempts%ROWTYPE;
+begin
+  select * into v_attempt from public.pass_attempts where id = p_attempt_id for update;
+  if not found then return; end if;
+  if v_attempt.status <> 'pending' then return; end if;
+  if v_attempt.created_at > now() - interval '8 seconds' then return; end if;
+
+  if v_attempt.accept_count >= v_attempt.reject_count then
+    perform public._finalize_attempt_accept(v_attempt.id);
+  else
+    perform public._finalize_attempt_reject(v_attempt.id);
+  end if;
 end;
 $function$;
 

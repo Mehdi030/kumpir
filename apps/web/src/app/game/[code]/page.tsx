@@ -24,6 +24,13 @@ import { ConnectionPill } from "@/components/ConnectionPill";
 import { AudioControl } from "@/components/AudioControl";
 import { playFx } from "@/lib/gameFx";
 
+// Ein pass_attempt ohne Timeout konnte für immer "pending" hängen bleiben,
+// sobald bei wenigen lebenden Spielern (v_alive <= 2) Einstimmigkeit
+// gefordert war und ein einzelner Spieler nicht (oder gegensätzlich)
+// abstimmte -- siehe BALANCE_REPORT.md, Fund #2. Jeder verbundene Client
+// löst nach dieser Frist rpc_resolve_stale_attempt aus (idempotent).
+const STALE_ATTEMPT_MS = 8000;
+
 type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
 
 type LobbyState = {
@@ -406,6 +413,25 @@ export default function GamePage() {
         mePlayerId
     );
 
+    // Watchdog: löst einen hängenden Pass-Versuch nach STALE_ATTEMPT_MS auf
+    // (Mehrheit der bis dahin abgegebenen Stimmen, bei 0:0 im Zweifel für
+    // den Halter). Läuft auf jedem verbundenen Client -- die RPC ist
+    // idempotent, mehrfache Aufrufe sind harmlos.
+    useEffect(() => {
+        const attempt = passAttempt.attempt;
+        if (!attempt || attempt.status !== "pending") return;
+
+        const createdMs = Date.parse(attempt.created_at);
+        if (Number.isNaN(createdMs)) return;
+
+        const delay = Math.max(0, createdMs + STALE_ATTEMPT_MS - Date.now());
+        const t = window.setTimeout(() => {
+            void supabase.rpc("rpc_resolve_stale_attempt", { p_attempt_id: attempt.id });
+        }, delay);
+
+        return () => window.clearTimeout(t);
+    }, [passAttempt.attempt, supabase]);
+
     // -----------------------------
     // Achievement-Toast — beobachtet neue Unlocks beim Spielende
     // -----------------------------
@@ -618,14 +644,17 @@ export default function GamePage() {
                 // Best-effort phase automations
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
                     const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
-                    const iAmHolderNow = nextLobby.holder_player_id === mePlayerId;
 
-                    // Keep backend tick logic as-is (server decides explosions, etc.)
-                    if (iAmHolderNow) {
-                        const explodeMs = Date.parse(nextLobby.explode_at);
-                        const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
-                        if (meAlive && due) void rpcTickGame(code);
-                    }
+                    // Every alive, connected client checks the timer -- not just the
+                    // current holder. rpc_tick_game only ever acts once explode_at has
+                    // actually passed (row-locked, idempotent), so redundant calls are
+                    // harmless. Gating this on "only the holder's own browser" left the
+                    // round permanently stuck whenever the holder was a bot (no client
+                    // of its own) or had disconnected -- nobody was left to ever call
+                    // it. See BALANCE_REPORT.md, Fund #1.
+                    const explodeMs = Date.parse(nextLobby.explode_at);
+                    const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
+                    if (meAlive && due) void rpcTickGame(code);
                 }
 
                 // topic_vote finalize
