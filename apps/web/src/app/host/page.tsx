@@ -135,6 +135,7 @@ export default function HostPage() {
                 p_max_players: maxPlayers,
                 p_round_seconds: roundSeconds,
                 p_user_id: user?.id ?? null,
+                p_round_speed: roundSpeed,
             });
 
             if (error) {
@@ -169,6 +170,22 @@ export default function HostPage() {
                 return;
             }
 
+            if (mode && mode !== "original") {
+                const { data: lobbyRow, error: lobbyErr } = await supabase
+                    .from("lobbies")
+                    .select("id")
+                    .eq("code", code)
+                    .single();
+
+                if (!lobbyErr && lobbyRow?.id) {
+                    await supabase.rpc("set_lobby_mode", {
+                        p_lobby_id: lobbyRow.id,
+                        p_me_player_id: hostPlayerId,
+                        p_mode: mode,
+                    });
+                }
+            }
+
             router.push(`/lobby/${code}`);
         } catch (e: unknown) {
             setCreateError(getErrorMessage(e));
@@ -176,7 +193,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, supabase, privacy, maxPlayers, router, user?.id]);
+    }, [canCreate, hostName, roundSpeed, mode, supabase, privacy, maxPlayers, router, user?.id]);
 
     return (
         <main className="container">
