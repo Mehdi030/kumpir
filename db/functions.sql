@@ -1,6 +1,7 @@
 -- ============================================================
 -- KUMPIR — RPC-Funktionen (gedumpt aus Supabase)
--- Stand: 2026-05-11
+-- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
+-- Migration 014 (Stand 2026-09-27).
 -- Quelle: User-Dump via SQL-Editor Query 2 aus db/HOW_TO_DUMP.md
 -- ============================================================
 
@@ -260,9 +261,14 @@ $function$;
 
 -- ============================================================
 -- AKTIV: rpc_join_lobby (im Frontend genutzt)
+-- Stand nach Migration 004: + p_user_id (Cross-Device-Reaktivierung).
 -- ============================================================
-CREATE OR REPLACE FUNCTION public.rpc_join_lobby(p_code text, p_player_id uuid, p_name text)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+CREATE OR REPLACE FUNCTION public.rpc_join_lobby(
+    p_code TEXT,
+    p_player_id UUID,
+    p_name TEXT,
+    p_user_id UUID DEFAULT NULL
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
   v_lobby_id uuid;
@@ -282,21 +288,34 @@ begin
 
   if v_active_count >= v_max_players then raise exception 'lobby_full'; end if;
 
+  if p_user_id is not null then
+    update public.players
+    set name = left(trim(p_name), 24),
+        status = 'active',
+        left_at = null,
+        kicked_at = null,
+        last_seen_at = now()
+    where lobby_id = v_lobby_id and user_id = p_user_id;
+
+    if found then return; end if;
+  end if;
+
   select coalesce(min(s.i), 0) into v_next_seat
   from generate_series(0, v_max_players - 1) as s(i)
   left join public.players p
     on p.lobby_id = v_lobby_id and p.seat_index = s.i and p.status = 'active'
   where p.id is null;
 
-  insert into public.players (lobby_id, player_id, name, status, seat_index, joined_at, last_seen_at)
-  values (v_lobby_id, p_player_id, left(trim(p_name), 24), 'active', v_next_seat, now(), now())
+  insert into public.players (lobby_id, player_id, name, status, seat_index, joined_at, last_seen_at, user_id)
+  values (v_lobby_id, p_player_id, left(trim(p_name), 24), 'active', v_next_seat, now(), now(), p_user_id)
   on conflict (lobby_id, player_id) do update set
     name = excluded.name,
     status = 'active',
     left_at = null,
     kicked_at = null,
     last_seen_at = now(),
-    seat_index = coalesce(public.players.seat_index, excluded.seat_index);
+    seat_index = coalesce(public.players.seat_index, excluded.seat_index),
+    user_id = coalesce(public.players.user_id, excluded.user_id);
 end;
 $function$;
 
@@ -428,11 +447,27 @@ end;
 $function$;
 
 
+-- Stand nach Migration 011: explode_at nutzt calc_explode_seconds(round_speed,
+-- alive_count, round_number) statt fix 25s. Stand nach Migration 010:
+-- used_answers/current_attempt_id werden bei jedem Rundenstart geleert.
 CREATE OR REPLACE FUNCTION public.rpc_advance_from_countdown(p_lobby_id uuid)
  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
-declare v_holder uuid;
+declare
+  v_holder uuid;
+  v_alive_count int;
+  v_round_speed text;
+  v_round_number int;
+  v_explode_seconds numeric;
 begin
+  select round_speed, coalesce(round_number, 0)
+    into v_round_speed, v_round_number
+  from public.lobbies where id = p_lobby_id;
+
+  select count(*) into v_alive_count
+  from public.players
+  where lobby_id = p_lobby_id and status = 'active' and is_alive = true;
+
   select player_id into v_holder
   from public.players
   where lobby_id = p_lobby_id and status = 'active' and is_alive = true
@@ -440,13 +475,21 @@ begin
 
   if v_holder is null then raise exception 'Kein Startspieler gefunden'; end if;
 
+  v_explode_seconds := public.calc_explode_seconds(
+    coalesce(v_round_speed, 'normal'),
+    greatest(1, v_alive_count),
+    greatest(1, v_round_number)
+  );
+
   update public.lobbies
   set phase = 'running',
       holder_player_id = v_holder,
       run_started_at = now(),
-      explode_at = now() + interval '25 seconds',
+      explode_at = now() + (v_explode_seconds * interval '1 second'),
       countdown_started_at = null,
       countdown_ends_at = null,
+      used_answers = '{}',
+      current_attempt_id = null,
       last_activity_at = now()
   where id = p_lobby_id and phase = 'countdown';
 end;
@@ -494,28 +537,42 @@ end;
 $function$;
 
 
-CREATE OR REPLACE FUNCTION public.rpc_create_lobby(p_host_name text, p_privacy text, p_max_players integer, p_round_seconds integer)
- RETURNS TABLE(code text, host_player_id uuid)
+-- Stand nach Migration 011: + p_user_id (Migration 004) + p_round_speed (Migration 011).
+CREATE OR REPLACE FUNCTION public.rpc_create_lobby(
+    p_host_name TEXT,
+    p_privacy TEXT,
+    p_max_players INTEGER,
+    p_round_seconds INTEGER,
+    p_user_id UUID DEFAULT NULL,
+    p_round_speed TEXT DEFAULT 'normal'
+) RETURNS TABLE(code TEXT, host_player_id UUID)
  LANGUAGE plpgsql SECURITY DEFINER
 AS $function$
 declare
   v_lobby_id uuid := gen_random_uuid();
   v_code text;
   v_host_player_id uuid := gen_random_uuid();
+  v_round_speed text := btrim(coalesce(p_round_speed, 'normal'));
 begin
+  if v_round_speed not in ('fast', 'normal', 'calm') then
+    v_round_speed := 'normal';
+  end if;
+
   v_code := public.generate_lobby_code(4);
 
   insert into public.lobbies (
-    id, code, host_player_id, status, privacy, max_players, round_seconds, created_at, last_activity_at, host_user_id
+    id, code, host_player_id, status, privacy, max_players, round_seconds, round_speed,
+    created_at, last_activity_at, host_user_id
   ) values (
     v_lobby_id, upper(v_code), v_host_player_id, 'waiting', p_privacy,
     greatest(2, least(p_max_players, 12)),
     coalesce(p_round_seconds, 25),
-    now(), now(), null
+    v_round_speed,
+    now(), now(), p_user_id
   );
 
   insert into public.players (id, lobby_id, player_id, name, ready, joined_at, last_seen_at, user_id)
-  values (gen_random_uuid(), v_lobby_id, v_host_player_id, left(trim(p_host_name), 24), false, now(), now(), null);
+  values (gen_random_uuid(), v_lobby_id, v_host_player_id, left(trim(p_host_name), 24), false, now(), now(), p_user_id);
 
   return query select upper(v_code), v_host_player_id;
 end;
@@ -586,6 +643,8 @@ end;
 $function$;
 
 
+-- Stand nach Migration 010: used_answers/current_attempt_id werden mit
+-- geleert (vorher blieben alte Antworten über den Rematch hinweg bestehen).
 CREATE OR REPLACE FUNCTION public.rpc_rematch(p_code text)
  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
@@ -599,7 +658,7 @@ begin
   delete from public.topic_votes where lobby_id = v_lobby_id;
 
   update public.players
-  set ready = false, is_alive = true,
+  set ready = coalesce(is_bot, false), is_alive = true,
       pass_count = 0, clutch_pass_count = 0,
       fastest_pass_ms = null, total_hold_ms = 0,
       survival_streak = 0, last_pass_at = null
@@ -611,6 +670,7 @@ begin
       topic_a = null, topic_b = null, topic_selected = null,
       topic_vote_ends_at = null, countdown_started_at = null, countdown_ends_at = null,
       topic_tie_choices = null, topic_tie_pick = null,
+      current_attempt_id = null, used_answers = '{}',
       round_number = 1, last_activity_at = now()
   where id = v_lobby_id;
 end;
@@ -618,9 +678,15 @@ $function$;
 
 
 -- ============================================================
--- BUG: rpc_start_rematch_if_ready nutzt `topics.name`,
--- aber rpc_begin_topic_vote nutzt `topic_pool.text`.
--- Inkonsistenz! Sollte eines von beiden umgestellt werden.
+-- Stand nach Migration 003: nutzt jetzt topic_pool.text wie
+-- rpc_begin_topic_vote (vorher: Bug, nutzte die tote `topics`-Tabelle,
+-- die seit Migration 013 nicht mehr existiert).
+--
+-- Wird seit Etappe "Rematch-Fix" (Bug #1) vom Frontend im rematch_wait-
+-- Screen aufgerufen, sobald alle Spieler auf "Bereit" stehen (siehe
+-- game/[code]/page.tsx) -- vorher war diese Funktion definiert, aber
+-- von nirgends im Frontend erreichbar, wodurch rpc_rematch in
+-- 'rematch_wait' hängen blieb.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_start_rematch_if_ready(p_code text)
  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
@@ -641,27 +707,28 @@ begin
   if v_active_count < 2 then raise exception 'Mindestens 2 aktive Spieler nötig'; end if;
   if v_ready_count <> v_active_count then return; end if;
 
-  -- ⚠️ nutzt topics, nicht topic_pool wie rpc_begin_topic_vote!
-  with picked as (
-    select name from public.topics where active = true order by random() limit 2
-  )
-  select
-    max(case when rn = 1 then name end),
-    max(case when rn = 2 then name end)
-  into v_topic_a, v_topic_b
-  from (select name, row_number() over () as rn from picked) x;
+  select t.text into v_topic_a
+  from public.topic_pool t
+  where t.active is true
+  order by random() limit 1;
+
+  select t.text into v_topic_b
+  from public.topic_pool t
+  where t.active is true and t.text <> v_topic_a
+  order by random() limit 1;
 
   if v_topic_a is null or v_topic_b is null then
-    raise exception 'Nicht genug aktive Themen vorhanden';
+    raise exception 'Nicht genug Themen im topic_pool';
   end if;
 
   delete from public.topic_votes where lobby_id = v_lobby_id;
-  update public.players set ready = false
+  update public.players set ready = coalesce(is_bot, false)
   where lobby_id = v_lobby_id and status = 'active';
 
   update public.lobbies
   set phase = 'topic_vote',
       topic_a = v_topic_a, topic_b = v_topic_b, topic_selected = null,
+      topic_vote_started_at = now(),
       topic_vote_ends_at = now() + interval '10 seconds',
       countdown_started_at = null, countdown_ends_at = null,
       topic_tie_choices = null, topic_tie_pick = null,
@@ -673,7 +740,50 @@ $function$;
 
 
 -- ============================================================
+-- Migration 009: rpc_reset_lobby (fehlte komplett, siehe TESTREPORT.md)
+-- Button "Zurück zur Lobby" auf dem Finished-Screen.
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.rpc_reset_lobby(p_code TEXT)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid;
+begin
+  select id into v_lobby_id from public.lobbies
+  where code = upper(trim(p_code)) limit 1;
+
+  if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+
+  update public.players
+  set ready = coalesce(is_bot, false), is_alive = true,
+      pass_count = 0, clutch_pass_count = 0,
+      fastest_pass_ms = null, total_hold_ms = 0,
+      survival_streak = 0, last_pass_at = null
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'waiting', locked = false,
+      holder_player_id = null, explode_at = null,
+      run_started_at = null, last_loser_player_id = null,
+      topic_a = null, topic_b = null, topic_selected = null,
+      topic_vote_started_at = null, topic_vote_ends_at = null,
+      countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      current_attempt_id = null, used_answers = '{}',
+      round_number = 0, pass_direction = 1,
+      last_activity_at = now()
+  where id = v_lobby_id;
+end;
+$function$;
+
+
+-- ============================================================
 -- AKTIV: rpc_tick_game — Eliminierung + Mode-aware next holder
+-- Stand nach Migration 011: nächste explode_at nutzt
+-- calc_explode_seconds(round_speed, alive_count, round_number)
+-- statt fix 15s.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_tick_game(p_code text)
  RETURNS void LANGUAGE plpgsql SECURITY DEFINER
@@ -681,11 +791,12 @@ AS $function$
 declare
   v_now timestamptz := now();
   v_lobby_id uuid; v_phase text; v_holder uuid; v_explode_at timestamptz; v_game_mode text;
+  v_round_speed text; v_round_number int;
   v_alive_count int; v_loser uuid; v_next_holder uuid;
-  v_round_duration interval := interval '15 seconds';
+  v_round_duration interval;
 begin
-  select id, phase, holder_player_id, explode_at, game_mode
-    into v_lobby_id, v_phase, v_holder, v_explode_at, v_game_mode
+  select id, phase, holder_player_id, explode_at, game_mode, round_speed
+    into v_lobby_id, v_phase, v_holder, v_explode_at, v_game_mode, v_round_speed
   from public.lobbies where code = upper(p_code) for update;
 
   if v_lobby_id is null then raise exception 'Lobby not found'; end if;
@@ -708,7 +819,8 @@ begin
   set round_number = coalesce(round_number, 0) + 1,
       last_loser_player_id = v_loser,
       last_activity_at = v_now
-  where id = v_lobby_id;
+  where id = v_lobby_id
+  returning round_number into v_round_number;
 
   select count(*) into v_alive_count
   from public.players
@@ -748,6 +860,12 @@ begin
     where lobby_id = v_lobby_id and status = 'active' and is_alive = true and player_id != v_loser
     order by random() limit 1;
   end if;
+
+  v_round_duration := public.calc_explode_seconds(
+    coalesce(v_round_speed, 'normal'),
+    v_alive_count,
+    coalesce(v_round_number, 1)
+  ) * interval '1 second';
 
   update public.lobbies
   set holder_player_id = v_next_holder,
@@ -928,14 +1046,352 @@ $function$;
 
 
 -- ============================================================
+-- Migration 001: Topic-Mechanik B (Antwort-Validierung)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.rpc_attempt_pass(
+    p_code TEXT, p_player_id UUID, p_answer TEXT
+) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER
+AS $function$
+declare
+  v_lobby public.lobbies%ROWTYPE;
+  v_attempt uuid;
+  v_clean text;
+begin
+  select * into v_lobby from public.lobbies where code = upper(p_code) for update;
+  if not found then raise exception 'lobby_not_found'; end if;
+  if v_lobby.phase <> 'running' then raise exception 'lobby_not_running'; end if;
+  if v_lobby.holder_player_id <> p_player_id then raise exception 'not_holder'; end if;
+  if v_lobby.current_attempt_id is not null then raise exception 'attempt_already_open'; end if;
+
+  v_clean := trim(p_answer);
+  if length(v_clean) = 0 then raise exception 'empty_answer'; end if;
+  if length(v_clean) > 60 then raise exception 'answer_too_long'; end if;
+
+  if exists (
+    select 1 from unnest(v_lobby.used_answers) as used
+    where lower(used) = lower(v_clean)
+  ) then raise exception 'answer_already_used'; end if;
+
+  insert into public.pass_attempts (lobby_id, round_number, holder_player_id, answer, topic)
+    values (v_lobby.id, coalesce(v_lobby.round_number, 0), p_player_id, v_clean, coalesce(v_lobby.topic_selected, v_lobby.topic, ''))
+    returning id into v_attempt;
+
+  update public.lobbies set current_attempt_id = v_attempt where id = v_lobby.id;
+  return v_attempt;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_vote_answer(
+    p_attempt_id UUID, p_voter_id UUID, p_accept BOOLEAN
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER
+AS $function$
+declare
+  v_attempt public.pass_attempts%ROWTYPE;
+  v_alive int; v_needed int;
+begin
+  select * into v_attempt from public.pass_attempts where id = p_attempt_id for update;
+  if not found then raise exception 'attempt_not_found'; end if;
+  if v_attempt.status <> 'pending' then raise exception 'attempt_closed'; end if;
+  if v_attempt.holder_player_id = p_voter_id then raise exception 'holder_cannot_vote'; end if;
+
+  insert into public.pass_attempt_votes (attempt_id, voter_id, accept)
+    values (p_attempt_id, p_voter_id, p_accept)
+    on conflict (attempt_id, voter_id) do nothing;
+
+  update public.pass_attempts
+  set accept_count = (select count(*) from public.pass_attempt_votes where attempt_id = p_attempt_id and accept = true),
+      reject_count = (select count(*) from public.pass_attempt_votes where attempt_id = p_attempt_id and accept = false)
+  where id = p_attempt_id
+  returning * into v_attempt;
+
+  select count(*) into v_alive
+  from public.players
+  where lobby_id = v_attempt.lobby_id and status = 'active' and is_alive = true
+    and player_id <> v_attempt.holder_player_id;
+
+  v_needed := (v_alive / 2) + 1;
+
+  if v_attempt.accept_count >= v_needed then
+    perform public._finalize_attempt_accept(v_attempt.id);
+  elsif v_attempt.reject_count >= v_needed then
+    perform public._finalize_attempt_reject(v_attempt.id);
+  end if;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public._finalize_attempt_accept(p_attempt_id UUID)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER
+AS $function$
+declare
+  v_attempt public.pass_attempts%ROWTYPE;
+  v_lobby public.lobbies%ROWTYPE;
+  v_code text;
+begin
+  select * into v_attempt from public.pass_attempts where id = p_attempt_id;
+  select * into v_lobby from public.lobbies where id = v_attempt.lobby_id;
+  v_code := v_lobby.code;
+
+  update public.pass_attempts set status = 'accepted', decided_at = now() where id = p_attempt_id;
+
+  update public.lobbies
+  set current_attempt_id = null,
+      used_answers = array_append(used_answers, v_attempt.answer)
+  where id = v_lobby.id;
+
+  perform public.rpc_pass_potato(v_code, v_attempt.holder_player_id);
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public._finalize_attempt_reject(p_attempt_id UUID)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER
+AS $function$
+begin
+  update public.pass_attempts set status = 'rejected', decided_at = now() where id = p_attempt_id;
+  update public.lobbies set current_attempt_id = null where current_attempt_id = p_attempt_id;
+end;
+$function$;
+
+
+-- ============================================================
+-- Migration 005: Achievements + Lifetime-Stats (nur eingeloggte Spieler)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.aggregate_player_stats(p_lobby_id UUID)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_winner_user_id uuid;
+begin
+  select p.user_id into v_winner_user_id
+  from public.players p
+  join public.lobbies l on l.id = p_lobby_id
+  where p.lobby_id = p_lobby_id and p.player_id = l.holder_player_id
+    and p.is_alive = true and p.user_id is not null
+  limit 1;
+
+  insert into public.player_lifetime_stats (
+    user_id, games_played, wins, total_passes, total_clutch_passes,
+    fastest_pass_ms, total_hold_ms, best_survival_streak, updated_at
+  )
+  select p.user_id, 1,
+    case when p.user_id = v_winner_user_id then 1 else 0 end,
+    coalesce(p.pass_count, 0), coalesce(p.clutch_pass_count, 0),
+    p.fastest_pass_ms, coalesce(p.total_hold_ms, 0), coalesce(p.survival_streak, 0), now()
+  from public.players p
+  where p.lobby_id = p_lobby_id and p.user_id is not null and p.status = 'active'
+  on conflict (user_id) do update
+  set games_played = public.player_lifetime_stats.games_played + 1,
+      wins = public.player_lifetime_stats.wins + excluded.wins,
+      total_passes = public.player_lifetime_stats.total_passes + excluded.total_passes,
+      total_clutch_passes = public.player_lifetime_stats.total_clutch_passes + excluded.total_clutch_passes,
+      fastest_pass_ms = least(coalesce(public.player_lifetime_stats.fastest_pass_ms, 999999), coalesce(excluded.fastest_pass_ms, 999999)),
+      total_hold_ms = public.player_lifetime_stats.total_hold_ms + excluded.total_hold_ms,
+      best_survival_streak = greatest(public.player_lifetime_stats.best_survival_streak, excluded.best_survival_streak),
+      updated_at = now();
+
+  insert into public.player_achievements (user_id, achievement_code, lobby_id)
+  select s.user_id, ach.code, p_lobby_id
+  from public.player_lifetime_stats s
+  join public.achievements ach on true
+  join public.players p on p.lobby_id = p_lobby_id and p.user_id = s.user_id
+  where s.user_id in (select user_id from public.players where lobby_id = p_lobby_id and user_id is not null)
+  and (
+    (ach.code = 'first_win' and s.wins >= 1) or
+    (ach.code = 'wins_5' and s.wins >= 5) or
+    (ach.code = 'wins_25' and s.wins >= 25) or
+    (ach.code = 'wins_100' and s.wins >= 100) or
+    (ach.code = 'first_pass' and s.total_passes >= 1) or
+    (ach.code = 'passes_100' and s.total_passes >= 100) or
+    (ach.code = 'passes_500' and s.total_passes >= 500) or
+    (ach.code = 'clutch_10' and s.total_clutch_passes >= 10) or
+    (ach.code = 'clutch_50' and s.total_clutch_passes >= 50) or
+    (ach.code = 'speed_demon' and s.fastest_pass_ms is not null and s.fastest_pass_ms < 500) or
+    (ach.code = 'iron_lung' and s.total_hold_ms >= 600000) or
+    (ach.code = 'survivor_3' and s.best_survival_streak >= 3) or
+    (ach.code = 'survivor_10' and s.best_survival_streak >= 10) or
+    (ach.code = 'games_10' and s.games_played >= 10) or
+    (ach.code = 'games_50' and s.games_played >= 50)
+  )
+  on conflict (user_id, achievement_code) do nothing;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.trg_aggregate_on_finished()
+ RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+begin
+  if new.phase = 'finished' and (old.phase is distinct from new.phase) then
+    perform public.aggregate_player_stats(new.id);
+  end if;
+  return new;
+end;
+$function$;
+-- Trigger: AFTER UPDATE OF phase ON public.lobbies FOR EACH ROW
+-- EXECUTE FUNCTION public.trg_aggregate_on_finished();
+
+
+-- ============================================================
+-- Migration 006: leaderboard_view (View, nicht per DROP FUNCTION entfernbar)
+-- ============================================================
+-- CREATE OR REPLACE VIEW public.leaderboard_view AS
+--   SELECT p.username, s.* , win_rate_pct berechnet aus wins/games_played
+--   FROM public.player_lifetime_stats s JOIN public.profiles p ON p.id = s.user_id
+--   siehe db/migrations/006_leaderboards.sql für die vollständige Definition.
+
+
+-- ============================================================
+-- Migration 007: Bots (players.is_bot Spalte siehe db/schema.sql)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.rpc_add_bot(
+    p_lobby_id UUID, p_me_player_id UUID, p_bot_name TEXT
+) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_host uuid; v_max_players int; v_active_count int; v_next_seat int;
+  v_bot_id uuid := gen_random_uuid();
+begin
+  select host_player_id, max_players into v_host, v_max_players
+  from public.lobbies where id = p_lobby_id;
+
+  if v_host is null then raise exception 'lobby_not_found'; end if;
+  if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
+
+  select count(*) into v_active_count from public.players where lobby_id = p_lobby_id and status = 'active';
+  if v_active_count >= v_max_players then raise exception 'lobby_full'; end if;
+
+  select coalesce(min(s.i), 0) into v_next_seat
+  from generate_series(0, v_max_players - 1) as s(i)
+  left join public.players p on p.lobby_id = p_lobby_id and p.seat_index = s.i and p.status = 'active'
+  where p.id is null;
+
+  insert into public.players (lobby_id, player_id, name, status, seat_index, joined_at, last_seen_at, is_bot, ready)
+  values (p_lobby_id, v_bot_id, left(trim(p_bot_name), 24), 'active', v_next_seat, now(), now(), true, true);
+
+  update public.lobbies set last_activity_at = now() where id = p_lobby_id;
+  return v_bot_id;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_remove_bot(
+    p_lobby_id UUID, p_me_player_id UUID, p_bot_player_id UUID
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare v_host uuid;
+begin
+  select host_player_id into v_host from public.lobbies where id = p_lobby_id;
+  if v_host is null then raise exception 'lobby_not_found'; end if;
+  if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
+
+  delete from public.players where lobby_id = p_lobby_id and player_id = p_bot_player_id and is_bot = true;
+end;
+$function$;
+
+
+-- ============================================================
+-- Migration 008: Freundeslisten + gespeicherte Lobbies
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.rpc_send_friend_request(
+    p_from_user_id UUID, p_to_username TEXT
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare v_to_id uuid;
+begin
+  if p_from_user_id is null then raise exception 'auth_required'; end if;
+
+  select id into v_to_id from public.profiles
+  where lower(username) = lower(trim(p_to_username)) limit 1;
+
+  if v_to_id is null then raise exception 'user_not_found'; end if;
+  if v_to_id = p_from_user_id then raise exception 'cannot_befriend_self'; end if;
+
+  insert into public.friendships (user_id, friend_user_id, status)
+  values (p_from_user_id, v_to_id, 'pending')
+  on conflict (user_id, friend_user_id) do nothing;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_accept_friend_request(
+    p_me_user_id UUID, p_from_user_id UUID
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+begin
+  if p_me_user_id is null then raise exception 'auth_required'; end if;
+
+  update public.friendships
+  set status = 'accepted', accepted_at = now()
+  where user_id = p_from_user_id and friend_user_id = p_me_user_id and status = 'pending';
+
+  if not found then raise exception 'request_not_found'; end if;
+
+  insert into public.friendships (user_id, friend_user_id, status, accepted_at)
+  values (p_me_user_id, p_from_user_id, 'accepted', now())
+  on conflict (user_id, friend_user_id) do update set status = 'accepted', accepted_at = now();
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_remove_friend(
+    p_me_user_id UUID, p_friend_user_id UUID
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+begin
+  if p_me_user_id is null then raise exception 'auth_required'; end if;
+
+  delete from public.friendships
+  where (user_id = p_me_user_id and friend_user_id = p_friend_user_id)
+     or (user_id = p_friend_user_id and friend_user_id = p_me_user_id);
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_save_lobby(
+    p_user_id UUID, p_lobby_code TEXT, p_nickname TEXT
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+begin
+  if p_user_id is null then raise exception 'auth_required'; end if;
+
+  insert into public.saved_lobbies (user_id, lobby_code, nickname, last_used)
+  values (p_user_id, upper(trim(p_lobby_code)), left(trim(p_nickname), 40), now())
+  on conflict (user_id, lobby_code) do update set nickname = excluded.nickname, last_used = now();
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_unsave_lobby(
+    p_user_id UUID, p_lobby_code TEXT
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+begin
+  if p_user_id is null then raise exception 'auth_required'; end if;
+  delete from public.saved_lobbies where user_id = p_user_id and lobby_code = upper(trim(p_lobby_code));
+end;
+$function$;
+-- Views friends_view / leaderboard_view: siehe jeweilige Migration.
+
+
+-- ============================================================
 -- HINWEIS — weitere Funktionen die im Dump auftauchen aber im
 -- aktuellen Frontend NICHT verwendet werden:
 --
--- LEGACY (anderes Schema, vermutlich aus älteren Iterationen):
+-- LEGACY (anderes Schema, vermutlich aus älteren Iterationen). Siehe
+-- db/migrations/013_legacy_cleanup.sql für eine Introspektions-Query,
+-- um die exakten Signaturen zu finden, BEVOR man diese droppt (ohne
+-- Signatur ist DROP FUNCTION riskant):
 --   begin_round, boom, pass_potato(2x), start_game(3x),
 --   start_lobby, start_round, start_game_by_code,
 --   leave_lobby(2x), kick_player(p_lobby_id, p_target_player_id)
 --   end_lobby, reset_lobby
+--
+-- WICHTIG: `rpc_reset_lobby` stand hier früher fälschlich als "unbenutzte
+-- Legacy-Funktion" -- das war falsch, sie existierte schlicht gar nicht
+-- (siehe Migration 009). Sie ist jetzt oben als aktive, echte Funktion
+-- definiert und wird vom "Zurück zur Lobby"-Button aufgerufen.
 --
 -- INTERNAL / TRIGGERS:
 --   rls_auto_enable, set_lobby_timestamps, set_ready,
@@ -944,8 +1400,11 @@ $function$;
 --   trg_reconcile_on_player_change, cleanup_lobby_if_empty,
 --   end_lobby_if_host_left, reconcile_lobby_after_exit,
 --   rpc_reconcile_lobby, rpc_eliminate_player, rpc_clear_lobby_to_waiting,
---   rpc_restart_game, rpc_ready_up, rpc_rematch_1v1, rpc_reset_lobby,
+--   rpc_restart_game, rpc_ready_up, rpc_rematch_1v1,
 --   rpc_schedule_next_explosion, cleanup_expired_lobbies
 --
 -- Diese sind Helper / Trigger / Legacy — können bleiben.
+--
+-- TABELLEN gedroppt in Migration 013 (unbenutzt, siehe dort für den
+-- Nachweis): lobby_players, topics, game_state.
 -- ============================================================

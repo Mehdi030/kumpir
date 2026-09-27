@@ -1,9 +1,14 @@
 -- ============================================================
 -- KUMPIR — Echtes Schema (gedumpt aus Supabase)
--- Stand: 2026-05-11
+-- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
+-- Migration 014 (Stand 2026-09-27). Nach jedem neuen `db/migrations/NNN_*.sql`
+-- bitte diese Datei von Hand (oder per neuem Dump) auf den gleichen Stand
+-- bringen, sonst driftet sie wieder auseinander wie zwischen 2026-05-11
+-- und Migration 001/005/008 (siehe unten).
 -- ============================================================
 -- Quelle: User-Dump via SQL-Editor Query 1 aus db/HOW_TO_DUMP.md
--- Diese Datei ist die WAHRHEIT. db/schema.reconstructed.sql kann gelöscht werden.
+-- Diese Datei ist die WAHRHEIT (so weit sie aktuell gehalten wird).
+-- db/schema.reconstructed.sql kann gelöscht werden.
 -- ============================================================
 
 CREATE TABLE game_run_eliminations (
@@ -28,16 +33,6 @@ CREATE TABLE game_runs (
     topic_selected text,
     winner_player_id uuid,
     players_count integer
-);
-
-CREATE TABLE game_state (
-    lobby_code text NOT NULL,
-    round integer NOT NULL DEFAULT 1,
-    state text NOT NULL DEFAULT 'idle'::text,
-    current_holder_player_id uuid,
-    timer_ends_at timestamp with time zone,
-    updated_at timestamp with time zone NOT NULL DEFAULT now(),
-    created_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
 CREATE TABLE kv_store_8e1b0e4b (
@@ -103,14 +98,6 @@ CREATE TABLE lobby_admin_sessions (
     is_active boolean NOT NULL DEFAULT true
 );
 
-CREATE TABLE lobby_players (
-    lobby_id uuid NOT NULL,
-    player_id uuid NOT NULL,
-    name text NOT NULL,
-    ready boolean NOT NULL DEFAULT false,
-    joined_at timestamp with time zone NOT NULL DEFAULT now()
-);
-
 CREATE TABLE players (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     lobby_id uuid NOT NULL,
@@ -131,7 +118,8 @@ CREATE TABLE players (
     pass_count integer NOT NULL DEFAULT 0,
     clutch_pass_count integer NOT NULL DEFAULT 0,
     fastest_pass_ms integer,
-    total_hold_ms bigint NOT NULL DEFAULT 0
+    total_hold_ms bigint NOT NULL DEFAULT 0,
+    is_bot boolean NOT NULL DEFAULT false
 );
 
 CREATE TABLE profiles (
@@ -176,9 +164,79 @@ CREATE TABLE topic_votes (
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
-CREATE TABLE topics (
+-- ============================================================
+-- Ab hier: Tabellen aus den Migrationen 001, 005, 008
+-- (waren im ursprünglichen Dump von 2026-05-11 noch nicht enthalten,
+-- weil er vor diesen Migrationen gezogen wurde).
+-- ============================================================
+
+CREATE TABLE pass_attempts (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
-    name text NOT NULL,
-    active boolean DEFAULT true,
-    created_at timestamp with time zone DEFAULT now()
+    lobby_id uuid NOT NULL REFERENCES lobbies(id) ON DELETE CASCADE,
+    round_number integer NOT NULL,
+    holder_player_id uuid NOT NULL,
+    answer text NOT NULL,
+    topic text NOT NULL,
+    status text NOT NULL DEFAULT 'pending',
+    accept_count integer NOT NULL DEFAULT 0,
+    reject_count integer NOT NULL DEFAULT 0,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    decided_at timestamp with time zone
 );
+
+CREATE TABLE pass_attempt_votes (
+    attempt_id uuid NOT NULL REFERENCES pass_attempts(id) ON DELETE CASCADE,
+    voter_id uuid NOT NULL,
+    accept boolean NOT NULL,
+    voted_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE achievements (
+    code text NOT NULL,
+    title text NOT NULL,
+    description text NOT NULL,
+    icon text NOT NULL,
+    tier text NOT NULL DEFAULT 'bronze',
+    created_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE player_lifetime_stats (
+    user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    games_played integer NOT NULL DEFAULT 0,
+    wins integer NOT NULL DEFAULT 0,
+    total_passes integer NOT NULL DEFAULT 0,
+    total_clutch_passes integer NOT NULL DEFAULT 0,
+    fastest_pass_ms integer,
+    total_hold_ms bigint NOT NULL DEFAULT 0,
+    best_survival_streak integer NOT NULL DEFAULT 0,
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE player_achievements (
+    user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    achievement_code text NOT NULL REFERENCES achievements(code) ON DELETE CASCADE,
+    unlocked_at timestamp with time zone NOT NULL DEFAULT now(),
+    lobby_id uuid REFERENCES lobbies(id) ON DELETE SET NULL
+);
+
+CREATE TABLE friendships (
+    user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    friend_user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    status text NOT NULL DEFAULT 'pending',
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    accepted_at timestamp with time zone
+);
+
+CREATE TABLE saved_lobbies (
+    user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    lobby_code text NOT NULL,
+    nickname text NOT NULL,
+    last_used timestamp with time zone NOT NULL DEFAULT now(),
+    created_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- Views (nicht per DROP-Skript entfernbar wie Tabellen, nur der Vollständigkeit halber dokumentiert):
+--   leaderboard_view   (Migration 006) — player_lifetime_stats x profiles.username
+--   friends_view       (Migration 008) — friendships x profiles.username
+--   public_lobbies_view existiert NICHT in main (nur im unmerged Branch
+--     claude/beautiful-panini-20b290, siehe TESTREPORT.md)

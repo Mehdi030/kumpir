@@ -17,6 +17,12 @@ In dieser Reihenfolge ausführen. Jede Migration ist idempotent (kann wiederholt
 | 006 | [`006_leaderboards.sql`](006_leaderboards.sql) | View `leaderboard_view` (joinet player_lifetime_stats × profiles.username) | Pflicht für die `/leaderboard`-Seite |
 | 007 | [`007_bots.sql`](007_bots.sql) | `players.is_bot` Spalte + `rpc_add_bot` + `rpc_remove_bot` | Pflicht für „🤖 +Bot" Button in der Lobby |
 | 008 | [`008_friends_and_saved_lobbies.sql`](008_friends_and_saved_lobbies.sql) | `friendships` + `saved_lobbies` Tabellen + 5 RPCs (send/accept/remove + save/unsave) + `friends_view` | Pflicht für `/friends`-Seite + Lobby-Merken-Button |
+| 009 | [`009_reset_lobby.sql`](009_reset_lobby.sql) | Fehlende `rpc_reset_lobby` nachgereicht ("Zurück zur Lobby"-Button war kaputt) | **PFLICHT** — ohne sie wirft der Button einen Fehler |
+| 010 | [`010_used_answers_reset.sql`](010_used_answers_reset.sql) | `used_answers` + `current_attempt_id` werden jetzt bei jedem Rundenstart und Rematch geleert | **PFLICHT** — sonst blockieren alte Antworten irgendwann jede neue Runde |
+| 011 | [`011_round_speed_wiring.sql`](011_round_speed_wiring.sql) | `rpc_create_lobby` bekommt `p_round_speed`; `rpc_advance_from_countdown` + `rpc_tick_game` nutzen jetzt `calc_explode_seconds()` statt fixer 25s/15s | Empfohlen — vorher hatte die Rundengeschwindigkeits-Auswahl keinerlei Wirkung |
+| 012 | [`012_rls_core_tables.sql`](012_rls_core_tables.sql) | RLS auf `lobbies`, `players`, `topic_pool`, `topic_votes`, `game_runs` (öffentlich lesbar, Schreiben nur über RPCs) + Lockout für `profiles`(Spalten-Grants)/`game_run_players`/`game_run_eliminations`/`round_stats`/`lobby_admin_*`/`staff_roles`/`kv_store_8e1b0e4b` | **PFLICHT** (Sicherheit) — vorher waren diese Tabellen über den öffentlichen Anon-Key frei lesbar/schreibbar |
+| 013 | [`013_legacy_cleanup.sql`](013_legacy_cleanup.sql) | Tote Tabellen `lobby_players`, `topics`, `game_state` gelöscht (durch `players`/`topic_pool`/`lobbies` ersetzt, nirgends mehr referenziert) | Empfohlen (Aufräumen) |
+| 014 | [`014_bots_stay_ready.sql`](014_bots_stay_ready.sql) | `rpc_reset_lobby` + `rpc_rematch` + `rpc_start_rematch_if_ready` setzten `ready=false` für ALLE Spieler inkl. Bots — Bots können sich aber nirgends selbst wieder bereit melden, blieben also für immer hängen | **PFLICHT** — sonst blockiert jeder Bot nach der ersten Runde jedes weitere Rematch/Reset |
 
 ## Was du **NICHT** machen musst
 

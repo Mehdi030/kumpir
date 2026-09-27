@@ -1,5 +1,5 @@
 -- ============================================================
--- KUMPIR — Alle 8 Migrationen in einem File
+-- KUMPIR — Alle 14 Migrationen in einem File
 -- ============================================================
 -- Einmal komplett kopieren, in Supabase SQL Editor einfügen, Run.
 -- Jede Sub-Migration ist idempotent — du kannst das File mehrfach laufen lassen.
@@ -1279,6 +1279,739 @@ CREATE POLICY "saved_lobbies_read_own"
     FOR SELECT
     USING (TRUE);
 
+
+COMMIT;
+
+
+-- ============================================================
+-- 009_reset_lobby.sql
+-- ============================================================
+-- ============================================================
+-- Migration 009: rpc_reset_lobby fehlte komplett
+-- ============================================================
+-- apps/web/src/app/game/[code]/page.tsx ruft "rpc_reset_lobby" auf
+-- (Button "Zurück zur Lobby" auf dem Finished-Screen), aber diese
+-- Funktion war in keiner db/-Datei definiert -> Klick endete in
+-- einem Fehler-Toast.
+--
+-- Zweck (aus Button-Kontext abgeleitet): Lobby nach Spielende
+-- komplett auf den Zustand direkt nach rpc_create_lobby zurücksetzen
+-- (phase='waiting'), OHNE wie rpc_rematch direkt in topic_vote zu
+-- starten. Spieler bleiben in der Lobby (im Gegensatz zu einem
+-- "Lobby löschen"), aber alle Runden-Daten werden geleert.
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.rpc_reset_lobby(p_code TEXT)
+ RETURNS VOID
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $$
+DECLARE
+    v_lobby_id UUID;
+BEGIN
+    SELECT id INTO v_lobby_id
+    FROM public.lobbies
+    WHERE code = UPPER(TRIM(p_code))
+    LIMIT 1;
+
+    IF v_lobby_id IS NULL THEN
+        RAISE EXCEPTION 'Lobby nicht gefunden';
+    END IF;
+
+    DELETE FROM public.topic_votes WHERE lobby_id = v_lobby_id;
+
+    -- Wie rpc_rematch: alle aktiven Spieler (inkl. Bots) auf Anfangszustand.
+    UPDATE public.players
+    SET ready = false,
+        is_alive = true,
+        pass_count = 0,
+        clutch_pass_count = 0,
+        fastest_pass_ms = NULL,
+        total_hold_ms = 0,
+        survival_streak = 0,
+        last_pass_at = NULL
+    WHERE lobby_id = v_lobby_id
+      AND status = 'active';
+
+    UPDATE public.lobbies
+    SET phase = 'waiting',
+        locked = false,
+        holder_player_id = NULL,
+        explode_at = NULL,
+        run_started_at = NULL,
+        last_loser_player_id = NULL,
+        topic_a = NULL,
+        topic_b = NULL,
+        topic_selected = NULL,
+        topic_vote_started_at = NULL,
+        topic_vote_ends_at = NULL,
+        countdown_started_at = NULL,
+        countdown_ends_at = NULL,
+        topic_tie_choices = NULL,
+        topic_tie_pick = NULL,
+        current_attempt_id = NULL,
+        used_answers = '{}',
+        round_number = 0,
+        pass_direction = 1,
+        last_activity_at = now()
+    WHERE id = v_lobby_id;
+END;
+$$;
+
+COMMIT;
+
+
+-- ============================================================
+-- 010_used_answers_reset.sql
+-- ============================================================
+-- ============================================================
+-- Migration 010: used_answers wird nie zurückgesetzt
+-- ============================================================
+-- lobbies.used_answers (Anti-Doppelnennung, siehe Migration 001)
+-- sammelte sich über Runden und Rematches hinweg an, weil weder
+-- rpc_advance_from_countdown (Rundenstart) noch rpc_rematch das Feld
+-- je geleert haben -- Migration 001 hat das per Kommentar sogar
+-- explizit als offenes TODO markiert.
+--
+-- Fix: current_attempt_id + used_answers werden jetzt geleert in:
+--   - rpc_advance_from_countdown (jeder neue Rundenstart, inkl. Rematch)
+--   - rpc_rematch (zur Sicherheit zusätzlich, falls irgendwo direkt
+--     wieder in 'running' gesprungen werden sollte)
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.rpc_advance_from_countdown(p_lobby_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_holder uuid;
+begin
+  select player_id into v_holder
+  from public.players
+  where lobby_id = p_lobby_id and status = 'active' and is_alive = true
+  order by random() limit 1;
+
+  if v_holder is null then raise exception 'Kein Startspieler gefunden'; end if;
+
+  update public.lobbies
+  set phase = 'running',
+      holder_player_id = v_holder,
+      run_started_at = now(),
+      explode_at = now() + interval '25 seconds',
+      countdown_started_at = null,
+      countdown_ends_at = null,
+      used_answers = '{}',
+      current_attempt_id = null,
+      last_activity_at = now()
+  where id = p_lobby_id and phase = 'countdown';
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_rematch(p_code text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_lobby_id uuid;
+begin
+  select id into v_lobby_id from public.lobbies
+  where code = upper(trim(p_code)) limit 1;
+
+  if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+
+  update public.players
+  set ready = false, is_alive = true,
+      pass_count = 0, clutch_pass_count = 0,
+      fastest_pass_ms = null, total_hold_ms = 0,
+      survival_streak = 0, last_pass_at = null
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'rematch_wait', holder_player_id = null, explode_at = null,
+      run_started_at = null, last_loser_player_id = null,
+      topic_a = null, topic_b = null, topic_selected = null,
+      topic_vote_ends_at = null, countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      current_attempt_id = null, used_answers = '{}',
+      round_number = 1, last_activity_at = now()
+  where id = v_lobby_id;
+end;
+$function$;
+
+COMMIT;
+
+
+-- ============================================================
+-- 011_round_speed_wiring.sql
+-- ============================================================
+-- ============================================================
+-- Migration 011: round_speed hatte keine Wirkung
+-- ============================================================
+-- Problem:
+--   - lobbies.round_speed existiert (default 'normal'), wurde aber nie
+--     von rpc_create_lobby gesetzt -- der Host-Screen wählt einen
+--     RoundSpeed-Key ('fast'/'normal'/'calm'), rechnet ihn aber in
+--     apps/web/src/app/host/page.tsx lokal in eine feste Sekundenzahl
+--     um und schickt nur p_round_seconds (-> lobbies.round_seconds,
+--     eine reine Anzeige-Spalte, die von keiner RPC gelesen wird).
+--   - calc_explode_seconds(round_speed, alive_count, round_number)
+--     existiert bereits fertig in der DB, wurde aber von keiner RPC
+--     aufgerufen. rpc_advance_from_countdown nutzte hartcodiert
+--     interval '25 seconds', rpc_tick_game hartcodiert interval '15
+--     seconds'.
+--
+-- Fix (kein neues Balancing -- nutzt exakt die bereits vorhandene
+-- calc_explode_seconds Funktion mit ihren bestehenden Defaults):
+--   1) rpc_create_lobby bekommt einen neuen optionalen Parameter
+--      p_round_speed (Default 'normal', validiert gegen fast/normal/
+--      calm) und schreibt ihn nach lobbies.round_speed.
+--   2) rpc_advance_from_countdown berechnet explode_at jetzt über
+--      calc_explode_seconds(round_speed, alive_count, 1) statt fix 25s.
+--   3) rpc_tick_game berechnet die nächste explode_at über
+--      calc_explode_seconds(round_speed, alive_count, round_number)
+--      statt fix 15s.
+-- ============================================================
+
+BEGIN;
+
+-- ------------------------------------------------------------
+-- rpc_create_lobby: + p_round_speed
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rpc_create_lobby(
+    p_host_name TEXT,
+    p_privacy TEXT,
+    p_max_players INTEGER,
+    p_round_seconds INTEGER,
+    p_user_id UUID DEFAULT NULL,
+    p_round_speed TEXT DEFAULT 'normal'
+) RETURNS TABLE(code TEXT, host_player_id UUID)
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+    v_lobby_id UUID := gen_random_uuid();
+    v_code TEXT;
+    v_host_player_id UUID := gen_random_uuid();
+    v_round_speed TEXT := btrim(coalesce(p_round_speed, 'normal'));
+BEGIN
+    IF v_round_speed NOT IN ('fast', 'normal', 'calm') THEN
+        v_round_speed := 'normal';
+    END IF;
+
+    v_code := public.generate_lobby_code(4);
+
+    INSERT INTO public.lobbies (
+        id, code, host_player_id, status, privacy, max_players, round_seconds, round_speed,
+        created_at, last_activity_at, host_user_id
+    )
+    VALUES (
+        v_lobby_id,
+        UPPER(v_code),
+        v_host_player_id,
+        'waiting',
+        p_privacy,
+        GREATEST(2, LEAST(p_max_players, 12)),
+        COALESCE(p_round_seconds, 25),
+        v_round_speed,
+        NOW(),
+        NOW(),
+        p_user_id
+    );
+
+    INSERT INTO public.players (
+        id, lobby_id, player_id, name, ready, joined_at, last_seen_at, user_id
+    )
+    VALUES (
+        gen_random_uuid(),
+        v_lobby_id,
+        v_host_player_id,
+        LEFT(TRIM(p_host_name), 24),
+        false,
+        NOW(),
+        NOW(),
+        p_user_id
+    );
+
+    RETURN QUERY SELECT UPPER(v_code), v_host_player_id;
+END;
+$$;
+
+
+-- ------------------------------------------------------------
+-- rpc_advance_from_countdown: dynamische Startzeit
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rpc_advance_from_countdown(p_lobby_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_holder uuid;
+  v_alive_count int;
+  v_round_speed text;
+  v_round_number int;
+  v_explode_seconds numeric;
+begin
+  select round_speed, coalesce(round_number, 0)
+    into v_round_speed, v_round_number
+  from public.lobbies where id = p_lobby_id;
+
+  select count(*) into v_alive_count
+  from public.players
+  where lobby_id = p_lobby_id and status = 'active' and is_alive = true;
+
+  select player_id into v_holder
+  from public.players
+  where lobby_id = p_lobby_id and status = 'active' and is_alive = true
+  order by random() limit 1;
+
+  if v_holder is null then raise exception 'Kein Startspieler gefunden'; end if;
+
+  v_explode_seconds := public.calc_explode_seconds(
+    coalesce(v_round_speed, 'normal'),
+    greatest(1, v_alive_count),
+    greatest(1, v_round_number)
+  );
+
+  update public.lobbies
+  set phase = 'running',
+      holder_player_id = v_holder,
+      run_started_at = now(),
+      explode_at = now() + (v_explode_seconds * interval '1 second'),
+      countdown_started_at = null,
+      countdown_ends_at = null,
+      used_answers = '{}',
+      current_attempt_id = null,
+      last_activity_at = now()
+  where id = p_lobby_id and phase = 'countdown';
+end;
+$function$;
+
+
+-- ------------------------------------------------------------
+-- rpc_tick_game: dynamische nächste Rundenzeit
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rpc_tick_game(p_code text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+declare
+  v_now timestamptz := now();
+  v_lobby_id uuid; v_phase text; v_holder uuid; v_explode_at timestamptz; v_game_mode text;
+  v_round_speed text; v_round_number int;
+  v_alive_count int; v_loser uuid; v_next_holder uuid;
+  v_round_duration interval;
+begin
+  select id, phase, holder_player_id, explode_at, game_mode, round_speed
+    into v_lobby_id, v_phase, v_holder, v_explode_at, v_game_mode, v_round_speed
+  from public.lobbies where code = upper(p_code) for update;
+
+  if v_lobby_id is null then raise exception 'Lobby not found'; end if;
+  if v_phase is distinct from 'running' then return; end if;
+  if v_explode_at is null then return; end if;
+  if v_now < v_explode_at then return; end if;
+
+  v_loser := v_holder;
+  if v_loser is null then return; end if;
+
+  update public.players
+  set is_alive = false, survival_streak = 0
+  where lobby_id = v_lobby_id and player_id = v_loser;
+
+  update public.players
+  set survival_streak = survival_streak + 1
+  where lobby_id = v_lobby_id and status = 'active' and is_alive = true;
+
+  update public.lobbies
+  set round_number = coalesce(round_number, 0) + 1,
+      last_loser_player_id = v_loser,
+      last_activity_at = v_now
+  where id = v_lobby_id
+  returning round_number into v_round_number;
+
+  select count(*) into v_alive_count
+  from public.players
+  where lobby_id = v_lobby_id and status = 'active' and is_alive = true;
+
+  if v_alive_count <= 1 then
+    update public.lobbies
+    set phase = 'finished', explode_at = null,
+        holder_player_id = (
+          select player_id from public.players
+          where lobby_id = v_lobby_id and status = 'active' and is_alive = true
+          limit 1
+        )
+    where id = v_lobby_id;
+    return;
+  end if;
+
+  -- Nächster alive Spieler nach Loser (seat_index aufsteigend)
+  select p2.player_id into v_next_holder
+  from public.players p_loser
+  join public.players p2 on p2.lobby_id = p_loser.lobby_id
+    and p2.status = 'active' and p2.is_alive = true
+    and p2.seat_index > p_loser.seat_index
+  where p_loser.lobby_id = v_lobby_id and p_loser.player_id = v_loser
+  order by p2.seat_index asc limit 1;
+
+  if v_next_holder is null then
+    select player_id into v_next_holder
+    from public.players
+    where lobby_id = v_lobby_id and status = 'active' and is_alive = true
+    order by seat_index asc limit 1;
+  end if;
+
+  if v_game_mode = 'teleport' then
+    select player_id into v_next_holder
+    from public.players
+    where lobby_id = v_lobby_id and status = 'active' and is_alive = true and player_id != v_loser
+    order by random() limit 1;
+  end if;
+
+  v_round_duration := public.calc_explode_seconds(
+    coalesce(v_round_speed, 'normal'),
+    v_alive_count,
+    coalesce(v_round_number, 1)
+  ) * interval '1 second';
+
+  update public.lobbies
+  set holder_player_id = v_next_holder,
+      explode_at = v_now + v_round_duration,
+      pass_direction = case
+        when v_game_mode = 'reverse' then (pass_direction * -1)::smallint
+        else pass_direction
+      end
+  where id = v_lobby_id;
+end;
+$function$;
+
+COMMIT;
+
+
+-- ============================================================
+-- 012_rls_core_tables.sql
+-- ============================================================
+-- ============================================================
+-- Migration 012: RLS auf Kern-Tabellen fehlte komplett
+-- ============================================================
+-- Der Supabase Anon-Key liegt öffentlich im Frontend-Bundle. Ohne RLS
+-- kann JEDER über die PostgREST-API direkt lesen/schreiben/löschen --
+-- unabhängig davon, was der offizielle Frontend-Code tatsächlich tut.
+--
+-- Teil A (aus dem Audit-Auftrag, "mindestens sicherstellen"):
+--   lobbies, players, topic_pool, topic_votes, game_runs bekommen
+--   RLS + eine SELECT-für-alle-Policy (wird für Realtime-Subscriptions
+--   und den Polling-Fallback gebraucht), aber KEINE INSERT/UPDATE/
+--   DELETE-Policy -- alle Schreiboperationen laufen ausschließlich
+--   über die SECURITY DEFINER RPCs (rpc_create_lobby, rpc_join_lobby,
+--   rpc_pass_potato, ...), die RLS als Tabellenbesitzer umgehen.
+--
+-- Teil B (zusätzlich beim Audit gefunden, nicht in der ursprünglichen
+-- Bug-Liste, aber derselbe Risiko-Klasse):
+--   - game_run_players / game_run_eliminations / round_stats werden
+--     von keiner Frontend-Route gelesen -> RLS an, KEINE Policy
+--     (kompletter Lockout für anon/authenticated; nur die SECURITY
+--     DEFINER Trigger/RPCs dürfen noch schreiben).
+--   - lobby_admin_sessions / lobby_admin_logs / staff_roles: enthalten
+--     Rollen-/Moderationsdaten, werden von keiner Frontend-Route
+--     direkt gelesen -> RLS an, KEINE Policy (kompletter Lockout).
+--   - kv_store_8e1b0e4b: unbenutzte Altlast (vermutlich Scaffolding-
+--     Rest), wird nirgends referenziert -> RLS an, KEINE Policy.
+--   - profiles: enthält email/phone (PII). Es gibt noch KEINE Policy
+--     dafür, und apps/web/src/hooks/useFriends.ts liest per Anon-Key
+--     direkt "profiles.username" für die Freundesliste. Statt RLS
+--     (zeilenbasiert, kann keine Spalten filtern) nutzen wir
+--     Column-Level-Privileges: anon/authenticated dürfen per REST nur
+--     noch (id, username) sehen, nie email/phone/*verified_at. Alle
+--     SECURITY DEFINER Funktionen (get_email_for_username, handle_new_user,
+--     sync_profile_verification, ...) sind Owner der Tabelle und bleiben
+--     davon unberührt.
+-- ============================================================
+
+BEGIN;
+
+-- ------------------------------------------------------------
+-- Teil A: öffentlich lesbare Kern-Tabellen
+-- ------------------------------------------------------------
+ALTER TABLE public.lobbies ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "lobbies_read_all" ON public.lobbies;
+CREATE POLICY "lobbies_read_all" ON public.lobbies FOR SELECT USING (TRUE);
+
+ALTER TABLE public.players ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "players_read_all" ON public.players;
+CREATE POLICY "players_read_all" ON public.players FOR SELECT USING (TRUE);
+
+ALTER TABLE public.topic_pool ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "topic_pool_read_all" ON public.topic_pool;
+CREATE POLICY "topic_pool_read_all" ON public.topic_pool FOR SELECT USING (TRUE);
+
+ALTER TABLE public.topic_votes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "topic_votes_read_all" ON public.topic_votes;
+CREATE POLICY "topic_votes_read_all" ON public.topic_votes FOR SELECT USING (TRUE);
+
+ALTER TABLE public.game_runs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "game_runs_read_all" ON public.game_runs;
+CREATE POLICY "game_runs_read_all" ON public.game_runs FOR SELECT USING (TRUE);
+
+
+-- ------------------------------------------------------------
+-- Teil B: komplett sperren (kein Frontend-Zugriff nötig)
+-- ------------------------------------------------------------
+ALTER TABLE public.game_run_players ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.game_run_eliminations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.round_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lobby_admin_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lobby_admin_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.staff_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kv_store_8e1b0e4b ENABLE ROW LEVEL SECURITY;
+-- Bewusst keine Policies -> Default-Deny für anon/authenticated.
+
+
+-- ------------------------------------------------------------
+-- profiles: RLS an (Zeilen-Ebene) + Column-Level-Grants (Spalten-Ebene)
+-- ------------------------------------------------------------
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "profiles_read_all" ON public.profiles;
+CREATE POLICY "profiles_read_all" ON public.profiles FOR SELECT USING (TRUE);
+
+REVOKE SELECT ON public.profiles FROM anon, authenticated;
+GRANT SELECT (id, username) ON public.profiles TO anon, authenticated;
+
+COMMIT;
+
+
+-- ============================================================
+-- 013_legacy_cleanup.sql
+-- ============================================================
+-- ============================================================
+-- Migration 013: Tote Legacy-Strukturen aufräumen
+-- ============================================================
+-- Geprüft per Grep über apps/web/src UND über alle db/-Dateien
+-- (functions.sql + migrations 001-012), bevor irgendetwas gelöscht
+-- wird:
+--
+--   - public.lobby_players: taucht NUR in der eigenen CREATE TABLE
+--     Zeile in schema.sql auf. Kein Frontend-Query, keine RPC, kein
+--     Trigger nutzt sie. Ersetzt durch public.players seit jeher.
+--     -> sicher zum Löschen.
+--
+--   - public.topics: wurde nur von der ALTEN Version von
+--     rpc_start_rematch_if_ready genutzt (Bug, siehe Kommentar in
+--     Migration 003). Migration 003 hat die Funktion bereits auf
+--     topic_pool umgestellt; seitdem referenziert keine einzige
+--     Funktion mehr public.topics. Migration 003 hat das Löschen
+--     bereits als sicheren Schritt dokumentiert.
+--     -> sicher zum Löschen.
+--
+--   - public.game_state: taucht NUR in der eigenen CREATE TABLE Zeile
+--     in schema.sql auf. Die aktiven Felder (phase, holder_player_id,
+--     explode_at, round_number) leben stattdessen alle in
+--     public.lobbies. Kein Frontend-Query, keine RPC referenziert sie.
+--     -> sicher zum Löschen.
+--
+-- NICHT gelöscht (bewusste Entscheidung, siehe Auftrag "bei
+-- Unsicherheit lieber stehen lassen"):
+--
+--   Die in db/functions.sql (Zeilen 930-951) als Legacy dokumentierten
+--   Funktionen (begin_round, boom, pass_potato x2, start_game x3,
+--   start_lobby, start_round, start_game_by_code, leave_lobby x2,
+--   kick_player(p_lobby_id, p_target_player_id), end_lobby, reset_lobby,
+--   sowie die Trigger/Helper-Liste darunter) sind in KEINER Datei in
+--   db/ mit vollständiger Signatur definiert -- sie existieren
+--   offenbar nur (noch) live in Supabase aus einer älteren Iteration,
+--   wurden aber nie in dieses Repo gedumpt. Postgres braucht für
+--   DROP FUNCTION die exakte Parameter-Signatur; ohne sie riskiert ein
+--   blindes DROP entweder einen Fehler oder (schlimmer, falls mehrere
+--   Overloads existieren) das Löschen der falschen Variante.
+--
+--   Vor einem echten Cleanup bitte im Supabase SQL-Editor ausführen
+--   und die exakten Signaturen einsammeln:
+--
+--     SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args
+--     FROM pg_proc p
+--     JOIN pg_namespace n ON n.oid = p.pronamespace
+--     WHERE n.nspname = 'public'
+--       AND p.proname IN (
+--         'begin_round','boom','pass_potato','start_game','start_lobby',
+--         'start_round','start_game_by_code','leave_lobby','end_lobby',
+--         'reset_lobby','rls_auto_enable','set_lobby_timestamps','set_ready',
+--         'set_updated_at','tg_set_updated_at','touch_lobby_activity_by_code',
+--         'trg_clear_lobby_on_player_leave','trg_reconcile_after_exit',
+--         'trg_reconcile_on_player_change','cleanup_lobby_if_empty',
+--         'end_lobby_if_host_left','reconcile_lobby_after_exit',
+--         'rpc_reconcile_lobby','rpc_eliminate_player','rpc_clear_lobby_to_waiting',
+--         'rpc_restart_game','rpc_ready_up','rpc_rematch_1v1','rpc_reset_lobby',
+--         'rpc_schedule_next_explosion','cleanup_expired_lobbies'
+--       );
+--
+--   ACHTUNG: rpc_reset_lobby steht in dieser Altlast-Liste, ist aber
+--   seit Migration 009 eine ECHTE, aktiv genutzte Funktion -- die
+--   obige Abfrage würde also (falls in Supabase noch eine alte Version
+--   mit anderer Signatur existierte) einen Konflikt aufdecken, den man
+--   vor dem nächsten Deploy manuell prüfen sollte.
+-- ============================================================
+
+BEGIN;
+
+DROP TABLE IF EXISTS public.lobby_players;
+DROP TABLE IF EXISTS public.topics;
+DROP TABLE IF EXISTS public.game_state;
+
+COMMIT;
+
+
+-- ============================================================
+-- 014_bots_stay_ready.sql
+-- ============================================================
+-- ============================================================
+-- Migration 014: Bots bleiben nach Reset/Rematch bereit
+-- ============================================================
+-- Live-Playtest-Fund (fix/clean-base): rpc_reset_lobby, rpc_rematch und
+-- rpc_start_rematch_if_ready setzen ready = false für ALLE aktiven
+-- Spieler -- auch für Bots. Bots haben aber keine eigene Möglichkeit,
+-- sich wieder bereit zu melden: die Bot-Engine (useBotEngine.ts) greift
+-- nur in den Phasen topic_vote/running ein, nie im Lobby-Ready-Screen.
+-- Ergebnis: Sobald ein Bot in der Lobby war und eine Runde zu Ende
+-- ging, blieb er für IMMER auf "nicht bereit" hängen -- weder
+-- "Zurück zur Lobby" noch "Rematch" ließen sich danach je wieder
+-- starten, weil "alle bereit" nie mehr erreicht wurde.
+--
+-- Fix: Bots werden beim Reset/Rematch auf ready = true gesetzt (nicht
+-- false) -- genau wie schon bei rpc_add_bot (Migration 007). Menschliche
+-- Spieler verhalten sich unverändert (ready = false, müssen aktiv
+-- wieder auf "Bereit" klicken).
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.rpc_rematch(p_code text)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare v_lobby_id uuid;
+begin
+  select id into v_lobby_id from public.lobbies
+  where code = upper(trim(p_code)) limit 1;
+
+  if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+
+  update public.players
+  set ready = coalesce(is_bot, false), is_alive = true,
+      pass_count = 0, clutch_pass_count = 0,
+      fastest_pass_ms = null, total_hold_ms = 0,
+      survival_streak = 0, last_pass_at = null
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'rematch_wait', holder_player_id = null, explode_at = null,
+      run_started_at = null, last_loser_player_id = null,
+      topic_a = null, topic_b = null, topic_selected = null,
+      topic_vote_ends_at = null, countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      current_attempt_id = null, used_answers = '{}',
+      round_number = 1, last_activity_at = now()
+  where id = v_lobby_id;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_start_rematch_if_ready(p_code text)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid; v_ready_count int; v_active_count int;
+  v_topic_a text; v_topic_b text;
+begin
+  select id into v_lobby_id from public.lobbies where code = upper(trim(p_code)) limit 1;
+  if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+
+  select count(*) into v_active_count from public.players
+  where lobby_id = v_lobby_id and status = 'active';
+
+  select count(*) into v_ready_count from public.players
+  where lobby_id = v_lobby_id and status = 'active' and coalesce(ready, false) = true;
+
+  if v_active_count < 2 then raise exception 'Mindestens 2 aktive Spieler nötig'; end if;
+  if v_ready_count <> v_active_count then return; end if;
+
+  select t.text into v_topic_a
+  from public.topic_pool t
+  where t.active is true
+  order by random() limit 1;
+
+  select t.text into v_topic_b
+  from public.topic_pool t
+  where t.active is true and t.text <> v_topic_a
+  order by random() limit 1;
+
+  if v_topic_a is null or v_topic_b is null then
+    raise exception 'Nicht genug Themen im topic_pool';
+  end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+  update public.players set ready = coalesce(is_bot, false)
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'topic_vote',
+      topic_a = v_topic_a, topic_b = v_topic_b, topic_selected = null,
+      topic_vote_started_at = now(),
+      topic_vote_ends_at = now() + interval '10 seconds',
+      countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      holder_player_id = null, explode_at = null, run_started_at = null,
+      last_activity_at = now()
+  where id = v_lobby_id;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_reset_lobby(p_code TEXT)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid;
+begin
+  select id into v_lobby_id from public.lobbies
+  where code = upper(trim(p_code)) limit 1;
+
+  if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+
+  update public.players
+  set ready = coalesce(is_bot, false), is_alive = true,
+      pass_count = 0, clutch_pass_count = 0,
+      fastest_pass_ms = null, total_hold_ms = 0,
+      survival_streak = 0, last_pass_at = null
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'waiting', locked = false,
+      holder_player_id = null, explode_at = null,
+      run_started_at = null, last_loser_player_id = null,
+      topic_a = null, topic_b = null, topic_selected = null,
+      topic_vote_started_at = null, topic_vote_ends_at = null,
+      countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      current_attempt_id = null, used_answers = '{}',
+      round_number = 0, pass_direction = 1,
+      last_activity_at = now()
+  where id = v_lobby_id;
+end;
+$function$;
 
 COMMIT;
 
