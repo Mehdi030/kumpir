@@ -13,7 +13,7 @@ Monorepo, npm workspaces.
 
 - `apps/web` → Web-Spiel (Next.js 16 + React 19 + Supabase + TypeScript)
 - `apps/discord-bot` → Discord-Bot für Preview-Notifications
-- `game-logic/` → Python-Simulator für Balance-Tests & Content (`questions_de.json`)
+- `game-logic/` → Spielregeln in Klartext & Content (`questions_de.json`) — siehe `game-logic/README.md`
 
 **Web und Logic sind klar getrennt** und werden nicht vermischt.
 
@@ -115,6 +115,7 @@ Aktuell läuft das Spiel im **Gast-Modus** (`NEXT_PUBLIC_AUTH_DISABLED=1` in `.e
 
 - Spielen ohne Account — Identität liegt nur in `localStorage` (`kumpir_player_id`)
 - Login/Register/Verified-Routen werden vom Proxy (`src/proxy.ts`, Next.js 16 Middleware-Konvention) auf `/` umgeleitet
+- `/achievements`, `/leaderboard`, `/friends` sind Auth-only und daher im Gast-Modus bewusst unverlinkt (kein Nav-Eintrag zeigt hin) **und** werden vom Proxy ebenfalls auf `/` umgeleitet, falls jemand die URL direkt aufruft — die Seiten/DB-Objekte bleiben erhalten, nur unerreichbar
 - Für die spätere Etappe 3 (Achievements, Leaderboards, Freundeslisten) wird Auth wieder aktiviert
 
 ---
