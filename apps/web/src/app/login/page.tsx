@@ -3,14 +3,10 @@
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "@/components/AuthProvider";
+import { loginWithIdentifier } from "@/actions/login";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
-
-function isEmailLike(v: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-}
 
 function safeNextPath(v: string | null) {
     if (!v) return "/host";
@@ -20,7 +16,6 @@ function safeNextPath(v: string | null) {
 }
 
 function LoginInner() {
-    const supabase = getSupabaseClient();
     const router = useRouter();
     const sp = useSearchParams();
     const { user, loading: authLoading } = useAuth();
@@ -66,65 +61,32 @@ function LoginInner() {
         if (busy) return;
         setError("");
         setInfo("");
-
-        const idValue = identifier.trim();
-        if (!idValue) {
-            setError("Bitte E-Mail oder Username eingeben.");
-            return;
-        }
-        if (password.length < 8) {
-            setError("Passwort muss mindestens 8 Zeichen haben.");
-            return;
-        }
-
         setBusy(true);
         try {
-            let emailToUse = idValue;
-
-            // Wenn kein @ enthalten → wir haben einen Username, hol die Email per RPC
-            if (!isEmailLike(idValue)) {
-                const { data: emailRow, error: rpcErr } = await supabase.rpc(
-                    "get_email_for_username",
-                    { p_username: idValue }
-                );
-                if (rpcErr) {
-                    setError("Konnte Benutzernamen nicht prüfen. Bitte erneut versuchen.");
-                    return;
-                }
-                if (!emailRow) {
-                    setError("Benutzername unbekannt.");
-                    return;
-                }
-                emailToUse = String(emailRow);
-            }
-
-            const { error: loginErr } = await supabase.auth.signInWithPassword({
-                email: emailToUse,
-                password,
-            });
-
-            if (loginErr) {
-                if (loginErr.message?.toLowerCase().includes("email not confirmed")) {
-                    setError("E-Mail noch nicht bestätigt. Bitte schau in dein Postfach.");
-                    return;
-                }
-                if (loginErr.message?.toLowerCase().includes("invalid")) {
-                    setError("E-Mail oder Passwort falsch.");
-                    return;
-                }
-                setError(loginErr.message || "Login fehlgeschlagen.");
+            // Löst Email/Username + Login komplett serverseitig auf (siehe
+            // actions/login.ts) -- die Email eines fremden Users landet dabei
+            // nie im Browser (Migration 017: get_email_for_username ist für
+            // anon/authenticated gesperrt).
+            const res = await loginWithIdentifier(identifier, password);
+            if (!res.ok) {
+                setError(res.error);
                 return;
             }
 
-            // Erfolg → AuthProvider triggert Redirect via useEffect oben
             setInfo("✅ Eingeloggt, leite weiter…");
+            // Hard-Navigation statt router.replace: die Session-Cookies wurden
+            // serverseitig gesetzt -- ein voller Seitenload lässt AuthProvider
+            // sie beim Mount frisch aus den Cookies lesen, statt auf einen
+            // client-seitigen Cache-Refresh der laufenden Supabase-Instanz zu
+            // hoffen.
+            window.location.assign(nextPath);
         } catch (e: unknown) {
             const m = e instanceof Error ? e.message : "Unbekannter Fehler.";
             setError(m);
         } finally {
             setBusy(false);
         }
-    }, [busy, identifier, password, supabase]);
+    }, [busy, identifier, password, nextPath]);
 
     if (AUTH_DISABLED) {
         return (
