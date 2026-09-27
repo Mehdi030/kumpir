@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — Echtes Schema (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 014 (Stand 2026-09-27). Nach jedem neuen `db/migrations/NNN_*.sql`
+-- Migration 017 (Stand 2026-09-27). Nach jedem neuen `db/migrations/NNN_*.sql`
 -- bitte diese Datei von Hand (oder per neuem Dump) auf den gleichen Stand
 -- bringen, sonst driftet sie wieder auseinander wie zwischen 2026-05-11
 -- und Migration 001/005/008 (siehe unten).
@@ -236,7 +236,7 @@ CREATE TABLE saved_lobbies (
 );
 
 -- Views (nicht per DROP-Skript entfernbar wie Tabellen, nur der Vollständigkeit halber dokumentiert):
---   leaderboard_view   (Migration 006) — player_lifetime_stats x profiles.username
---   friends_view       (Migration 008) — friendships x profiles.username
+--   leaderboard_view   (Migration 006, security_invoker seit Migration 015) — player_lifetime_stats x profiles.username
+--   friends_view       (Migration 008, security_invoker seit Migration 015) — friendships x profiles.username
 --   public_lobbies_view existiert NICHT in main (nur im unmerged Branch
 --     claude/beautiful-panini-20b290, siehe TESTREPORT.md)

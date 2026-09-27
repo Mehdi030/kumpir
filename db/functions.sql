@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — RPC-Funktionen (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 014 (Stand 2026-09-27).
+-- Migration 017 (Stand 2026-09-27).
 -- Quelle: User-Dump via SQL-Editor Query 2 aus db/HOW_TO_DUMP.md
 -- ============================================================
 
@@ -146,6 +146,7 @@ CREATE OR REPLACE FUNCTION public.cleanup_lobby(p_lobby_id uuid, p_stale_seconds
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 declare
   v_host uuid;
@@ -221,6 +222,10 @@ end;
 $function$;
 
 
+-- Stand nach Migration 017: EXECUTE für anon/authenticated entzogen
+-- (gab Klartext-Emails für jeden bekannten Username öffentlich per RPC
+-- heraus -- Username-Login läuft seither über actions/login.ts +
+-- service_role, siehe Migration 017 für Details).
 CREATE OR REPLACE FUNCTION public.get_email_for_username(p_username text)
  RETURNS text LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
@@ -228,6 +233,8 @@ AS $function$
   where lower(username) = lower(public.normalize_username(p_username))
   limit 1;
 $function$;
+
+REVOKE EXECUTE ON FUNCTION public.get_email_for_username(text) FROM PUBLIC, anon, authenticated;
 
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -321,7 +328,7 @@ $function$;
 
 
 CREATE OR REPLACE FUNCTION public.kick_player(p_lobby_id uuid, p_me_player_id uuid, p_target_player_id uuid)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare v_host uuid;
 begin
@@ -345,7 +352,7 @@ AS $function$ select lower(trim(u)) $function$;
 -- AKTIV: rpc_pass_potato — enthält BEREITS Teleport + Reverse Logik
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_pass_potato(p_code text, p_player_id uuid)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
   v_lobby_id uuid; v_mode text; v_holder uuid; v_dir smallint; v_explode_at timestamptz;
@@ -501,7 +508,7 @@ $function$;
 -- ABER: rpc_start_rematch_if_ready nutzt `topics` (Inkonsistenz!)
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_begin_topic_vote(p_lobby_id uuid, p_player_id uuid)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare v_host uuid; v_a text; v_b text;
 begin
@@ -546,7 +553,7 @@ CREATE OR REPLACE FUNCTION public.rpc_create_lobby(
     p_user_id UUID DEFAULT NULL,
     p_round_speed TEXT DEFAULT 'normal'
 ) RETURNS TABLE(code TEXT, host_player_id UUID)
- LANGUAGE plpgsql SECURITY DEFINER
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
   v_lobby_id uuid := gen_random_uuid();
@@ -633,7 +640,7 @@ $function$;
 
 
 CREATE OR REPLACE FUNCTION public.rpc_heartbeat(p_lobby_id uuid, p_player_id uuid)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 begin
   update public.players
@@ -786,7 +793,7 @@ $function$;
 -- statt fix 15s.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_tick_game(p_code text)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
   v_now timestamptz := now();
@@ -898,7 +905,7 @@ $function$;
 
 
 CREATE OR REPLACE FUNCTION public.rpc_vote_topic(p_lobby_id uuid, p_player_id uuid, p_choice integer)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 begin
   if p_choice not in (1,2,3) then raise exception 'Invalid choice %', p_choice; end if;
@@ -924,7 +931,7 @@ $function$;
 
 
 CREATE OR REPLACE FUNCTION public.set_lobby_mode(p_lobby_id uuid, p_me_player_id uuid, p_mode text)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare v_host uuid; v_mode text;
 begin
@@ -944,7 +951,7 @@ $function$;
 
 
 CREATE OR REPLACE FUNCTION public.set_lobby_topic(p_lobby_id uuid, p_me_player_id uuid, p_topic text)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare v_host uuid; v_topic text;
 begin
@@ -964,7 +971,7 @@ $function$;
 
 
 CREATE OR REPLACE FUNCTION public.set_max_players(p_lobby_id uuid, p_me_player_id uuid, p_max_players integer)
- RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare v_host uuid; v_active_count int;
 begin
@@ -1050,7 +1057,7 @@ $function$;
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_attempt_pass(
     p_code TEXT, p_player_id UUID, p_answer TEXT
-) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER
+) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
   v_lobby public.lobbies%ROWTYPE;
@@ -1084,7 +1091,7 @@ $function$;
 
 CREATE OR REPLACE FUNCTION public.rpc_vote_answer(
     p_attempt_id UUID, p_voter_id UUID, p_accept BOOLEAN
-) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
   v_attempt public.pass_attempts%ROWTYPE;
@@ -1122,7 +1129,7 @@ $function$;
 
 
 CREATE OR REPLACE FUNCTION public._finalize_attempt_accept(p_attempt_id UUID)
- RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
   v_attempt public.pass_attempts%ROWTYPE;
@@ -1146,7 +1153,7 @@ $function$;
 
 
 CREATE OR REPLACE FUNCTION public._finalize_attempt_reject(p_attempt_id UUID)
- RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 begin
   update public.pass_attempts set status = 'rejected', decided_at = now() where id = p_attempt_id;

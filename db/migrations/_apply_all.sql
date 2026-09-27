@@ -1,5 +1,5 @@
 -- ============================================================
--- KUMPIR — Alle 14 Migrationen in einem File
+-- KUMPIR — Alle 17 Migrationen in einem File
 -- ============================================================
 -- Einmal komplett kopieren, in Supabase SQL Editor einfügen, Run.
 -- Jede Sub-Migration ist idempotent — du kannst das File mehrfach laufen lassen.
@@ -2012,6 +2012,170 @@ begin
   where id = v_lobby_id;
 end;
 $function$;
+
+COMMIT;
+
+
+-- ============================================================
+-- 015_security_definer_views.sql
+-- ============================================================
+-- ============================================================
+-- Migration 015: Security-Definer-Views entschärft
+-- ============================================================
+-- Supabase Advisor (Security, CRITICAL) meldete:
+--   "View public.leaderboard_view is defined with the SECURITY
+--    DEFINER property"
+--   "View public.friends_view is defined with the SECURITY
+--    DEFINER property"
+--
+-- Hintergrund: Eine normale Postgres-VIEW wertet RLS/Grants standard-
+-- mäßig mit den Rechten des VIEW-BESITZERS aus (i.d.R. der Migrations-
+-- Rolle), nicht mit denen des tatsächlich abfragenden Users. Damit
+-- umgeht die View RLS-Policies auf den referenzierten Tabellen
+-- komplett -- unabhängig davon, ob das heute schon ausgenutzt werden
+-- kann (aktuell sind die Policies auf player_lifetime_stats/
+-- friendships ohnehin "USING (TRUE)", siehe Migration 005/008), ist
+-- es ein Foundational-Risiko: Sobald diese Policies mal enger gezogen
+-- werden, würde die View das RLS trotzdem weiter umgehen, ohne dass
+-- es auffällt.
+--
+-- Fix: `security_invoker = true` (Postgres 15+, von Supabase
+-- unterstützt) lässt die View stattdessen mit den Rechten des
+-- ABFRAGENDEN Users laufen -- RLS-Policies + Column-Grants (z.B. die
+-- profiles-Einschränkung auf nur id/username aus Migration 012)
+-- greifen dann auch innerhalb der View korrekt.
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE VIEW public.leaderboard_view
+WITH (security_invoker = true) AS
+SELECT
+    p.username,
+    s.user_id,
+    s.games_played,
+    s.wins,
+    CASE
+        WHEN s.games_played > 0 THEN ROUND((s.wins::numeric / s.games_played) * 100, 1)
+        ELSE 0
+    END AS win_rate_pct,
+    s.total_passes,
+    s.total_clutch_passes,
+    s.fastest_pass_ms,
+    s.total_hold_ms,
+    s.best_survival_streak,
+    s.updated_at
+FROM public.player_lifetime_stats s
+JOIN public.profiles p ON p.id = s.user_id
+WHERE p.username IS NOT NULL
+  AND s.games_played >= 1;
+
+GRANT SELECT ON public.leaderboard_view TO anon, authenticated;
+
+
+CREATE OR REPLACE VIEW public.friends_view
+WITH (security_invoker = true) AS
+SELECT
+    f.user_id,
+    f.friend_user_id,
+    p.username AS friend_username,
+    f.status,
+    f.created_at,
+    f.accepted_at
+FROM public.friendships f
+JOIN public.profiles p ON p.id = f.friend_user_id;
+
+GRANT SELECT ON public.friends_view TO anon, authenticated;
+
+COMMIT;
+
+
+-- ============================================================
+-- 016_function_search_path_hardening.sql
+-- ============================================================
+-- ============================================================
+-- Migration 016: Fehlenden search_path bei SECURITY DEFINER-Funktionen ergänzt
+-- ============================================================
+-- Beim Sicherheits-Audit gefunden (nicht vom Advisor-Screenshot
+-- gemeldet, aber dieselbe Fund-Klasse "Function Search Path Mutable",
+-- die Supabase separat unter Security lintet): 15 SECURITY DEFINER
+-- Funktionen hatten kein `SET search_path`, obwohl praktisch alle
+-- anderen SECURITY DEFINER Funktionen im Projekt das bereits haben.
+--
+-- Risiko: Eine SECURITY DEFINER Funktion ohne fest verdrahteten
+-- search_path lässt sich potenziell kapern, wenn ein Aufrufer (mit
+-- Schema-Create-Rechten) ein gleichnamiges Objekt in einem Schema
+-- anlegt, das vor `public` im search_path des Funktions-Besitzers
+-- steht -- die Funktion würde dann unbemerkt das falsche Objekt
+-- verwenden, mit den erhöhten Rechten des Funktions-Besitzers.
+-- Da hier alle Tabellen-/Funktionsreferenzen im Code bereits mit
+-- `public.` qualifiziert sind, ist die praktische Ausnutzbarkeit
+-- gering -- trotzdem harte Absicherung nach Postgres/Supabase
+-- Best-Practice, ohne jegliche Verhaltensänderung.
+--
+-- ALTER FUNCTION statt CREATE OR REPLACE: ändert nur die Config,
+-- fasst den Funktionskörper nicht an -- risikofrei.
+-- ============================================================
+
+BEGIN;
+
+ALTER FUNCTION public.cleanup_lobby(uuid, integer) SET search_path TO 'public';
+ALTER FUNCTION public.kick_player(uuid, uuid, uuid) SET search_path TO 'public';
+ALTER FUNCTION public.rpc_pass_potato(text, uuid) SET search_path TO 'public';
+ALTER FUNCTION public.rpc_begin_topic_vote(uuid, uuid) SET search_path TO 'public';
+ALTER FUNCTION public.rpc_create_lobby(text, text, integer, integer, uuid, text) SET search_path TO 'public';
+ALTER FUNCTION public.rpc_heartbeat(uuid, uuid) SET search_path TO 'public';
+ALTER FUNCTION public.rpc_tick_game(text) SET search_path TO 'public';
+ALTER FUNCTION public.rpc_vote_topic(uuid, uuid, integer) SET search_path TO 'public';
+ALTER FUNCTION public.set_lobby_mode(uuid, uuid, text) SET search_path TO 'public';
+ALTER FUNCTION public.set_lobby_topic(uuid, uuid, text) SET search_path TO 'public';
+ALTER FUNCTION public.set_max_players(uuid, uuid, integer) SET search_path TO 'public';
+ALTER FUNCTION public.rpc_attempt_pass(text, uuid, text) SET search_path TO 'public';
+ALTER FUNCTION public.rpc_vote_answer(uuid, uuid, boolean) SET search_path TO 'public';
+ALTER FUNCTION public._finalize_attempt_accept(uuid) SET search_path TO 'public';
+ALTER FUNCTION public._finalize_attempt_reject(uuid) SET search_path TO 'public';
+
+COMMIT;
+
+
+-- ============================================================
+-- 017_restrict_email_lookup.sql
+-- ============================================================
+-- ============================================================
+-- Migration 017: get_email_for_username nicht mehr öffentlich aufrufbar
+-- ============================================================
+-- Beim Sicherheits-Audit gefunden (nicht vom Advisor gemeldet, aber
+-- schwerwiegender als die beiden View-Funde): get_email_for_username(
+-- p_username text) RETURNS text war als normale RPC für anon/
+-- authenticated aufrufbar UND gab die Klartext-Email direkt zurück.
+--
+-- apps/web/src/app/login/page.tsx rief sie bisher direkt vom Browser
+-- aus auf, um Username-Login zu ermöglichen ("kein @ im Feld -> Email
+-- per RPC holen, dann signInWithPassword"). Das Problem: der Anon-Key
+-- liegt öffentlich im Frontend-Bundle -- JEDER kann die RPC direkt per
+-- REST aufrufen (unabhängig vom eigentlichen Frontend-Code) und damit
+-- für JEDEN bekannten Username (Usernames sind über leaderboard_view/
+-- friends_view ohnehin öffentlich sichtbar) die zugehörige Email
+-- abgreifen. Das ist ein klassisches Username->Email-Harvesting für
+-- Phishing/Spam/Credential-Stuffing-Listen -- schwerwiegender als die
+-- beiden Advisor-Funde, weil hier tatsächlich PII (Email) mit einem
+-- einzigen, für jeden möglichen Aufruf abfließt.
+--
+-- Fix: EXECUTE-Recht für anon/authenticated entzogen. Die Funktion
+-- bleibt für den Owner (postgres) bzw. den service_role (umgeht
+-- Grants ohnehin) nutzbar. Der Login-Flow wird im selben Zug auf
+-- einen Server Action umgestellt (siehe apps/web/src/actions/login.ts),
+-- der die Email serverseitig mit dem Service-Role-Key auflöst und NIE
+-- an den Browser zurückgibt.
+--
+-- WICHTIG: Ohne SUPABASE_SERVICE_ROLE_KEY in der Server-Umgebung
+-- funktioniert Username-Login danach nicht mehr (Email-Login bleibt
+-- unberührt) -- siehe apps/web/.env.example.
+-- ============================================================
+
+BEGIN;
+
+REVOKE EXECUTE ON FUNCTION public.get_email_for_username(text) FROM PUBLIC, anon, authenticated;
 
 COMMIT;
 
