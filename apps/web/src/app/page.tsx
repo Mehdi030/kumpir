@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { Suspense } from "react";
 import { AuthMini } from "@/components/AuthMini";
+import { LobbyExitNotice } from "@/components/LobbyExitNotice";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
@@ -25,6 +27,11 @@ export default function Home() {
 
                 {/* FOREGROUND card */}
                 <section className="card" aria-label="Kumpir Landing Card">
+                    {/* Suspense boundary required for useSearchParams (inside LobbyExitNotice) */}
+                    <Suspense fallback={null}>
+                        <LobbyExitNotice />
+                    </Suspense>
+
                     <div className="metaBar metaBarInCard">
                         <div className="metaLeft">
                             <span className="metaPill">👥 2–10 Spieler</span>

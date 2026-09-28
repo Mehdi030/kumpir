@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
 import { useMemo, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
-import { HostNotice } from "./HostNotice";
 import { MUSIC_PLAYLISTS, MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
 
 type Privacy = "private" | "public";
@@ -215,11 +213,6 @@ export default function HostPage() {
         <main className="container">
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby hosten">
-                    {/* ✅ Suspense boundary required for useSearchParams (inside HostNotice) */}
-                    <Suspense fallback={null}>
-                        <HostNotice />
-                    </Suspense>
-
                     <header className="hostHeader">
                         <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                             <h1 className="h1">Lobby hosten</h1>

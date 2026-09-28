@@ -123,11 +123,13 @@ export default function LobbyPage() {
                 clearMyIdentityStorage();
                 suppressRedirectRef.current = true;
 
-                go(status === "kicked" ? `/host?kicked=1` : `/host?left=1`);
+                // "/" statt "/host": wer nur beigetreten war, soll nicht auf der
+                // "Lobby erstellen"-Seite landen, siehe LobbyExitNotice.
+                go(status === "kicked" ? `/?kicked=1` : `/?left=1`);
             } catch {
                 clearMyIdentityStorage();
                 suppressRedirectRef.current = true;
-                go(`/host`);
+                go(`/`);
             }
         })();
     }, [loading, players, mePlayerId, lobbyId, go]);
@@ -290,7 +292,10 @@ export default function LobbyPage() {
             // ignore
         } finally {
             clearMyIdentityStorage();
-            go("/host?left=1");
+            // "Hauptmenü" muss auch für Spieler stimmen, die nur beigetreten sind
+            // (nicht gehostet haben) -- /host ist die "Lobby erstellen"-Seite und
+            // ergibt für sie keinen Sinn. "/" bietet beide Optionen (Host + Join).
+            go("/?left=1");
         }
     }, [mePlayerId, lobbyId, go]);
 
@@ -328,54 +333,6 @@ export default function LobbyPage() {
                                 <h1 className="h1" style={{ marginBottom: 10 }}>
                                     Private Lobby
                                 </h1>
-
-                                <div style={{ display: "grid", placeItems: "center", marginTop: 6 }}>
-                                    <button
-                                        type="button"
-                                        onClick={copyInviteByClick}
-                                        title="Klick → Join-Link kopieren"
-                                        style={{ border: "none", background: "transparent", cursor: isRunning ? "not-allowed" : "pointer", padding: 0 }}
-                                        aria-label="Join-Link kopieren"
-                                        disabled={isRunning}
-                                    >
-                                        <div
-                                            style={{
-                                                fontSize: 58,
-                                                fontWeight: 950,
-                                                letterSpacing: 6,
-                                                lineHeight: 1,
-                                                backgroundImage: "linear-gradient(90deg,#ff2d55,#ff9500,#ffd60a,#34c759,#0a84ff,#bf5af2,#ff2d55)",
-                                                backgroundSize: "220% 100%",
-                                                WebkitBackgroundClip: "text",
-                                                backgroundClip: "text",
-                                                color: "transparent",
-                                                animation: "kumpir-rainbow 2.8s linear infinite",
-                                                textShadow: "0 10px 30px rgba(0,0,0,0.18)",
-                                                userSelect: "none",
-                                                opacity: isRunning ? 0.75 : 1,
-                                            }}
-                                        >
-                                            {code}
-                                        </div>
-                                    </button>
-
-                                    {toast ? (
-                                        <div className="fieldHelp" style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}>
-                                            {toast}
-                                        </div>
-                                    ) : (
-                                        <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.85, textAlign: "center" }}>
-                                            Klick auf den Code kopiert den Join-Link.
-                                        </div>
-                                    )}
-
-                                    <style>{`
-                    @keyframes kumpir-rainbow {
-                      0% { background-position: 0% 50%; }
-                      100% { background-position: 100% 50%; }
-                    }
-                  `}</style>
-                                </div>
                             </div>
 
                             <div style={{ display: "grid", gap: 10, justifyItems: "end", minWidth: 240 }}>
@@ -442,6 +399,54 @@ export default function LobbyPage() {
                                     </Link>
                                 ) : null}
                             </div>
+                        </div>
+
+                        <div style={{ display: "grid", placeItems: "center", width: "100%", marginTop: 6 }}>
+                            <button
+                                type="button"
+                                onClick={copyInviteByClick}
+                                title="Klick → Join-Link kopieren"
+                                style={{ border: "none", background: "transparent", cursor: isRunning ? "not-allowed" : "pointer", padding: 0 }}
+                                aria-label="Join-Link kopieren"
+                                disabled={isRunning}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: 58,
+                                        fontWeight: 950,
+                                        letterSpacing: 6,
+                                        lineHeight: 1,
+                                        backgroundImage: "linear-gradient(90deg,#ff2d55,#ff9500,#ffd60a,#34c759,#0a84ff,#bf5af2,#ff2d55)",
+                                        backgroundSize: "220% 100%",
+                                        WebkitBackgroundClip: "text",
+                                        backgroundClip: "text",
+                                        color: "transparent",
+                                        animation: "kumpir-rainbow 2.8s linear infinite",
+                                        textShadow: "0 10px 30px rgba(0,0,0,0.18)",
+                                        userSelect: "none",
+                                        opacity: isRunning ? 0.75 : 1,
+                                    }}
+                                >
+                                    {code}
+                                </div>
+                            </button>
+
+                            {toast ? (
+                                <div className="fieldHelp" style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}>
+                                    {toast}
+                                </div>
+                            ) : (
+                                <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.85, textAlign: "center" }}>
+                                    Klick auf den Code kopiert den Join-Link.
+                                </div>
+                            )}
+
+                            <style>{`
+                    @keyframes kumpir-rainbow {
+                      0% { background-position: 0% 50%; }
+                      100% { background-position: 100% 50%; }
+                    }
+                  `}</style>
                         </div>
                     </div>
 

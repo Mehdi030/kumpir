@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export function HostNotice() {
+/**
+ * Zeigt "Du hast die Lobby verlassen" / "Du wurdest gekickt" auf der
+ * Startseite an, nachdem lobby/[code]/page.tsx dorthin umgeleitet hat
+ * (?left=1 / ?kicked=1). Lebt auf "/" statt auf "/host" -- wer nur einer
+ * fremden Lobby beigetreten war, landet sonst unpassend auf der
+ * "Lobby erstellen"-Seite statt im eigentlichen Hauptmenü.
+ */
+export function LobbyExitNotice() {
     const router = useRouter();
     const sp = useSearchParams();
 
@@ -19,7 +26,7 @@ export function HostNotice() {
 
     useEffect(() => {
         if (initialReason) {
-            router.replace("/host");
+            router.replace("/");
         }
     }, [initialReason, router]);
 
