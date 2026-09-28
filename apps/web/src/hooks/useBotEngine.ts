@@ -116,11 +116,15 @@ export function useBotEngine(
                         lobby.topic_selected ?? lobby.topic_a,
                         lobby.used_answers ?? []
                     );
-                    void supabase.rpc("rpc_attempt_pass", {
-                        p_code: lobby.code,
-                        p_player_id: holder.player_id,
-                        p_answer: answer,
-                    });
+                    supabase
+                        .rpc("rpc_attempt_pass", {
+                            p_code: lobby.code,
+                            p_player_id: holder.player_id,
+                            p_answer: answer,
+                        })
+                        .then(({ error }) => {
+                            if (error) console.error("[bot] attempt failed:", holder.name, error);
+                        });
                     return;
                 }
 
@@ -133,11 +137,15 @@ export function useBotEngine(
                 const used = lobby.used_answers ?? [];
                 if (used.length > 0) {
                     const dup = used[Math.floor(Math.random() * used.length)];
-                    void supabase.rpc("rpc_attempt_pass", {
-                        p_code: lobby.code,
-                        p_player_id: holder.player_id,
-                        p_answer: dup,
-                    });
+                    supabase
+                        .rpc("rpc_attempt_pass", {
+                            p_code: lobby.code,
+                            p_player_id: holder.player_id,
+                            p_answer: dup,
+                        })
+                        .then(({ error }) => {
+                            if (error) console.error("[bot] deliberate-fail attempt errored:", holder.name, error);
+                        });
                 }
             }, delay);
             return;
@@ -159,11 +167,15 @@ export function useBotEngine(
                     window.setTimeout(() => {
                         // 90% akzeptieren — pragmatisch, Bots sollen das Spiel nicht blockieren
                         const accept = Math.random() < 0.9;
-                        void supabase.rpc("rpc_vote_answer", {
-                            p_attempt_id: currentAttempt.id,
-                            p_voter_id: bot.player_id,
-                            p_accept: accept,
-                        });
+                        supabase
+                            .rpc("rpc_vote_answer", {
+                                p_attempt_id: currentAttempt.id,
+                                p_voter_id: bot.player_id,
+                                p_accept: accept,
+                            })
+                            .then(({ error }) => {
+                                if (error) console.error("[bot] vote failed:", bot.name, error);
+                            });
                     }, delay);
                 });
         }
