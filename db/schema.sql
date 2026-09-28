@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — Echtes Schema (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 028 (Stand 2026-09-28). Nach jedem neuen `db/migrations/NNN_*.sql`
+-- Migration 029 (Stand 2026-09-28). Nach jedem neuen `db/migrations/NNN_*.sql`
 -- bitte diese Datei von Hand (oder per neuem Dump) auf den gleichen Stand
 -- bringen, sonst driftet sie wieder auseinander wie zwischen 2026-05-11
 -- und Migration 001/005/008 (siehe unten).
@@ -78,7 +78,9 @@ CREATE TABLE lobbies (
     round_index integer DEFAULT 0,
     last_round_seconds numeric,
     pass_direction smallint NOT NULL DEFAULT 1,
-    topic_filter text[]  -- Migration 026. NULL/leer = alle Kategorien möglich.
+    topic_filter text[],  -- Migration 026. NULL/leer = alle Kategorien möglich.
+    current_song_id uuid REFERENCES song_pool(id),  -- Migration 029.
+    used_song_ids uuid[] NOT NULL DEFAULT '{}'       -- Migration 029.
 );
 
 CREATE TABLE lobby_admin_logs (
@@ -157,7 +159,8 @@ CREATE TABLE topic_pool (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     text text NOT NULL,
     active boolean NOT NULL DEFAULT true,
-    created_at timestamp with time zone NOT NULL DEFAULT now()
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    is_song_category boolean NOT NULL DEFAULT false  -- Migration 029.
 );
 
 CREATE TABLE topic_votes (
@@ -205,6 +208,20 @@ CREATE TABLE topic_answers (
     lower_answer text GENERATED ALWAYS AS (lower(answer)) STORED,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     UNIQUE (topic_pool_id, lower_answer)
+);
+
+-- Migration 029: pro Musik-Kategorie ein echter Songtitel. current_song_id
+-- auf lobbies zeigt auf den EINEN Song, den der aktuelle Halter gerade
+-- "hat" -- der Titel wird im Client nie gerendert, nur als iTunes-Search-
+-- Suchbegriff für den 30s-Preview-Clip verwendet.
+CREATE TABLE song_pool (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    topic_pool_id uuid NOT NULL REFERENCES topic_pool(id) ON DELETE CASCADE,
+    title text NOT NULL,
+    artist text,
+    lower_title text GENERATED ALWAYS AS (lower(title)) STORED,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    UNIQUE (topic_pool_id, lower_title)
 );
 
 CREATE TABLE achievements (

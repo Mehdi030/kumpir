@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — RPC-Funktionen (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 028 (Stand 2026-09-28).
+-- Migration 029 (Stand 2026-09-28).
 -- Quelle: User-Dump via SQL-Editor Query 2 aus db/HOW_TO_DUMP.md
 -- ============================================================
 
@@ -549,6 +549,7 @@ begin
   end if;
 
   update public.lobbies set holder_player_id = v_next, last_activity_at = v_now where id = v_lobby_id;
+  perform public._pick_next_song(v_lobby_id);
 
   -- Stats tracking
   select last_pass_at into v_last_pass from public.players
@@ -598,7 +599,7 @@ declare
 begin
   select round_speed, coalesce(round_number, 0)
     into v_round_speed, v_round_number
-  from public.lobbies where id = p_lobby_id;
+  from public.lobbies where id = p_lobby_id for update;
 
   select count(*) into v_alive_count
   from public.players
@@ -625,9 +626,12 @@ begin
       countdown_started_at = null,
       countdown_ends_at = null,
       used_answers = '{}',
+      used_song_ids = '{}',
       current_attempt_id = null,
       last_activity_at = now()
   where id = p_lobby_id and phase = 'countdown';
+
+  perform public._pick_next_song(p_lobby_id);
 end;
 $function$;
 
@@ -1111,7 +1115,7 @@ begin
 
   if v_alive_count <= 1 then
     update public.lobbies
-    set phase = 'finished', explode_at = null,
+    set phase = 'finished', explode_at = null, current_song_id = null,
         holder_player_id = (
           select player_id from public.players
           where lobby_id = v_lobby_id and status = 'active' and is_alive = true
@@ -1158,6 +1162,8 @@ begin
         else pass_direction
       end
   where id = v_lobby_id;
+
+  perform public._pick_next_song(v_lobby_id);
 end;
 $function$;
 
@@ -1434,16 +1440,30 @@ begin
 
   update public.lobbies set current_attempt_id = v_attempt where id = v_lobby.id;
 
-  -- Antwort-Datenbank: bekannte, korrekte Antwort -> sofort annehmen,
-  -- kein Voting nötig. _finalize_attempt_accept setzt current_attempt_id
-  -- selbst wieder auf null und stößt rpc_pass_potato an.
-  select exists (
-    select 1
-    from public.topic_answers ta
-    join public.topic_pool tp on tp.id = ta.topic_pool_id
-    where lower(tp.text) = lower(v_topic)
-      and ta.lower_answer = lower(v_clean)
-  ) into v_known;
+  if v_lobby.current_song_id is not null then
+    -- Song-Modus: gegen genau den einen aktuellen Song prüfen (Klammer-
+    -- Zusätze wie "(feat. ...)" werden toleriert, exakte Interpreten-
+    -- Schreibweise wird nicht verlangt).
+    select exists (
+      select 1 from public.song_pool sp
+      where sp.id = v_lobby.current_song_id
+        and (
+          sp.lower_title = lower(v_clean)
+          or regexp_replace(sp.lower_title, '\s*\(.*?\)\s*', '', 'g') = lower(v_clean)
+        )
+    ) into v_known;
+  else
+    -- Antwort-Datenbank: bekannte, korrekte Antwort -> sofort annehmen,
+    -- kein Voting nötig. _finalize_attempt_accept setzt current_attempt_id
+    -- selbst wieder auf null und stößt rpc_pass_potato an.
+    select exists (
+      select 1
+      from public.topic_answers ta
+      join public.topic_pool tp on tp.id = ta.topic_pool_id
+      where lower(tp.text) = lower(v_topic)
+        and ta.lower_answer = lower(v_clean)
+    ) into v_known;
+  end if;
 
   if v_known then
     perform public._finalize_attempt_accept(v_attempt);
@@ -1816,3 +1836,44 @@ $function$;
 -- TABELLEN gedroppt in Migration 013 (unbenutzt, siehe dort für den
 -- Nachweis): lobby_players, topics, game_state.
 -- ============================================================
+
+
+CREATE OR REPLACE FUNCTION public._pick_next_song(p_lobby_id UUID)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_topic text; v_topic_pool_id uuid; v_used uuid[]; v_song_id uuid;
+begin
+  select topic_selected, used_song_ids into v_topic, v_used
+  from public.lobbies where id = p_lobby_id;
+
+  select tp.id into v_topic_pool_id
+  from public.topic_pool tp
+  where tp.is_song_category is true and lower(tp.text) = lower(coalesce(v_topic, ''));
+
+  if v_topic_pool_id is null then
+    update public.lobbies set current_song_id = null where id = p_lobby_id;
+    return;
+  end if;
+
+  select sp.id into v_song_id
+  from public.song_pool sp
+  where sp.topic_pool_id = v_topic_pool_id
+    and not (sp.id = any(coalesce(v_used, '{}')))
+  order by random() limit 1;
+
+  -- Songs im Match aufgebraucht -> Pool für dieses Match wieder freigeben.
+  if v_song_id is null then
+    select sp.id into v_song_id
+    from public.song_pool sp
+    where sp.topic_pool_id = v_topic_pool_id
+    order by random() limit 1;
+    v_used := '{}';
+  end if;
+
+  update public.lobbies
+  set current_song_id = v_song_id,
+      used_song_ids = case when v_song_id is null then used_song_ids else array_append(v_used, v_song_id) end
+  where id = p_lobby_id;
+end;
+$function$;

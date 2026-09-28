@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { VoiceInput } from "@/components/game/VoiceInput";
+import { SongRound } from "@/components/game/SongRound";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
@@ -72,6 +73,9 @@ type LobbyState = {
     // Modus-Anzeige
     game_mode: string | null;
     pass_direction: number | null;
+
+    // Song-Raten (Musik-Modus): aktueller, versteckter Song für den Halter
+    current_song_id: string | null;
 };
 
 type Player = {
@@ -604,6 +608,8 @@ export default function GamePage() {
 
                     game_mode: (raw.game_mode as string | null) ?? "original",
                     pass_direction: (raw.pass_direction as number | null) ?? 1,
+
+                    current_song_id: (raw.current_song_id as string | null) ?? null,
                 };
 
                 // Post-round loser toast (once)
@@ -2082,20 +2088,7 @@ export default function GamePage() {
                 <div className="hudInner">
                     <div className="topic">{selectedTopic}</div>
 
-                    {MUSIC_PLAYLISTS[selectedTopic] ? (
-                        <div className="spotifyEmbedWrap">
-                            <iframe
-                                title={`Spotify: ${MUSIC_PLAYLISTS[selectedTopic].title}`}
-                                style={{ borderRadius: 12 }}
-                                src={`https://open.spotify.com/embed/playlist/${MUSIC_PLAYLISTS[selectedTopic].id}?utm_source=kumpir`}
-                                width="100%"
-                                height="152"
-                                frameBorder={0}
-                                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                                loading="lazy"
-                            />
-                        </div>
-                    ) : null}
+                    {MUSIC_PLAYLISTS[selectedTopic] ? <SongRound songId={lobby.current_song_id} /> : null}
 
                     <div className="strip" key={hudPulseNonce}>
                         <div className="now">
@@ -2375,9 +2368,21 @@ export default function GamePage() {
           0%, 100% { box-shadow: 0 0 0 0 rgba(255,60,60,0.5); }
           50% { box-shadow: 0 0 0 8px rgba(255,60,60,0); }
         }
-        .spotifyEmbedWrap{
+        .songRoundHint{
           width: min(680px, 92vw);
           margin: 6px auto 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 8px 14px;
+          border-radius: 12px;
+          background: rgba(255,255,255,0.08);
+          font-weight: 700;
+          opacity: 0.92;
+        }
+        .songRoundIcon{
+          animation: voicePulse 1.6s ease-in-out infinite;
         }
         .answerStatus,
         .answerVote{
