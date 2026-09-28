@@ -60,6 +60,16 @@ const ANSWERS: Record<string, string[]> = {
     "Kinderspiele":           ["Verstecken", "Fangen", "Mensch ärgere dich nicht", "UNO", "Memory", "Stadt Land Fluss", "Twister", "Mau Mau"],
     "Brettspiele":            ["Monopoly", "Risiko", "Catan", "Scrabble", "Backgammon", "Dame", "Schach", "Trivial Pursuit", "Cluedo"],
     "Handwerks-Berufe":       ["Tischler", "Schreiner", "Maurer", "Elektriker", "Klempner", "Maler", "Schlosser", "Dachdecker", "Friseur"],
+    "Deutschrap-Songs":       [
+        // Aktuell (2025/2026)
+        "Tequila", "Wolke 10", "Puuh Bär", "Rockstar", "Athen", "Neymar",
+        "Millionär", "Blaulicht", "Vermissen", "Dior",
+        // Bekannt / Klassiker
+        "Bonez MC", "Gangsta Rap", "Willst du", "Anfang", "Powergirl",
+        "Meine Soldaten", "Roller", "Blackout", "Palmen aus Plastik",
+        "Nicht verdient", "3 Millionen", "Nightliner", "Nur noch Gangster",
+        "Nummer 1", "Nicht so wichtig", "Nur für dich",
+    ],
 };
 
 const BOT_NAMES = [

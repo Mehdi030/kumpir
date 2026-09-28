@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 import { PlayerRing } from "@/components/game/PlayerRing";
+import { VoiceInput } from "@/components/game/VoiceInput";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
@@ -1921,6 +1922,21 @@ export default function GamePage() {
                 <div className="hudInner">
                     <div className="topic">{selectedTopic}</div>
 
+                    {selectedTopic === "Deutschrap-Songs" ? (
+                        <div className="spotifyEmbedWrap">
+                            <iframe
+                                title="Spotify: Deutschrap Charts 2026"
+                                style={{ borderRadius: 12 }}
+                                src="https://open.spotify.com/embed/playlist/5lJ1Ko6KMm9lTfdcngqNdA?utm_source=kumpir"
+                                width="100%"
+                                height="152"
+                                frameBorder={0}
+                                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                                loading="lazy"
+                            />
+                        </div>
+                    ) : null}
+
                     <div className="strip" key={hudPulseNonce}>
                         <div className="now">
                             <span className="dotNow" aria-hidden />
@@ -1989,26 +2005,32 @@ export default function GamePage() {
                     ) : isMeHolder ? (
                         // ─── Halter darf neue Antwort eingeben ───
                         <div className="answerInputBox">
-                            <input
-                                type="text"
-                                className="input answerInput"
-                                value={answerDraft}
-                                onChange={(e) => setAnswerDraft(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter" && !passBusy) {
-                                        e.preventDefault();
-                                        void handleAttemptPass();
-                                    }
-                                }}
-                                placeholder={`z.B. ${selectedTopic === "…" ? "deine Antwort" : "Antwort zu " + selectedTopic}`}
-                                maxLength={60}
-                                autoComplete="off"
-                                autoCapitalize="none"
-                                autoCorrect="off"
-                                spellCheck={false}
-                                inputMode="text"
-                                enterKeyHint="send"
-                            />
+                            <div className="answerInputRow">
+                                <input
+                                    type="text"
+                                    className="input answerInput"
+                                    value={answerDraft}
+                                    onChange={(e) => setAnswerDraft(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !passBusy) {
+                                            e.preventDefault();
+                                            void handleAttemptPass();
+                                        }
+                                    }}
+                                    placeholder={`z.B. ${selectedTopic === "…" ? "deine Antwort" : "Antwort zu " + selectedTopic}`}
+                                    maxLength={60}
+                                    autoComplete="off"
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
+                                    spellCheck={false}
+                                    inputMode="text"
+                                    enterKeyHint="send"
+                                />
+                                <VoiceInput
+                                    disabled={!!passDisabledReason}
+                                    onResult={(text) => setAnswerDraft(text.slice(0, 60))}
+                                />
+                            </div>
                             <button
                                 type="button"
                                 className="btn btnPrimary"
@@ -2144,7 +2166,13 @@ export default function GamePage() {
           gap: 10px;
           flex-direction: column;
         }
+        .answerInputRow{
+          display: flex;
+          gap: 8px;
+          align-items: stretch;
+        }
         .answerInput{
+          flex: 1;
           font-size: clamp(18px, 2.4vw, 24px);
           font-weight: 800;
           padding: 14px 18px;
@@ -2157,6 +2185,39 @@ export default function GamePage() {
         .answerInput:focus{
           outline: 3px solid rgba(255,214,10,0.7);
           border-color: rgba(255,214,10,0.9);
+        }
+        .voiceInputBtn{
+          flex-shrink: 0;
+          width: 52px;
+          font-size: 20px;
+          border-radius: 16px;
+          background: rgba(0,0,0,0.32);
+          border: 2px solid rgba(255,255,255,0.18);
+          cursor: pointer;
+          transition: transform .15s ease, background .2s ease, border-color .2s ease;
+        }
+        .voiceInputBtn:hover{
+          background: rgba(0,0,0,0.45);
+        }
+        .voiceInputBtn:active{
+          transform: scale(0.94);
+        }
+        .voiceInputBtn:disabled{
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .voiceInputBtnActive{
+          border-color: rgba(255,60,60,0.9);
+          background: rgba(255,60,60,0.22);
+          animation: voicePulse 1.1s ease-in-out infinite;
+        }
+        @keyframes voicePulse{
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255,60,60,0.5); }
+          50% { box-shadow: 0 0 0 8px rgba(255,60,60,0); }
+        }
+        .spotifyEmbedWrap{
+          width: min(680px, 92vw);
+          margin: 6px auto 0;
         }
         .answerStatus,
         .answerVote{
