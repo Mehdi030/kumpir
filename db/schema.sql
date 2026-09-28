@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — Echtes Schema (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 026 (Stand 2026-09-28). Nach jedem neuen `db/migrations/NNN_*.sql`
+-- Migration 028 (Stand 2026-09-28). Nach jedem neuen `db/migrations/NNN_*.sql`
 -- bitte diese Datei von Hand (oder per neuem Dump) auf den gleichen Stand
 -- bringen, sonst driftet sie wieder auseinander wie zwischen 2026-05-11
 -- und Migration 001/005/008 (siehe unten).
@@ -193,6 +193,18 @@ CREATE TABLE pass_attempt_votes (
     voter_id uuid NOT NULL,
     accept boolean NOT NULL,
     voted_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- Migration 027: Referenz-Antworten pro Kategorie. Ein Treffer hier lässt
+-- rpc_attempt_pass die Antwort sofort automatisch annehmen (kein Voting
+-- nötig); ohne Treffer greift weiterhin das bestehende Mehrheits-Voting.
+CREATE TABLE topic_answers (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    topic_pool_id uuid NOT NULL REFERENCES topic_pool(id) ON DELETE CASCADE,
+    answer text NOT NULL,
+    lower_answer text GENERATED ALWAYS AS (lower(answer)) STORED,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    UNIQUE (topic_pool_id, lower_answer)
 );
 
 CREATE TABLE achievements (

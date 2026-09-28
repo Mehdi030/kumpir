@@ -319,6 +319,78 @@ export default function GamePage() {
 
     const top5 = useMemo(() => ranking.slice(0, 5), [ranking]);
 
+    // Jeder Spieler bekommt genau eine Auszeichnung -- nicht nur die zwei
+    // Gesamtsieger-Kategorien von früher. Reihenfolge = Priorität: die
+    // erste Kategorie, in der ein Spieler noch nicht durch einen anderen
+    // "verbraucht" wurde, gewinnt er. Wer in keiner Kategorie vorne landet
+    // (bei vielen Spielern normal), bekommt die Teilnahme-Auszeichnung mit
+    // seiner eigenen Bestleistung als Text -- niemand geht leer aus.
+    const playerAwards = useMemo(() => {
+        const awarded = new Map<string, { icon: string; label: string; value: string; desc: string }>();
+
+        if (winnerPlayer) {
+            awarded.set(winnerPlayer.player_id, {
+                icon: "🏆",
+                label: "Sieger",
+                value: winnerPlayer.name,
+                desc: "Hat als letzte(r) überlebt",
+            });
+        }
+
+        type Row = (typeof ranking)[number];
+        const categories: {
+            icon: string;
+            label: string;
+            desc: string;
+            get: (r: Row) => number | null | undefined;
+            fmt: (r: Row) => string;
+            higherIsBetter: boolean;
+        }[] = [
+            { icon: "⚡", label: "Fastest Pass", desc: "Schnellste Reaktion im Match", get: (r) => r.fastest, fmt: (r) => fmtMs(r.fastest), higherIsBetter: false },
+            { icon: "🧱", label: "Longest Hold", desc: "Längste Haltezeit insgesamt", get: (r) => r.holdMs, fmt: (r) => fmtHold(r.holdMs), higherIsBetter: true },
+            { icon: "🔥", label: "Meiste Pässe", desc: "Am häufigsten weitergegeben", get: (r) => r.pass, fmt: (r) => `${r.pass}x`, higherIsBetter: true },
+            { icon: "🎯", label: "Clutch-King", desc: "Meiste Last-Second-Pässe", get: (r) => r.clutch, fmt: (r) => `${r.clutch}x`, higherIsBetter: true },
+            { icon: "🛡️", label: "Beste Serie", desc: "Längste Überlebens-Serie am Stück", get: (r) => r.streak, fmt: (r) => `${r.streak} Runden`, higherIsBetter: true },
+        ];
+
+        for (const cat of categories) {
+            const candidates = ranking
+                .filter((r) => !awarded.has(r.player_id))
+                .filter((r) => {
+                    const v = cat.get(r);
+                    return v != null && v > 0;
+                })
+                .sort((a, b) => {
+                    const av = cat.get(a) ?? 0;
+                    const bv = cat.get(b) ?? 0;
+                    return cat.higherIsBetter ? bv - av : av - bv;
+                });
+
+            const winner = candidates[0];
+            if (winner) {
+                awarded.set(winner.player_id, {
+                    icon: cat.icon,
+                    label: cat.label,
+                    value: cat.fmt(winner),
+                    desc: cat.desc,
+                });
+            }
+        }
+
+        // Teilnahme-Auszeichnung für alle, die sonst leer ausgehen würden.
+        for (const r of ranking) {
+            if (awarded.has(r.player_id)) continue;
+            awarded.set(r.player_id, {
+                icon: "🎉",
+                label: "Mit vollem Einsatz dabei",
+                value: `${r.pass} ${r.pass === 1 ? "Pass" : "Pässe"}`,
+                desc: "Hat die Kartoffel nie fallen lassen",
+            });
+        }
+
+        return awarded;
+    }, [ranking, winnerPlayer]);
+
     const myRankRow = useMemo(() => {
         if (!mePlayerId) return null;
         const idx = ranking.findIndex((r) => r.player_id === mePlayerId);
@@ -1442,6 +1514,22 @@ export default function GamePage() {
                                 </div>
                             </div>
 
+                            <div className="cardTitle" style={{ marginTop: 18 }}>🎖 Jede Auszeichnung</div>
+                            <div className="personalAwards">
+                                {ranking.map((r) => {
+                                    const a = playerAwards.get(r.player_id);
+                                    if (!a) return null;
+                                    return (
+                                        <div key={r.player_id} className={`personalAwardRow ${r.player_id === mePlayerId ? "me" : ""}`}>
+                                            <span className="personalAwardIcon" aria-hidden>{a.icon}</span>
+                                            <span className="personalAwardName">{r.name}</span>
+                                            <span className="personalAwardLabel">{a.label}</span>
+                                            <span className="personalAwardValue">{a.value}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
                             <div className="cardActions" style={{ marginTop: 14 }}>
                                 <button
                                     className="btn btnPrimary"
@@ -1675,6 +1763,24 @@ export default function GamePage() {
           background: radial-gradient(circle at 30% 25%, rgba(52,199,89,0.14), rgba(255,214,10,0.10), transparent 72%);
           animation-delay: -1.4s;
         }
+
+        .personalAwards{ margin-top: 10px; display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
+        .personalAwardRow{
+          display: grid;
+          grid-template-columns: 24px 1fr auto;
+          grid-template-areas: "icon name value" "icon label value";
+          column-gap: 10px;
+          row-gap: 1px;
+          padding: 8px 10px;
+          border-radius: 12px;
+          background: rgba(0,0,0,0.18);
+          border: 1px solid rgba(255,255,255,0.08);
+        }
+        .personalAwardRow.me{ border-color: rgba(255,214,10,0.6); background: rgba(255,214,10,0.08); }
+        .personalAwardIcon{ grid-area: icon; font-size: 18px; align-self: center; }
+        .personalAwardName{ grid-area: name; font-weight: 900; font-size: 13px; }
+        .personalAwardLabel{ grid-area: label; font-size: 11px; opacity: 0.75; }
+        .personalAwardValue{ grid-area: value; align-self: center; font-weight: 800; font-size: 13px; opacity: 0.9; }
 
         .cardActions{
           margin-top: 12px;

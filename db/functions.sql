@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — RPC-Funktionen (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 026 (Stand 2026-09-28).
+-- Migration 028 (Stand 2026-09-28).
 -- Quelle: User-Dump via SQL-Editor Query 2 aus db/HOW_TO_DUMP.md
 -- ============================================================
 
@@ -735,6 +735,48 @@ end;
 $function$;
 
 
+-- ============================================================
+-- Migration 028: Themen-Countdown springt auf 5s wenn alle (Menschen) gewählt haben
+-- ============================================================
+-- Bots zählen nicht mit. Verkürzt nur einmalig (no-op sobald Restzeit
+-- schon <= 5s ist) -- sonst würde die Uhr bei wiederholtem Aufruf nie
+-- unter 5s fallen.
+CREATE OR REPLACE FUNCTION public.rpc_maybe_shorten_topic_vote(p_lobby_id UUID)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_phase text;
+  v_ends_at timestamptz;
+  v_voters_needed int;
+  v_voters_have int;
+begin
+  select phase, topic_vote_ends_at into v_phase, v_ends_at
+  from public.lobbies where id = p_lobby_id for update;
+
+  if v_phase is distinct from 'topic_vote' then return; end if;
+  if v_ends_at is null then return; end if;
+  if v_ends_at <= now() + interval '5 seconds' then return; end if;
+
+  select count(*) into v_voters_needed
+  from public.players
+  where lobby_id = p_lobby_id and status = 'active' and coalesce(is_bot, false) = false;
+
+  if v_voters_needed = 0 then return; end if;
+
+  select count(distinct tv.player_id) into v_voters_have
+  from public.topic_votes tv
+  join public.players p on p.lobby_id = p_lobby_id and p.player_id = tv.player_id
+  where tv.lobby_id = p_lobby_id and p.status = 'active' and coalesce(p.is_bot, false) = false;
+
+  if v_voters_have >= v_voters_needed then
+    update public.lobbies
+    set topic_vote_ends_at = now() + interval '5 seconds'
+    where id = p_lobby_id;
+  end if;
+end;
+$function$;
+
+
 CREATE OR REPLACE FUNCTION public.rpc_finalize_topic_vote(p_lobby_id uuid)
  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
@@ -1361,6 +1403,8 @@ declare
   v_lobby public.lobbies%ROWTYPE;
   v_attempt uuid;
   v_clean text;
+  v_topic text;
+  v_known boolean;
 begin
   select * into v_lobby from public.lobbies where code = upper(p_code) for update;
   if not found then raise exception 'lobby_not_found'; end if;
@@ -1382,11 +1426,29 @@ begin
     where lower(used) = lower(v_clean)
   ) then raise exception 'answer_already_used'; end if;
 
+  v_topic := coalesce(v_lobby.topic_selected, v_lobby.topic, '');
+
   insert into public.pass_attempts (lobby_id, round_number, holder_player_id, answer, topic)
-    values (v_lobby.id, coalesce(v_lobby.round_number, 0), p_player_id, v_clean, coalesce(v_lobby.topic_selected, v_lobby.topic, ''))
+    values (v_lobby.id, coalesce(v_lobby.round_number, 0), p_player_id, v_clean, v_topic)
     returning id into v_attempt;
 
   update public.lobbies set current_attempt_id = v_attempt where id = v_lobby.id;
+
+  -- Antwort-Datenbank: bekannte, korrekte Antwort -> sofort annehmen,
+  -- kein Voting nötig. _finalize_attempt_accept setzt current_attempt_id
+  -- selbst wieder auf null und stößt rpc_pass_potato an.
+  select exists (
+    select 1
+    from public.topic_answers ta
+    join public.topic_pool tp on tp.id = ta.topic_pool_id
+    where lower(tp.text) = lower(v_topic)
+      and ta.lower_answer = lower(v_clean)
+  ) into v_known;
+
+  if v_known then
+    perform public._finalize_attempt_accept(v_attempt);
+  end if;
+
   return v_attempt;
 end;
 $function$;
