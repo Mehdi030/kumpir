@@ -662,6 +662,12 @@ export default function GamePage() {
 
                 // topic_vote finalize
                 if (nextLobby.phase === "topic_vote" && nextLobby.topic_vote_ends_at) {
+                    // Springt einmalig auf 5s runter, sobald alle (menschlichen)
+                    // Spieler gewählt haben -- Bots zählen nicht mit, ihre Wahl
+                    // ist zufällig (useBotEngine.ts). Idempotent/no-op sobald die
+                    // Restzeit schon <= 5s ist, siehe Migration 028.
+                    void supabase.rpc("rpc_maybe_shorten_topic_vote", { p_lobby_id: nextLobby.id });
+
                     const dueMs = msUntil(nextLobby.topic_vote_ends_at);
                     if (dueMs !== null && dueMs <= 0 && !finalizeInFlightRef.current) {
                         finalizeInFlightRef.current = true;
