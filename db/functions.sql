@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — RPC-Funktionen (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 025 (Stand 2026-09-28).
+-- Migration 026 (Stand 2026-09-28).
 -- Quelle: User-Dump via SQL-Editor Query 2 aus db/HOW_TO_DUMP.md
 -- ============================================================
 
@@ -639,23 +639,24 @@ $function$;
 CREATE OR REPLACE FUNCTION public.rpc_begin_topic_vote(p_lobby_id uuid, p_player_id uuid)
  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
-declare v_host uuid; v_a text; v_b text;
+declare v_host uuid; v_a text; v_b text; v_filter text[];
 begin
   if not public._verify_session(p_lobby_id, p_player_id) then
     raise exception 'invalid_session';
   end if;
 
-  select host_player_id into v_host
+  select host_player_id, topic_filter into v_host, v_filter
   from public.lobbies where id = p_lobby_id for update;
 
   if not found then raise exception 'Lobby not found'; end if;
   if v_host is null or v_host <> p_player_id then raise exception 'Only host can start'; end if;
 
-  select t.text into v_a from public.topic_pool t where t.active is true
+  select t.text into v_a from public.topic_pool t
+  where t.active is true and (v_filter is null or t.text = any(v_filter))
   order by random() limit 1;
 
   select t.text into v_b from public.topic_pool t
-  where t.active is true and t.text <> v_a
+  where t.active is true and t.text <> v_a and (v_filter is null or t.text = any(v_filter))
   order by random() limit 1;
 
   if v_a is null or v_b is null then raise exception 'Not enough topics in topic_pool'; end if;
@@ -859,10 +860,11 @@ CREATE OR REPLACE FUNCTION public.rpc_start_rematch_if_ready(p_code text)
  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
-  v_lobby_id uuid; v_ready_count int; v_active_count int;
+  v_lobby_id uuid; v_ready_count int; v_active_count int; v_filter text[];
   v_topic_a text; v_topic_b text;
 begin
-  select id into v_lobby_id from public.lobbies where code = upper(trim(p_code)) limit 1;
+  select id, topic_filter into v_lobby_id, v_filter
+  from public.lobbies where code = upper(trim(p_code)) limit 1;
   if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
 
   select count(*) into v_active_count from public.players
@@ -876,12 +878,12 @@ begin
 
   select t.text into v_topic_a
   from public.topic_pool t
-  where t.active is true
+  where t.active is true and (v_filter is null or t.text = any(v_filter))
   order by random() limit 1;
 
   select t.text into v_topic_b
   from public.topic_pool t
-  where t.active is true and t.text <> v_topic_a
+  where t.active is true and t.text <> v_topic_a and (v_filter is null or t.text = any(v_filter))
   order by random() limit 1;
 
   if v_topic_a is null or v_topic_b is null then
@@ -1170,6 +1172,42 @@ begin
   select l.host_player_id into v_host from public.lobbies l where l.id = p_lobby_id;
   if v_host is null or v_host <> p_me_player_id then raise exception 'not_host'; end if;
   update public.lobbies set locked = p_locked where id = p_lobby_id;
+end;
+$function$;
+
+
+-- ============================================================
+-- Migration 026: Musik-Genres als wählbarer Themen-Filter
+-- ============================================================
+-- lobbies.topic_filter (TEXT[], nullable): NULL/leer = wie bisher alle
+-- aktiven topic_pool-Kategorien möglich; sonst zieht rpc_begin_topic_vote
+-- / rpc_start_rematch_if_ready die beiden Zufalls-Themen nur noch aus
+-- den gelisteten Kategorien. Host-only + Session-geprüft.
+CREATE OR REPLACE FUNCTION public.set_lobby_topic_filter(
+    p_lobby_id UUID, p_me_player_id UUID, p_categories TEXT[]
+) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_host uuid;
+  v_clean text[];
+begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  select host_player_id into v_host from public.lobbies where id = p_lobby_id;
+  if v_host is null then raise exception 'lobby_not_found'; end if;
+  if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
+
+  select coalesce(array_agg(distinct tp.text), '{}')
+    into v_clean
+  from public.topic_pool tp
+  where tp.active is true and tp.text = any(coalesce(p_categories, '{}'));
+
+  update public.lobbies
+  set topic_filter = nullif(v_clean, '{}'),
+      settings_version = coalesce(settings_version, 0) + 1
+  where id = p_lobby_id;
 end;
 $function$;
 

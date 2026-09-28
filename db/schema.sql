@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — Echtes Schema (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 025 (Stand 2026-09-28). Nach jedem neuen `db/migrations/NNN_*.sql`
+-- Migration 026 (Stand 2026-09-28). Nach jedem neuen `db/migrations/NNN_*.sql`
 -- bitte diese Datei von Hand (oder per neuem Dump) auf den gleichen Stand
 -- bringen, sonst driftet sie wieder auseinander wie zwischen 2026-05-11
 -- und Migration 001/005/008 (siehe unten).
@@ -77,7 +77,8 @@ CREATE TABLE lobbies (
     safe_until timestamp with time zone,
     round_index integer DEFAULT 0,
     last_round_seconds numeric,
-    pass_direction smallint NOT NULL DEFAULT 1
+    pass_direction smallint NOT NULL DEFAULT 1,
+    topic_filter text[]  -- Migration 026. NULL/leer = alle Kategorien möglich.
 );
 
 CREATE TABLE lobby_admin_logs (
