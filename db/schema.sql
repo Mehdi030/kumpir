@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — Echtes Schema (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 029 (Stand 2026-09-28). Nach jedem neuen `db/migrations/NNN_*.sql`
+-- Migration 030 (Stand 2026-09-29). Nach jedem neuen `db/migrations/NNN_*.sql`
 -- bitte diese Datei von Hand (oder per neuem Dump) auf den gleichen Stand
 -- bringen, sonst driftet sie wieder auseinander wie zwischen 2026-05-11
 -- und Migration 001/005/008 (siehe unten).

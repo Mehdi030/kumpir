@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — RPC-Funktionen (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 029 (Stand 2026-09-28).
+-- Migration 030 (Stand 2026-09-29).
 -- Quelle: User-Dump via SQL-Editor Query 2 aus db/HOW_TO_DUMP.md
 -- ============================================================
 
@@ -663,7 +663,8 @@ begin
   where t.active is true and t.text <> v_a and (v_filter is null or t.text = any(v_filter))
   order by random() limit 1;
 
-  if v_a is null or v_b is null then raise exception 'Not enough topics in topic_pool'; end if;
+  if v_a is null then raise exception 'Not enough topics in topic_pool'; end if;
+  if v_b is null then v_b := v_a; end if;
 
   delete from public.topic_votes where lobby_id = p_lobby_id;
 
@@ -932,9 +933,10 @@ begin
   where t.active is true and t.text <> v_topic_a and (v_filter is null or t.text = any(v_filter))
   order by random() limit 1;
 
-  if v_topic_a is null or v_topic_b is null then
+  if v_topic_a is null then
     raise exception 'Nicht genug Themen im topic_pool';
   end if;
+  if v_topic_b is null then v_topic_b := v_topic_a; end if;
 
   delete from public.topic_votes where lobby_id = v_lobby_id;
   update public.players set ready = coalesce(is_bot, false)
