@@ -17,6 +17,7 @@ import { AchievementToastPortal } from "@/components/AchievementToastPortal";
 import { BackdropFx } from "@/components/game/BackdropFx";
 import { notify } from "@/lib/notifications";
 import { GAME_MODES, type GameMode } from "@/lib/gameConfig";
+import { MUSIC_PLAYLISTS } from "@/lib/musicGenres";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
@@ -1922,12 +1923,12 @@ export default function GamePage() {
                 <div className="hudInner">
                     <div className="topic">{selectedTopic}</div>
 
-                    {selectedTopic === "Deutschrap-Songs" ? (
+                    {MUSIC_PLAYLISTS[selectedTopic] ? (
                         <div className="spotifyEmbedWrap">
                             <iframe
-                                title="Spotify: Deutschrap Charts 2026"
+                                title={`Spotify: ${MUSIC_PLAYLISTS[selectedTopic].title}`}
                                 style={{ borderRadius: 12 }}
-                                src="https://open.spotify.com/embed/playlist/5lJ1Ko6KMm9lTfdcngqNdA?utm_source=kumpir"
+                                src={`https://open.spotify.com/embed/playlist/${MUSIC_PLAYLISTS[selectedTopic].id}?utm_source=kumpir`}
                                 width="100%"
                                 height="152"
                                 frameBorder={0}

@@ -70,6 +70,29 @@ const ANSWERS: Record<string, string[]> = {
         "Nicht verdient", "3 Millionen", "Nightliner", "Nur noch Gangster",
         "Nummer 1", "Nicht so wichtig", "Nur für dich",
     ],
+    "Deutschrap Klassiker":   [
+        "Halt dich fest", "Wilma rennt", "Für immer jung", "1000 PS",
+        "Wer hat Angst vorm schwarzen Mann", "Wo ist das Geld", "Berlin lebt",
+        "Alles auf Rot", "Bilder im Kopf", "Frei sein", "Phantom",
+        "Adrenalin", "Vermissen", "Prinzessin", "Willkommen im Bundestag",
+        "Aggro Ansage Nr.1", "Bild dir deine Meinung", "Denkmal",
+        "Wilder Wilder Westen", "Party Prinzessin",
+    ],
+    "Englische All-Time-Hits": [
+        "Bohemian Rhapsody", "Billie Jean", "Rolling in the Deep",
+        "Shape of You", "Blinding Lights", "Someone Like You",
+        "Sweet Child O' Mine", "Smells Like Teen Spirit", "Hotel California",
+        "I Want It That Way", "Uptown Funk", "Umbrella", "Poker Face",
+        "Firework", "Radioactive", "Thinking Out Loud", "Shake It Off",
+        "Stayin' Alive", "Like a Prayer", "Wonderwall",
+    ],
+    "Internationale Pop-Charts": [
+        "Espresso", "Flowers", "As It Was", "Anti-Hero", "Cruel Summer",
+        "Levitating", "Peaches", "Watermelon Sugar", "Good 4 U",
+        "Stay", "Circles", "Blinding Lights", "Kill Bill", "Vampire",
+        "Greedy", "Lose Control", "Die With a Smile", "Birds of a Feather",
+        "Espresso Martini", "Houdini",
+    ],
 };
 
 const BOT_NAMES = [

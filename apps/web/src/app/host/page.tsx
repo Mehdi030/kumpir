@@ -8,6 +8,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
 import { HostNotice } from "./HostNotice";
+import { MUSIC_PLAYLISTS, MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
 
 type Privacy = "private" | "public";
 type ModeKey = "original" | "teleport" | "reverse";
@@ -96,6 +97,12 @@ export default function HostPage() {
 
     const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>(null);
     const [mode, setMode] = useState<ModeKey | null>(null);
+    // Leer = alle Themen-Kategorien möglich (wie bisher). Ausgewählt = die
+    // Themen-Wahl zieht nur noch aus diesen Musik-Genres (Migration 026).
+    const [musicGenres, setMusicGenres] = useState<string[]>([]);
+    const toggleMusicGenre = useCallback((key: string) => {
+        setMusicGenres((prev) => (prev.includes(key) ? prev.filter((g) => g !== key) : [...prev, key]));
+    }, []);
 
     const activeMode = mode ? MODES[mode] : null;
     const activeSpeed = roundSpeed ? ROUND_SPEEDS[roundSpeed] : null;
@@ -170,7 +177,7 @@ export default function HostPage() {
                 return;
             }
 
-            if (mode && mode !== "original") {
+            if ((mode && mode !== "original") || musicGenres.length > 0) {
                 const { data: lobbyRow, error: lobbyErr } = await supabase
                     .from("lobbies")
                     .select("id")
@@ -178,11 +185,20 @@ export default function HostPage() {
                     .single();
 
                 if (!lobbyErr && lobbyRow?.id) {
-                    await supabase.rpc("set_lobby_mode", {
-                        p_lobby_id: lobbyRow.id,
-                        p_me_player_id: hostPlayerId,
-                        p_mode: mode,
-                    });
+                    if (mode && mode !== "original") {
+                        await supabase.rpc("set_lobby_mode", {
+                            p_lobby_id: lobbyRow.id,
+                            p_me_player_id: hostPlayerId,
+                            p_mode: mode,
+                        });
+                    }
+                    if (musicGenres.length > 0) {
+                        await supabase.rpc("set_lobby_topic_filter", {
+                            p_lobby_id: lobbyRow.id,
+                            p_me_player_id: hostPlayerId,
+                            p_categories: musicGenres,
+                        });
+                    }
                 }
             }
 
@@ -193,7 +209,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, supabase, privacy, maxPlayers, router, user?.id]);
+    }, [canCreate, hostName, roundSpeed, mode, musicGenres, supabase, privacy, maxPlayers, router, user?.id]);
 
     return (
         <main className="container">
@@ -359,6 +375,48 @@ export default function HostPage() {
                                             </button>
                                         );
                                     })}
+                                </div>
+                            </div>
+
+                            <div className="pillCard" style={{ marginTop: 14 }}>
+                                <div className="pillCardTop">
+                                    <div className="pillCardTitle">🎵 Musik-Modus</div>
+                                    <div className="pillCardHint">
+                                        {musicGenres.length === 0
+                                            ? "Optional — sonst alle Themen wie gewohnt gemischt"
+                                            : `${musicGenres.length} Genre(s) ausgewählt`}
+                                    </div>
+                                </div>
+
+                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                    {MUSIC_GENRE_KEYS.map((key) => {
+                                        const g = MUSIC_PLAYLISTS[key];
+                                        const active = musicGenres.includes(key);
+                                        return (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
+                                                onClick={() => toggleMusicGenre(key)}
+                                                aria-pressed={active}
+                                                title={`Playlist: ${g.title}`}
+                                            >
+                                                <span className="segIcon" aria-hidden>{g.icon}</span>
+                                                <span className="segLabel">{key}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
+                                    {musicGenres.length > 0 ? (
+                                        <>
+                                            <span style={{ fontWeight: 900 }}>Reiner Musik-Abend:</span>{" "}
+                                            nur diese Kategorien kommen in die Themen-Wahl, jede mit eigener Spotify-Playlist zur Einstimmung.
+                                        </>
+                                    ) : (
+                                        "Nichts ausgewählt = Musik-Kategorien mischen sich normal unter alle anderen Themen."
+                                    )}
                                 </div>
                             </div>
 
