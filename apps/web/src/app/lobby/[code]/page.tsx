@@ -320,6 +320,13 @@ export default function LobbyPage() {
                             marginBottom: 6,
                             backdropFilter: "blur(10px)",
                             WebkitBackdropFilter: "blur(10px)",
+                            // pointerEvents:none hier + gezieltes "auto" auf den echten
+                            // Buttons darunter: der sticky Header überlappt bei kurzer
+                            // Spielerliste (wenige Zeilen) geometrisch die Buttons direkt
+                            // darunter (+Bot/Bereit/Hauptmenü) und blockte deren Klicks
+                            // komplett, weil sein zIndex:5 einen eigenen Stacking-Context
+                            // bildet, der IMMER über den unpositionierten Geschwistern liegt.
+                            pointerEvents: "none",
                         }}
                     >
                         {isRunning ? (
@@ -367,6 +374,7 @@ export default function LobbyPage() {
                                     <button
                                         type="button"
                                         className="btn btnSecondary btnSmall"
+                                        style={{ pointerEvents: "auto" }}
                                         onClick={async () => {
                                             if (isSaved) {
                                                 await savedLobbies.unsave(code);
@@ -388,6 +396,7 @@ export default function LobbyPage() {
                                     <Link
                                         href={`/lobby/${encodeURIComponent(code)}/admin`}
                                         className={`btn btnSecondary btnSmall ${starting || isRunning ? "btnDisabled" : ""}`}
+                                        style={{ pointerEvents: "auto" }}
                                         aria-disabled={starting || isRunning}
                                         tabIndex={starting || isRunning ? -1 : 0}
                                         onClick={(e) => {
@@ -406,7 +415,7 @@ export default function LobbyPage() {
                                 type="button"
                                 onClick={copyInviteByClick}
                                 title="Klick → Join-Link kopieren"
-                                style={{ border: "none", background: "transparent", cursor: isRunning ? "not-allowed" : "pointer", padding: 0 }}
+                                style={{ border: "none", background: "transparent", cursor: isRunning ? "not-allowed" : "pointer", padding: 0, pointerEvents: "auto" }}
                                 aria-label="Join-Link kopieren"
                                 disabled={isRunning}
                             >
