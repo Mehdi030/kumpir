@@ -12,6 +12,7 @@ import { useSavedLobbies } from "@/hooks/useSavedLobbies";
 import { useAuth } from "@/components/AuthProvider";
 import { Spinner } from "@/components/Spinner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSessionToken } from "@/lib/playerSession";
 
 type ModeKey = "original" | "teleport" | "reverse";
 
@@ -205,7 +206,7 @@ export default function LobbyPage() {
 
         setStarting(true);
         try {
-            const res: StartGameResult = await startGame(code, mePlayerId);
+            const res: StartGameResult = await startGame(code, mePlayerId, getSessionToken() ?? "");
 
             if (!res.ok) {
                 const msg = "error" in res ? res.error : "Start fehlgeschlagen";
@@ -274,8 +275,16 @@ export default function LobbyPage() {
 
         try {
             if (mePlayerId && lobbyId) {
+                // Direktes UPDATE auf players wird seit Migration 012 von RLS
+                // abgelehnt (der Fehler landete hier stumm im catch, der Spieler
+                // blieb als Geist "active" in der Lobby). Läuft jetzt über die
+                // geprüfte RPC aus Migration 022/023.
                 const supabase = getSupabaseClient();
-                await supabase.from("players").update({ status: "left" }).eq("lobby_id", lobbyId).eq("player_id", mePlayerId);
+                const { error } = await supabase.rpc("rpc_leave_lobby", {
+                    p_lobby_id: lobbyId,
+                    p_player_id: mePlayerId,
+                });
+                if (error) console.error("rpc_leave_lobby:", error.message);
             }
         } catch {
             // ignore
