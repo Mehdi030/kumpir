@@ -24,7 +24,19 @@ type LobbyForBot = {
     topic_b: string | null;
     current_attempt_id: string | null;
     used_answers: string[] | null;
+    round_number: number | null;
 };
+
+/**
+ * Überlebenswahrscheinlichkeit eines Bots als Halter, abhängig von der
+ * Runde: die ersten beiden Runden überleben Bots garantiert (100%),
+ * danach sinkt die Chance auf eine gültige Antwort schrittweise, nie
+ * unter 15% (sonst wäre Practice-Mode ab Runde 6 unspielbar hart).
+ */
+function botSurvivalChance(roundNumber: number): number {
+    if (roundNumber <= 2) return 1;
+    return Math.max(0.15, 1 - (roundNumber - 2) * 0.2);
+}
 
 type Attempt = {
     id: string;
@@ -95,16 +107,38 @@ export function useBotEngine(
             seenAttemptStartRef.current = attemptKey;
 
             const delay = 900 + Math.random() * 1800;
+            const roundNumber = lobby.round_number ?? 1;
+            const willSucceed = Math.random() < botSurvivalChance(roundNumber);
+
             window.setTimeout(() => {
-                const answer = pickBotAnswer(
-                    lobby.topic_selected ?? lobby.topic_a,
-                    lobby.used_answers ?? []
-                );
-                void supabase.rpc("rpc_attempt_pass", {
-                    p_code: lobby.code,
-                    p_player_id: holder.player_id,
-                    p_answer: answer,
-                });
+                if (willSucceed) {
+                    const answer = pickBotAnswer(
+                        lobby.topic_selected ?? lobby.topic_a,
+                        lobby.used_answers ?? []
+                    );
+                    void supabase.rpc("rpc_attempt_pass", {
+                        p_code: lobby.code,
+                        p_player_id: holder.player_id,
+                        p_answer: answer,
+                    });
+                    return;
+                }
+
+                // Ab Runde 3, mit wachsender Wahrscheinlichkeit: der Bot "vergreift"
+                // sich absichtlich (schon benutzte Antwort -> answer_already_used,
+                // es entsteht gar kein Attempt) und riskiert damit die Explosion,
+                // statt garantiert weiterzukommen. Ohne bereits benutzte Antworten
+                // (ganz frühe Runde) bleibt der Bot einfach untätig -- derselbe
+                // Effekt: er hält, bis der Timer über ihn entscheidet.
+                const used = lobby.used_answers ?? [];
+                if (used.length > 0) {
+                    const dup = used[Math.floor(Math.random() * used.length)];
+                    void supabase.rpc("rpc_attempt_pass", {
+                        p_code: lobby.code,
+                        p_player_id: holder.player_id,
+                        p_answer: dup,
+                    });
+                }
             }, delay);
             return;
         }
