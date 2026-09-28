@@ -4,9 +4,9 @@ import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 export type StartGameResult = { ok: true } | { ok: false; error: string };
 
-export async function startGame(code: string, mePlayerId: string): Promise<StartGameResult> {
+export async function startGame(code: string, mePlayerId: string, sessionToken: string): Promise<StartGameResult> {
     try {
-        const supabase = await createSupabaseServerClient();
+        const supabase = await createSupabaseServerClient(sessionToken);
 
         const { data: lobby, error: lobbyErr } = await supabase
             .from("lobbies")

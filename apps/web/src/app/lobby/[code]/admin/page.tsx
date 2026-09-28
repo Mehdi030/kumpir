@@ -11,6 +11,7 @@ import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
 import { kickPlayerAction, setLobbyLockAction, transferHostAction } from "@/actions/hostActions";
+import { getSessionToken } from "@/lib/playerSession";
 
 const GAME_PHASES = new Set(["topic_vote", "countdown", "running"]);
 
@@ -79,7 +80,7 @@ export default function LobbyAdminPage() {
             setBusyTarget(targetPlayerId);
             startTransition(async () => {
                 try {
-                    const res = await kickPlayerAction({ lobbyId, mePlayerId, targetPlayerId });
+                    const res = await kickPlayerAction({ lobbyId, mePlayerId, targetPlayerId, sessionToken: getSessionToken() ?? "" });
                     if (res.ok) {
                         showToast(`👢 ${targetName} gekickt`, 1400);
                     } else if ("error" in res) {
@@ -103,7 +104,7 @@ export default function LobbyAdminPage() {
             setBusyTarget(targetPlayerId);
             startTransition(async () => {
                 try {
-                    const res = await transferHostAction({ lobbyId, mePlayerId, newHostPlayerId: targetPlayerId });
+                    const res = await transferHostAction({ lobbyId, mePlayerId, newHostPlayerId: targetPlayerId, sessionToken: getSessionToken() ?? "" });
                     if (res.ok) {
                         showToast(`👑 ${targetName} ist jetzt Host`, 1600);
                     } else if ("error" in res) {
@@ -124,7 +125,7 @@ export default function LobbyAdminPage() {
         const next = !isLocked;
         startTransition(async () => {
             try {
-                const res = await setLobbyLockAction({ lobbyId, mePlayerId, locked: next });
+                const res = await setLobbyLockAction({ lobbyId, mePlayerId, locked: next, sessionToken: getSessionToken() ?? "" });
                 if (res.ok) {
                     showToast(next ? "🔒 Lobby gesperrt" : "🔓 Lobby offen", 1400);
                 } else if ("error" in res) {

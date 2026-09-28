@@ -1,10 +1,9 @@
 "use server";
 
-// SECURITY NOTE: These actions currently accept `mePlayerId` from the client.
-// The Supabase RPCs (kick_player, set_lobby_lock, transfer_host) must validate
-// that `p_me_player_id == lobbies.host_player_id` server-side — never trust the
-// client value. Once real Supabase Auth is enabled (Etappe 3), replace the
-// `mePlayerId` argument with `auth.getUser().id` from the server cookie.
+// Die RPCs prüfen serverseitig BEIDES: p_me_player_id == lobbies.host_player_id
+// UND das Session-Token des Aufrufers (Migration 023/024). Die vom Client
+// gelieferte mePlayerId allein reicht also nicht mehr aus -- ohne passendes
+// Token lehnt die RPC mit `invalid_session` ab.
 
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
@@ -27,9 +26,10 @@ export async function kickPlayerAction(args: {
     lobbyId: string;
     mePlayerId: string;
     targetPlayerId: string;
+    sessionToken: string;
 }): Promise<Res> {
     try {
-        const supabase = await createSupabaseServerClient();
+        const supabase = await createSupabaseServerClient(args.sessionToken);
 
         const { error } = await supabase.rpc("kick_player", {
             p_lobby_id: args.lobbyId,
@@ -51,9 +51,10 @@ export async function setLobbyLockAction(args: {
     lobbyId: string;
     mePlayerId: string;
     locked: boolean;
+    sessionToken: string;
 }): Promise<Res> {
     try {
-        const supabase = await createSupabaseServerClient();
+        const supabase = await createSupabaseServerClient(args.sessionToken);
 
         const { error } = await supabase.rpc("set_lobby_lock", {
             p_lobby_id: args.lobbyId,
@@ -75,9 +76,10 @@ export async function transferHostAction(args: {
     lobbyId: string;
     mePlayerId: string;
     newHostPlayerId: string;
+    sessionToken: string;
 }): Promise<Res> {
     try {
-        const supabase = await createSupabaseServerClient();
+        const supabase = await createSupabaseServerClient(args.sessionToken);
 
         const { error } = await supabase.rpc("transfer_host", {
             p_lobby_id: args.lobbyId,
