@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — Echtes Schema (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 021 (Stand 2026-09-27). Nach jedem neuen `db/migrations/NNN_*.sql`
+-- Migration 025 (Stand 2026-09-28). Nach jedem neuen `db/migrations/NNN_*.sql`
 -- bitte diese Datei von Hand (oder per neuem Dump) auf den gleichen Stand
 -- bringen, sonst driftet sie wieder auseinander wie zwischen 2026-05-11
 -- und Migration 001/005/008 (siehe unten).
@@ -119,7 +119,10 @@ CREATE TABLE players (
     clutch_pass_count integer NOT NULL DEFAULT 0,
     fastest_pass_ms integer,
     total_hold_ms bigint NOT NULL DEFAULT 0,
-    is_bot boolean NOT NULL DEFAULT false
+    is_bot boolean NOT NULL DEFAULT false,
+    session_token uuid  -- Migration 023. NICHT per SELECT * lesbar: Column-Grant
+                        -- für anon/authenticated schließt sie explizit aus
+                        -- (REVOKE/GRANT-Spaltenliste in Migration 023).
 );
 
 CREATE TABLE profiles (

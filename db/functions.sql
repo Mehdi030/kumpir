@@ -1,7 +1,7 @@
 -- ============================================================
 -- KUMPIR — RPC-Funktionen (gedumpt aus Supabase)
 -- Ursprünglicher Dump: 2026-05-11 — manuell nachgeführt bis inkl.
--- Migration 021 (Stand 2026-09-27).
+-- Migration 025 (Stand 2026-09-28).
 -- Quelle: User-Dump via SQL-Editor Query 2 aus db/HOW_TO_DUMP.md
 -- ============================================================
 
@@ -267,8 +267,111 @@ $function$;
 
 
 -- ============================================================
+-- Migration 023: Session-Token-Prüfung (gegen Identitäts-Spoofing)
+-- ============================================================
+-- players.session_token ist per Column-Grant für anon/authenticated
+-- NICHT lesbar (siehe REVOKE/GRANT weiter unten im Live-Skript,
+-- Migration 023). Jede schreibende RPC, die im Namen eines konkreten
+-- Spielers handelt, ruft das hier zuerst auf.
+CREATE OR REPLACE FUNCTION public._verify_session(p_lobby_id UUID, p_player_id UUID)
+ RETURNS BOOLEAN LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_headers text;
+  v_token uuid;
+  v_stored uuid;
+  v_is_bot boolean;
+  v_host uuid;
+begin
+  v_headers := current_setting('request.headers', true);
+  if v_headers is null or v_headers = '' then
+    return true;  -- interner Aufruf, kein Client im Spiel
+  end if;
+
+  begin
+    v_token := nullif(v_headers::json ->> 'x-kumpir-session', '')::uuid;
+  exception when others then
+    v_token := null;
+  end;
+
+  select session_token, coalesce(is_bot, false)
+    into v_stored, v_is_bot
+  from public.players
+  where lobby_id = p_lobby_id and player_id = p_player_id;
+
+  if not found then return false; end if;
+
+  -- Altbestand ohne Token: nicht aussperren.
+  if v_stored is null then return true; end if;
+
+  if v_token is not null and v_token = v_stored then return true; end if;
+
+  -- Host handelt stellvertretend für Bots.
+  if v_is_bot then
+    select host_player_id into v_host from public.lobbies where id = p_lobby_id;
+    if v_host is not null and v_token is not null and exists (
+      select 1 from public.players
+      where lobby_id = p_lobby_id and player_id = v_host and session_token = v_token
+    ) then
+      return true;
+    end if;
+  end if;
+
+  return false;
+end;
+$function$;
+
+
+-- ============================================================
+-- Migration 022: rpc_leave_lobby (ersetzt kaputtes direktes UPDATE)
+-- ============================================================
+-- lobby/[code]/page.tsx schrieb vorher direkt
+-- supabase.from("players").update({status:'left'}) -- seit Migration
+-- 012 (RLS) von der DB abgelehnt, der Fehler landete im leeren catch.
+-- Der Spieler blieb als Geist "active" zurück. Jetzt ein geprüfter
+-- RPC-Pfad wie jede andere Aktion.
+CREATE OR REPLACE FUNCTION public.rpc_leave_lobby(p_lobby_id UUID, p_player_id UUID)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_host uuid;
+  v_new_host uuid;
+begin
+  if not public._verify_session(p_lobby_id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  select host_player_id into v_host from public.lobbies where id = p_lobby_id;
+  if v_host is null then raise exception 'lobby_not_found'; end if;
+
+  update public.players
+  set status = 'left', left_at = now(), ready = false
+  where lobby_id = p_lobby_id and player_id = p_player_id and status = 'active';
+
+  if not found then return; end if;
+
+  if v_host = p_player_id then
+    select player_id into v_new_host
+    from public.players
+    where lobby_id = p_lobby_id and status = 'active' and coalesce(is_bot, false) = false
+    order by seat_index asc nulls last, joined_at asc
+    limit 1;
+
+    if v_new_host is not null then
+      update public.lobbies
+      set host_player_id = v_new_host, last_activity_at = now()
+      where id = p_lobby_id;
+    end if;
+  end if;
+
+  update public.lobbies set last_activity_at = now() where id = p_lobby_id;
+end;
+$function$;
+
+
+-- ============================================================
 -- AKTIV: rpc_join_lobby (im Frontend genutzt)
--- Stand nach Migration 004: + p_user_id (Cross-Device-Reaktivierung).
+-- Stand nach Migration 023: bindet session_token beim ersten Beitritt.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_join_lobby(
     p_code TEXT,
@@ -283,12 +386,32 @@ declare
   v_max_players int;
   v_active_count int;
   v_next_seat int;
+  v_headers text;
+  v_token uuid;
+  v_existing uuid;
 begin
   select id, locked, max_players into v_lobby_id, v_locked, v_max_players
   from public.lobbies where upper(code) = upper(p_code) limit 1;
 
   if v_lobby_id is null then raise exception 'lobby_not_found'; end if;
   if v_locked then raise exception 'lobby_locked'; end if;
+
+  v_headers := current_setting('request.headers', true);
+  if v_headers is not null and v_headers <> '' then
+    begin
+      v_token := nullif(v_headers::json ->> 'x-kumpir-session', '')::uuid;
+    exception when others then
+      v_token := null;
+    end;
+  end if;
+
+  -- Fremdübernahme eines belegten Platzes verhindern
+  select session_token into v_existing
+  from public.players where lobby_id = v_lobby_id and player_id = p_player_id;
+
+  if v_existing is not null and v_token is distinct from v_existing then
+    raise exception 'identity_taken';
+  end if;
 
   select count(*) into v_active_count from public.players
   where lobby_id = v_lobby_id and status = 'active';
@@ -301,7 +424,8 @@ begin
         status = 'active',
         left_at = null,
         kicked_at = null,
-        last_seen_at = now()
+        last_seen_at = now(),
+        session_token = coalesce(v_token, session_token)
     where lobby_id = v_lobby_id and user_id = p_user_id;
 
     if found then return; end if;
@@ -313,8 +437,8 @@ begin
     on p.lobby_id = v_lobby_id and p.seat_index = s.i and p.status = 'active'
   where p.id is null;
 
-  insert into public.players (lobby_id, player_id, name, status, seat_index, joined_at, last_seen_at, user_id)
-  values (v_lobby_id, p_player_id, left(trim(p_name), 24), 'active', v_next_seat, now(), now(), p_user_id)
+  insert into public.players (lobby_id, player_id, name, status, seat_index, joined_at, last_seen_at, user_id, session_token)
+  values (v_lobby_id, p_player_id, left(trim(p_name), 24), 'active', v_next_seat, now(), now(), p_user_id, v_token)
   on conflict (lobby_id, player_id) do update set
     name = excluded.name,
     status = 'active',
@@ -322,7 +446,8 @@ begin
     kicked_at = null,
     last_seen_at = now(),
     seat_index = coalesce(public.players.seat_index, excluded.seat_index),
-    user_id = coalesce(public.players.user_id, excluded.user_id);
+    user_id = coalesce(public.players.user_id, excluded.user_id),
+    session_token = coalesce(public.players.session_token, excluded.session_token);
 end;
 $function$;
 
@@ -332,6 +457,10 @@ CREATE OR REPLACE FUNCTION public.kick_player(p_lobby_id uuid, p_me_player_id uu
 AS $function$
 declare v_host uuid;
 begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   select host_player_id into v_host from public.lobbies where id = p_lobby_id;
   if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
   if p_target_player_id = v_host then raise exception 'cannot_kick_host'; end if;
@@ -512,6 +641,10 @@ CREATE OR REPLACE FUNCTION public.rpc_begin_topic_vote(p_lobby_id uuid, p_player
 AS $function$
 declare v_host uuid; v_a text; v_b text;
 begin
+  if not public._verify_session(p_lobby_id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   select host_player_id into v_host
   from public.lobbies where id = p_lobby_id for update;
 
@@ -561,12 +694,23 @@ declare
   v_host_player_id uuid := gen_random_uuid();
   v_round_speed text := btrim(coalesce(p_round_speed, 'normal'));
   v_privacy text := btrim(coalesce(p_privacy, 'private'));
+  v_headers text;
+  v_token uuid;
 begin
   if v_round_speed not in ('fast', 'normal', 'calm') then
     v_round_speed := 'normal';
   end if;
   if v_privacy not in ('private', 'public') then
     v_privacy := 'private';
+  end if;
+
+  v_headers := current_setting('request.headers', true);
+  if v_headers is not null and v_headers <> '' then
+    begin
+      v_token := nullif(v_headers::json ->> 'x-kumpir-session', '')::uuid;
+    exception when others then
+      v_token := null;
+    end;
   end if;
 
   v_code := public.generate_lobby_code(4);
@@ -582,8 +726,8 @@ begin
     now(), now(), p_user_id
   );
 
-  insert into public.players (id, lobby_id, player_id, name, ready, joined_at, last_seen_at, user_id)
-  values (gen_random_uuid(), v_lobby_id, v_host_player_id, left(trim(p_host_name), 24), false, now(), now(), p_user_id);
+  insert into public.players (id, lobby_id, player_id, name, ready, joined_at, last_seen_at, user_id, session_token)
+  values (gen_random_uuid(), v_lobby_id, v_host_player_id, left(trim(p_host_name), 24), false, now(), now(), p_user_id, v_token);
 
   return query select upper(v_code), v_host_player_id;
 end;
@@ -658,7 +802,7 @@ $function$;
 -- Lobby-Mitglied sein) und wirkt nur noch aus phase='finished' -- vorher
 -- konnte jeder, der nur den Code kannte, damit jede laufende Partie
 -- jederzeit in den Rematch zwingen.
-CREATE OR REPLACE FUNCTION public.rpc_rematch(p_code text, p_player_id uuid)
+CREATE OR REPLACE FUNCTION public.rpc_rematch(p_code TEXT, p_player_id UUID)
  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare v_lobby_id uuid; v_phase text;
@@ -668,6 +812,11 @@ begin
 
   if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
   if v_phase is distinct from 'finished' then raise exception 'lobby_not_finished'; end if;
+
+  if not public._verify_session(v_lobby_id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   if not exists (
     select 1 from public.players
     where lobby_id = v_lobby_id and player_id = p_player_id and status = 'active'
@@ -758,12 +907,69 @@ $function$;
 
 
 -- ============================================================
+-- Migration 022: rpc_reset_lobby(text) -- Legacy-Kompatibilitäts-Overload
+-- ============================================================
+-- ACHTUNG, zwei Overloads existieren live nebeneinander:
+--   rpc_reset_lobby(text)       <- dieser hier
+--   rpc_reset_lobby(text, uuid) <- der eigentlich genutzte, siehe unten
+--
+-- Migration 019 hat den einarmigen Overload gedroppt (er sollte durch
+-- den zweiarmigen mit Mitgliedschafts-Prüfung ersetzt werden). Das hat
+-- kick_player kaputt gemacht: die LIVE-Datenbank enthält einen nie ins
+-- Repo gedumpten Legacy-Trigger auf players, der beim Statuswechsel
+-- intern rpc_reset_lobby(p_code) mit der alten Signatur aufruft.
+-- Migration 022 stellt sie deshalb wieder her -- aber für anon/
+-- authenticated per REVOKE gesperrt, sodass nur der (als Owner
+-- laufende) Legacy-Trigger sie erreichen kann. Von außen bleibt die
+-- Migration-019-Absicherung (Mitgliedschaft + phase='finished') über
+-- den zweiarmigen Overload unten voll wirksam.
+CREATE OR REPLACE FUNCTION public.rpc_reset_lobby(p_code TEXT)
+ RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid;
+begin
+  select id into v_lobby_id from public.lobbies
+  where code = upper(trim(p_code)) limit 1;
+
+  if v_lobby_id is null then return; end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+
+  update public.players
+  set ready = coalesce(is_bot, false), is_alive = true,
+      pass_count = 0, clutch_pass_count = 0,
+      fastest_pass_ms = null, total_hold_ms = 0,
+      survival_streak = 0, last_pass_at = null
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'waiting', locked = false,
+      holder_player_id = null, explode_at = null,
+      run_started_at = null, last_loser_player_id = null,
+      topic_a = null, topic_b = null, topic_selected = null,
+      topic_vote_started_at = null, topic_vote_ends_at = null,
+      countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      current_attempt_id = null, used_answers = '{}',
+      round_number = 0, pass_direction = 1,
+      last_activity_at = now()
+  where id = v_lobby_id;
+end;
+$function$;
+
+-- Nur für interne Aufrufer (Legacy-Trigger laufen als Owner).
+REVOKE EXECUTE ON FUNCTION public.rpc_reset_lobby(text) FROM PUBLIC, anon, authenticated;
+
+
+-- ============================================================
 -- Migration 009: rpc_reset_lobby (fehlte komplett, siehe TESTREPORT.md)
 -- Button "Zurück zur Lobby" auf dem Finished-Screen.
--- Stand nach Migration 019: verlangt zusätzlich p_player_id (muss aktives
--- Lobby-Mitglied sein) und wirkt nur noch aus phase='finished' -- vorher
--- konnte jeder, der nur den Code kannte, damit jede laufende Partie
--- jederzeit zurücksetzen.
+-- Stand nach Migration 019/024: verlangt zusätzlich p_player_id (muss
+-- aktives Lobby-Mitglied sein UND das passende Session-Token haben)
+-- und wirkt nur noch aus phase='finished' -- vorher konnte jeder, der
+-- nur den Code kannte, damit jede laufende Partie jederzeit
+-- zurücksetzen.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_reset_lobby(p_code TEXT, p_player_id UUID)
  RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
@@ -777,6 +983,11 @@ begin
 
   if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
   if v_phase is distinct from 'finished' then raise exception 'lobby_not_finished'; end if;
+
+  if not public._verify_session(v_lobby_id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   if not exists (
     select 1 from public.players
     where lobby_id = v_lobby_id and player_id = p_player_id and status = 'active'
@@ -912,6 +1123,10 @@ CREATE OR REPLACE FUNCTION public.rpc_toggle_ready(p_lobby_id uuid, p_player_id 
 AS $function$
 declare v_new boolean;
 begin
+  if not public._verify_session(p_lobby_id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   update public.players
   set ready = not coalesce(ready,false), last_seen_at = now()
   where lobby_id = p_lobby_id and player_id = p_player_id
@@ -931,6 +1146,10 @@ AS $function$
 begin
   if p_choice not in (1,2,3) then raise exception 'Invalid choice %', p_choice; end if;
 
+  if not public._verify_session(p_lobby_id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   insert into public.topic_votes (lobby_id, player_id, choice)
   values (p_lobby_id, p_player_id, p_choice)
   on conflict (lobby_id, player_id)
@@ -944,6 +1163,10 @@ CREATE OR REPLACE FUNCTION public.set_lobby_lock(p_lobby_id uuid, p_me_player_id
 AS $function$
 declare v_host uuid;
 begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   select l.host_player_id into v_host from public.lobbies l where l.id = p_lobby_id;
   if v_host is null or v_host <> p_me_player_id then raise exception 'not_host'; end if;
   update public.lobbies set locked = p_locked where id = p_lobby_id;
@@ -956,6 +1179,10 @@ CREATE OR REPLACE FUNCTION public.set_lobby_mode(p_lobby_id uuid, p_me_player_id
 AS $function$
 declare v_host uuid; v_mode text;
 begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   select host_player_id into v_host from public.lobbies where id = p_lobby_id;
   if v_host is null then raise exception 'lobby_not_found'; end if;
   if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
@@ -976,6 +1203,10 @@ CREATE OR REPLACE FUNCTION public.set_lobby_topic(p_lobby_id uuid, p_me_player_i
 AS $function$
 declare v_host uuid; v_topic text;
 begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   select host_player_id into v_host from public.lobbies where id = p_lobby_id;
   if v_host is null then raise exception 'lobby_not_found'; end if;
   if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
@@ -996,6 +1227,10 @@ CREATE OR REPLACE FUNCTION public.set_max_players(p_lobby_id uuid, p_me_player_i
 AS $function$
 declare v_host uuid; v_active_count int;
 begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   select host_player_id into v_host from public.lobbies where id = p_lobby_id;
   if v_host is null then raise exception 'lobby_not_found'; end if;
   if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
@@ -1035,6 +1270,10 @@ CREATE OR REPLACE FUNCTION public.transfer_host(p_lobby_id uuid, p_me_player_id 
 AS $function$
 declare v_host uuid; v_ok boolean;
 begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   select l.host_player_id into v_host from public.lobbies l where l.id = p_lobby_id;
   if v_host is null or v_host <> p_me_player_id then raise exception 'not_host'; end if;
 
@@ -1087,6 +1326,11 @@ declare
 begin
   select * into v_lobby from public.lobbies where code = upper(p_code) for update;
   if not found then raise exception 'lobby_not_found'; end if;
+
+  if not public._verify_session(v_lobby.id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   if v_lobby.phase <> 'running' then raise exception 'lobby_not_running'; end if;
   if v_lobby.holder_player_id <> p_player_id then raise exception 'not_holder'; end if;
   if v_lobby.current_attempt_id is not null then raise exception 'attempt_already_open'; end if;
@@ -1120,6 +1364,11 @@ declare
 begin
   select * into v_attempt from public.pass_attempts where id = p_attempt_id for update;
   if not found then raise exception 'attempt_not_found'; end if;
+
+  if not public._verify_session(v_attempt.lobby_id, p_voter_id) then
+    raise exception 'invalid_session';
+  end if;
+
   if v_attempt.status <> 'pending' then raise exception 'attempt_closed'; end if;
   if v_attempt.holder_player_id = p_voter_id then raise exception 'holder_cannot_vote'; end if;
 
@@ -1304,6 +1553,10 @@ declare
   v_host uuid; v_max_players int; v_active_count int; v_next_seat int;
   v_bot_id uuid := gen_random_uuid();
 begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   select host_player_id, max_players into v_host, v_max_players
   from public.lobbies where id = p_lobby_id;
 
@@ -1333,6 +1586,10 @@ CREATE OR REPLACE FUNCTION public.rpc_remove_bot(
 AS $function$
 declare v_host uuid;
 begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
   select host_player_id into v_host from public.lobbies where id = p_lobby_id;
   if v_host is null then raise exception 'lobby_not_found'; end if;
   if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
