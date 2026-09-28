@@ -646,7 +646,11 @@ export default function GamePage() {
                 prevHolderRef.current = nextHolder;
                 setLobby(nextLobby);
 
-                // IMPORTANT: finished => do NOT filter by status=active (so stats still show)
+                // IMPORTANT: finished => include status "left" too, so a player who
+                // disconnected mid-match still shows their final stats. "kicked" stays
+                // excluded even when finished -- the host removed them, so they never
+                // really played this match (this also covers a player kicked before
+                // the match even started, who'd otherwise show up with 0 passes).
                 const playersQuery = supabase
                     .from("players")
                     .select(
@@ -670,7 +674,10 @@ export default function GamePage() {
                     .eq("lobby_id", nextLobby.id)
                     .order("seat_index", { ascending: true });
 
-                const playersRes = nextLobby.phase === "finished" ? await playersQuery : await playersQuery.eq("status", "active");
+                const playersRes =
+                    nextLobby.phase === "finished"
+                        ? await playersQuery.in("status", ["active", "left"])
+                        : await playersQuery.eq("status", "active");
 
                 if (!alive) return;
 
@@ -718,18 +725,21 @@ export default function GamePage() {
 
                 // Best-effort phase automations
                 if (mePlayerId && nextLobby.phase === "running" && nextLobby.explode_at) {
-                    const meAlive = nextPlayers.find((p) => p.player_id === mePlayerId)?.is_alive ?? true;
-
-                    // Every alive, connected client checks the timer -- not just the
-                    // current holder. rpc_tick_game only ever acts once explode_at has
-                    // actually passed (row-locked, idempotent), so redundant calls are
-                    // harmless. Gating this on "only the holder's own browser" left the
-                    // round permanently stuck whenever the holder was a bot (no client
-                    // of its own) or had disconnected -- nobody was left to ever call
-                    // it. See BALANCE_REPORT.md, Fund #1.
+                    // Every CONNECTED client checks the timer -- alive or not, not just
+                    // the current holder. rpc_tick_game only ever acts once explode_at
+                    // has actually passed (row-locked, idempotent), so redundant calls
+                    // are harmless. Gating this on "only the holder's own browser" left
+                    // the round permanently stuck whenever the holder was a bot (no
+                    // client of its own) or had disconnected -- nobody was left to ever
+                    // call it (BALANCE_REPORT.md, Fund #1). Gating it on "only ALIVE
+                    // clients" had the same failure mode one step later: once the last
+                    // connected human got eliminated, their now-spectating browser
+                    // stopped ticking too and the match froze forever with bots still
+                    // alive. An eliminated player is still a connected client, so they
+                    // keep ticking exactly like any spectator would.
                     const explodeMs = Date.parse(nextLobby.explode_at);
                     const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
-                    if (meAlive && due) void rpcTickGame(code);
+                    if (due) void rpcTickGame(code);
                 }
 
                 // topic_vote finalize
@@ -783,6 +793,42 @@ export default function GamePage() {
         finalizeInFlightRef.current = true;
         void rpcFinalizeTopicVote(lobby.id).finally(() => (finalizeInFlightRef.current = false));
     }, [allVoted, lobby, rpcFinalizeTopicVote]);
+
+    // Fast, dedicated clock for time-based phase transitions (topic_vote ->
+    // countdown, countdown -> running, explode). These fire the instant a
+    // stored timestamp is reached, not on a DB row change -- Postgres never
+    // emits a realtime event just because the wall clock passed a value, so
+    // the main poll loop above (which slows to a 4s safety net once realtime
+    // is "live") isn't enough on its own: it left every player waiting up to
+    // ~4s after a countdown/vote timer visually hit zero before the phase
+    // actually advanced, and the host (whose own state settled first) felt
+    // ahead of everyone else. This runs every 250ms against already-fetched
+    // `lobby` state (no extra fetch) and reuses the same in-flight guards, so
+    // it's just a tighter clock on top of logic that already existed.
+    useEffect(() => {
+        if (!lobby) return;
+        const t = window.setInterval(() => {
+            if (lobby.phase === "topic_vote" && lobby.topic_vote_ends_at) {
+                const dueMs = msUntil(lobby.topic_vote_ends_at);
+                if (dueMs !== null && dueMs <= 0 && !finalizeInFlightRef.current) {
+                    finalizeInFlightRef.current = true;
+                    void rpcFinalizeTopicVote(lobby.id).finally(() => (finalizeInFlightRef.current = false));
+                }
+            } else if (lobby.phase === "countdown" && lobby.countdown_ends_at) {
+                const dueMs = msUntil(lobby.countdown_ends_at);
+                if (dueMs !== null && dueMs <= 0 && !advanceInFlightRef.current) {
+                    advanceInFlightRef.current = true;
+                    void rpcAdvanceFromCountdown(lobby.id).finally(() => (advanceInFlightRef.current = false));
+                }
+            } else if (lobby.phase === "running" && lobby.explode_at) {
+                const explodeMs = Date.parse(lobby.explode_at);
+                if (!Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150) {
+                    void rpcTickGame(code);
+                }
+            }
+        }, 250);
+        return () => window.clearInterval(t);
+    }, [lobby, code, rpcFinalizeTopicVote, rpcAdvanceFromCountdown, rpcTickGame]);
 
     // (realtimeStatus + reloadFromRealtime above, before the poll loop)
 
