@@ -1258,22 +1258,27 @@ body::after{
     background: linear-gradient(90deg, rgba(167,139,250,0.18), rgba(240,138,26,0.14));
 }
 
-/* Musik-Genres: jede Kategorie farblich unterscheidbar, auch schon
-   INaktiv (nicht erst bei Auswahl), damit man die vier Playlists auf
-   einen Blick auseinanderhält -- ein reiner Border-Tint ging auf dem
-   warmen Karten-Hintergrund unter, deshalb jetzt ein sichtbarer
-   Farbpunkt vor dem Label + kräftigerer Untergrund. */
-.segChoice[data-variant="Deutschrap-Songs"],
-.segChoice[data-variant="Deutschrap Klassiker"],
-.segChoice[data-variant="Englische All-Time-Hits"],
-.segChoice[data-variant="Internationale Pop-Charts"] {
+/* Musik-Genres: jede Kategorie farblich unterscheidbar -- aber NUR wenn
+   ausgewählt. Vorher waren die Buttons schon inaktiv eingefärbt (siehe
+   Git-History), das wirkte aber wie "schon ausgewählt" bevor man
+   überhaupt geklickt hat. Inaktiv sehen sie jetzt aus wie jeder andere
+   Segment-Button (neutral), die Farbe + der Punkt kommen erst mit
+   .segChoiceActive dazu. */
+.segChoice[data-variant="Deutschrap-Songs"].segChoiceActive,
+.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive,
+.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive,
+.segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive,
+.segChoice[data-variant="2000er Old School"].segChoiceActive,
+.segChoice[data-variant="Shisha Club"].segChoiceActive {
     position: relative;
     padding-left: 30px;
 }
-.segChoice[data-variant="Deutschrap-Songs"]::before,
-.segChoice[data-variant="Deutschrap Klassiker"]::before,
-.segChoice[data-variant="Englische All-Time-Hits"]::before,
-.segChoice[data-variant="Internationale Pop-Charts"]::before {
+.segChoice[data-variant="Deutschrap-Songs"].segChoiceActive::before,
+.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive::before,
+.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive::before,
+.segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive::before,
+.segChoice[data-variant="2000er Old School"].segChoiceActive::before,
+.segChoice[data-variant="Shisha Club"].segChoiceActive::before {
     content: "";
     position: absolute;
     left: 12px;
@@ -1285,45 +1290,47 @@ body::after{
     box-shadow: 0 0 8px 1px currentColor;
 }
 
-.segChoice[data-variant="Deutschrap-Songs"] {
+.segChoice[data-variant="Deutschrap-Songs"].segChoiceActive {
     border-color: rgba(255, 205, 40, 0.45);
-    background: rgba(255, 205, 40, 0.12);
+    background: linear-gradient(90deg, rgba(255, 205, 40, 0.38), rgba(230, 40, 40, 0.22));
     color: #ffe082;
 }
-.segChoice[data-variant="Deutschrap-Songs"] .segLabel { color: var(--text); }
-.segChoice[data-variant="Deutschrap-Songs"].segChoiceActive {
-    background: linear-gradient(90deg, rgba(255, 205, 40, 0.38), rgba(230, 40, 40, 0.22));
-}
+.segChoice[data-variant="Deutschrap-Songs"].segChoiceActive .segLabel { color: var(--text); }
 
-.segChoice[data-variant="Deutschrap Klassiker"] {
+.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive {
     border-color: rgba(255, 170, 60, 0.45);
-    background: rgba(255, 170, 60, 0.12);
+    background: linear-gradient(90deg, rgba(255, 170, 60, 0.38), rgba(255, 205, 40, 0.20));
     color: #ffcc80;
 }
-.segChoice[data-variant="Deutschrap Klassiker"] .segLabel { color: var(--text); }
-.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive {
-    background: linear-gradient(90deg, rgba(255, 170, 60, 0.38), rgba(255, 205, 40, 0.20));
-}
+.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive .segLabel { color: var(--text); }
 
-.segChoice[data-variant="Englische All-Time-Hits"] {
+.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive {
     border-color: rgba(167, 139, 250, 0.45);
-    background: rgba(167, 139, 250, 0.14);
+    background: linear-gradient(90deg, rgba(167, 139, 250, 0.38), rgba(34, 211, 238, 0.20));
     color: #c4b5fd;
 }
-.segChoice[data-variant="Englische All-Time-Hits"] .segLabel { color: var(--text); }
-.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive {
-    background: linear-gradient(90deg, rgba(167, 139, 250, 0.38), rgba(34, 211, 238, 0.20));
-}
+.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive .segLabel { color: var(--text); }
 
-.segChoice[data-variant="Internationale Pop-Charts"] {
+.segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive {
     border-color: rgba(52, 211, 153, 0.45);
-    background: rgba(52, 211, 153, 0.14);
+    background: linear-gradient(90deg, rgba(52, 211, 153, 0.38), rgba(236, 72, 153, 0.22));
     color: #6ee7b7;
 }
-.segChoice[data-variant="Internationale Pop-Charts"] .segLabel { color: var(--text); }
-.segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive {
-    background: linear-gradient(90deg, rgba(52, 211, 153, 0.38), rgba(236, 72, 153, 0.22));
+.segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive .segLabel { color: var(--text); }
+
+.segChoice[data-variant="2000er Old School"].segChoiceActive {
+    border-color: rgba(96, 165, 250, 0.45);
+    background: linear-gradient(90deg, rgba(96, 165, 250, 0.38), rgba(236, 72, 153, 0.22));
+    color: #93c5fd;
 }
+.segChoice[data-variant="2000er Old School"].segChoiceActive .segLabel { color: var(--text); }
+
+.segChoice[data-variant="Shisha Club"].segChoiceActive {
+    border-color: rgba(45, 212, 191, 0.45);
+    background: linear-gradient(90deg, rgba(45, 212, 191, 0.38), rgba(167, 139, 250, 0.22));
+    color: #5eead4;
+}
+.segChoice[data-variant="Shisha Club"].segChoiceActive .segLabel { color: var(--text); }
 
 /* Spieler-Liste in der Lobby: 2 Spalten statt einer langen Tabelle, damit
    auch 12 Spieler auf einen Blick passen statt scrollen zu müssen. */
