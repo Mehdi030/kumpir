@@ -48,6 +48,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // abzuspeichern.
 async function lookupPreview(title, artist) {
     const query = [title, artist].filter(Boolean).join(" ");
+    // entity=song wurde testweise ergänzt (ein Musikvideo landete bei
+    // "Lose Yourself" auf Platz 1, ohne previewUrl) -- lieferte aber in der
+    // Praxis DEUTLICH weniger Treffer insgesamt (68 -> 1 von 36 Restposten),
+    // weil es viele echte Song-Treffer zu strikt rausfiltert. Wieder entfernt.
     const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&country=DE&limit=1`);
     if (!res.ok) {
         // Apple antwortet bei Rate-Limiting mit 403 + leerem Body statt einem

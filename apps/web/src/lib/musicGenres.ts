@@ -8,8 +8,8 @@
  */
 export const MUSIC_PLAYLISTS: Record<string, { title: string; id: string; icon: string }> = {
     "Deutschrap-Songs": {
-        title: "Deutschrap Charts 2026",
-        id: "5lJ1Ko6KMm9lTfdcngqNdA",
+        title: "German Hip Hop Mix",
+        id: "37i9dQZF1EIhtg5PfzSFt2",
         icon: "🇩🇪",
     },
     "Deutschrap Klassiker": {
@@ -26,6 +26,11 @@ export const MUSIC_PLAYLISTS: Record<string, { title: string; id: string; icon: 
         title: "Today's Top Hits",
         id: "37i9dQZF1DXcBWIGoYBM5M",
         icon: "🌍",
+    },
+    "2000er Old School": {
+        title: "2000s Hip Hop R&B",
+        id: "5pk7cWIp56YkrwyWU7eMTr",
+        icon: "📼",
     },
 };
 
