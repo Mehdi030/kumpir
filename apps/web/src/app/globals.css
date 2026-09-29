@@ -1265,18 +1265,12 @@ body::after{
    Segment-Button (neutral), die Farbe + der Punkt kommen erst mit
    .segChoiceActive dazu. */
 .segChoice[data-variant="Deutschrap-Songs"].segChoiceActive,
-.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive,
-.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive,
-.segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive,
 .segChoice[data-variant="2000er Old School"].segChoiceActive,
 .segChoice[data-variant="Shisha Club"].segChoiceActive {
     position: relative;
     padding-left: 30px;
 }
 .segChoice[data-variant="Deutschrap-Songs"].segChoiceActive::before,
-.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive::before,
-.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive::before,
-.segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive::before,
 .segChoice[data-variant="2000er Old School"].segChoiceActive::before,
 .segChoice[data-variant="Shisha Club"].segChoiceActive::before {
     content: "";
@@ -1296,27 +1290,6 @@ body::after{
     color: #ffe082;
 }
 .segChoice[data-variant="Deutschrap-Songs"].segChoiceActive .segLabel { color: var(--text); }
-
-.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive {
-    border-color: rgba(255, 170, 60, 0.45);
-    background: linear-gradient(90deg, rgba(255, 170, 60, 0.38), rgba(255, 205, 40, 0.20));
-    color: #ffcc80;
-}
-.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive .segLabel { color: var(--text); }
-
-.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive {
-    border-color: rgba(167, 139, 250, 0.45);
-    background: linear-gradient(90deg, rgba(167, 139, 250, 0.38), rgba(34, 211, 238, 0.20));
-    color: #c4b5fd;
-}
-.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive .segLabel { color: var(--text); }
-
-.segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive {
-    border-color: rgba(52, 211, 153, 0.45);
-    background: linear-gradient(90deg, rgba(52, 211, 153, 0.38), rgba(236, 72, 153, 0.22));
-    color: #6ee7b7;
-}
-.segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive .segLabel { color: var(--text); }
 
 .segChoice[data-variant="2000er Old School"].segChoiceActive {
     border-color: rgba(96, 165, 250, 0.45);

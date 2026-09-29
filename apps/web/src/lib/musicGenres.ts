@@ -12,21 +12,6 @@ export const MUSIC_PLAYLISTS: Record<string, { title: string; id: string; icon: 
         id: "37i9dQZF1EIhtg5PfzSFt2",
         icon: "🇩🇪",
     },
-    "Deutschrap Klassiker": {
-        title: "Deutschrap: Die Klassiker",
-        id: "37i9dQZF1DWSzguhfGl55y",
-        icon: "🏆",
-    },
-    "Englische All-Time-Hits": {
-        title: "Hit Rewind",
-        id: "37i9dQZF1DX0s5kDXi1oC5",
-        icon: "🎸",
-    },
-    "Internationale Pop-Charts": {
-        title: "Today's Top Hits",
-        id: "37i9dQZF1DXcBWIGoYBM5M",
-        icon: "🌍",
-    },
     "2000er Old School": {
         title: "2000s Hip Hop R&B",
         id: "5pk7cWIp56YkrwyWU7eMTr",
