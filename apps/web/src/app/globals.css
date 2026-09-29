@@ -848,6 +848,23 @@ body::after{
     font-size: 13px;
 }
 
+/* "Bereit"/"ausgewählt"-Hervorhebung -- wurde in vier Dateien referenziert
+   (Host-CTA "startbereit", Modus/Antwort-Auswahl in Lobby/Admin/Join),
+   hatte aber nirgends eine CSS-Definition und blieb dadurch komplett
+   wirkungslos: der Button sah "bereit" und "nicht bereit" IDENTISCH aus. */
+.btnGlow{
+    border-color: rgba(255,255,255,.42) !important;
+    filter: saturate(1.15) brightness(1.06);
+    box-shadow:
+            0 0 0 2px rgba(255,255,255,.16) inset,
+            0 0 22px 2px rgba(255, 205, 60, .38);
+    animation: kumpir-btn-glow 1.8s ease-in-out infinite;
+}
+@keyframes kumpir-btn-glow {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(255,255,255,.16) inset, 0 0 14px 1px rgba(255, 205, 60, .28); }
+    50% { box-shadow: 0 0 0 2px rgba(255,255,255,.22) inset, 0 0 26px 4px rgba(255, 205, 60, .5); }
+}
+
 /* =========================================================
    MOBILE
    ========================================================= */
@@ -1242,31 +1259,94 @@ body::after{
 }
 
 /* Musik-Genres: jede Kategorie farblich unterscheidbar, auch schon
-   INaktiv leicht getönt (nicht erst bei Auswahl), damit man die vier
-   Playlists auf einen Blick auseinanderhält. */
-.segChoice[data-variant="Deutschrap-Songs"] {
-    border-color: rgba(255, 205, 40, 0.28);
-}
-.segChoice[data-variant="Deutschrap-Songs"].segChoiceActive {
-    background: linear-gradient(90deg, rgba(255, 205, 40, 0.30), rgba(230, 40, 40, 0.18));
-}
-.segChoice[data-variant="Deutschrap Klassiker"] {
-    border-color: rgba(255, 170, 60, 0.28);
-}
-.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive {
-    background: linear-gradient(90deg, rgba(255, 170, 60, 0.30), rgba(255, 205, 40, 0.16));
-}
-.segChoice[data-variant="Englische All-Time-Hits"] {
-    border-color: rgba(167, 139, 250, 0.28);
-}
-.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive {
-    background: linear-gradient(90deg, rgba(167, 139, 250, 0.30), rgba(34, 211, 238, 0.16));
-}
+   INaktiv (nicht erst bei Auswahl), damit man die vier Playlists auf
+   einen Blick auseinanderhält -- ein reiner Border-Tint ging auf dem
+   warmen Karten-Hintergrund unter, deshalb jetzt ein sichtbarer
+   Farbpunkt vor dem Label + kräftigerer Untergrund. */
+.segChoice[data-variant="Deutschrap-Songs"],
+.segChoice[data-variant="Deutschrap Klassiker"],
+.segChoice[data-variant="Englische All-Time-Hits"],
 .segChoice[data-variant="Internationale Pop-Charts"] {
-    border-color: rgba(52, 211, 153, 0.28);
+    position: relative;
+    padding-left: 30px;
 }
+.segChoice[data-variant="Deutschrap-Songs"]::before,
+.segChoice[data-variant="Deutschrap Klassiker"]::before,
+.segChoice[data-variant="Englische All-Time-Hits"]::before,
+.segChoice[data-variant="Internationale Pop-Charts"]::before {
+    content: "";
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    box-shadow: 0 0 8px 1px currentColor;
+}
+
+.segChoice[data-variant="Deutschrap-Songs"] {
+    border-color: rgba(255, 205, 40, 0.45);
+    background: rgba(255, 205, 40, 0.12);
+    color: #ffe082;
+}
+.segChoice[data-variant="Deutschrap-Songs"] .segLabel { color: var(--text); }
+.segChoice[data-variant="Deutschrap-Songs"].segChoiceActive {
+    background: linear-gradient(90deg, rgba(255, 205, 40, 0.38), rgba(230, 40, 40, 0.22));
+}
+
+.segChoice[data-variant="Deutschrap Klassiker"] {
+    border-color: rgba(255, 170, 60, 0.45);
+    background: rgba(255, 170, 60, 0.12);
+    color: #ffcc80;
+}
+.segChoice[data-variant="Deutschrap Klassiker"] .segLabel { color: var(--text); }
+.segChoice[data-variant="Deutschrap Klassiker"].segChoiceActive {
+    background: linear-gradient(90deg, rgba(255, 170, 60, 0.38), rgba(255, 205, 40, 0.20));
+}
+
+.segChoice[data-variant="Englische All-Time-Hits"] {
+    border-color: rgba(167, 139, 250, 0.45);
+    background: rgba(167, 139, 250, 0.14);
+    color: #c4b5fd;
+}
+.segChoice[data-variant="Englische All-Time-Hits"] .segLabel { color: var(--text); }
+.segChoice[data-variant="Englische All-Time-Hits"].segChoiceActive {
+    background: linear-gradient(90deg, rgba(167, 139, 250, 0.38), rgba(34, 211, 238, 0.20));
+}
+
+.segChoice[data-variant="Internationale Pop-Charts"] {
+    border-color: rgba(52, 211, 153, 0.45);
+    background: rgba(52, 211, 153, 0.14);
+    color: #6ee7b7;
+}
+.segChoice[data-variant="Internationale Pop-Charts"] .segLabel { color: var(--text); }
 .segChoice[data-variant="Internationale Pop-Charts"].segChoiceActive {
-    background: linear-gradient(90deg, rgba(52, 211, 153, 0.30), rgba(236, 72, 153, 0.18));
+    background: linear-gradient(90deg, rgba(52, 211, 153, 0.38), rgba(236, 72, 153, 0.22));
+}
+
+/* Öffentliche-Lobbys-Übersicht (/browse) */
+.publicLobbyRow {
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 16px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+    animation: kumpir-row-in 260ms var(--ease) backwards;
+}
+.publicLobbyRow:hover {
+    background: rgba(0,0,0,0.28);
+    border-color: rgba(255,255,255,0.24);
+    transform: translateY(-1px);
+}
+@keyframes kumpir-row-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Antwort-Modus (Schreiben/Sprechen) */
