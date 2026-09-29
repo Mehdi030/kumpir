@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
     reactCompiler: true,
     env: {
         NEXT_PUBLIC_BUILD_SHA: resolveBuildSha(),
-        NEXT_PUBLIC_BUILD_DATE: new Date().toISOString().slice(0, 10),
+        NEXT_PUBLIC_BUILD_DATE: new Date().toISOString().slice(0, 16).replace("T", " "),
     },
 };
 
