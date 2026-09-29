@@ -1375,6 +1375,22 @@ body::after{
     padding: 4px 8px !important;
 }
 
+/* Admin-Variante: Zeile statt Chip, mehr Platz für Host-/Kick-Buttons */
+.playerGridAdmin {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.playerChipAdmin {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding: 10px 12px;
+}
+.playerChipAdminActions {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
 /* Öffentliche-Lobbys-Übersicht (/browse) */
 .publicLobbyRow {
     background: rgba(0,0,0,0.2);

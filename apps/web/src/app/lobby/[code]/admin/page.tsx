@@ -465,76 +465,53 @@ export default function LobbyAdminPage() {
                         <div className="stepsBox">
                             <div className="stepsTitle">Spieler verwalten</div>
 
-                            <div style={{ overflowX: "auto" }}>
-                                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                                    <thead>
-                                        <tr style={{ textAlign: "left", opacity: 0.75 }}>
-                                            <th style={{ padding: "10px 8px" }}>#</th>
-                                            <th style={{ padding: "10px 8px" }}>Name</th>
-                                            <th style={{ padding: "10px 8px" }}>Status</th>
-                                            <th style={{ padding: "10px 8px", textAlign: "right" }}>Aktionen</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {players.map((p, idx) => {
-                                            const isMe = !!mePlayerId && p.player_id === mePlayerId;
-                                            const isHostRow = !!lobby.host_player_id && p.player_id === lobby.host_player_id;
-                                            const rowBusy = busyTarget === p.player_id && pending;
+                            {players.length === 0 ? (
+                                <div style={{ padding: "12px 8px", opacity: 0.75 }}>Noch niemand beigetreten.</div>
+                            ) : (
+                                <div className="playerGrid playerGridAdmin">
+                                    {players.map((p, idx) => {
+                                        const isMe = !!mePlayerId && p.player_id === mePlayerId;
+                                        const isHostRow = !!lobby.host_player_id && p.player_id === lobby.host_player_id;
+                                        const rowBusy = busyTarget === p.player_id && pending;
 
-                                            return (
-                                                <tr
-                                                    key={p.player_id}
-                                                    style={{
-                                                        borderTop: "1px solid rgba(255,255,255,0.08)",
-                                                        background: isHostRow ? "rgba(255,255,255,0.06)" : "transparent",
-                                                    }}
-                                                >
-                                                    <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
-                                                    <td style={{ padding: "10px 8px", fontWeight: 900 }}>
-                                                        {p.name}
-                                                        {isMe ? <span style={{ opacity: 0.6 }}> (du)</span> : null}
-                                                        {isHostRow ? <span style={{ marginLeft: 8 }}>👑</span> : null}
-                                                    </td>
-                                                    <td style={{ padding: "10px 8px", opacity: 0.85 }}>{p.ready ? "✅ Bereit" : "⏳ nicht bereit"}</td>
-                                                    <td style={{ padding: "10px 8px", textAlign: "right" }}>
-                                                        <div style={{ display: "inline-flex", gap: 6 }}>
-                                                            {!isHostRow ? (
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btnSecondary btnSmall"
-                                                                    disabled={pending}
-                                                                    onClick={() => onTransfer(p.player_id, p.name)}
-                                                                    title="Host übertragen"
-                                                                >
-                                                                    {rowBusy ? <Spinner size={14} /> : "👑 Host"}
-                                                                </button>
-                                                            ) : null}
-                                                            {!isMe ? (
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btnReadyOff btnSmall"
-                                                                    disabled={pending}
-                                                                    onClick={() => onKick(p.player_id, p.name)}
-                                                                    title="Aus der Lobby kicken"
-                                                                >
-                                                                    {rowBusy ? <Spinner size={14} /> : "👢 Kick"}
-                                                                </button>
-                                                            ) : null}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                        {players.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={4} style={{ padding: "12px 8px", opacity: 0.75 }}>
-                                                    Noch niemand beigetreten.
-                                                </td>
-                                            </tr>
-                                        ) : null}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        return (
+                                            <div key={p.player_id} className={`playerChip playerChipAdmin ${isHostRow ? "playerChipHost" : ""}`}>
+                                                <span className="playerChipSeat">{idx + 1}</span>
+                                                <span className="playerChipName">
+                                                    {p.name}
+                                                    {isMe ? <span style={{ opacity: 0.6 }}> (du)</span> : null}
+                                                    {isHostRow ? <span className="playerChipHostBadge">👑</span> : null}
+                                                </span>
+                                                <span className="playerChipState">{p.ready ? "✅" : "⏳"}</span>
+                                                <div className="playerChipAdminActions">
+                                                    {!isHostRow ? (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btnSecondary btnSmall"
+                                                            disabled={pending}
+                                                            onClick={() => onTransfer(p.player_id, p.name)}
+                                                            title="Host übertragen"
+                                                        >
+                                                            {rowBusy ? <Spinner size={14} /> : "👑"}
+                                                        </button>
+                                                    ) : null}
+                                                    {!isMe ? (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btnReadyOff btnSmall"
+                                                            disabled={pending}
+                                                            onClick={() => onKick(p.player_id, p.name)}
+                                                            title="Aus der Lobby kicken"
+                                                        >
+                                                            {rowBusy ? <Spinner size={14} /> : "👢"}
+                                                        </button>
+                                                    ) : null}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
 

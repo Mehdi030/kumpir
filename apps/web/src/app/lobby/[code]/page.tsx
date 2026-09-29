@@ -231,6 +231,10 @@ export default function LobbyPage() {
     }, [amIHost, mePlayerId, starting, isRunning, code, showToast]);
 
     const [botBusy, setBotBusy] = useState(false);
+    // Namen, die schon per rpc_add_bot verschickt wurden -- die `players`-Liste
+    // kommt erst per Realtime nach (spürbare Lücke), ein schneller zweiter Klick
+    // sah sonst noch den alten Stand und griff sich denselben Namen nochmal.
+    const dispatchedBotNamesRef = useRef<Set<string>>(new Set());
 
     const addBot = useCallback(async () => {
         if (!amIHost || !mePlayerId || !lobbyId) return;
@@ -238,10 +242,11 @@ export default function LobbyPage() {
         setBotBusy(true);
         try {
             const supabase = getSupabaseClient();
-            // Random Bot-Name aus einer kleinen Liste, server-side wird unique seat vergeben
             const names = ["Bot Anna", "Bot Ben", "Bot Cleo", "Bot Dino", "Bot Echo", "Bot Fips", "Bot Gala", "Bot Hugo", "Bot Iris", "Bot Jay"];
             const taken = new Set(players.map((p) => p.name));
+            for (const n of dispatchedBotNamesRef.current) taken.add(n);
             const free = names.find((n) => !taken.has(n)) ?? `Bot ${Math.floor(Math.random() * 999)}`;
+            dispatchedBotNamesRef.current.add(free);
 
             const { error: rpcErr } = await supabase.rpc("rpc_add_bot", {
                 p_lobby_id: lobbyId,
@@ -249,6 +254,7 @@ export default function LobbyPage() {
                 p_bot_name: free,
             });
             if (rpcErr) {
+                dispatchedBotNamesRef.current.delete(free);
                 showToast(`❌ ${rpcErr.message}`, 2400);
             }
         } catch (e: unknown) {
