@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { getMuted, getVolume } from "@/lib/gameFx";
+import { getMuted, getVolume, onAudioSettingsChanged } from "@/lib/gameFx";
 
 /**
  * Song-Raten (Musik-Modus): spielt den aktuellen, versteckten Song des
@@ -142,6 +142,25 @@ export function SongRound({ songId }: { songId: string | null }) {
     useEffect(() => {
         if (!songId) audioRef.current?.pause();
     }, [songId]);
+
+    // Live nachziehen, wenn Mute/Lautstärke ÜBER AudioControl geändert wird,
+    // während der Song schon läuft -- vorher wirkte der Regler erst beim
+    // nächsten Song-Wechsel (siehe Kommentar an gameFx.setMuted).
+    useEffect(() => {
+        const apply = () => {
+            const el = audioRef.current;
+            if (!el || !previewUrl) return;
+            if (getMuted()) {
+                el.pause();
+                return;
+            }
+            el.volume = getVolume();
+            if (el.paused && !blocked) {
+                void el.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
+            }
+        };
+        return onAudioSettingsChanged(apply);
+    }, [previewUrl, blocked]);
 
     const retryPlay = useCallback(() => {
         const el = audioRef.current;

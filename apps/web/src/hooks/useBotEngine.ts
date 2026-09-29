@@ -23,6 +23,7 @@ type LobbyForBot = {
     topic_selected: string | null;
     topic_a: string | null;
     topic_b: string | null;
+    topic_c: string | null;
     current_attempt_id: string | null;
     used_answers: string[] | null;
     round_number: number | null;
@@ -155,15 +156,18 @@ export function useBotEngine(
 
         // === TOPIC VOTE ===
         if (lobby.phase === "topic_vote") {
-            const roundSig = (lobby.topic_a ?? "") + "|" + (lobby.topic_b ?? "");
+            const roundSig = (lobby.topic_a ?? "") + "|" + (lobby.topic_b ?? "") + "|" + (lobby.topic_c ?? "");
             bots.forEach((bot) => {
                 if (seenVoteRoundsRef.current.get(bot.player_id) === roundSig) return;
                 seenVoteRoundsRef.current.set(bot.player_id, roundSig);
 
-                // Random delay 800-2400ms, dann random vote
+                // Random delay 800-2400ms, dann random vote -- "3" nur, wenn
+                // es wirklich ein drittes Thema gibt (topic_c), sonst würde
+                // der Bot eine nicht angebotene Option wählen.
                 const delay = 800 + Math.random() * 1600;
+                const maxChoice = lobby.topic_c ? 3 : 2;
                 window.setTimeout(() => {
-                    const choice = (Math.floor(Math.random() * 3) + 1) as 1 | 2 | 3;
+                    const choice = (Math.floor(Math.random() * maxChoice) + 1) as 1 | 2 | 3;
                     void supabase.rpc("rpc_vote_topic", {
                         p_lobby_id: lobby.id,
                         p_player_id: bot.player_id,

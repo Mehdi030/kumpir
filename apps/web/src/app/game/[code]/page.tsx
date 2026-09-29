@@ -55,6 +55,7 @@ type LobbyState = {
     // Topic voting
     topic_a: string | null;
     topic_b: string | null;
+    topic_c: string | null;
     topic_selected: string | null;
     topic_vote_ends_at: string | null;
 
@@ -542,6 +543,7 @@ export default function GamePage() {
                   topic_selected: lobby.topic_selected,
                   topic_a: lobby.topic_a,
                   topic_b: lobby.topic_b,
+                  topic_c: lobby.topic_c,
                   current_attempt_id: lobby.current_attempt_id,
                   used_answers: lobby.used_answers ?? [],
                   round_number: lobby.round_number,
@@ -602,6 +604,7 @@ export default function GamePage() {
 
                     topic_a: (raw.topic_a as string | null) ?? null,
                     topic_b: (raw.topic_b as string | null) ?? null,
+                    topic_c: (raw.topic_c as string | null) ?? null,
                     topic_selected: (raw.topic_selected as string | null) ?? null,
                     topic_vote_ends_at: (raw.topic_vote_ends_at as string | null) ?? null,
 
@@ -1122,8 +1125,11 @@ export default function GamePage() {
 
             if (!lobby) return;
 
-            // Topic vote: 1 / 2 / 3
-            if (lobby.phase === "topic_vote" && (ev.key === "1" || ev.key === "2" || ev.key === "3")) {
+            // Topic vote: 1 / 2 / 3 -- "3" nur, wenn es wirklich ein drittes Thema gibt.
+            if (
+                lobby.phase === "topic_vote" &&
+                (ev.key === "1" || ev.key === "2" || (ev.key === "3" && lobby.topic_c))
+            ) {
                 ev.preventDefault();
                 const choice = Number(ev.key) as 1 | 2 | 3;
                 void vote(choice);
@@ -1169,7 +1175,8 @@ export default function GamePage() {
     // Labels
     const aLabel = lobby.topic_a ?? "…";
     const bLabel = lobby.topic_b ?? "…";
-    const rLabel = "Zufällig";
+    const cLabel = lobby.topic_c ?? "…";
+    const hasThirdTopic = !!lobby.topic_c;
 
     // =========================================================
     // PHASE: TOPIC VOTE  (NO blinking)
@@ -1242,20 +1249,22 @@ export default function GamePage() {
                                 <div className="cardHint">{myVote === 2 ? "Ausgewählt" : "Tippe zum Voten"}</div>
                             </button>
 
-                            <button
-                                type="button"
-                                onClick={() => void vote(3)}
-                                disabled={voteBusy || !mePlayerId}
-                                className={`glassCard ${myVote === 3 ? "active" : ""}`}
-                            >
-                                <div className="glassShine" aria-hidden />
-                                <div className="cardTop">
-                                    <span className="chip">🎲</span>
-                                    <span className="micro">Random</span>
-                                </div>
-                                <div className="cardTitle">{rLabel}</div>
-                                <div className="cardHint">{myVote === 3 ? "Ausgewählt" : "Überraschen lassen"}</div>
-                            </button>
+                            {hasThirdTopic ? (
+                                <button
+                                    type="button"
+                                    onClick={() => void vote(3)}
+                                    disabled={voteBusy || !mePlayerId}
+                                    className={`glassCard ${myVote === 3 ? "active" : ""}`}
+                                >
+                                    <div className="glassShine" aria-hidden />
+                                    <div className="cardTop">
+                                        <span className="chip">③</span>
+                                        <span className="micro">Thema C</span>
+                                    </div>
+                                    <div className="cardTitle">{cLabel}</div>
+                                    <div className="cardHint">{myVote === 3 ? "Ausgewählt" : "Tippe zum Voten"}</div>
+                                </button>
+                            ) : null}
                         </div>
 
                         <div className="statusLine">
@@ -1299,7 +1308,7 @@ export default function GamePage() {
           .kicker{font-size:12px;font-weight:950;letter-spacing:2.2px;opacity:.78;text-transform:uppercase;animation:${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};}
           .headline{margin-top:10px;font-size:clamp(36px,4.8vw,70px);font-weight:1000;letter-spacing:-0.6px;position:relative;display:inline-block;text-shadow:0 24px 80px rgba(0,0,0,0.35);animation:${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};}
           .headlineGlow{position:absolute;inset:-30px -60px;background:radial-gradient(circle at 40% 35%, rgba(255,214,10,0.25), rgba(255,149,0,0.18), rgba(255,45,85,0.06), transparent 70%);filter:blur(18px);opacity:.9;pointer-events:none;animation:${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};}
-          .topicGrid{margin-top:24px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;}
+          .topicGrid{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;}
           .glassCard{color:white;position:relative;width:100%;border-radius:38px;padding:24px 22px 22px;min-height:260px;text-align:left;cursor:pointer;border:1px solid rgba(255,255,255,0.18);background:linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),radial-gradient(circle at 30% 20%, rgba(255,214,10,0.14), rgba(255,149,0,0.08), rgba(0,0,0,0.16) 70%);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);box-shadow:0 18px 70px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.20);overflow:hidden;transform:translateZ(0);transition:transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease;animation:${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};}
           .glassCard:nth-child(2){animation-delay:${reduceMotion ? "0ms" : "70ms"};}
           .glassCard:nth-child(3){animation-delay:${reduceMotion ? "0ms" : "140ms"};}
@@ -1378,7 +1387,7 @@ export default function GamePage() {
         const labelForChoice = (c: number) => {
             if (c === 1) return `① ${aLabel}`;
             if (c === 2) return `② ${bLabel}`;
-            if (c === 3) return `🎲 ${rLabel}`;
+            if (c === 3) return `③ ${cLabel}`;
             return String(c);
         };
 
@@ -1399,7 +1408,15 @@ export default function GamePage() {
                 <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
-                    <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 14, alignItems: "stretch" }}>
+                    <div
+                        style={{
+                            marginTop: 16,
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${hasThirdTopic ? 3 : 2}, minmax(0,1fr))`,
+                            gap: 14,
+                            alignItems: "stretch",
+                        }}
+                    >
                         <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`}>
                             <div className="resultBadge">①</div>
                             <div className="resultTitle">{aLabel}</div>
@@ -1408,10 +1425,12 @@ export default function GamePage() {
                             <div className="resultBadge">②</div>
                             <div className="resultTitle">{bLabel}</div>
                         </div>
-                        <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
-                            <div className="resultBadge">🎲</div>
-                            <div className="resultTitle">{rLabel}</div>
-                        </div>
+                        {hasThirdTopic ? (
+                            <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
+                                <div className="resultBadge">③</div>
+                                <div className="resultTitle">{cLabel}</div>
+                            </div>
+                        ) : null}
                     </div>
 
                     <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>{selectedTopic}</div>
@@ -2063,6 +2082,11 @@ export default function GamePage() {
             className={selfShake ? "kumpirSelfShake" : ""}
             style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}
         >
+            {/* Feuerwellen am Bildschirmrand -- werden intensiver, je weniger Zeit
+                bleibt (heatLevel), statt dass man das nur am kleinen "Ruhig/Heiß"-
+                Pill oben rechts ablesen kann. */}
+            <div className={`edgeFire edgeFire-${heatLevel}`} aria-hidden />
+
             <PlayerRing
                 players={players}
                 holderPlayerId={lobby.holder_player_id}
@@ -2597,6 +2621,39 @@ export default function GamePage() {
         @keyframes heatBlink{
           0%,100% { filter: brightness(1.0); }
           50%     { filter: brightness(1.32); }
+        }
+
+        .edgeFire{
+          position: fixed;
+          inset: 0;
+          z-index: 3;
+          pointer-events: none;
+          transition: box-shadow 500ms ease, opacity 500ms ease;
+        }
+        .edgeFire-low{
+          opacity: 0;
+          box-shadow: inset 0 0 0 0 rgba(255,90,0,0);
+        }
+        .edgeFire-mid{
+          opacity: 1;
+          box-shadow: inset 0 0 80px 8px rgba(255,120,0,0.30);
+          animation: edgeFirePulseMid 2.6s ease-in-out infinite;
+        }
+        .edgeFire-high{
+          opacity: 1;
+          box-shadow: inset 0 0 120px 18px rgba(255,45,0,0.5);
+          animation: edgeFirePulseHigh 1s ease-in-out infinite;
+        }
+        @keyframes edgeFirePulseMid{
+          0%,100% { box-shadow: inset 0 0 60px 6px rgba(255,120,0,0.26); }
+          50%     { box-shadow: inset 0 0 110px 16px rgba(255,150,20,0.42); }
+        }
+        @keyframes edgeFirePulseHigh{
+          0%,100% { box-shadow: inset 0 0 100px 14px rgba(255,45,0,0.46); }
+          50%     { box-shadow: inset 0 0 170px 32px rgba(255,90,0,0.72); }
+        }
+        @media (prefers-reduced-motion: reduce){
+          .edgeFire-mid, .edgeFire-high{ animation: none; }
         }
 
         .selfFlash{

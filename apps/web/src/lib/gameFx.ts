@@ -26,6 +26,23 @@ function isMuted(): boolean {
     return muted;
 }
 
+// AudioControl setzt Mute/Lautstärke nur hier (Modul-Variable + localStorage) --
+// ein bereits laufender <audio>-Song (SongRound.tsx) bekam das bisher NIE mit,
+// weil er den Wert nur einmalig beim Song-Wechsel ausliest. Dieses Event lässt
+// laufende Player live nachziehen, statt erst beim nächsten Song.
+const AUDIO_SETTINGS_EVENT = "kumpir:audio-settings";
+
+function notifyAudioSettingsChanged() {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event(AUDIO_SETTINGS_EVENT));
+}
+
+export function onAudioSettingsChanged(cb: () => void): () => void {
+    if (typeof window === "undefined") return () => {};
+    window.addEventListener(AUDIO_SETTINGS_EVENT, cb);
+    return () => window.removeEventListener(AUDIO_SETTINGS_EVENT, cb);
+}
+
 export function setMuted(next: boolean) {
     muted = next;
     try {
@@ -33,6 +50,7 @@ export function setMuted(next: boolean) {
     } catch {
         // ignore
     }
+    notifyAudioSettingsChanged();
 }
 
 export function getMuted(): boolean {
@@ -60,6 +78,7 @@ export function setVolume(next: number) {
     } catch {
         // ignore
     }
+    notifyAudioSettingsChanged();
 }
 
 function getCtx(): AudioContext | null {
