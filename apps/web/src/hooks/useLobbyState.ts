@@ -13,7 +13,6 @@ export type LobbyRow = {
     max_players: number | null;
     game_mode: string | null;
     topic: string | null;
-    privacy: string | null;
     answer_mode: string | null;
     topic_filter: string[] | null;
 };
@@ -58,7 +57,7 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
 
         const lobbyRes = await supabase
             .from("lobbies")
-            .select("id,code,host_player_id,phase,locked,max_players,game_mode,topic,privacy,answer_mode,topic_filter")
+            .select("id,code,host_player_id,phase,locked,max_players,game_mode,topic,answer_mode,topic_filter")
             .eq("code", code)
             .single();
 

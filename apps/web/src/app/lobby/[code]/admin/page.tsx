@@ -165,7 +165,6 @@ export default function LobbyAdminPage() {
     const maxPlayers = lobby?.max_players ?? 8;
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
     const answerMode = ((lobby?.answer_mode ?? "text") as AnswerModeKey) ?? "text";
-    const privacy = lobby?.privacy === "public" ? "public" : "private";
     const musicGenres = useMemo(() => lobby?.topic_filter ?? [], [lobby?.topic_filter]);
 
     const runSetting = useCallback(
@@ -221,18 +220,6 @@ export default function LobbyAdminPage() {
             runSetting(
                 () => supabase.rpc("set_lobby_answer_mode", { p_lobby_id: lobbyId, p_me_player_id: mePlayerId, p_answer_mode: next }),
                 "✅ Antwort-Modus gespeichert"
-            );
-        },
-        [mePlayerId, lobbyId, runSetting]
-    );
-
-    const setPrivacySetting = useCallback(
-        (next: "private" | "public") => {
-            if (!mePlayerId || !lobbyId) return;
-            const supabase = getSupabaseClient();
-            runSetting(
-                () => supabase.rpc("set_lobby_privacy", { p_lobby_id: lobbyId, p_me_player_id: mePlayerId, p_privacy: next }),
-                next === "public" ? "🌐 Lobby ist jetzt öffentlich" : "🔒 Lobby ist jetzt privat"
             );
         },
         [mePlayerId, lobbyId, runSetting]
@@ -382,31 +369,6 @@ export default function LobbyAdminPage() {
                                             {ANSWER_MODES[k].icon} {ANSWER_MODES[k].label}
                                         </button>
                                     ))}
-                                </div>
-                            </div>
-
-                            <div className="pillCard" style={{ marginTop: 14 }}>
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">Privatsphäre</div>
-                                    <div className="pillCardHint">{privacy === "public" ? "In der Übersicht sichtbar" : "Nur mit Code"}</div>
-                                </div>
-                                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                                    <button
-                                        type="button"
-                                        className={`btn btnSecondary btnSmall ${privacy === "private" ? "btnGlow" : ""}`}
-                                        onClick={() => setPrivacySetting("private")}
-                                        disabled={settingsBusy}
-                                    >
-                                        🔒 Privat
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`btn btnSecondary btnSmall ${privacy === "public" ? "btnGlow" : ""}`}
-                                        onClick={() => setPrivacySetting("public")}
-                                        disabled={settingsBusy}
-                                    >
-                                        🌐 Public
-                                    </button>
                                 </div>
                             </div>
 

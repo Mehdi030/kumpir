@@ -345,7 +345,7 @@ export default function LobbyPage() {
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
                             <div style={{ flex: 1, minWidth: 280 }}>
                                 <h1 className="h1" style={{ marginBottom: 4 }}>
-                                    {lobby?.privacy === "public" ? "Öffentliche Lobby" : "Private Lobby"}
+                                    Private Lobby
                                 </h1>
                             </div>
 
