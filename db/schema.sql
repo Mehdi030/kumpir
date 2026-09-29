@@ -224,6 +224,8 @@ CREATE TABLE song_pool (
     artist text,
     lower_title text GENERATED ALWAYS AS (lower(title)) STORED,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
+    preview_url text,                    -- Migration 036. Gecachte iTunes-Preview.
+    preview_checked_at timestamp with time zone,  -- Migration 036.
     UNIQUE (topic_pool_id, lower_title)
 );
 

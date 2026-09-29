@@ -21,9 +21,12 @@ export function SongRound({ songId }: { songId: string | null }) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const requestedForRef = useRef<string | null>(null);
 
-    // songId -> Titel/Interpret laden (nur um daraus einen Suchbegriff zu
-    // bauen) -> iTunes Search API -> previewUrl. Titel/Interpret selbst
-    // landen nie in einem State, das im JSX gerendert wird.
+    // songId -> preview_url. Der Normalfall liest nur noch die von
+    // db/scripts/backfill-song-previews.mjs vorab gecachte URL (Migration
+    // 036) -- kein Live-Request mehr, keine Ladezeit. Nur für einen Song,
+    // der noch nie gecacht wurde (frisch hinzugefügt, Cache-Job noch nicht
+    // gelaufen), fragen wir als Fallback einmalig live die iTunes Search
+    // API an, statt einfach stumm zu bleiben.
     useEffect(() => {
         if (!songId) {
             // Song-Runde vorbei (Thema gewechselt/Match beendet) -- lokalen
@@ -43,11 +46,18 @@ export function SongRound({ songId }: { songId: string | null }) {
         (async () => {
             const { data, error } = await supabase
                 .from("song_pool")
-                .select("title,artist")
+                .select("title,artist,preview_url,preview_checked_at")
                 .eq("id", songId)
                 .single();
 
             if (cancelled || error || !data) return;
+
+            if (data.preview_checked_at) {
+                // Bereits gecacht (auch wenn Ergebnis damals "kein Treffer" war,
+                // also preview_url null) -- kein erneuter Live-Request nötig.
+                setPreviewUrl(data.preview_url ?? null);
+                return;
+            }
 
             const query = [data.title, data.artist].filter(Boolean).join(" ");
             try {
