@@ -2142,10 +2142,13 @@ export default function GamePage() {
                         </div>
                     </div>
 
-                    {/* Topic-Mechanik B: Antwort + Validierung */}
-                    {iAmEliminated ? (
-                        <div className="hint">Du schaust zu.</div>
-                    ) : passAttempt.attempt ? (
+                    {/* Topic-Mechanik B: Antwort + Validierung. Eliminierte Spieler
+                        schauen zwar nur noch zu, dürfen aber weiter mitreden --
+                        offene Versuche sehen und mitabstimmen (gilt/gilt nicht),
+                        genau wie lebende Nicht-Halter. Serverseitig war das schon
+                        immer erlaubt (_verify_session prüft nicht is_alive), nur
+                        die UI hat es bisher komplett ausgeblendet. */}
+                    {passAttempt.attempt ? (
                         // ─── Es läuft gerade ein Validierungs-Versuch ───
                         isMeHolder ? (
                             <div className="answerStatus">
@@ -2190,6 +2193,8 @@ export default function GamePage() {
                                 </div>
                             </div>
                         )
+                    ) : iAmEliminated ? (
+                        <div className="hint">Du schaust zu.</div>
                     ) : isMeHolder ? (
                         // ─── Halter darf neue Antwort eingeben ───
                         <div className="answerInputBox">
@@ -2247,15 +2252,18 @@ export default function GamePage() {
                         <div className="hint">Warte, bis du dran bist.</div>
                     )}
 
-                    {/* Used-Answers: bisher genannte Antworten dieser Runde */}
+                    {/* Used-Answers: bisher genannte Antworten dieser Runde --
+                        zeigt die letzten 10, für lebende wie eliminierte Spieler
+                        gleichermaßen sichtbar (dieser Block hängt nicht an
+                        iAmEliminated). */}
                     {lobby.used_answers && lobby.used_answers.length > 0 ? (
                         <div className="usedAnswers" aria-label="Bisher genannte Antworten">
                             <span className="usedAnswersLabel">Schon gesagt:</span>
-                            {lobby.used_answers.slice(-6).map((a, i) => (
+                            {lobby.used_answers.slice(-10).map((a, i) => (
                                 <span key={`${a}-${i}`} className="usedAnswerChip">{a}</span>
                             ))}
-                            {lobby.used_answers.length > 6 ? (
-                                <span className="usedAnswerChip more">+{lobby.used_answers.length - 6}</span>
+                            {lobby.used_answers.length > 10 ? (
+                                <span className="usedAnswerChip more">+{lobby.used_answers.length - 10}</span>
                             ) : null}
                         </div>
                     ) : null}
