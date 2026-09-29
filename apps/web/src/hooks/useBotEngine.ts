@@ -28,6 +28,7 @@ type LobbyForBot = {
     used_answers: string[] | null;
     round_number: number | null;
     current_song_id: string | null;
+    song_answer_mode: string | null;
 };
 
 /**
@@ -62,15 +63,30 @@ function songAnswerMatches(title: string, answer: string) {
     return t === a || stripParen(t) === a;
 }
 
-const songTitleCache = new Map<string, string | null>();
+// Spiegelt den Split aus rpc_attempt_pass für den Interpret-Modus: das
+// artist-Feld ist oft eine Liste ("Amo, Celo & Abdi"), jeder einzelne
+// genannte Name zählt für sich. Original-Schreibweise bleibt erhalten,
+// damit ein Bot-Versuch im UI lesbar bleibt ("XATAR" statt "xatar").
+function splitArtists(artist: string): string[] {
+    return artist
+        .split(/\s*,\s*|\s*&\s*/)
+        .map((a) => a.trim())
+        .filter(Boolean);
+}
+function songArtistMatches(artist: string, answer: string) {
+    const target = answer.trim().toLowerCase();
+    return splitArtists(artist).some((a) => a.toLowerCase() === target);
+}
+
+const songCache = new Map<string, { title: string; artist: string } | null>();
 const topicPoolIdCache = new Map<string, string | null>();
 
-async function fetchSongTitle(supabase: SupabaseClient, songId: string): Promise<string | null> {
-    if (songTitleCache.has(songId)) return songTitleCache.get(songId)!;
-    const { data, error } = await supabase.from("song_pool").select("title").eq("id", songId).single();
-    const title = !error && data ? (data.title as string) : null;
-    songTitleCache.set(songId, title);
-    return title;
+async function fetchSong(supabase: SupabaseClient, songId: string): Promise<{ title: string; artist: string } | null> {
+    if (songCache.has(songId)) return songCache.get(songId)!;
+    const { data, error } = await supabase.from("song_pool").select("title,artist").eq("id", songId).single();
+    const song = !error && data ? { title: data.title as string, artist: (data.artist as string | null) ?? "" } : null;
+    songCache.set(songId, song);
+    return song;
 }
 
 async function fetchTopicPoolId(supabase: SupabaseClient, topicText: string): Promise<string | null> {
@@ -98,9 +114,11 @@ async function isAnswerActuallyCorrect(
     attempt: Attempt
 ): Promise<boolean> {
     if (lobby.current_song_id) {
-        const title = await fetchSongTitle(supabase, lobby.current_song_id);
-        if (!title) return false;
-        return songAnswerMatches(title, attempt.answer);
+        const song = await fetchSong(supabase, lobby.current_song_id);
+        if (!song) return false;
+        return lobby.song_answer_mode === "artist"
+            ? songArtistMatches(song.artist, attempt.answer)
+            : songAnswerMatches(song.title, attempt.answer);
     }
 
     const topic = lobby.topic_selected ?? lobby.topic_a ?? "";
@@ -198,12 +216,22 @@ export function useBotEngine(
                     // Song-Modus: die generische ANSWERS-Liste aus botAnswers.ts
                     // (Kategorie-Titel) hat mit dem tatsächlich gezogenen Song
                     // (song_pool.current_song_id) nichts zu tun -- ein "richtiger"
-                    // Bot muss den ECHTEN Titel des aktuellen Songs abschicken,
-                    // sonst prüft der Server (rpc_attempt_pass) ihn als falsch,
-                    // egal wie die Erfolgs-Quote gewürfelt hat.
+                    // Bot muss den ECHTEN Titel (oder im Interpret-Modus einen
+                    // ECHTEN Interpret) des aktuellen Songs abschicken, sonst
+                    // prüft der Server (rpc_attempt_pass) ihn als falsch, egal
+                    // wie die Erfolgs-Quote gewürfelt hat.
                     if (songId) {
-                        const realTitle = willSucceed ? await fetchSongTitle(supabase, songId) : null;
-                        const answer = realTitle ?? BOT_FALLBACK[Math.floor(Math.random() * BOT_FALLBACK.length)]!;
+                        let answer: string | null = null;
+                        if (willSucceed) {
+                            const song = await fetchSong(supabase, songId);
+                            if (song) {
+                                answer =
+                                    lobby.song_answer_mode === "artist"
+                                        ? splitArtists(song.artist)[0] ?? null
+                                        : song.title;
+                            }
+                        }
+                        answer ??= BOT_FALLBACK[Math.floor(Math.random() * BOT_FALLBACK.length)]!;
                         const { error } = await supabase.rpc("rpc_attempt_pass", {
                             p_code: lobby.code,
                             p_player_id: holder.player_id,

@@ -33,7 +33,7 @@ function prefetchPreviewUrl(url: string) {
     prefetchAudioPool.push(a);
 }
 
-export function SongRound({ songId }: { songId: string | null }) {
+export function SongRound({ songId, answerMode = "title" }: { songId: string | null; answerMode?: "title" | "artist" }) {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [blocked, setBlocked] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -181,7 +181,7 @@ export function SongRound({ songId }: { songId: string | null }) {
                     <span className="songRoundIcon" aria-hidden>
                         🎵
                     </span>
-                    <span>Song läuft … errate ihn!</span>
+                    <span>{answerMode === "artist" ? "Song läuft … wer singt/rappt das?" : "Song läuft … errate ihn!"}</span>
                 </>
             )}
             <audio ref={audioRef} preload="none" />

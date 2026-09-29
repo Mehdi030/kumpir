@@ -75,6 +75,8 @@ type LobbyState = {
 
     // Song-Raten (Musik-Modus): aktueller, versteckter Song für den Halter
     current_song_id: string | null;
+    // "title" (Standard, Songtitel erraten) oder "artist" (Interpret nennen)
+    song_answer_mode: string | null;
 
     // Antwort-Modus: "text" (Standard) oder "voice" (Sprache primär)
     answer_mode: string | null;
@@ -546,6 +548,7 @@ export default function GamePage() {
                   used_answers: lobby.used_answers ?? [],
                   round_number: lobby.round_number,
                   current_song_id: lobby.current_song_id,
+                  song_answer_mode: lobby.song_answer_mode,
               }
             : null,
         players,
@@ -619,6 +622,7 @@ export default function GamePage() {
                     pass_direction: (raw.pass_direction as number | null) ?? 1,
 
                     current_song_id: (raw.current_song_id as string | null) ?? null,
+                    song_answer_mode: (raw.song_answer_mode as string | null) ?? null,
 
                     answer_mode: (raw.answer_mode as string | null) ?? "text",
                 };
@@ -2115,7 +2119,9 @@ export default function GamePage() {
                 <div className="hudInner">
                     <div className="topic">{selectedTopic}</div>
 
-                    {MUSIC_PLAYLISTS[selectedTopic] ? <SongRound songId={lobby.current_song_id} /> : null}
+                    {MUSIC_PLAYLISTS[selectedTopic] ? (
+                        <SongRound songId={lobby.current_song_id} answerMode={lobby.song_answer_mode === "artist" ? "artist" : "title"} />
+                    ) : null}
 
                     <div className="strip" key={hudPulseNonce}>
                         <div className="now">
@@ -2214,7 +2220,13 @@ export default function GamePage() {
                                             void handleAttemptPass();
                                         }
                                     }}
-                                    placeholder={`z.B. ${selectedTopic === "…" ? "deine Antwort" : "Antwort zu " + selectedTopic}`}
+                                    placeholder={
+                                        selectedTopic === "…"
+                                            ? "z.B. deine Antwort"
+                                            : lobby.current_song_id && lobby.song_answer_mode === "artist"
+                                                ? "z.B. Interpret / Rapper"
+                                                : `z.B. Antwort zu ${selectedTopic}`
+                                    }
                                     maxLength={60}
                                     autoComplete="off"
                                     autoCapitalize="none"

@@ -1403,6 +1403,14 @@ body::after{
     background: linear-gradient(90deg, rgba(240,138,26,0.28), rgba(230,40,110,0.16));
 }
 
+/* Song-Rätsel-Modus (Songtitel/Interpret) */
+.segChoiceActive[data-variant="title"] {
+    background: linear-gradient(90deg, rgba(52,211,153,0.26), rgba(255,255,255,0.10));
+}
+.segChoiceActive[data-variant="artist"] {
+    background: linear-gradient(90deg, rgba(167,139,250,0.28), rgba(236,72,153,0.16));
+}
+
 /* ✅ READY ON / READY – Satt, positiv, glasig (GRÜN) */
 .btnReadyOn{
     position: relative;

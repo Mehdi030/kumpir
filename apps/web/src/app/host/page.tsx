@@ -12,10 +12,16 @@ type Privacy = "private" | "public";
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
 type AnswerMode = "text" | "voice";
+type SongAnswerMode = "title" | "artist";
 
 const ANSWER_MODES: Record<AnswerMode, { label: string; icon: string; hint: string }> = {
     text: { label: "Schreiben", icon: "⌨️", hint: "Antwort eintippen (Standard)." },
     voice: { label: "Mündlich", icon: "🎤", hint: "Antwort per Sprache sagen statt zu tippen." },
+};
+
+const SONG_ANSWER_MODES: Record<SongAnswerMode, { label: string; icon: string; hint: string }> = {
+    title: { label: "Songtitel", icon: "🎵", hint: "Man muss den Titel des laufenden Songs nennen (Standard)." },
+    artist: { label: "Interpret", icon: "🎤", hint: "Man muss den Interpret/Rapper des laufenden Songs nennen." },
 };
 
 const ROUND_SPEEDS: Record<
@@ -102,6 +108,7 @@ export default function HostPage() {
     const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>(null);
     const [mode, setMode] = useState<ModeKey | null>(null);
     const [answerMode, setAnswerMode] = useState<AnswerMode>("text");
+    const [songAnswerMode, setSongAnswerMode] = useState<SongAnswerMode>("title");
     // Leer = alle Themen-Kategorien möglich (wie bisher). Ausgewählt = die
     // Themen-Wahl zieht nur noch aus diesen Musik-Genres (Migration 026).
     const [musicGenres, setMusicGenres] = useState<string[]>([]);
@@ -182,7 +189,7 @@ export default function HostPage() {
                 return;
             }
 
-            if ((mode && mode !== "original") || musicGenres.length > 0 || answerMode !== "text") {
+            if ((mode && mode !== "original") || musicGenres.length > 0 || answerMode !== "text" || songAnswerMode !== "title") {
                 const { data: lobbyRow, error: lobbyErr } = await supabase
                     .from("lobbies")
                     .select("id")
@@ -211,6 +218,13 @@ export default function HostPage() {
                             p_answer_mode: answerMode,
                         });
                     }
+                    if (songAnswerMode !== "title") {
+                        await supabase.rpc("set_lobby_song_answer_mode", {
+                            p_lobby_id: lobbyRow.id,
+                            p_me_player_id: hostPlayerId,
+                            p_song_answer_mode: songAnswerMode,
+                        });
+                    }
                 }
             }
 
@@ -221,7 +235,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, musicGenres, answerMode, supabase, privacy, maxPlayers, router, user?.id]);
+    }, [canCreate, hostName, roundSpeed, mode, musicGenres, answerMode, songAnswerMode, supabase, privacy, maxPlayers, router, user?.id]);
 
     return (
         <main className="container">
@@ -432,6 +446,38 @@ export default function HostPage() {
                                     ) : (
                                         "Nichts ausgewählt = Musik-Kategorien mischen sich normal unter alle anderen Themen."
                                     )}
+                                </div>
+                            </div>
+
+                            <div className="pillCard" style={{ marginTop: 14 }}>
+                                <div className="pillCardTop">
+                                    <div className="pillCardTitle">🎤 Song-Rätsel</div>
+                                    <div className="pillCardHint">{SONG_ANSWER_MODES[songAnswerMode].hint}</div>
+                                </div>
+
+                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                    {(Object.keys(SONG_ANSWER_MODES) as SongAnswerMode[]).map((key) => {
+                                        const s = SONG_ANSWER_MODES[key];
+                                        const active = songAnswerMode === key;
+
+                                        return (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
+                                                data-variant={key}
+                                                onClick={() => setSongAnswerMode(key)}
+                                                aria-pressed={active}
+                                            >
+                                                <span className="segIcon" aria-hidden>{s.icon}</span>
+                                                <span className="segLabel">{s.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
+                                    Gilt, sobald in einer Runde ein Musik-Thema drankommt — egal ob per Musik-Modus-Filter oben oder zufällig gemischt.
                                 </div>
                             </div>
 
