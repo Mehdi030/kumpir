@@ -157,6 +157,16 @@ AS $function$
 $function$;
 
 
+-- ============================================================
+-- Migration 034: Obergrenze fuer kumulierten Pass-Bonus pro Runde
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.calc_pass_bonus_cap(p_alive_count integer)
+    RETURNS numeric LANGUAGE sql IMMUTABLE
+AS $function$
+    SELECT greatest(12, least(30, coalesce(p_alive_count, 4) * 3));
+$function$;
+
+
 CREATE OR REPLACE FUNCTION public.cleanup_lobby(p_lobby_id uuid, p_stale_seconds integer)
  RETURNS void
  LANGUAGE plpgsql
@@ -500,13 +510,13 @@ CREATE OR REPLACE FUNCTION public.rpc_pass_potato(p_code text, p_player_id uuid)
 AS $function$
 declare
   v_lobby_id uuid; v_mode text; v_holder uuid; v_dir smallint; v_explode_at timestamptz;
-  v_round_number int; v_bonus_seconds numeric;
+  v_round_number int; v_bonus_seconds numeric; v_bonus_used numeric; v_bonus_cap numeric; v_bonus_applied numeric;
   alive_ids uuid[]; n int; idx int; next_idx int; v_next uuid;
   v_now timestamptz := now();
   v_last_pass timestamptz; v_pass_ms int; v_clutch int := 0; v_ms_left int;
 begin
-  select l.id, l.game_mode, l.holder_player_id, l.pass_direction, l.explode_at, l.round_number
-    into v_lobby_id, v_mode, v_holder, v_dir, v_explode_at, v_round_number
+  select l.id, l.game_mode, l.holder_player_id, l.pass_direction, l.explode_at, l.round_number, coalesce(l.round_bonus_used, 0)
+    into v_lobby_id, v_mode, v_holder, v_dir, v_explode_at, v_round_number, v_bonus_used
   from public.lobbies l
   where l.code = upper(p_code) for update;
 
@@ -569,11 +579,16 @@ begin
   -- als Basis statt einfach v_explode_at + Bonus, damit ein durch Client-
   -- Polling-Lag bereits abgelaufener Timer dem nächsten Halter trotzdem
   -- die volle Bonuszeit gibt statt einer Negativ-Restzeit + Bonus.
+  -- Migration 034: pro Runde gedeckelt (calc_pass_bonus_cap), sonst können
+  -- viele Spieler + viel Glück eine Runde beliebig lange laufen lassen.
+  v_bonus_cap := public.calc_pass_bonus_cap(n);
   v_bonus_seconds := public.calc_pass_bonus_seconds(v_round_number);
+  v_bonus_applied := greatest(0, least(v_bonus_seconds, v_bonus_cap - v_bonus_used));
 
   update public.lobbies
   set holder_player_id = v_next,
-      explode_at = greatest(coalesce(v_explode_at, v_now), v_now) + (v_bonus_seconds * interval '1 second'),
+      explode_at = greatest(coalesce(v_explode_at, v_now), v_now) + (v_bonus_applied * interval '1 second'),
+      round_bonus_used = v_bonus_used + v_bonus_applied,
       last_activity_at = v_now
   where id = v_lobby_id;
   perform public._pick_next_song(v_lobby_id);
@@ -655,6 +670,7 @@ begin
       used_answers = '{}',
       used_song_ids = '{}',
       current_attempt_id = null,
+      round_bonus_used = 0,
       last_activity_at = now()
   where id = p_lobby_id and phase = 'countdown';
 
@@ -1186,6 +1202,7 @@ begin
   update public.lobbies
   set holder_player_id = v_next_holder,
       explode_at = v_now + v_round_duration,
+      round_bonus_used = 0,
       pass_direction = case
         when v_game_mode = 'reverse' then (pass_direction * -1)::smallint
         else pass_direction

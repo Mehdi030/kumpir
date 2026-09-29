@@ -81,7 +81,8 @@ CREATE TABLE lobbies (
     topic_filter text[],  -- Migration 026. NULL/leer = alle Kategorien möglich.
     current_song_id uuid REFERENCES song_pool(id),  -- Migration 029.
     used_song_ids uuid[] NOT NULL DEFAULT '{}',      -- Migration 029.
-    answer_mode text NOT NULL DEFAULT 'text'         -- Migration 031. 'text' | 'voice'.
+    answer_mode text NOT NULL DEFAULT 'text',        -- Migration 031. 'text' | 'voice'.
+    round_bonus_used numeric NOT NULL DEFAULT 0      -- Migration 034. Kumulierter Pass-Bonus der aktuellen Runde.
 );
 
 CREATE TABLE lobby_admin_logs (
