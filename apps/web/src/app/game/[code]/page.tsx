@@ -880,8 +880,10 @@ export default function GamePage() {
         }
 
         if (prevAlive.size > 0) {
+            let anyDied = false;
             for (const id of prevAlive) {
                 if (!currentAlive.has(id)) {
+                    anyDied = true;
                     setExplodedPlayerId(id);
                     const isMe = !!mePlayerId && id === mePlayerId;
                     playFx(isMe ? "selfExplode" : "explode");
@@ -890,11 +892,19 @@ export default function GamePage() {
                         window.setTimeout(() => setSelfShake(false), 700);
                     }
                     window.setTimeout(() => setExplodedPlayerId((cur) => (cur === id ? null : cur)), 900);
-
-                    setAliveDropBanner(currentAlive.size);
-                    window.setTimeout(() => setAliveDropBanner((cur) => (cur === currentAlive.size ? null : cur)), 2200);
-                    break;
+                    break; // FX/Shake nur einmal pro Tick -- bei mehreren gleichzeitig
+                    // erkannten Toden (z.B. Tab war kurz im Hintergrund, mehrere
+                    // Runden liefen durch) reicht ein Explosions-Sound.
                 }
+            }
+            // Das große "Nur noch X übrig"-Banner ist unabhängig vom Spielmodus
+            // (Original/Teleport/Reverse) und feuert bei JEDEM erkannten
+            // Rückgang der Spielerzahl -- auch wenn zwischen zwei Polls mehr als
+            // eine Elimination passiert ist, zeigt es immer den aktuell
+            // korrekten Stand.
+            if (anyDied) {
+                setAliveDropBanner(currentAlive.size);
+                window.setTimeout(() => setAliveDropBanner((cur) => (cur === currentAlive.size ? null : cur)), 2200);
             }
         }
         prevAliveRef.current = currentAlive;
