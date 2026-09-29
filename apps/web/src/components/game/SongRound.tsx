@@ -15,6 +15,24 @@ import { getMuted, getVolume } from "@/lib/gameFx";
  * aber die bestehende Mute/Lautstärke-Einstellung (gameFx), statt einen
  * zweiten, unabhängigen Audio-Schalter einzuführen.
  */
+// Songs, deren Preview-URL wir schon vorgeladen haben (Modul-Ebene, überlebt
+// Re-Renders und den Wechsel des aktuellen Songs für die Dauer des Tabs).
+const prefetchedUrls = new Set<string>();
+const prefetchedTopics = new Set<string>();
+// Muss außerhalb jeder Funktion referenziert bleiben, sonst holt der
+// Garbage-Collector die Audio()-Objekte, bevor der Preload fertig ist.
+const prefetchAudioPool: HTMLAudioElement[] = [];
+
+function prefetchPreviewUrl(url: string) {
+    if (!url || prefetchedUrls.has(url)) return;
+    prefetchedUrls.add(url);
+    const a = new Audio();
+    a.preload = "auto";
+    a.src = url;
+    a.load();
+    prefetchAudioPool.push(a);
+}
+
 export function SongRound({ songId }: { songId: string | null }) {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [blocked, setBlocked] = useState(false);
@@ -46,15 +64,35 @@ export function SongRound({ songId }: { songId: string | null }) {
         (async () => {
             const { data, error } = await supabase
                 .from("song_pool")
-                .select("title,artist,preview_url,preview_checked_at")
+                .select("title,artist,preview_url,preview_checked_at,topic_pool_id")
                 .eq("id", songId)
                 .single();
 
             if (cancelled || error || !data) return;
 
+            // Restliche Songs derselben Kategorie im Hintergrund vorladen (einmal
+            // pro Kategorie und Tab) -- sonst lädt <audio preload="none"> die
+            // Preview erst GENAU in dem Moment, in dem der Song dran ist, und
+            // wer gerade eine langsamere Verbindung/CDN-Route hat, verliert
+            // dadurch spürbar Reaktionszeit gegenüber den anderen Haltern.
+            if (data.topic_pool_id && !prefetchedTopics.has(data.topic_pool_id)) {
+                prefetchedTopics.add(data.topic_pool_id);
+                void supabase
+                    .from("song_pool")
+                    .select("preview_url")
+                    .eq("topic_pool_id", data.topic_pool_id)
+                    .not("preview_url", "is", null)
+                    .then(({ data: siblings }) => {
+                        for (const s of siblings ?? []) {
+                            if (s.preview_url) prefetchPreviewUrl(s.preview_url as string);
+                        }
+                    });
+            }
+
             if (data.preview_checked_at) {
                 // Bereits gecacht (auch wenn Ergebnis damals "kein Treffer" war,
                 // also preview_url null) -- kein erneuter Live-Request nötig.
+                if (data.preview_url) prefetchPreviewUrl(data.preview_url);
                 setPreviewUrl(data.preview_url ?? null);
                 return;
             }
