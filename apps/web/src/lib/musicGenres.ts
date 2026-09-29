@@ -32,6 +32,11 @@ export const MUSIC_PLAYLISTS: Record<string, { title: string; id: string; icon: 
         id: "5pk7cWIp56YkrwyWU7eMTr",
         icon: "📼",
     },
+    "Shisha Club": {
+        title: "Shisha Club",
+        id: "37i9dQZF1DX2lUf1uE6Mre",
+        icon: "💨",
+    },
 };
 
 export const MUSIC_GENRE_KEYS = Object.keys(MUSIC_PLAYLISTS);
