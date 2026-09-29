@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
 import { Spinner } from "@/components/Spinner";
 
 type Stats = {
@@ -9,7 +11,6 @@ type Stats = {
         totalEver: number;
         activeNow: number;
         last24h: number;
-        sampleSize: number;
         byMode: Record<string, number>;
         bySpeed: Record<string, number>;
     };
@@ -20,7 +21,6 @@ type Stats = {
     };
     matches: {
         finished: number;
-        sampleSize: number;
         avgPlayers: number | null;
         avgDurationSec: number | null;
     };
@@ -47,186 +47,80 @@ type Stats = {
 
 const MODE_LABEL: Record<string, string> = { original: "🥔 Original", teleport: "🌀 Teleport", reverse: "🔁 Reverse" };
 const SPEED_LABEL: Record<string, string> = { fast: "⚡ Blitz", normal: "🎯 Standard", calm: "🧊 Casual" };
-const ACTIVE_PHASES = ["topic_vote", "countdown", "running", "rematch_wait"];
-const STUCK_ATTEMPT_SECONDS = 30;
-const RECENT_SAMPLE_SIZE = 500;
 
 function pct(part: number, total: number): number {
     if (total <= 0) return 0;
     return Math.round((part / total) * 1000) / 10;
 }
 
-async function exactCount(
-    query: PromiseLike<{ count: number | null; error: { message: string } | null }>
-): Promise<number> {
-    const res = await query;
-    if (res.error) throw new Error(res.error.message);
-    return res.count ?? 0;
-}
-
 export default function AdminStatsPage() {
     const supabase = getSupabaseClient();
+    const { user, loading: authLoading } = useAuth();
     const [stats, setStats] = useState<Stats | null>(null);
     const [error, setError] = useState("");
+    const [forbidden, setForbidden] = useState(false);
     const [loading, setLoading] = useState(true);
     const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
+    // Alle Zahlen kommen aus EINER SECURITY DEFINER Funktion, die serverseitig
+    // profiles.is_platform_admin prüft (Migration 031) -- vorher fragte diese
+    // Seite zehn Rohtabellen direkt an, ganz ohne Zugriffskontrolle.
     const load = useCallback(async () => {
+        if (!user?.id) return;
         setLoading(true);
         setError("");
+        setForbidden(false);
         try {
-            const dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            const stuckCutoffIso = new Date(Date.now() - STUCK_ATTEMPT_SECONDS * 1000).toISOString();
-
-            const [
-                lobbiesTotal,
-                lobbiesActive,
-                lobbiesLast24h,
-                lobbiesSampleRes,
-                playersTotal,
-                playersBots,
-                playersActive,
-                matchesFinished,
-                matchesSampleRes,
-                registeredUsers,
-                friendshipsAccepted,
-                savedLobbiesCount,
-                activeTopics,
-                votesTotal,
-                votesAccepted,
-                votesRejected,
-                votesPending,
-                votesStuck,
-                achievementsTotal,
-                leaderboardRes,
-            ] = await Promise.all([
-                exactCount(supabase.from("lobbies").select("id", { count: "exact", head: true })),
-                exactCount(supabase.from("lobbies").select("id", { count: "exact", head: true }).in("phase", ACTIVE_PHASES)),
-                exactCount(supabase.from("lobbies").select("id", { count: "exact", head: true }).gte("created_at", dayAgoIso)),
-                supabase
-                    .from("lobbies")
-                    .select("game_mode,round_speed")
-                    .order("created_at", { ascending: false })
-                    .limit(RECENT_SAMPLE_SIZE),
-                exactCount(supabase.from("players").select("id", { count: "exact", head: true })),
-                exactCount(supabase.from("players").select("id", { count: "exact", head: true }).eq("is_bot", true)),
-                exactCount(supabase.from("players").select("id", { count: "exact", head: true }).eq("status", "active")),
-                exactCount(supabase.from("game_runs").select("id", { count: "exact", head: true }).not("finished_at", "is", null)),
-                supabase
-                    .from("game_runs")
-                    .select("started_at,finished_at,players_count")
-                    .not("finished_at", "is", null)
-                    .order("started_at", { ascending: false })
-                    .limit(RECENT_SAMPLE_SIZE),
-                exactCount(supabase.from("profiles").select("id", { count: "exact", head: true })),
-                exactCount(supabase.from("friendships").select("user_id", { count: "exact", head: true }).eq("status", "accepted")),
-                exactCount(supabase.from("saved_lobbies").select("user_id", { count: "exact", head: true })),
-                exactCount(supabase.from("topic_pool").select("id", { count: "exact", head: true }).eq("active", true)),
-                exactCount(supabase.from("pass_attempts").select("id", { count: "exact", head: true })),
-                exactCount(supabase.from("pass_attempts").select("id", { count: "exact", head: true }).eq("status", "accepted")),
-                exactCount(supabase.from("pass_attempts").select("id", { count: "exact", head: true }).eq("status", "rejected")),
-                exactCount(supabase.from("pass_attempts").select("id", { count: "exact", head: true }).eq("status", "pending")),
-                exactCount(
-                    supabase
-                        .from("pass_attempts")
-                        .select("id", { count: "exact", head: true })
-                        .eq("status", "pending")
-                        .lt("created_at", stuckCutoffIso)
-                ),
-                exactCount(supabase.from("player_achievements").select("user_id", { count: "exact", head: true })),
-                supabase
-                    .from("leaderboard_view")
-                    .select("username,wins,games_played,win_rate_pct")
-                    .order("wins", { ascending: false })
-                    .limit(5),
-            ]);
-
-            if (lobbiesSampleRes.error) throw lobbiesSampleRes.error;
-            if (matchesSampleRes.error) throw matchesSampleRes.error;
-            if (leaderboardRes.error) throw leaderboardRes.error;
-
-            const lobbiesSample = (lobbiesSampleRes.data ?? []) as { game_mode: string | null; round_speed: string | null }[];
-            const byMode: Record<string, number> = {};
-            const bySpeed: Record<string, number> = {};
-            for (const row of lobbiesSample) {
-                const mode = row.game_mode ?? "original";
-                const speed = row.round_speed ?? "normal";
-                byMode[mode] = (byMode[mode] ?? 0) + 1;
-                bySpeed[speed] = (bySpeed[speed] ?? 0) + 1;
-            }
-
-            const matchesSample = (matchesSampleRes.data ?? []) as {
-                started_at: string;
-                finished_at: string | null;
-                players_count: number | null;
-            }[];
-            let avgPlayers: number | null = null;
-            let avgDurationSec: number | null = null;
-            if (matchesSample.length > 0) {
-                const playerCounts = matchesSample.map((m) => m.players_count).filter((n): n is number => n != null);
-                if (playerCounts.length > 0) {
-                    avgPlayers = Math.round((playerCounts.reduce((a, b) => a + b, 0) / playerCounts.length) * 10) / 10;
+            const { data, error: rpcErr } = await supabase.rpc("rpc_get_admin_stats", { p_user_id: user.id });
+            if (rpcErr) {
+                if (rpcErr.message === "not_authorized") {
+                    setForbidden(true);
+                } else {
+                    setError(rpcErr.message);
                 }
-                const durations = matchesSample
-                    .filter((m) => m.finished_at)
-                    .map((m) => (new Date(m.finished_at as string).getTime() - new Date(m.started_at).getTime()) / 1000)
-                    .filter((s) => Number.isFinite(s) && s >= 0);
-                if (durations.length > 0) {
-                    avgDurationSec = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
-                }
+                return;
             }
-
-            setStats({
-                lobbies: {
-                    totalEver: lobbiesTotal,
-                    activeNow: lobbiesActive,
-                    last24h: lobbiesLast24h,
-                    sampleSize: lobbiesSample.length,
-                    byMode,
-                    bySpeed,
-                },
-                players: {
-                    totalRows: playersTotal,
-                    botRows: playersBots,
-                    activeRows: playersActive,
-                },
-                matches: {
-                    finished: matchesFinished,
-                    sampleSize: matchesSample.length,
-                    avgPlayers,
-                    avgDurationSec,
-                },
-                social: {
-                    registeredUsers,
-                    acceptedFriendships: friendshipsAccepted,
-                    savedLobbies: savedLobbiesCount,
-                },
-                content: {
-                    activeTopics,
-                },
-                votes: {
-                    total: votesTotal,
-                    accepted: votesAccepted,
-                    rejected: votesRejected,
-                    pending: votesPending,
-                    stuckPending: votesStuck,
-                },
-                achievements: {
-                    totalUnlocked: achievementsTotal,
-                },
-                leaderboard: (leaderboardRes.data ?? []) as Stats["leaderboard"],
-            });
+            setStats(data as Stats);
             setUpdatedAt(new Date());
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Unbekannter Fehler beim Laden der Stats.");
         } finally {
             setLoading(false);
         }
-    }, [supabase]);
+    }, [supabase, user?.id]);
 
     useEffect(() => {
+        if (authLoading) return;
+        if (!user?.id) {
+            setLoading(false);
+            return;
+        }
         void load();
-    }, [load]);
+    }, [authLoading, user?.id, load]);
+
+    if (!authLoading && !user) {
+        return (
+            <main className="container">
+                <section className="card" aria-label="Kumpir Stats">
+                    <h1 className="h1">📊 Kumpir Stats</h1>
+                    <p className="p hostSub">Nur für eingeloggte Platform-Admins.</p>
+                    <Link href="/login?next=/admin/stats" className="btn btnPrimary">🔓 Einloggen</Link>
+                </section>
+            </main>
+        );
+    }
+
+    if (forbidden) {
+        return (
+            <main className="container">
+                <section className="card" aria-label="Kumpir Stats">
+                    <h1 className="h1">⛔ Kein Zugriff</h1>
+                    <p className="p hostSub">Dieser Account hat keine Admin-Berechtigung für Kumpir Stats.</p>
+                    <Link href="/" className="btn btnSecondary">← Startseite</Link>
+                </section>
+            </main>
+        );
+    }
 
     return (
         <main className="container" style={{ alignItems: "flex-start" }}>
@@ -287,16 +181,8 @@ export default function AdminStatsPage() {
                                     tone={stats.lobbies.activeNow > 0 ? "good" : "muted"}
                                 />
                                 <Tile label="Neu (24h)" value={stats.lobbies.last24h} />
-                                <DistTile
-                                    label={`Modus (letzte ${stats.lobbies.sampleSize})`}
-                                    entries={stats.lobbies.byMode}
-                                    labelMap={MODE_LABEL}
-                                />
-                                <DistTile
-                                    label={`Speed (letzte ${stats.lobbies.sampleSize})`}
-                                    entries={stats.lobbies.bySpeed}
-                                    labelMap={SPEED_LABEL}
-                                />
+                                <DistTile label="Modus (alle)" entries={stats.lobbies.byMode} labelMap={MODE_LABEL} />
+                                <DistTile label="Speed (alle)" entries={stats.lobbies.bySpeed} labelMap={SPEED_LABEL} />
                             </StatGroup>
 
                             <StatGroup title="👥 Spieler & Social">
@@ -313,15 +199,10 @@ export default function AdminStatsPage() {
 
                             <StatGroup title="🏁 Matches">
                                 <Tile label="Abgeschlossene Matches" value={stats.matches.finished} />
-                                <Tile
-                                    label="⌀ Spieler / Match"
-                                    value={stats.matches.avgPlayers ?? "—"}
-                                    sub={`aus letzten ${stats.matches.sampleSize}`}
-                                />
+                                <Tile label="⌀ Spieler / Match" value={stats.matches.avgPlayers ?? "—"} />
                                 <Tile
                                     label="⌀ Dauer"
                                     value={stats.matches.avgDurationSec != null ? formatDuration(stats.matches.avgDurationSec) : "—"}
-                                    sub={`aus letzten ${stats.matches.sampleSize}`}
                                 />
                                 <Tile label="Aktive Kategorien" value={stats.content.activeTopics} />
                             </StatGroup>

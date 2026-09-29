@@ -80,7 +80,8 @@ CREATE TABLE lobbies (
     pass_direction smallint NOT NULL DEFAULT 1,
     topic_filter text[],  -- Migration 026. NULL/leer = alle Kategorien möglich.
     current_song_id uuid REFERENCES song_pool(id),  -- Migration 029.
-    used_song_ids uuid[] NOT NULL DEFAULT '{}'       -- Migration 029.
+    used_song_ids uuid[] NOT NULL DEFAULT '{}',      -- Migration 029.
+    answer_mode text NOT NULL DEFAULT 'text'         -- Migration 031. 'text' | 'voice'.
 );
 
 CREATE TABLE lobby_admin_logs (
@@ -135,7 +136,8 @@ CREATE TABLE profiles (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     email text,
     email_verified_at timestamp with time zone,
-    phone_verified_at timestamp with time zone
+    phone_verified_at timestamp with time zone,
+    is_platform_admin boolean NOT NULL DEFAULT false  -- Migration 031. Nur per SQL setzbar.
 );
 
 CREATE TABLE round_stats (

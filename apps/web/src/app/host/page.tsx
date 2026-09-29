@@ -11,6 +11,12 @@ import { MUSIC_PLAYLISTS, MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
 type Privacy = "private" | "public";
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
+type AnswerMode = "text" | "voice";
+
+const ANSWER_MODES: Record<AnswerMode, { label: string; icon: string; hint: string }> = {
+    text: { label: "Schreiben", icon: "⌨️", hint: "Antwort eintippen (Standard)." },
+    voice: { label: "Mündlich", icon: "🎤", hint: "Antwort per Sprache sagen statt zu tippen." },
+};
 
 const ROUND_SPEEDS: Record<
     RoundSpeed,
@@ -95,6 +101,7 @@ export default function HostPage() {
 
     const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>(null);
     const [mode, setMode] = useState<ModeKey | null>(null);
+    const [answerMode, setAnswerMode] = useState<AnswerMode>("text");
     // Leer = alle Themen-Kategorien möglich (wie bisher). Ausgewählt = die
     // Themen-Wahl zieht nur noch aus diesen Musik-Genres (Migration 026).
     const [musicGenres, setMusicGenres] = useState<string[]>([]);
@@ -175,7 +182,7 @@ export default function HostPage() {
                 return;
             }
 
-            if ((mode && mode !== "original") || musicGenres.length > 0) {
+            if ((mode && mode !== "original") || musicGenres.length > 0 || answerMode !== "text") {
                 const { data: lobbyRow, error: lobbyErr } = await supabase
                     .from("lobbies")
                     .select("id")
@@ -197,6 +204,13 @@ export default function HostPage() {
                             p_categories: musicGenres,
                         });
                     }
+                    if (answerMode !== "text") {
+                        await supabase.rpc("set_lobby_answer_mode", {
+                            p_lobby_id: lobbyRow.id,
+                            p_me_player_id: hostPlayerId,
+                            p_answer_mode: answerMode,
+                        });
+                    }
                 }
             }
 
@@ -207,7 +221,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, musicGenres, supabase, privacy, maxPlayers, router, user?.id]);
+    }, [canCreate, hostName, roundSpeed, mode, musicGenres, answerMode, supabase, privacy, maxPlayers, router, user?.id]);
 
     return (
         <main className="container">
@@ -282,7 +296,9 @@ export default function HostPage() {
                                 <div className="pillCard">
                                     <div className="pillCardTop">
                                         <div className="pillCardTitle">Privatsphäre</div>
-                                        <div className="pillCardHint">Public später</div>
+                                        <div className="pillCardHint">
+                                            {privacy === "public" ? "Für alle in der Übersicht sichtbar" : "Nur mit Code beitretbar"}
+                                        </div>
                                     </div>
                                     <div className="pillSeg">
                                         <button
@@ -292,7 +308,12 @@ export default function HostPage() {
                                         >
                                             🔒 Privat
                                         </button>
-                                        <button type="button" className="pillSegBtn" disabled aria-disabled="true" title="Kommt später">
+                                        <button
+                                            type="button"
+                                            className={`pillSegBtn ${privacy === "public" ? "pillSegActive" : ""}`}
+                                            onClick={() => setPrivacy("public")}
+                                            title="Erscheint für alle unter „Öffentliche Lobbys“"
+                                        >
                                             🌐 Public
                                         </button>
                                     </div>
@@ -390,6 +411,7 @@ export default function HostPage() {
                                                 key={key}
                                                 type="button"
                                                 className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
+                                                data-variant={key}
                                                 onClick={() => toggleMusicGenre(key)}
                                                 aria-pressed={active}
                                                 title={`Playlist: ${g.title}`}
@@ -410,6 +432,34 @@ export default function HostPage() {
                                     ) : (
                                         "Nichts ausgewählt = Musik-Kategorien mischen sich normal unter alle anderen Themen."
                                     )}
+                                </div>
+                            </div>
+
+                            <div className="pillCard" style={{ marginTop: 14 }}>
+                                <div className="pillCardTop">
+                                    <div className="pillCardTitle">Antwort-Modus</div>
+                                    <div className="pillCardHint">{ANSWER_MODES[answerMode].hint}</div>
+                                </div>
+
+                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                    {(Object.keys(ANSWER_MODES) as AnswerMode[]).map((key) => {
+                                        const a = ANSWER_MODES[key];
+                                        const active = answerMode === key;
+
+                                        return (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
+                                                data-variant={key}
+                                                onClick={() => setAnswerMode(key)}
+                                                aria-pressed={active}
+                                            >
+                                                <span className="segIcon" aria-hidden>{a.icon}</span>
+                                                <span className="segLabel">{a.label}</span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 

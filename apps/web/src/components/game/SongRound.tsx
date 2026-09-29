@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getMuted, getVolume } from "@/lib/gameFx";
 
@@ -17,6 +17,7 @@ import { getMuted, getVolume } from "@/lib/gameFx";
  */
 export function SongRound({ songId }: { songId: string | null }) {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [blocked, setBlocked] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const requestedForRef = useRef<string | null>(null);
 
@@ -72,28 +73,50 @@ export function SongRound({ songId }: { songId: string | null }) {
         if (!el) return;
         if (!previewUrl || getMuted()) {
             el.pause();
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setBlocked(false);
             return;
         }
         el.src = previewUrl;
         el.volume = getVolume();
-        void el.play().catch(() => {
-            // Autoplay ohne vorherige Nutzer-Geste kann abgelehnt werden --
-            // in dem Fall bleibt es einfach stumm, kein Fehler nötig.
-        });
+        el.play()
+            .then(() => setBlocked(false))
+            .catch(() => {
+                // Browser-Autoplay-Policy kann den ersten Play() ohne frische
+                // Nutzer-Geste ablehnen (z.B. direkt nach Rematch/Reload ohne
+                // Zwischenklick) -- statt dann einfach stumm zu bleiben (der
+                // gemeldete "läuft nicht von Anfang an"-Fall), zeigen wir einen
+                // Tippen-zum-Abspielen-Button, der garantiert funktioniert.
+                setBlocked(true);
+            });
     }, [previewUrl]);
 
     useEffect(() => {
         if (!songId) audioRef.current?.pause();
     }, [songId]);
 
+    const retryPlay = useCallback(() => {
+        const el = audioRef.current;
+        if (!el) return;
+        void el.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
+    }, []);
+
     if (!songId) return null;
 
     return (
         <div className="songRoundHint" aria-live="polite">
-            <span className="songRoundIcon" aria-hidden>
-                🎵
-            </span>
-            <span>Song läuft … errate ihn!</span>
+            {blocked ? (
+                <button type="button" onClick={retryPlay} className="btn btnSecondary btnSmall" title="Wiedergabe starten">
+                    ▶️ Song abspielen
+                </button>
+            ) : (
+                <>
+                    <span className="songRoundIcon" aria-hidden>
+                        🎵
+                    </span>
+                    <span>Song läuft … errate ihn!</span>
+                </>
+            )}
             <audio ref={audioRef} preload="none" />
         </div>
     );

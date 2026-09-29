@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 
 export default function GlobalError({
     error,
@@ -33,9 +34,9 @@ export default function GlobalError({
                         >
                             ⟳ Seite neu laden
                         </button>
-                        <a href="/host" className="btn btnSecondary">
+                        <Link href="/" className="btn btnSecondary">
                             ← Hauptmenü
-                        </a>
+                        </Link>
                     </div>
                 </section>
             </div>

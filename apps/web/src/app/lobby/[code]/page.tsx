@@ -337,31 +337,31 @@ export default function LobbyPage() {
 
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
                             <div style={{ flex: 1, minWidth: 280 }}>
-                                <h1 className="h1" style={{ marginBottom: 10 }}>
-                                    Private Lobby
+                                <h1 className="h1" style={{ marginBottom: 4 }}>
+                                    {lobby?.privacy === "public" ? "Öffentliche Lobby" : "Private Lobby"}
                                 </h1>
                             </div>
 
-                            <div style={{ display: "grid", gap: 10, justifyItems: "end", minWidth: 240 }}>
-                                <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <div style={{ display: "grid", gap: 6, justifyItems: "end", minWidth: 240 }}>
+                                <div className="pillChip" style={{ height: 30, display: "flex", alignItems: "center", justifyContent: "center" }}>
                                     {meLabel}
                                 </div>
 
-                                <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                                    <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
+                                    <div className="pillChip" style={{ height: 28, display: "flex", alignItems: "center", gap: 8 }}>
                                         <span style={{ opacity: 0.8 }}>👥</span>
                                         <span style={{ fontWeight: 900 }}>{players.length}</span>
                                         <span style={{ opacity: 0.8 }}>/</span>
                                         <span style={{ fontWeight: 900 }}>{maxPlayers}</span>
                                     </div>
 
-                                    <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8 }}>
+                                    <div className="pillChip" style={{ height: 28, display: "flex", alignItems: "center", gap: 8 }}>
                                         <span>{MODES[mode]?.icon ?? "🥔"}</span>
                                         <span style={{ fontWeight: 900 }}>{MODES[mode]?.label ?? mode}</span>
                                     </div>
 
                                     {lobby?.topic ? (
-                                        <div className="pillChip" style={{ height: 32, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }} title={lobby.topic ?? undefined}>
+                                        <div className="pillChip" style={{ height: 28, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }} title={lobby.topic ?? undefined}>
                                             <span style={{ opacity: 0.8 }}>🏷️</span>
                                             <span style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {lobby.topic}
@@ -410,7 +410,7 @@ export default function LobbyPage() {
                             </div>
                         </div>
 
-                        <div style={{ display: "grid", placeItems: "center", width: "100%", marginTop: 6 }}>
+                        <div style={{ display: "grid", placeItems: "center", width: "100%", marginTop: -6 }}>
                             <button
                                 type="button"
                                 onClick={copyInviteByClick}

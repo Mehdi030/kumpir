@@ -43,9 +43,13 @@ function getRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
 export function VoiceInput({
     onResult,
     disabled,
+    variant = "icon",
 }: {
     onResult: (text: string) => void;
     disabled?: boolean;
+    /** "icon" = kleiner Mikro-Knopf neben dem Textfeld (Standard-Antwortmodus).
+     *  "primary" = großer, beschrifteter Haupt-Button (Lobby-Antwortmodus "Mündlich"). */
+    variant?: "icon" | "primary";
 }) {
     // Startet mit `false` (identisch zum SSR-Ergebnis, `window` existiert dort
     // nicht) und korrigiert sich nach dem Mount -- eine Lazy-Init-Funktion wie
@@ -101,7 +105,34 @@ export function VoiceInput({
         rec.start();
     }, [listening, disabled, onResult]);
 
-    if (!supported) return null;
+    if (!supported) {
+        // Im "Mündlich"-Modus still zu verschwinden würde den Halter ohne jede
+        // Eingabemöglichkeit dastehen lassen -- das Textfeld bleibt in beiden
+        // Varianten immer zusätzlich vorhanden, also reicht ein Hinweis.
+        if (variant === "primary") {
+            return (
+                <div className="fieldHelp" style={{ opacity: 0.85 }}>
+                    🎤 Spracheingabe wird von diesem Browser nicht unterstützt — bitte tippen.
+                </div>
+            );
+        }
+        return null;
+    }
+
+    if (variant === "primary") {
+        return (
+            <button
+                type="button"
+                onClick={toggle}
+                disabled={disabled}
+                aria-label={listening ? "Spracheingabe läuft, zum Stoppen klicken" : "Antwort per Sprache eingeben"}
+                title={listening ? "Aufnahme läuft… (Klick zum Stoppen)" : "Sprich deine Antwort"}
+                className={`btn btnPrimary btnXL voiceInputPrimary${listening ? " voiceInputBtnActive" : ""}`}
+            >
+                {listening ? "🔴 Höre zu…" : "🎤 Antwort sprechen"}
+            </button>
+        );
+    }
 
     return (
         <button

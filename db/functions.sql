@@ -142,6 +142,21 @@ end;
 $function$;
 
 
+-- ============================================================
+-- Migration 032: Grace-Bonus auf den Timer bei jedem erfolgreichen Pass
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.calc_pass_bonus_seconds(p_round_number integer)
+    RETURNS numeric LANGUAGE sql IMMUTABLE
+AS $function$
+    SELECT CASE
+        WHEN coalesce(p_round_number, 1) <= 2 THEN 4
+        WHEN p_round_number <= 4 THEN 3
+        WHEN p_round_number <= 6 THEN 2
+        ELSE 1
+    END;
+$function$;
+
+
 CREATE OR REPLACE FUNCTION public.cleanup_lobby(p_lobby_id uuid, p_stale_seconds integer)
  RETURNS void
  LANGUAGE plpgsql
@@ -485,12 +500,13 @@ CREATE OR REPLACE FUNCTION public.rpc_pass_potato(p_code text, p_player_id uuid)
 AS $function$
 declare
   v_lobby_id uuid; v_mode text; v_holder uuid; v_dir smallint; v_explode_at timestamptz;
+  v_round_number int; v_bonus_seconds numeric;
   alive_ids uuid[]; n int; idx int; next_idx int; v_next uuid;
   v_now timestamptz := now();
   v_last_pass timestamptz; v_pass_ms int; v_clutch int := 0; v_ms_left int;
 begin
-  select l.id, l.game_mode, l.holder_player_id, l.pass_direction, l.explode_at
-    into v_lobby_id, v_mode, v_holder, v_dir, v_explode_at
+  select l.id, l.game_mode, l.holder_player_id, l.pass_direction, l.explode_at, l.round_number
+    into v_lobby_id, v_mode, v_holder, v_dir, v_explode_at, v_round_number
   from public.lobbies l
   where l.code = upper(p_code) for update;
 
@@ -548,7 +564,18 @@ begin
     v_next := alive_ids[next_idx];
   end if;
 
-  update public.lobbies set holder_player_id = v_next, last_activity_at = v_now where id = v_lobby_id;
+  -- Grace-Bonus: Timer wird bei jedem erfolgreichen Pass um ein paar
+  -- Sekunden verlängert statt unverändert zu bleiben. GREATEST(..., now())
+  -- als Basis statt einfach v_explode_at + Bonus, damit ein durch Client-
+  -- Polling-Lag bereits abgelaufener Timer dem nächsten Halter trotzdem
+  -- die volle Bonuszeit gibt statt einer Negativ-Restzeit + Bonus.
+  v_bonus_seconds := public.calc_pass_bonus_seconds(v_round_number);
+
+  update public.lobbies
+  set holder_player_id = v_next,
+      explode_at = greatest(coalesce(v_explode_at, v_now), v_now) + (v_bonus_seconds * interval '1 second'),
+      last_activity_at = v_now
+  where id = v_lobby_id;
   perform public._pick_next_song(v_lobby_id);
 
   -- Stats tracking
@@ -1879,3 +1906,147 @@ begin
   where id = p_lobby_id;
 end;
 $function$;
+
+
+-- ============================================================
+-- Migration 031: Public-Lobbys, Admin-Stats-Zugriffsschutz, Antwort-Modus
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.rpc_get_admin_stats(p_user_id uuid)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_is_admin boolean;
+  v_result jsonb;
+  v_stuck_cutoff timestamptz := now() - interval '30 seconds';
+  v_day_ago timestamptz := now() - interval '24 hours';
+begin
+  if p_user_id is null then
+    raise exception 'not_authorized';
+  end if;
+
+  select coalesce(is_platform_admin, false) into v_is_admin
+  from public.profiles where id = p_user_id;
+
+  if not coalesce(v_is_admin, false) then
+    raise exception 'not_authorized';
+  end if;
+
+  select jsonb_build_object(
+    'lobbies', jsonb_build_object(
+      'totalEver', (select count(*) from public.lobbies),
+      'activeNow', (select count(*) from public.lobbies where phase in ('topic_vote','countdown','running','rematch_wait')),
+      'last24h', (select count(*) from public.lobbies where created_at >= v_day_ago),
+      'byMode', (
+        select coalesce(jsonb_object_agg(game_mode, cnt), '{}'::jsonb)
+        from (select coalesce(game_mode, 'original') as game_mode, count(*) as cnt from public.lobbies group by 1) s
+      ),
+      'bySpeed', (
+        select coalesce(jsonb_object_agg(round_speed, cnt), '{}'::jsonb)
+        from (select coalesce(round_speed, 'normal') as round_speed, count(*) as cnt from public.lobbies group by 1) s
+      )
+    ),
+    'players', jsonb_build_object(
+      'totalRows', (select count(*) from public.players),
+      'botRows', (select count(*) from public.players where is_bot = true),
+      'activeRows', (select count(*) from public.players where status = 'active')
+    ),
+    'matches', jsonb_build_object(
+      'finished', (select count(*) from public.game_runs where finished_at is not null),
+      'avgPlayers', (select round(avg(players_count)::numeric, 1) from public.game_runs where finished_at is not null and players_count is not null),
+      'avgDurationSec', (select round(avg(extract(epoch from (finished_at - started_at)))::numeric) from public.game_runs where finished_at is not null)
+    ),
+    'social', jsonb_build_object(
+      'registeredUsers', (select count(*) from public.profiles),
+      'acceptedFriendships', (select count(*) from public.friendships where status = 'accepted'),
+      'savedLobbies', (select count(*) from public.saved_lobbies)
+    ),
+    'content', jsonb_build_object(
+      'activeTopics', (select count(*) from public.topic_pool where active = true)
+    ),
+    'votes', jsonb_build_object(
+      'total', (select count(*) from public.pass_attempts),
+      'accepted', (select count(*) from public.pass_attempts where status = 'accepted'),
+      'rejected', (select count(*) from public.pass_attempts where status = 'rejected'),
+      'pending', (select count(*) from public.pass_attempts where status = 'pending'),
+      'stuckPending', (select count(*) from public.pass_attempts where status = 'pending' and created_at < v_stuck_cutoff)
+    ),
+    'achievements', jsonb_build_object(
+      'totalUnlocked', (select count(*) from public.player_achievements)
+    ),
+    'leaderboard', (
+      select coalesce(jsonb_agg(row_to_json(t)), '[]'::jsonb)
+      from (select username, wins, games_played, win_rate_pct from public.leaderboard_view order by wins desc limit 5) t
+    )
+  ) into v_result;
+
+  return v_result;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.set_lobby_privacy(p_lobby_id uuid, p_me_player_id uuid, p_privacy text)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare v_host uuid; v_privacy text;
+begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  select host_player_id into v_host from public.lobbies where id = p_lobby_id;
+  if v_host is null then raise exception 'lobby_not_found'; end if;
+  if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
+
+  v_privacy := btrim(coalesce(p_privacy, ''));
+  if v_privacy not in ('private', 'public') then raise exception 'invalid_privacy'; end if;
+
+  update public.lobbies
+  set privacy = v_privacy,
+      settings_version = coalesce(settings_version, 0) + 1
+  where id = p_lobby_id;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.set_lobby_answer_mode(p_lobby_id uuid, p_me_player_id uuid, p_answer_mode text)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare v_host uuid; v_mode text;
+begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  select host_player_id into v_host from public.lobbies where id = p_lobby_id;
+  if v_host is null then raise exception 'lobby_not_found'; end if;
+  if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
+
+  v_mode := btrim(coalesce(p_answer_mode, ''));
+  if v_mode not in ('text', 'voice') then raise exception 'invalid_answer_mode'; end if;
+
+  update public.lobbies
+  set answer_mode = v_mode,
+      settings_version = coalesce(settings_version, 0) + 1
+  where id = p_lobby_id;
+end;
+$function$;
+
+
+-- Übersicht offener Public-Lobbys (Warteraum, unversperrt). Die
+-- zugrundeliegenden Tabellen erlauben anon SELECT ohnehin schon
+-- uneingeschränkt (lobbies_read_all / players_read_all aus Migration
+-- 012), eine normale View reicht hier also aus.
+CREATE OR REPLACE VIEW public.public_lobbies_view AS
+SELECT
+  l.code,
+  l.game_mode,
+  l.round_speed,
+  l.max_players,
+  l.topic_filter,
+  l.answer_mode,
+  l.created_at,
+  h.name AS host_name,
+  (SELECT count(*) FROM public.players p WHERE p.lobby_id = l.id AND p.status = 'active') AS player_count
+FROM public.lobbies l
+JOIN public.players h ON h.lobby_id = l.id AND h.player_id = l.host_player_id
+WHERE l.privacy = 'public' AND l.phase = 'waiting' AND l.locked = false;

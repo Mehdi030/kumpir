@@ -1,5 +1,5 @@
 -- ============================================================
--- KUMPIR — Alle 30 Migrationen in einem File
+-- KUMPIR — Alle 33 Migrationen in einem File
 -- ============================================================
 -- Einmal komplett kopieren, in Supabase SQL Editor einfügen, Run.
 -- Jede Sub-Migration ist idempotent — du kannst das File mehrfach laufen lassen.
@@ -4854,7 +4854,6 @@ $function$;
 COMMIT;
 
 
-
 -- ============================================================
 -- 029_song_guess_mode.sql
 -- ============================================================
@@ -5510,3 +5509,434 @@ end;
 $function$;
 
 COMMIT;
+
+
+-- ============================================================
+-- 031_public_lobbies_admin_stats_answer_mode.sql
+-- ============================================================
+-- ============================================================
+-- Migration 031: Public-Lobbys fertigbauen, Admin-Stats absichern,
+-- Antwort-Modus (Schreiben/Sprechen) als Lobby-Einstellung
+-- ============================================================
+-- Drei unabhängige Ergänzungen, in einer Migration gebündelt:
+--
+-- 1) Admin-Stats-Zugriffsschutz: `/admin/stats` hatte bisher gar keine
+--    Zugriffskontrolle (weder Route noch Backend) -- jeder mit der URL
+--    konnte interne Aggregat-Statistiken sehen. Neues `profiles.
+--    is_platform_admin` Flag (manuell per SQL gesetzt, kein UI dafür --
+--    bewusst, es soll niemand versehentlich sich selbst freischalten
+--    können) + eine SECURITY DEFINER Funktion, die die Berechtigung
+--    SERVERSEITIG prüft, bevor sie irgendwas zurückgibt. Das Frontend
+--    ruft nur noch diese eine Funktion auf statt zehn Rohtabellen
+--    direkt abzufragen.
+--
+-- 2) Public-Lobbys: `rpc_create_lobby` validiert `p_privacy` schon seit
+--    Migration 020 korrekt -- die Public-Option war nur im Frontend
+--    deaktiviert. Für eine Lobby-Übersicht ("welche Lobbys sind gerade
+--    offen") fehlte bisher eine Abfragemöglichkeit + eine Funktion, um
+--    die Privatsphäre auch NACH der Erstellung zu ändern (Konsistenz
+--    mit set_lobby_mode/set_lobby_topic, die das für andere Einstellungen
+--    schon können).
+--
+-- 3) Antwort-Modus: neue Spalte `lobbies.answer_mode` ('text' | 'voice'),
+--    wählbar beim Hosten UND danach änderbar. 'text' bleibt Default --
+--    Sprocheingabe ist ein Zusatzmodus, kein Ersatz.
+-- ============================================================
+
+BEGIN;
+
+-- --- 1) Admin-Stats -------------------------------------------------
+
+ALTER TABLE public.profiles
+    ADD COLUMN IF NOT EXISTS is_platform_admin boolean NOT NULL DEFAULT false;
+
+CREATE OR REPLACE FUNCTION public.rpc_get_admin_stats(p_user_id uuid)
+    RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+    v_is_admin boolean;
+    v_result jsonb;
+    v_stuck_cutoff timestamptz := now() - interval '30 seconds';
+    v_day_ago timestamptz := now() - interval '24 hours';
+begin
+    if p_user_id is null then
+        raise exception 'not_authorized';
+    end if;
+
+    select coalesce(is_platform_admin, false) into v_is_admin
+    from public.profiles where id = p_user_id;
+
+    if not coalesce(v_is_admin, false) then
+        raise exception 'not_authorized';
+    end if;
+
+    select jsonb_build_object(
+        'lobbies', jsonb_build_object(
+            'totalEver', (select count(*) from public.lobbies),
+            'activeNow', (select count(*) from public.lobbies where phase in ('topic_vote','countdown','running','rematch_wait')),
+            'last24h', (select count(*) from public.lobbies where created_at >= v_day_ago),
+            'byMode', (
+                select coalesce(jsonb_object_agg(game_mode, cnt), '{}'::jsonb)
+                from (select coalesce(game_mode, 'original') as game_mode, count(*) as cnt from public.lobbies group by 1) s
+            ),
+            'bySpeed', (
+                select coalesce(jsonb_object_agg(round_speed, cnt), '{}'::jsonb)
+                from (select coalesce(round_speed, 'normal') as round_speed, count(*) as cnt from public.lobbies group by 1) s
+            )
+        ),
+        'players', jsonb_build_object(
+            'totalRows', (select count(*) from public.players),
+            'botRows', (select count(*) from public.players where is_bot = true),
+            'activeRows', (select count(*) from public.players where status = 'active')
+        ),
+        'matches', jsonb_build_object(
+            'finished', (select count(*) from public.game_runs where finished_at is not null),
+            'avgPlayers', (select round(avg(players_count)::numeric, 1) from public.game_runs where finished_at is not null and players_count is not null),
+            'avgDurationSec', (select round(avg(extract(epoch from (finished_at - started_at)))::numeric) from public.game_runs where finished_at is not null)
+        ),
+        'social', jsonb_build_object(
+            'registeredUsers', (select count(*) from public.profiles),
+            'acceptedFriendships', (select count(*) from public.friendships where status = 'accepted'),
+            'savedLobbies', (select count(*) from public.saved_lobbies)
+        ),
+        'content', jsonb_build_object(
+            'activeTopics', (select count(*) from public.topic_pool where active = true)
+        ),
+        'votes', jsonb_build_object(
+            'total', (select count(*) from public.pass_attempts),
+            'accepted', (select count(*) from public.pass_attempts where status = 'accepted'),
+            'rejected', (select count(*) from public.pass_attempts where status = 'rejected'),
+            'pending', (select count(*) from public.pass_attempts where status = 'pending'),
+            'stuckPending', (select count(*) from public.pass_attempts where status = 'pending' and created_at < v_stuck_cutoff)
+        ),
+        'achievements', jsonb_build_object(
+            'totalUnlocked', (select count(*) from public.player_achievements)
+        ),
+        'leaderboard', (
+            select coalesce(jsonb_agg(row_to_json(t)), '[]'::jsonb)
+            from (select username, wins, games_played, win_rate_pct from public.leaderboard_view order by wins desc limit 5) t
+        )
+    ) into v_result;
+
+    return v_result;
+end;
+$function$;
+
+-- --- 3) Antwort-Modus (Schreiben/Sprechen) -----------------------------
+-- Muss VOR der public_lobbies_view (Abschnitt 2) stehen, die l.answer_mode
+-- bereits mit ausliest -- sonst schlägt die View-Erstellung mit
+-- "column l.answer_mode does not exist" fehl.
+
+ALTER TABLE public.lobbies
+    ADD COLUMN IF NOT EXISTS answer_mode text NOT NULL DEFAULT 'text'
+        CHECK (answer_mode IN ('text', 'voice'));
+
+CREATE OR REPLACE FUNCTION public.set_lobby_answer_mode(p_lobby_id uuid, p_me_player_id uuid, p_answer_mode text)
+    RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare v_host uuid; v_mode text;
+begin
+    if not public._verify_session(p_lobby_id, p_me_player_id) then
+        raise exception 'invalid_session';
+    end if;
+
+    select host_player_id into v_host from public.lobbies where id = p_lobby_id;
+    if v_host is null then raise exception 'lobby_not_found'; end if;
+    if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
+
+    v_mode := btrim(coalesce(p_answer_mode, ''));
+    if v_mode not in ('text', 'voice') then raise exception 'invalid_answer_mode'; end if;
+
+    update public.lobbies
+    set answer_mode = v_mode,
+        settings_version = coalesce(settings_version, 0) + 1
+    where id = p_lobby_id;
+end;
+$function$;
+
+-- --- 2) Public-Lobbys -------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.set_lobby_privacy(p_lobby_id uuid, p_me_player_id uuid, p_privacy text)
+    RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare v_host uuid; v_privacy text;
+begin
+    if not public._verify_session(p_lobby_id, p_me_player_id) then
+        raise exception 'invalid_session';
+    end if;
+
+    select host_player_id into v_host from public.lobbies where id = p_lobby_id;
+    if v_host is null then raise exception 'lobby_not_found'; end if;
+    if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
+
+    v_privacy := btrim(coalesce(p_privacy, ''));
+    if v_privacy not in ('private', 'public') then raise exception 'invalid_privacy'; end if;
+
+    update public.lobbies
+    set privacy = v_privacy,
+        settings_version = coalesce(settings_version, 0) + 1
+    where id = p_lobby_id;
+end;
+$function$;
+
+-- Übersicht offener Public-Lobbys (Warteraum, unversperrt). Die
+-- zugrundeliegenden Tabellen erlauben anon SELECT ohnehin schon
+-- uneingeschränkt (lobbies_read_all / players_read_all aus Migration
+-- 012 -- "privacy" filtert bisher nur, was die UI anzeigt, nicht was
+-- die DB rausgibt), eine normale View reicht hier also aus.
+CREATE OR REPLACE VIEW public.public_lobbies_view AS
+SELECT
+    l.code,
+    l.game_mode,
+    l.round_speed,
+    l.max_players,
+    l.topic_filter,
+    l.answer_mode,
+    l.created_at,
+    h.name AS host_name,
+    (SELECT count(*) FROM public.players p WHERE p.lobby_id = l.id AND p.status = 'active') AS player_count
+FROM public.lobbies l
+JOIN public.players h ON h.lobby_id = l.id AND h.player_id = l.host_player_id
+WHERE l.privacy = 'public' AND l.phase = 'waiting' AND l.locked = false;
+
+COMMIT;
+
+
+-- ============================================================
+-- 032_pass_grace_bonus.sql
+-- ============================================================
+-- ============================================================
+-- Migration 032: Grace-Bonus auf den Explosions-Timer bei jedem Pass
+-- ============================================================
+-- Bisher galt: explode_at wird nur EINMAL pro Runde gesetzt (Rundenstart
+-- oder nach einer Explosion) und bleibt beim Weiterreichen der Kartoffel
+-- unverändert -- wer die Kartoffel kurz vor Ablauf bekommt, kann quasi
+-- ohne jede Chance sofort explodieren, egal wie schnell er reagiert.
+--
+-- Live-Feedback: bei jedem erfolgreichen Pass soll der Timer um ein paar
+-- Sekunden VERLÄNGERT werden (nicht komplett zurückgesetzt) -- Beispiel:
+-- Bombe hätte in 10s explodiert, Antwort kommt bei 3s Restzeit rein,
+-- Bonus +2s -> 5s Restzeit für den nächsten Halter. Reagiert der wiederum
+-- nach 1s (4s Restzeit), bekommt der übernächste 4s + 2s = 6s. Der Bonus
+-- soll mit steigender Rundenzahl kleiner werden, damit das Spiel gegen
+-- Ende (jeder war schon mehrfach dran) spürbar schneller/härter wird --
+-- dieselbe Idee wie der bestehende scale_round-Faktor in
+-- calc_explode_seconds, nur eigens für den Pass-Bonus statt die Basis-
+-- Rundendauer.
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.calc_pass_bonus_seconds(p_round_number integer)
+    RETURNS numeric LANGUAGE sql IMMUTABLE
+AS $function$
+    SELECT CASE
+        WHEN coalesce(p_round_number, 1) <= 2 THEN 4
+        WHEN p_round_number <= 4 THEN 3
+        WHEN p_round_number <= 6 THEN 2
+        ELSE 1
+    END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.rpc_pass_potato(p_code text, p_player_id uuid)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid; v_mode text; v_holder uuid; v_dir smallint; v_explode_at timestamptz;
+  v_round_number int; v_bonus_seconds numeric;
+  alive_ids uuid[]; n int; idx int; next_idx int; v_next uuid;
+  v_now timestamptz := now();
+  v_last_pass timestamptz; v_pass_ms int; v_clutch int := 0; v_ms_left int;
+begin
+  select l.id, l.game_mode, l.holder_player_id, l.pass_direction, l.explode_at, l.round_number
+    into v_lobby_id, v_mode, v_holder, v_dir, v_explode_at, v_round_number
+  from public.lobbies l
+  where l.code = upper(p_code) for update;
+
+  if v_lobby_id is null then raise exception 'Lobby not found'; end if;
+
+  if (select phase from public.lobbies where id = v_lobby_id) <> 'running' then
+    raise exception 'Game not running';
+  end if;
+
+  if v_holder is null or v_holder <> p_player_id then
+    raise exception 'Not holder';
+  end if;
+
+  if not exists (
+    select 1 from public.players p
+    where p.lobby_id = v_lobby_id and p.player_id = p_player_id
+      and p.status = 'active' and p.is_alive = true
+  ) then raise exception 'Player not active/alive'; end if;
+
+  select array_agg(p.player_id order by p.seat_index) into alive_ids
+  from public.players p
+  where p.lobby_id = v_lobby_id and p.status = 'active' and p.is_alive = true;
+
+  n := coalesce(array_length(alive_ids, 1), 0);
+  if n <= 1 then return; end if;
+
+  idx := array_position(alive_ids, p_player_id);
+  if idx is null then raise exception 'Holder not in alive list'; end if;
+
+  -- Mode-aware next holder
+  if v_mode = 'teleport' then
+    select p.player_id into v_next
+    from public.players p
+    where p.lobby_id = v_lobby_id
+      and p.status = 'active' and p.is_alive = true
+      and p.player_id <> p_player_id
+    order by random() limit 1;
+    if v_next is null then return; end if;
+
+  elsif v_mode = 'reverse' then
+    v_dir := coalesce(v_dir, 1) * -1;
+    update public.lobbies set pass_direction = v_dir where id = v_lobby_id;
+    if v_dir = 1 then
+      next_idx := idx + 1;
+      if next_idx > n then next_idx := 1; end if;
+    else
+      next_idx := idx - 1;
+      if next_idx < 1 then next_idx := n; end if;
+    end if;
+    v_next := alive_ids[next_idx];
+
+  else
+    next_idx := idx + 1;
+    if next_idx > n then next_idx := 1; end if;
+    v_next := alive_ids[next_idx];
+  end if;
+
+  -- Grace-Bonus: Timer wird bei jedem erfolgreichen Pass um ein paar
+  -- Sekunden verlängert statt unverändert zu bleiben. GREATEST(..., now())
+  -- als Basis statt einfach v_explode_at + Bonus, damit ein durch Client-
+  -- Polling-Lag bereits abgelaufener Timer dem nächsten Halter trotzdem
+  -- die volle Bonuszeit gibt statt einer Negativ-Restzeit + Bonus.
+  v_bonus_seconds := public.calc_pass_bonus_seconds(v_round_number);
+
+  update public.lobbies
+  set holder_player_id = v_next,
+      explode_at = greatest(coalesce(v_explode_at, v_now), v_now) + (v_bonus_seconds * interval '1 second'),
+      last_activity_at = v_now
+  where id = v_lobby_id;
+  perform public._pick_next_song(v_lobby_id);
+
+  -- Stats tracking
+  select last_pass_at into v_last_pass from public.players
+  where lobby_id = v_lobby_id and player_id = p_player_id;
+
+  if v_last_pass is not null then
+    v_pass_ms := extract(epoch from (v_now - v_last_pass)) * 1000;
+  else
+    select extract(epoch from (v_now - coalesce(run_started_at, v_now))) * 1000
+      into v_pass_ms from public.lobbies where id = v_lobby_id;
+  end if;
+
+  v_pass_ms := greatest(0, coalesce(v_pass_ms, 0));
+
+  if v_explode_at is not null then
+    v_ms_left := extract(epoch from (v_explode_at - v_now)) * 1000;
+    if v_ms_left <= 2000 then v_clutch := 1; end if;
+  end if;
+
+  update public.players
+  set pass_count = coalesce(pass_count, 0) + 1,
+      last_pass_at = v_now,
+      total_hold_ms = coalesce(total_hold_ms, 0) + v_pass_ms,
+      fastest_pass_ms = case
+        when fastest_pass_ms is null then v_pass_ms
+        when v_pass_ms < fastest_pass_ms then v_pass_ms
+        else fastest_pass_ms
+      end,
+      clutch_pass_count = coalesce(clutch_pass_count, 0) + v_clutch
+  where lobby_id = v_lobby_id and player_id = p_player_id;
+end;
+$function$;
+
+COMMIT;
+
+
+-- ============================================================
+-- 033_refresh_current_song_categories.sql
+-- ============================================================
+-- ============================================================
+-- Migration 033: Song-Pool "Deutschrap-Songs" + "Internationale
+-- Pop-Charts" auf aktuelle Charts (Stand September 2026) aktualisiert
+-- ============================================================
+-- Feedback: die Songs in diesen zwei Kategorien waren teils Jahre alt
+-- (z.B. "Tequila", "Wolke 10", "Roller" -- 2016-2020er Bonez MC/RAF
+-- Camora/Apache207-Ära). Das ist bei "Deutschrap Klassiker" und
+-- "Englische All-Time-Hits" GEWOLLT (die Kategorien heißen absichtlich
+-- so), aber "Deutschrap-Songs" und "Internationale Pop-Charts" sollen
+-- die aktuell laufenden Charts abbilden.
+--
+-- Quelle: mix1.de Hip-Hop Single-Charts (Woche 39/2026) für Deutschrap,
+-- Billboard Hot 100 (aktuelle Top 10 + 2026er Nr.-1-Hits) für Pop.
+-- Titel/Interpret 1:1 aus den Charts übernommen -- iTunes-Suche findet
+-- aktuelle Chart-Hits erfahrungsgemäß zuverlässig, im Zweifel liefert
+-- SongRound.tsx dann einfach keinen Preview (kein Absturz, siehe dort).
+--
+-- current_song_id zeigt per FK auf song_pool -- vor dem Löschen alter
+-- Zeilen müssen eventuell noch darauf zeigende Lobbys (alte, meist
+-- längst beendete Test-Runden) erst genullt werden, sonst schlägt der
+-- DELETE mit einer FK-Verletzung fehl.
+-- ============================================================
+
+BEGIN;
+
+UPDATE public.lobbies l
+SET current_song_id = NULL
+FROM public.song_pool sp
+JOIN public.topic_pool tp ON tp.id = sp.topic_pool_id
+WHERE l.current_song_id = sp.id
+  AND tp.text IN ('Deutschrap-Songs', 'Internationale Pop-Charts');
+
+DELETE FROM public.song_pool sp
+USING public.topic_pool tp
+WHERE sp.topic_pool_id = tp.id
+  AND tp.text IN ('Deutschrap-Songs', 'Internationale Pop-Charts');
+
+INSERT INTO public.song_pool (topic_pool_id, title, artist)
+SELECT tp.id, v.title, v.artist
+FROM (VALUES
+    ('Deutschrap-Songs', 'Issa', 'Sido'),
+    ('Deutschrap-Songs', 'Gut Genug', 'KITSCHKRIEG, Blumengarten & Shirin David'),
+    ('Deutschrap-Songs', 'Killy Manjaro', 'Summer Cem & Billa Joe'),
+    ('Deutschrap-Songs', 'Woke', 'Sido'),
+    ('Deutschrap-Songs', 'Mo'' Money Mo'' Haters', 'Summer Cem & Shirin David'),
+    ('Deutschrap-Songs', 'War nie weg', 'Ufo361 feat. Souly & Blumengarten'),
+    ('Deutschrap-Songs', 'Chaos', 'Apache 207'),
+    ('Deutschrap-Songs', 'Biertornado', 'PA69'),
+    ('Deutschrap-Songs', 'Der Sonne immer näher', 'Tream x Bausa'),
+    ('Deutschrap-Songs', 'Böse Jungs', 'Capital Bra, Samra & Lacazette'),
+    ('Deutschrap-Songs', 'Allein', 'Juju'),
+    ('Deutschrap-Songs', 'Wer bist du denn?', 'Jazeek & Luciano'),
+    ('Deutschrap-Songs', 'Augenblick', 'Pashanim'),
+    ('Deutschrap-Songs', 'Sonne über Berlin', 'Capital Bra & Samra'),
+    ('Deutschrap-Songs', 'Verschwommen', 'Ski Aggu'),
+    ('Deutschrap-Songs', 'Geile Sau trotzdem', 'badmómzjay & IKKIMEL'),
+    ('Deutschrap-Songs', 'Ghetto Superstars', 'Samra & Capital Bra'),
+    ('Deutschrap-Songs', 'BLN', 'Lacazette, Gangsta Ralph & Sido feat. DJ Desue'),
+    ('Deutschrap-Songs', 'Pablo', 'Dardan & Azet'),
+    ('Deutschrap-Songs', 'Berlin Calling', 'Pashanim'),
+
+    ('Internationale Pop-Charts', 'Choosin'' Texas', 'Ella Langley'),
+    ('Internationale Pop-Charts', 'Boston', 'Stella Lefty'),
+    ('Internationale Pop-Charts', 'Been By Now', 'Morgan Wallen'),
+    ('Internationale Pop-Charts', 'The Fate of Ophelia', 'Taylor Swift'),
+    ('Internationale Pop-Charts', 'I Just Might', 'Bruno Mars'),
+    ('Internationale Pop-Charts', 'Aperture', 'Harry Styles'),
+    ('Internationale Pop-Charts', 'DTMF', 'Bad Bunny'),
+    ('Internationale Pop-Charts', 'Opalite', 'Taylor Swift'),
+    ('Internationale Pop-Charts', 'Swim', 'BTS'),
+    ('Internationale Pop-Charts', 'Drop Dead', 'Olivia Rodrigo'),
+    ('Internationale Pop-Charts', 'Janice STFU', 'Drake'),
+    ('Internationale Pop-Charts', 'Hate That I Made You Love Me', 'Ariana Grande'),
+    ('Internationale Pop-Charts', 'I Knew It, I Knew You', 'Taylor Swift')
+) AS v(category, title, artist)
+JOIN public.topic_pool tp ON tp.text = v.category
+ON CONFLICT (topic_pool_id, lower_title) DO NOTHING;
+
+COMMIT;
+
+

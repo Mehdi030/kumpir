@@ -86,6 +86,12 @@ export default function Home() {
                         </div>
                     </div>
 
+                    <div style={{ textAlign: "center", marginTop: 4 }}>
+                        <Link href="/browse" className="fieldHelp" style={{ fontWeight: 900 }}>
+                            🌐 Öffentliche Lobbys durchsuchen
+                        </Link>
+                    </div>
+
                     <p className="trustLine">Kein Download · Kein Account · Startet in Sekunden</p>
                 </section>
             </div>

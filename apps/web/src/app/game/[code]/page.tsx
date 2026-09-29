@@ -76,6 +76,9 @@ type LobbyState = {
 
     // Song-Raten (Musik-Modus): aktueller, versteckter Song für den Halter
     current_song_id: string | null;
+
+    // Antwort-Modus: "text" (Standard) oder "voice" (Sprache primär)
+    answer_mode: string | null;
 };
 
 type Player = {
@@ -610,6 +613,8 @@ export default function GamePage() {
                     pass_direction: (raw.pass_direction as number | null) ?? 1,
 
                     current_song_id: (raw.current_song_id as string | null) ?? null,
+
+                    answer_mode: (raw.answer_mode as string | null) ?? "text",
                 };
 
                 // Post-round loser toast (once)
@@ -2158,6 +2163,18 @@ export default function GamePage() {
                     ) : isMeHolder ? (
                         // ─── Halter darf neue Antwort eingeben ───
                         <div className="answerInputBox">
+                            {lobby?.answer_mode === "voice" ? (
+                                <>
+                                    <VoiceInput
+                                        variant="primary"
+                                        disabled={!!passDisabledReason}
+                                        onResult={(text) => setAnswerDraft(text.slice(0, 60))}
+                                    />
+                                    <div className="fieldHelp" style={{ textAlign: "center", marginBottom: 6, opacity: 0.75 }}>
+                                        {answerDraft ? `Erkannt: „${answerDraft}"` : "…oder unten tippen"}
+                                    </div>
+                                </>
+                            ) : null}
                             <div className="answerInputRow">
                                 <input
                                     type="text"
@@ -2179,10 +2196,12 @@ export default function GamePage() {
                                     inputMode="text"
                                     enterKeyHint="send"
                                 />
-                                <VoiceInput
-                                    disabled={!!passDisabledReason}
-                                    onResult={(text) => setAnswerDraft(text.slice(0, 60))}
-                                />
+                                {lobby?.answer_mode !== "voice" ? (
+                                    <VoiceInput
+                                        disabled={!!passDisabledReason}
+                                        onResult={(text) => setAnswerDraft(text.slice(0, 60))}
+                                    />
+                                ) : null}
                             </div>
                             <button
                                 type="button"
