@@ -483,7 +483,10 @@ export default function LobbyPage() {
                                     const isHostRow = !!lobby?.host_player_id && p.player_id === lobby.host_player_id;
 
                                     return (
-                                        <div key={p.player_id} className={`playerChip ${isHostRow ? "playerChipHost" : ""}`}>
+                                        <div
+                                            key={p.player_id}
+                                            className={`playerChip ${isHostRow ? "playerChipHost" : ""} ${p.ready ? "playerChipReady" : "playerChipNotReady"}`}
+                                        >
                                             <span className="playerChipSeat">{idx + 1}</span>
                                             <span className="playerChipName">
                                                 {p.is_bot ? "🤖 " : ""}
