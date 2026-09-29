@@ -1892,9 +1892,9 @@ CREATE OR REPLACE FUNCTION public._pick_next_song(p_lobby_id UUID)
  RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
 declare
-  v_topic text; v_topic_pool_id uuid; v_used uuid[]; v_song_id uuid;
+  v_topic text; v_topic_pool_id uuid; v_used uuid[]; v_song_id uuid; v_current uuid;
 begin
-  select topic_selected, used_song_ids into v_topic, v_used
+  select topic_selected, used_song_ids, current_song_id into v_topic, v_used, v_current
   from public.lobbies where id = p_lobby_id;
 
   select tp.id into v_topic_pool_id
@@ -1912,11 +1912,14 @@ begin
     and not (sp.id = any(coalesce(v_used, '{}')))
   order by random() limit 1;
 
-  -- Songs im Match aufgebraucht -> Pool für dieses Match wieder freigeben.
+  -- Songs im Match aufgebraucht -> Pool für dieses Match wieder freigeben,
+  -- aber den gerade gespielten Song von der Neuziehung ausschließen
+  -- (Migration 037), damit er nicht direkt zweimal hintereinander drankommt.
   if v_song_id is null then
     select sp.id into v_song_id
     from public.song_pool sp
     where sp.topic_pool_id = v_topic_pool_id
+      and (v_current is null or sp.id <> v_current)
     order by random() limit 1;
     v_used := '{}';
   end if;

@@ -179,10 +179,10 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
         <main className="container">
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
                 <Image
-                    src="/logo.png"
+                    src="/HGLogo.png"
                     alt="Kumpir Maskottchen"
                     width={400}
-                    height={400}
+                    height={267}
                     priority
                     className="brandLogoImg"
                 />

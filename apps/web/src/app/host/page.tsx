@@ -427,7 +427,7 @@ export default function HostPage() {
                                     {musicGenres.length > 0 ? (
                                         <>
                                             <span style={{ fontWeight: 900 }}>Reiner Musik-Abend:</span>{" "}
-                                            nur diese Kategorien kommen in die Themen-Wahl, jede mit eigener Spotify-Playlist zur Einstimmung.
+                                            nur diese Kategorien kommen in die Themen-Wahl — der Halter hört einen Song-Schnipsel und muss ihn erraten.
                                         </>
                                     ) : (
                                         "Nichts ausgewählt = Musik-Kategorien mischen sich normal unter alle anderen Themen."

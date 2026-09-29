@@ -1325,6 +1325,56 @@ body::after{
     background: linear-gradient(90deg, rgba(52, 211, 153, 0.38), rgba(236, 72, 153, 0.22));
 }
 
+/* Spieler-Liste in der Lobby: 2 Spalten statt einer langen Tabelle, damit
+   auch 12 Spieler auf einen Blick passen statt scrollen zu müssen. */
+.playerGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+.playerChip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.16);
+    border: 1px solid rgba(255,255,255,0.08);
+    min-width: 0;
+}
+.playerChipHost {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.16);
+}
+.playerChipSeat {
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+    opacity: 0.55;
+    font-size: 12px;
+    font-weight: 800;
+}
+.playerChipName {
+    flex: 1;
+    min-width: 0;
+    font-weight: 900;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.playerChipHostBadge {
+    margin-left: 6px;
+}
+.playerChipState {
+    flex-shrink: 0;
+    font-size: 15px;
+}
+.playerChipKick {
+    flex-shrink: 0;
+    padding: 4px 8px !important;
+}
+
 /* Öffentliche-Lobbys-Übersicht (/browse) */
 .publicLobbyRow {
     background: rgba(0,0,0,0.2);
@@ -1576,40 +1626,10 @@ body::after{
     font-size: max(16px, 1rem);
 }
 
-/* Antwort-Eingabe: Textfeld + Mikro-Knopf nebeneinander */
-.answerInputRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.answerInputRow .answerInput {
-    flex: 1;
-}
-
-.voiceInputBtn {
-    flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.18);
-    background: rgba(255,255,255,0.08);
-    font-size: 18px;
-    cursor: pointer;
-    transition: transform 140ms ease, background 140ms ease;
-}
-.voiceInputBtn:hover:not(:disabled) {
-    background: rgba(255,255,255,0.14);
-    transform: scale(1.05);
-}
-.voiceInputBtn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-.voiceInputBtn.voiceInputBtnActive {
-    background: rgba(230,40,40,0.35);
-    border-color: rgba(230,40,40,0.55);
-    animation: kumpir-voice-pulse 1.1s ease-in-out infinite;
-}
+/* .answerInputRow/.voiceInputBtn(Active) werden schon vollständig im
+   <style>-Block von game/[code]/page.tsx definiert (dort wo sie
+   tatsächlich gerendert werden) -- hier nur noch das primäre
+   Mündlich-Pendant, das es dort noch nicht gibt. */
 
 /* Antwort-Modus "Mündlich": großer, primärer Mikro-Button über dem Textfeld */
 .voiceInputPrimary {

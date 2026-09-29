@@ -34,14 +34,13 @@ export default function Home() {
 
                     <div className="metaBar metaBarInCard">
                         <div className="metaLeft">
-                            <span className="metaPill">👥 2–10 Spieler</span>
+                            <span className="metaPill">👥 2–12 Spieler</span>
                         </div>
                         <div className="metaRight" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            {AUTH_DISABLED ? (
-                                <span className="metaPill">v0 • Gast-Modus</span>
-                            ) : (
-                                <AuthMini nextPath="/host" variant="header" />
-                            )}
+                            <span className="metaPill" title="Build-Version">
+                                v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"} · {process.env.NEXT_PUBLIC_BUILD_DATE ?? ""}
+                            </span>
+                            {!AUTH_DISABLED ? <AuthMini nextPath="/host" variant="header" /> : null}
                         </div>
                     </div>
 

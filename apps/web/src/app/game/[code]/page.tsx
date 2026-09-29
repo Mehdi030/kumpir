@@ -200,6 +200,10 @@ export default function GamePage() {
     const [explodedPlayerId, setExplodedPlayerId] = useState<string | null>(null);
     const [selfShake, setSelfShake] = useState(false);
 
+    // Großes, kurz eingeblendetes "Nur noch X Spieler übrig!" bei jeder
+    // Elimination -- verschwindet von selbst wieder.
+    const [aliveDropBanner, setAliveDropBanner] = useState<number | null>(null);
+
     // HUD swap animation trigger
     const [hudPulseNonce, setHudPulseNonce] = useState(0);
 
@@ -886,6 +890,9 @@ export default function GamePage() {
                         window.setTimeout(() => setSelfShake(false), 700);
                     }
                     window.setTimeout(() => setExplodedPlayerId((cur) => (cur === id ? null : cur)), 900);
+
+                    setAliveDropBanner(currentAlive.size);
+                    window.setTimeout(() => setAliveDropBanner((cur) => (cur === currentAlive.size ? null : cur)), 2200);
                     break;
                 }
             }
@@ -2019,6 +2026,8 @@ export default function GamePage() {
 
     const passDisabledReason = iAmEliminated ? "Du bist raus" : !isMeHolder ? "Nicht dein Turn" : passBusy ? "Busy" : null;
 
+    const aliveNow = players.filter((p) => p.is_alive).length;
+
     // Heat level: derived from time-to-explode + player count (low/mid/high)
     const heatLevel: "low" | "mid" | "high" = (() => {
         if (!lobby.explode_at) return "low";
@@ -2058,8 +2067,18 @@ export default function GamePage() {
                 </div>
             ) : null}
 
+            {aliveDropBanner != null ? (
+                <div className="aliveDropBanner" role="status" aria-live="assertive">
+                    💥 Nur noch {aliveDropBanner} Spieler übrig!
+                </div>
+            ) : null}
+
             {/* Top-right: Modus + Heat + Connection + Audio */}
             <div className="topRight" aria-hidden={false}>
+                <div className="modePill" title={`${aliveNow} von ${totalPlayers} Spielern noch am Leben`}>
+                    <span>👥</span>
+                    <span>{aliveNow}/{totalPlayers}</span>
+                </div>
                 <div className="modePill" title={GAME_MODES[(lobby.game_mode as GameMode) ?? "original"]?.desc ?? lobby.game_mode ?? "Original"}>
                     <span>{GAME_MODES[(lobby.game_mode as GameMode) ?? "original"]?.icon ?? "🥔"}</span>
                     <span>{GAME_MODES[(lobby.game_mode as GameMode) ?? "original"]?.label ?? lobby.game_mode ?? "Original"}</span>
@@ -2481,6 +2500,35 @@ export default function GamePage() {
           letter-spacing: 0.3px;
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
+        }
+        .aliveDropBanner{
+          position: fixed;
+          left: 50%;
+          top: 16%;
+          transform: translate(-50%, 0);
+          z-index: 9998;
+          padding: 18px 30px;
+          border-radius: 22px;
+          background: rgba(0,0,0,0.7);
+          border: 1px solid rgba(255,80,80,0.4);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(255,80,80,0.25);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          font-size: clamp(20px, 3.6vw, 32px);
+          font-weight: 950;
+          text-align: center;
+          pointer-events: none;
+          animation: aliveDropIn 2.2s cubic-bezier(.2,.9,.3,1) both;
+        }
+        @keyframes aliveDropIn{
+          0% { opacity: 0; transform: translate(-50%, -10px) scale(0.92); }
+          10% { opacity: 1; transform: translate(-50%, 0) scale(1.04); }
+          18% { transform: translate(-50%, 0) scale(1); }
+          78% { opacity: 1; }
+          100% { opacity: 0; transform: translate(-50%, -6px) scale(0.98); }
+        }
+        @media (prefers-reduced-motion: reduce){
+          .aliveDropBanner{ animation: none; }
         }
         .topRight{
           position: fixed;

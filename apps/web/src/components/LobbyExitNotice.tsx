@@ -30,6 +30,14 @@ export function LobbyExitNotice() {
         }
     }, [initialReason, router]);
 
+    // Soll kurz stehen und von selbst wieder verschwinden, statt bis zum
+    // manuellen Wegklicken hängen zu bleiben.
+    useEffect(() => {
+        if (!initialReason) return;
+        const t = window.setTimeout(() => setReason(null), 4000);
+        return () => window.clearTimeout(t);
+    }, [initialReason]);
+
     const topToast =
         reason === "kicked"
             ? "⛔ Du wurdest gekickt."

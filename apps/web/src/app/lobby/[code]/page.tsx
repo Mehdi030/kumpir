@@ -175,9 +175,14 @@ export default function LobbyPage() {
     }, [players, mePlayerId]);
 
     const MIN_PLAYERS = 2;
+    // Der Host muss NICHT mehr selbst "Bereit" klicken, um starten zu können --
+    // sobald alle ANDEREN aktiven Spieler bereit sind, reicht das. Der Host
+    // sitzt eh am Start-Button, ein zusätzlicher Klick auf "Bereit" davor war
+    // nur ein unnötiger Zwischenschritt.
     const allReady = useMemo(() => {
-        return players.length >= MIN_PLAYERS && players.every((p) => !!p.ready);
-    }, [players]);
+        const others = players.filter((p) => p.player_id !== lobby?.host_player_id);
+        return players.length >= MIN_PLAYERS && others.every((p) => !!p.ready);
+    }, [players, lobby?.host_player_id]);
 
     const toggleReady = useCallback(async () => {
         if (!mePlayerId) return;
@@ -464,86 +469,45 @@ export default function LobbyPage() {
                             <div className="stepsTitle">Spieler</div>
                             {error ? <p className="errorText">{error}</p> : null}
 
-                            <div style={{ overflowX: "auto" }}>
-                                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                                    <thead>
-                                    <tr style={{ textAlign: "left", opacity: 0.75 }}>
-                                        <th style={{ padding: "10px 8px" }}>#</th>
-                                        <th style={{ padding: "10px 8px" }}>Name</th>
-                                        <th style={{ padding: "10px 8px", textAlign: "right" }}>Zustand</th>
-                                    </tr>
-                                    </thead>
+                            {loading && players.length === 0 ? (
+                                <div style={{ padding: "12px 8px", opacity: 0.85 }}>
+                                    <Spinner size={16} label="Lade Spieler…" />
+                                </div>
+                            ) : null}
 
-                                    <tbody>
-                                    {loading && players.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.85 }}>
-                                                <Spinner size={16} label="Lade Spieler…" />
-                                            </td>
-                                        </tr>
-                                    ) : null}
+                            {!loading && players.length === 0 ? (
+                                <div style={{ padding: "12px 8px", opacity: 0.75 }}>Noch niemand beigetreten.</div>
+                            ) : null}
 
-                                    {players.map((p, idx) => {
-                                        const isMe = !!mePlayerId && p.player_id === mePlayerId;
-                                        const isHostRow = !!lobby?.host_player_id && p.player_id === lobby.host_player_id;
+                            <div className="playerGrid">
+                                {players.map((p, idx) => {
+                                    const isMe = !!mePlayerId && p.player_id === mePlayerId;
+                                    const isHostRow = !!lobby?.host_player_id && p.player_id === lobby.host_player_id;
 
-                                        return (
-                                            <tr
-                                                key={p.player_id}
-                                                style={{
-                                                    borderTop: "1px solid rgba(255,255,255,0.08)",
-                                                    opacity: isMe ? 1 : 0.95,
-                                                    background: isHostRow ? "rgba(255,255,255,0.07)" : "transparent",
-                                                }}
-                                            >
-                                                <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
-                                                <td style={{ padding: "10px 8px", fontWeight: 900 }}>
-                                                    {p.is_bot ? "🤖 " : ""}{p.name} {isMe ? <span style={{ opacity: 0.6 }}>(du)</span> : null}
-                                                    {isHostRow ? (
-                                                        <span
-                                                            style={{
-                                                                marginLeft: 10,
-                                                                fontWeight: 950,
-                                                                opacity: 0.98,
-                                                                padding: "4px 10px",
-                                                                borderRadius: 999,
-                                                                background: "rgba(255,255,255,0.08)",
-                                                                border: "1px solid rgba(255,255,255,0.10)",
-                                                            }}
-                                                        >
-                                👑 Host
-                              </span>
-                                                    ) : null}
-                                                </td>
-
-                                                <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: 950 }}>
-                                                    {p.is_bot && amIHost ? (
-                                                        <button
-                                                            type="button"
-                                                            className="btn btnReadyOff btnSmall"
-                                                            style={{ marginRight: 8 }}
-                                                            onClick={() => void removeBot(p.player_id)}
-                                                            disabled={botBusy || isRunning}
-                                                            title="Bot entfernen"
-                                                        >
-                                                            👋 raus
-                                                        </button>
-                                                    ) : null}
-                                                    {p.ready ? "✅ Bereit" : "⏳ nicht bereit"}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-
-                                    {!loading && players.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={3} style={{ padding: "12px 8px", opacity: 0.75 }}>
-                                                Noch niemand beigetreten.
-                                            </td>
-                                        </tr>
-                                    ) : null}
-                                    </tbody>
-                                </table>
+                                    return (
+                                        <div key={p.player_id} className={`playerChip ${isHostRow ? "playerChipHost" : ""}`}>
+                                            <span className="playerChipSeat">{idx + 1}</span>
+                                            <span className="playerChipName">
+                                                {p.is_bot ? "🤖 " : ""}
+                                                {p.name}
+                                                {isMe ? <span style={{ opacity: 0.6 }}> (du)</span> : null}
+                                                {isHostRow ? <span className="playerChipHostBadge">👑</span> : null}
+                                            </span>
+                                            <span className="playerChipState">{p.ready ? "✅" : "⏳"}</span>
+                                            {p.is_bot && amIHost ? (
+                                                <button
+                                                    type="button"
+                                                    className="btn btnReadyOff btnSmall playerChipKick"
+                                                    onClick={() => void removeBot(p.player_id)}
+                                                    disabled={botBusy || isRunning}
+                                                    title="Bot entfernen"
+                                                >
+                                                    👋
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    );
+                                })}
                             </div>
 
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14, flexWrap: "wrap" }}>

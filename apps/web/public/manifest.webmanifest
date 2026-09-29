@@ -13,21 +13,15 @@
   "categories": ["games", "social"],
   "icons": [
     {
-      "src": "/logo.png",
+      "src": "/HGLogo.png",
       "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any"
-    },
-    {
-      "src": "/LogoK.png",
-      "type": "image/png",
-      "sizes": "192x192",
+      "sizes": "1536x1024",
       "purpose": "any"
     },
     {
       "src": "/HGLogo.png",
       "type": "image/png",
-      "sizes": "512x512",
+      "sizes": "1536x1024",
       "purpose": "maskable"
     }
   ]
