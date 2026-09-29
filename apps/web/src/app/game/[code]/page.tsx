@@ -95,8 +95,10 @@ type Player = {
     pass_count?: number;
     clutch_pass_count?: number;
     fastest_pass_ms?: number | null;
+    slowest_pass_ms?: number | null;
     total_hold_ms?: number;
     survival_streak?: number;
+    eliminated_at_round?: number | null;
     last_seen_at?: string | null;
 };
 
@@ -185,7 +187,7 @@ export default function GamePage() {
 
     // Topic-Mechanik B: Antwort-Eingabe + Validierung
     const [answerDraft, setAnswerDraft] = useState("");
-    const [voteBusyAttempt, setVoteBusyAttempt] = useState(false);
+    const [kickBusyId, setKickBusyId] = useState<string | null>(null);
 
     // Motion
     const [reduceMotion, setReduceMotion] = useState(false);
@@ -310,9 +312,15 @@ export default function GamePage() {
             const clutch = p.clutch_pass_count ?? 0;
             const streak = p.survival_streak ?? 0;
             const fastest = p.fastest_pass_ms ?? null;
+            const slowest = p.slowest_pass_ms ?? null;
 
             const fastestBonus = fastest == null ? 0 : Math.max(0, Math.min(12, Math.round((2200 - fastest) / 200)));
             const score = pass * 10 + clutch * 18 + streak * 6 + fastestBonus;
+
+            // "Runden überlebt": Sieger (nie eliminiert) haben alle Runden des
+            // Matches überlebt, alle anderen bis zu der Runde, in der sie
+            // ausgeschieden sind (Timer-Explosion oder Host-Kick, Migration 048).
+            const roundsSurvived = p.eliminated_at_round ?? lobby?.round_number ?? 0;
 
             return {
                 ...p,
@@ -321,13 +329,15 @@ export default function GamePage() {
                 clutch,
                 streak,
                 fastest,
+                slowest,
+                roundsSurvived,
                 holdMs: p.total_hold_ms ?? 0,
             };
         });
 
         rows.sort((a, b) => b.score - a.score);
         return rows;
-    }, [players]);
+    }, [players, lobby?.round_number]);
 
     const top5 = useMemo(() => ranking.slice(0, 5), [ranking]);
 
@@ -358,11 +368,11 @@ export default function GamePage() {
             fmt: (r: Row) => string;
             higherIsBetter: boolean;
         }[] = [
+            // Genau 3 Award-Kategorien (+ Sieger-Trophäe): Fastest, Slowest,
+            // und Longest Hold als dritte -- mehr wollte der Auftrag nicht.
             { icon: "⚡", label: "Fastest Pass", desc: "Schnellste Reaktion im Match", get: (r) => r.fastest, fmt: (r) => fmtMs(r.fastest), higherIsBetter: false },
+            { icon: "🐢", label: "Slowest Pass", desc: "Ließ sich am meisten Zeit", get: (r) => r.slowest, fmt: (r) => fmtMs(r.slowest), higherIsBetter: true },
             { icon: "🧱", label: "Longest Hold", desc: "Längste Haltezeit insgesamt", get: (r) => r.holdMs, fmt: (r) => fmtHold(r.holdMs), higherIsBetter: true },
-            { icon: "🔥", label: "Meiste Pässe", desc: "Am häufigsten weitergegeben", get: (r) => r.pass, fmt: (r) => `${r.pass}x`, higherIsBetter: true },
-            { icon: "🎯", label: "Clutch-King", desc: "Meiste Last-Second-Pässe", get: (r) => r.clutch, fmt: (r) => `${r.clutch}x`, higherIsBetter: true },
-            { icon: "🛡️", label: "Beste Serie", desc: "Längste Überlebens-Serie am Stück", get: (r) => r.streak, fmt: (r) => `${r.streak} Runden`, higherIsBetter: true },
         ];
 
         for (const cat of categories) {
@@ -461,13 +471,15 @@ export default function GamePage() {
         [supabase]
     );
 
-    // Topic-Mechanik B: Mitspieler stimmt ab, ob die Antwort gilt.
-    const rpcVoteAnswer = useCallback(
-        async (attemptId: string, voterId: string, accept: boolean) => {
-            const { error } = await supabase.rpc("rpc_vote_answer", {
-                p_attempt_id: attemptId,
-                p_voter_id: voterId,
-                p_accept: accept,
+    // Host-Live-Kick: sofortige Eliminierung während der laufenden Runde,
+    // ohne Bestätigung. Antworten werden ab jetzt immer angenommen --
+    // das hier ist der manuelle Ausgleich dafür.
+    const rpcHostKickDuringRound = useCallback(
+        async (codeUpper: string, hostPlayerId: string, targetPlayerId: string) => {
+            const { error } = await supabase.rpc("rpc_host_kick_during_round", {
+                p_code: codeUpper,
+                p_host_player_id: hostPlayerId,
+                p_target_player_id: targetPlayerId,
             });
             return error;
         },
@@ -517,6 +529,39 @@ export default function GamePage() {
 
         return () => window.clearTimeout(t);
     }, [passAttempt.attempt, supabase]);
+
+    // -----------------------------
+    // Zuschauer-Bewertung (nur kosmetisch): seit Antworten immer sofort
+    // angenommen werden, gibt es kein echtes "gilt/gilt nicht"-Voting mehr.
+    // Bereits raus geflogene Spieler bekommen stattdessen kurz die letzte
+    // Antwort angezeigt und können sie rein optisch mit Daumen bewerten --
+    // ohne jede Auswirkung auf das Spiel. Aktive Spieler sehen das nicht,
+    // die sollen sich nur aufs Spiel konzentrieren.
+    // -----------------------------
+    const [spectatorFlash, setSpectatorFlash] = useState<{ text: string; holderName: string; key: number } | null>(null);
+    const [spectatorRating, setSpectatorRating] = useState<"up" | "down" | null>(null);
+    const prevUsedAnswersLenRef = useRef(0);
+    const prevHolderNameRef = useRef("…");
+
+    useEffect(() => {
+        const list = lobby?.used_answers ?? [];
+        const prevLen = prevUsedAnswersLenRef.current;
+        if (list.length > prevLen) {
+            setSpectatorFlash({ text: list[list.length - 1], holderName: prevHolderNameRef.current, key: Date.now() });
+            setSpectatorRating(null);
+        }
+        prevUsedAnswersLenRef.current = list.length;
+    }, [lobby?.used_answers]);
+
+    useEffect(() => {
+        prevHolderNameRef.current = holderName;
+    }, [holderName]);
+
+    useEffect(() => {
+        if (!spectatorFlash) return;
+        const t = window.setTimeout(() => setSpectatorFlash(null), 5000);
+        return () => window.clearTimeout(t);
+    }, [spectatorFlash]);
 
     // -----------------------------
     // Achievement-Toast — beobachtet neue Unlocks beim Spielende
@@ -687,8 +732,10 @@ export default function GamePage() {
                             "pass_count",
                             "clutch_pass_count",
                             "fastest_pass_ms",
+                            "slowest_pass_ms",
                             "total_hold_ms",
                             "survival_streak",
+                            "eliminated_at_round",
                             "last_seen_at",
                         ].join(",")
                     )
@@ -1022,7 +1069,7 @@ export default function GamePage() {
             const err = await rpcAttemptPass(code, mePlayerId, clean);
             if (err) return showToast(`❌ ${err.message}`, 2400);
             setAnswerDraft("");
-            showToast("⏳ Wird geprüft …", 900);
+            showToast("✅ Angenommen", 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
@@ -1030,26 +1077,26 @@ export default function GamePage() {
         }
     }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, answerDraft, rpcAttemptPass, showToast]);
 
-    // Topic-Mechanik B: Mitspieler stimmt ab, ob die Antwort gilt.
-    const handleVoteAnswer = useCallback(
-        async (accept: boolean) => {
-            if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
-            if (!passAttempt.attempt) return;
-            if (passAttempt.attempt.holder_player_id === mePlayerId) return;
-            if (passAttempt.myVote !== null) return showToast("Du hast schon abgestimmt", 1400);
-            if (voteBusyAttempt) return;
+    // Host-Live-Kick: ein Klick auf einen Namen eliminiert sofort, ohne
+    // Bestätigung -- Ausgleich dafür, dass Antworten jetzt immer akzeptiert
+    // werden und die Spieler sozial entscheiden, wer eigentlich raus muss.
+    const handleHostKick = useCallback(
+        async (targetPlayerId: string) => {
+            if (!mePlayerId || !lobby) return;
+            if (lobby.host_player_id !== mePlayerId) return;
+            if (kickBusyId) return;
 
-            setVoteBusyAttempt(true);
+            setKickBusyId(targetPlayerId);
             try {
-                const err = await rpcVoteAnswer(passAttempt.attempt.id, mePlayerId, accept);
+                const err = await rpcHostKickDuringRound(code, mePlayerId, targetPlayerId);
                 if (err) return showToast(`❌ ${err.message}`, 2400);
             } catch (e: unknown) {
                 showToast(`❌ ${getErrorMessage(e)}`, 2400);
             } finally {
-                setVoteBusyAttempt(false);
+                setKickBusyId(null);
             }
         },
-        [mePlayerId, passAttempt, voteBusyAttempt, rpcVoteAnswer, showToast]
+        [mePlayerId, lobby, kickBusyId, code, rpcHostKickDuringRound, showToast]
     );
 
     // Rematch handler (also bound to "R" key)
@@ -1468,8 +1515,8 @@ export default function GamePage() {
 
     // =========================================================
     // PHASE: FINISHED  (Winner-only hero, NO Top3 podium)
-    // - Awards: Fastest Pass + Longest Hold
-    // - Ranking: # | Name | Score | Fastest
+    // - Awards: Fastest Pass + Slowest Pass + Longest Hold
+    // - Ranking: # | Name | Score | Runden | Fastest
     // =========================================================
     if (lobby.phase === "finished") {
         const winnerName = winnerPlayer?.name ?? "Unbekannt";
@@ -1477,6 +1524,9 @@ export default function GamePage() {
 
         const fastestOverall =
             [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] ?? null;
+
+        const slowestOverall =
+            [...ranking].filter((r) => r.slowest != null).sort((a, b) => (b.slowest ?? 0) - (a.slowest ?? 0))[0] ?? null;
 
         const longestHold = [...ranking].sort((a, b) => (b.holdMs ?? 0) - (a.holdMs ?? 0))[0] ?? null;
 
@@ -1540,23 +1590,31 @@ export default function GamePage() {
                                     <div>#</div>
                                     <div>Player</div>
                                     <div className="r">Score</div>
+                                    <div className="r">Runden</div>
                                     <div className="r">Fastest</div>
                                 </div>
 
-                                {shown.map((p, idx) => (
-                                    <div key={p.player_id} className={`row ${p.player_id === mePlayerId ? "me" : ""}`}>
-                                        <div>{idx + 1}</div>
-                                        <div className="name">
-                                            {p.name}
-                                            {!p.is_alive ? <span className="tag dead">💀</span> : null}
-                                            {p.player_id === lobby.holder_player_id ? <span className="tag holder">🥔</span> : null}
+                                {shown.map((p, idx) => {
+                                    const isWinner = p.player_id === winnerPlayer?.player_id;
+                                    return (
+                                        <div
+                                            key={p.player_id}
+                                            className={`row ${p.player_id === mePlayerId ? "me" : ""} ${isWinner ? "winner" : ""}`}
+                                        >
+                                            <div>{isWinner ? "🏆" : idx + 1}</div>
+                                            <div className="name">
+                                                {p.name}
+                                                {!p.is_alive ? <span className="tag dead">💀</span> : null}
+                                                {p.player_id === lobby.holder_player_id ? <span className="tag holder">🥔</span> : null}
+                                            </div>
+                                            <div className="r">
+                                                <b>{p.score}</b>
+                                            </div>
+                                            <div className="r">{p.roundsSurvived}</div>
+                                            <div className="r">{fmtMs(p.fastest)}</div>
                                         </div>
-                                        <div className="r">
-                                            <b>{p.score}</b>
-                                        </div>
-                                        <div className="r">{fmtMs(p.fastest)}</div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             <div className="cardActions">
@@ -1589,6 +1647,23 @@ export default function GamePage() {
                                 </div>
 
                                 <div className="awardTile">
+                                    <div className="awardK">🐢 Slowest Pass</div>
+                                    <div className="awardV">
+                                        {slowestOverall ? (
+                                            <>
+                                                <b>{slowestOverall.name}</b>
+                                                <span className="sep">•</span>
+                                                <span>{fmtMs(slowestOverall.slowest)}</span>
+                                            </>
+                                        ) : (
+                                            "—"
+                                        )}
+                                    </div>
+                                    <div className="awardS">Ließ sich am meisten Zeit</div>
+                                    <span className="awardGlow g2" aria-hidden />
+                                </div>
+
+                                <div className="awardTile">
                                     <div className="awardK">🧱 Longest Hold</div>
                                     <div className="awardV">
                                         {longestHold ? (
@@ -1602,7 +1677,7 @@ export default function GamePage() {
                                         )}
                                     </div>
                                     <div className="awardS">Längste Haltezeit insgesamt</div>
-                                    <span className="awardGlow g2" aria-hidden />
+                                    <span className="awardGlow g3" aria-hidden />
                                 </div>
                             </div>
 
@@ -1762,7 +1837,7 @@ export default function GamePage() {
         .table{ margin-top: 12px; display:grid; gap: 8px; }
         .row{
           display:grid;
-          grid-template-columns: 42px 1fr 100px 120px;
+          grid-template-columns: 42px 1fr 90px 90px 100px;
           gap: 10px;
           padding: 10px 10px;
           border-radius: 16px;
@@ -1783,6 +1858,14 @@ export default function GamePage() {
           border-color: rgba(34,211,238,0.22);
           background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.10), rgba(255,255,255,0.06));
         }
+        .row.winner{
+          border-color: rgba(255,214,10,0.55);
+          background: radial-gradient(circle at 20% 20%, rgba(255,214,10,0.20), rgba(255,255,255,0.07));
+          padding: 16px 12px;
+          font-size: 1.18em;
+          box-shadow: 0 8px 24px rgba(255,180,10,0.18);
+        }
+        .row.winner .name{ font-weight: 1000; }
         .name{
           display:flex;
           gap: 8px;
@@ -1854,6 +1937,10 @@ export default function GamePage() {
         .awardGlow.g2{
           background: radial-gradient(circle at 30% 25%, rgba(52,199,89,0.14), rgba(255,214,10,0.10), transparent 72%);
           animation-delay: -1.4s;
+        }
+        .awardGlow.g3{
+          background: radial-gradient(circle at 30% 25%, rgba(167,139,250,0.16), rgba(255,255,255,0.06), transparent 72%);
+          animation-delay: -2.8s;
         }
 
         .personalAwards{ margin-top: 10px; display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
@@ -2110,6 +2197,33 @@ export default function GamePage() {
                 <AudioControl />
             </div>
 
+            {/* Host-Live-Kick: da Antworten immer akzeptiert werden, kann der
+                Host hier sofort (ohne Bestätigung) einen aktiven Spieler
+                eliminieren, z.B. wenn die getippte Antwort offensichtlich
+                falsch war. Nur für den Host sichtbar, verschiebt nichts
+                anderes im Layout (eigene fixierte Box). */}
+            {isHost ? (
+                <div className="hostKickPanel">
+                    <div className="hostKickLabel">👑 Kicken</div>
+                    <div className="hostKickList">
+                        {players
+                            .filter((p) => p.is_alive && p.player_id !== mePlayerId)
+                            .map((p) => (
+                                <button
+                                    key={p.player_id}
+                                    type="button"
+                                    className="hostKickChip"
+                                    onClick={() => void handleHostKick(p.player_id)}
+                                    disabled={kickBusyId === p.player_id}
+                                    title={`${p.name} sofort eliminieren`}
+                                >
+                                    {kickBusyId === p.player_id ? "…" : `✖ ${p.name}`}
+                                </button>
+                            ))}
+                    </div>
+                </div>
+            ) : null}
+
             {/* Self-elimination flash overlay */}
             {selfShake ? <div className="selfFlash" aria-hidden /> : null}
 
@@ -2120,7 +2234,7 @@ export default function GamePage() {
                     <div className="topic">{selectedTopic}</div>
 
                     {MUSIC_PLAYLISTS[selectedTopic] ? (
-                        <SongRound songId={lobby.current_song_id} answerMode={lobby.song_answer_mode === "artist" ? "artist" : "title"} />
+                        <SongRound songId={lobby.current_song_id} />
                     ) : null}
 
                     <div className="strip" key={hudPulseNonce}>
@@ -2140,59 +2254,40 @@ export default function GamePage() {
                         </div>
                     </div>
 
-                    {/* Topic-Mechanik B: Antwort + Validierung. Eliminierte Spieler
-                        schauen zwar nur noch zu, dürfen aber weiter mitreden --
-                        offene Versuche sehen und mitabstimmen (gilt/gilt nicht),
-                        genau wie lebende Nicht-Halter. Serverseitig war das schon
-                        immer erlaubt (_verify_session prüft nicht is_alive), nur
-                        die UI hat es bisher komplett ausgeblendet. */}
-                    {passAttempt.attempt ? (
-                        // ─── Es läuft gerade ein Validierungs-Versuch ───
-                        isMeHolder ? (
-                            <div className="answerStatus">
-                                <div className="answerStatusLabel">Deine Antwort wird geprüft</div>
-                                <div className="answerStatusValue">{`„${passAttempt.attempt.answer}"`}</div>
-                                <div className="voteCounters">
-                                    <span className="voteCounter accept">✅ {passAttempt.attempt.accept_count}</span>
-                                    <span className="voteCounter reject">❌ {passAttempt.attempt.reject_count}</span>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="answerVote">
-                                <div className="answerStatusLabel">{holderName} sagt:</div>
-                                <div className="answerStatusValue">{`„${passAttempt.attempt.answer}"`}</div>
-                                {passAttempt.myVote === null ? (
+                    {/* Antworten werden serverseitig sofort angenommen -- kein
+                        Gilt/Gilt-nicht-Voting mehr. Aktive Spieler sehen nur noch
+                        ihr eigenes Eingabefeld bzw. "warte, bis du dran bist" und
+                        sollen sich aufs Spiel konzentrieren. Bereits raus geflogene
+                        Zuschauer bekommen stattdessen kurz die letzte Antwort zum
+                        rein kosmetischen Bewerten angezeigt (ohne Spielauswirkung). */}
+                    {iAmEliminated ? (
+                        <div className="hint" style={{ display: "grid", gap: 10, justifyItems: "center" }}>
+                            <div>Du schaust zu.</div>
+                            {spectatorFlash ? (
+                                <div key={spectatorFlash.key} className="answerVote">
+                                    <div className="answerStatusLabel">{spectatorFlash.holderName} sagte:</div>
+                                    <div className="answerStatusValue">{`„${spectatorFlash.text}"`}</div>
                                     <div className="actions" style={{ gap: 12 }}>
                                         <button
                                             type="button"
                                             className="btn btnReadyOn"
-                                            onClick={() => void handleVoteAnswer(true)}
-                                            disabled={voteBusyAttempt}
-                                            title="Antwort akzeptieren"
+                                            onClick={() => setSpectatorRating("up")}
+                                            title="Fand ich gut"
                                         >
-                                            ✅ Gilt
+                                            👍{spectatorRating === "up" ? " Danke!" : ""}
                                         </button>
                                         <button
                                             type="button"
                                             className="btn btnReadyOff"
-                                            onClick={() => void handleVoteAnswer(false)}
-                                            disabled={voteBusyAttempt}
-                                            title="Antwort ablehnen"
+                                            onClick={() => setSpectatorRating("down")}
+                                            title="Fand ich nicht gut"
                                         >
-                                            ❌ Gilt nicht
+                                            👎{spectatorRating === "down" ? " Notiert" : ""}
                                         </button>
                                     </div>
-                                ) : (
-                                    <div className="hint">Du hast {passAttempt.myVote ? "✅ akzeptiert" : "❌ abgelehnt"}.</div>
-                                )}
-                                <div className="voteCounters">
-                                    <span className="voteCounter accept">✅ {passAttempt.attempt.accept_count}</span>
-                                    <span className="voteCounter reject">❌ {passAttempt.attempt.reject_count}</span>
                                 </div>
-                            </div>
-                        )
-                    ) : iAmEliminated ? (
-                        <div className="hint">Du schaust zu.</div>
+                            ) : null}
+                        </div>
                     ) : isMeHolder ? (
                         // ─── Halter darf neue Antwort eingeben ───
                         <div className="answerInputBox">
@@ -2223,8 +2318,8 @@ export default function GamePage() {
                                     placeholder={
                                         selectedTopic === "…"
                                             ? "z.B. deine Antwort"
-                                            : lobby.current_song_id && lobby.song_answer_mode === "artist"
-                                                ? "z.B. Interpret / Rapper"
+                                            : lobby.current_song_id
+                                                ? "z.B. Songtitel oder Interpret"
                                                 : `z.B. Antwort zu ${selectedTopic}`
                                     }
                                     maxLength={60}
@@ -2582,6 +2677,44 @@ export default function GamePage() {
           font-size: 17px;
           gap: 8px;
         }
+
+        .hostKickPanel{
+          position: fixed;
+          top: 18px;
+          left: 18px;
+          z-index: 60;
+          max-width: min(52vw, 320px);
+          padding: 8px 10px;
+          border-radius: 16px;
+          background: rgba(0,0,0,0.26);
+          border: 1px solid rgba(255,255,255,0.16);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
+        .hostKickLabel{
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.4px;
+          opacity: 0.7;
+          margin-bottom: 6px;
+        }
+        .hostKickList{
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .hostKickChip{
+          border: 1px solid rgba(255,90,90,0.4);
+          background: rgba(255,45,45,0.16);
+          color: #fff;
+          font-weight: 800;
+          font-size: 12px;
+          padding: 5px 10px;
+          border-radius: 999px;
+          cursor: pointer;
+        }
+        .hostKickChip:hover{ background: rgba(255,45,45,0.3); }
+        .hostKickChip:disabled{ opacity: 0.5; cursor: default; }
 
         .edgeFire{
           position: fixed;

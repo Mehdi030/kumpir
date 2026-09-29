@@ -6,22 +6,15 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
-import { MUSIC_PLAYLISTS, MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
+import { MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
 
-type Privacy = "private" | "public";
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
 type AnswerMode = "text" | "voice";
-type SongAnswerMode = "title" | "artist";
 
 const ANSWER_MODES: Record<AnswerMode, { label: string; icon: string; hint: string }> = {
     text: { label: "Schreiben", icon: "⌨️", hint: "Antwort eintippen (Standard)." },
     voice: { label: "Mündlich", icon: "🎤", hint: "Antwort per Sprache sagen statt zu tippen." },
-};
-
-const SONG_ANSWER_MODES: Record<SongAnswerMode, { label: string; icon: string; hint: string }> = {
-    title: { label: "Songtitel", icon: "🎵", hint: "Man muss den Titel des laufenden Songs nennen (Standard)." },
-    artist: { label: "Interpret", icon: "🎤", hint: "Man muss den Interpret/Rapper des laufenden Songs nennen." },
 };
 
 const ROUND_SPEEDS: Record<
@@ -56,12 +49,16 @@ const MODES: Record<
         label: "Teleport",
         icon: "🌀",
         desc: "Die Kartoffel springt bei jedem Pass zu einem zufälligen Spieler.",
+        disabled: true,
+        comingSoon: true,
         variant: "teleport",
     },
     reverse: {
         label: "Reverse",
         icon: "🔁",
         desc: "Die Richtung wechselt gelegentlich. Mehr Chaos, mehr Lacher.",
+        disabled: true,
+        comingSoon: true,
         variant: "reverse",
     },
 };
@@ -102,19 +99,20 @@ export default function HostPage() {
     const { user } = useAuth();
 
     const [hostName, setHostName] = useState("");
-    const [privacy, setPrivacy] = useState<Privacy>("private");
     const [maxPlayers, setMaxPlayers] = useState(8);
 
     const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>(null);
-    const [mode, setMode] = useState<ModeKey | null>(null);
+    // Original ist aktuell der einzige spielbare Modus (Teleport/Reverse
+    // sind mit "SOON" gesperrt) -- direkt vorausgewählt, damit man nicht
+    // erst klicken muss.
+    const [mode, setMode] = useState<ModeKey | null>("original");
     const [answerMode, setAnswerMode] = useState<AnswerMode>("text");
-    const [songAnswerMode, setSongAnswerMode] = useState<SongAnswerMode>("title");
-    // Leer = alle Themen-Kategorien möglich (wie bisher). Ausgewählt = die
-    // Themen-Wahl zieht nur noch aus diesen Musik-Genres (Migration 026).
-    const [musicGenres, setMusicGenres] = useState<string[]>([]);
-    const toggleMusicGenre = useCallback((key: string) => {
-        setMusicGenres((prev) => (prev.includes(key) ? prev.filter((g) => g !== key) : [...prev, key]));
-    }, []);
+    // Musik-Modus ist jetzt ein einfacher An/Aus-Schalter -- AN wählt
+    // automatisch alle verfügbaren Musik-Kategorien (bisher konnte man
+    // versehentlich nur 1 auswählen, wodurch die Themen-Wahl dieselbe
+    // Kategorie mehrfach zeigte).
+    const [musicMode, setMusicMode] = useState(false);
+    const musicGenres = useMemo(() => (musicMode ? MUSIC_GENRE_KEYS : []), [musicMode]);
 
     const activeMode = mode ? MODES[mode] : null;
     const activeSpeed = roundSpeed ? ROUND_SPEEDS[roundSpeed] : null;
@@ -150,7 +148,7 @@ export default function HostPage() {
 
             const { data, error } = await supabase.rpc("rpc_create_lobby", {
                 p_host_name: cleanName,
-                p_privacy: privacy,
+                p_privacy: "private",
                 p_max_players: maxPlayers,
                 p_round_seconds: roundSeconds,
                 p_user_id: user?.id ?? null,
@@ -189,7 +187,7 @@ export default function HostPage() {
                 return;
             }
 
-            if ((mode && mode !== "original") || musicGenres.length > 0 || answerMode !== "text" || songAnswerMode !== "title") {
+            if ((mode && mode !== "original") || musicGenres.length > 0 || answerMode !== "text") {
                 const { data: lobbyRow, error: lobbyErr } = await supabase
                     .from("lobbies")
                     .select("id")
@@ -218,13 +216,6 @@ export default function HostPage() {
                             p_answer_mode: answerMode,
                         });
                     }
-                    if (songAnswerMode !== "title") {
-                        await supabase.rpc("set_lobby_song_answer_mode", {
-                            p_lobby_id: lobbyRow.id,
-                            p_me_player_id: hostPlayerId,
-                            p_song_answer_mode: songAnswerMode,
-                        });
-                    }
                 }
             }
 
@@ -235,7 +226,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, musicGenres, answerMode, songAnswerMode, supabase, privacy, maxPlayers, router, user?.id]);
+    }, [canCreate, hostName, roundSpeed, mode, musicGenres, answerMode, supabase, maxPlayers, router, user?.id]);
 
     return (
         <main className="container">
@@ -290,47 +281,19 @@ export default function HostPage() {
 
                             <div className="divider" />
 
-                            <div className="pillGrid2">
-                                <div className="pillCard">
-                                    <div className="pillCardTop">
-                                        <div className="pillCardTitle">Max. Spieler</div>
-                                        <div className="pillCardHint">Empfohlen: 6–10</div>
-                                    </div>
-                                    <div className="pillStepper">
-                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>
-                                            −
-                                        </button>
-                                        <div className="pillStepValue">{maxPlayers}</div>
-                                        <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>
-                                            +
-                                        </button>
-                                    </div>
+                            <div className="pillCard">
+                                <div className="pillCardTop">
+                                    <div className="pillCardTitle">Max. Spieler</div>
+                                    <div className="pillCardHint">Empfohlen: 6–10</div>
                                 </div>
-
-                                <div className="pillCard">
-                                    <div className="pillCardTop">
-                                        <div className="pillCardTitle">Privatsphäre</div>
-                                        <div className="pillCardHint">
-                                            {privacy === "public" ? "Für alle in der Übersicht sichtbar" : "Nur mit Code beitretbar"}
-                                        </div>
-                                    </div>
-                                    <div className="pillSeg">
-                                        <button
-                                            type="button"
-                                            className={`pillSegBtn ${privacy === "private" ? "pillSegActive" : ""}`}
-                                            onClick={() => setPrivacy("private")}
-                                        >
-                                            🔒 Privat
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className={`pillSegBtn ${privacy === "public" ? "pillSegActive" : ""}`}
-                                            onClick={() => setPrivacy("public")}
-                                            title="Erscheint für alle unter „Öffentliche Lobbys“"
-                                        >
-                                            🌐 Public
-                                        </button>
-                                    </div>
+                                <div className="pillStepper">
+                                    <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>
+                                        −
+                                    </button>
+                                    <div className="pillStepValue">{maxPlayers}</div>
+                                    <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>
+                                        +
+                                    </button>
                                 </div>
                             </div>
 
@@ -410,74 +373,40 @@ export default function HostPage() {
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">🎵 Musik-Modus</div>
                                     <div className="pillCardHint">
-                                        {musicGenres.length === 0
-                                            ? "Optional — sonst alle Themen wie gewohnt gemischt"
-                                            : `${musicGenres.length} Genre(s) ausgewählt`}
+                                        {musicMode ? "An — nur Musik-Runden" : "Aus — Musik mischt sich normal unter alle Themen"}
                                     </div>
                                 </div>
 
-                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                    {MUSIC_GENRE_KEYS.map((key) => {
-                                        const g = MUSIC_PLAYLISTS[key];
-                                        const active = musicGenres.includes(key);
-                                        return (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
-                                                data-variant={key}
-                                                onClick={() => toggleMusicGenre(key)}
-                                                aria-pressed={active}
-                                                title={`Playlist: ${g.title}`}
-                                            >
-                                                <span className="segIcon" aria-hidden>{g.icon}</span>
-                                                <span className="segLabel">{key}</span>
-                                            </button>
-                                        );
-                                    })}
+                                <div className="pillSeg">
+                                    <button
+                                        type="button"
+                                        className={`pillSegBtn segChoice ${!musicMode ? "segChoiceActive" : ""}`}
+                                        onClick={() => setMusicMode(false)}
+                                        aria-pressed={!musicMode}
+                                    >
+                                        Aus
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`pillSegBtn segChoice ${musicMode ? "segChoiceActive" : ""}`}
+                                        data-variant="Shisha Club"
+                                        onClick={() => setMusicMode(true)}
+                                        aria-pressed={musicMode}
+                                    >
+                                        🎵 An
+                                    </button>
                                 </div>
 
                                 <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                    {musicGenres.length > 0 ? (
+                                    {musicMode ? (
                                         <>
                                             <span style={{ fontWeight: 900 }}>Reiner Musik-Abend:</span>{" "}
-                                            nur diese Kategorien kommen in die Themen-Wahl — der Halter hört einen Song-Schnipsel und muss ihn erraten.
+                                            jede Runde ist eine der {MUSIC_GENRE_KEYS.length} Playlists ({MUSIC_GENRE_KEYS.join(", ")}) — der Halter
+                                            hört einen Song-Schnipsel und muss Titel oder Interpret erraten.
                                         </>
                                     ) : (
-                                        "Nichts ausgewählt = Musik-Kategorien mischen sich normal unter alle anderen Themen."
+                                        "Aus = Musik-Kategorien mischen sich normal unter alle anderen Themen."
                                     )}
-                                </div>
-                            </div>
-
-                            <div className="pillCard" style={{ marginTop: 14 }}>
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">🎤 Song-Rätsel</div>
-                                    <div className="pillCardHint">{SONG_ANSWER_MODES[songAnswerMode].hint}</div>
-                                </div>
-
-                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                    {(Object.keys(SONG_ANSWER_MODES) as SongAnswerMode[]).map((key) => {
-                                        const s = SONG_ANSWER_MODES[key];
-                                        const active = songAnswerMode === key;
-
-                                        return (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
-                                                data-variant={key}
-                                                onClick={() => setSongAnswerMode(key)}
-                                                aria-pressed={active}
-                                            >
-                                                <span className="segIcon" aria-hidden>{s.icon}</span>
-                                                <span className="segLabel">{s.label}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                    Gilt, sobald in einer Runde ein Musik-Thema drankommt — egal ob per Musik-Modus-Filter oben oder zufällig gemischt.
                                 </div>
                             </div>
 

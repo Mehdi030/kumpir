@@ -33,7 +33,7 @@ function prefetchPreviewUrl(url: string) {
     prefetchAudioPool.push(a);
 }
 
-export function SongRound({ songId, answerMode = "title" }: { songId: string | null; answerMode?: "title" | "artist" }) {
+export function SongRound({ songId }: { songId: string | null }) {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [blocked, setBlocked] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -170,20 +170,16 @@ export function SongRound({ songId, answerMode = "title" }: { songId: string | n
 
     if (!songId) return null;
 
+    // Kein Text-Hinweis mehr ("Song läuft … errate ihn!") -- die Dringlichkeit
+    // zeigt allein der pulsierende Feuer-Rand (.edgeFire in game/[code]/page.tsx).
+    // Nur der Autoplay-Fallback-Button bleibt, weil er funktional nötig ist.
     return (
         <div className="songRoundHint" aria-live="polite">
             {blocked ? (
                 <button type="button" onClick={retryPlay} className="btn btnSecondary btnSmall" title="Wiedergabe starten">
                     ▶️ Song abspielen
                 </button>
-            ) : (
-                <>
-                    <span className="songRoundIcon" aria-hidden>
-                        🎵
-                    </span>
-                    <span>{answerMode === "artist" ? "Song läuft … wer singt/rappt das?" : "Song läuft … errate ihn!"}</span>
-                </>
-            )}
+            ) : null}
             <audio ref={audioRef} preload="none" />
         </div>
     );

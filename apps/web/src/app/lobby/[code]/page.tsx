@@ -52,7 +52,7 @@ export default function LobbyPage() {
     const router = useRouter();
 
     const code = String(params.code ?? "").toUpperCase();
-    const { mePlayerId, meName } = usePlayerIdentity();
+    const { mePlayerId } = usePlayerIdentity();
     const { user } = useAuth();
     const savedLobbies = useSavedLobbies(user?.id ?? null);
     const isSaved = useMemo(() => savedLobbies.rows.some((s) => s.lobby_code === code), [savedLobbies.rows, code]);
@@ -310,10 +310,6 @@ export default function LobbyPage() {
         }
     }, [mePlayerId, lobbyId, go]);
 
-    const meLabel = useMemo(() => {
-        return amIHost ? "👑 Host" : meName ? `👤 ${meName}` : "👤 Spieler";
-    }, [amIHost, meName]);
-
     const maxPlayers = lobby?.max_players ?? 8;
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
 
@@ -354,21 +350,17 @@ export default function LobbyPage() {
                             </div>
 
                             <div style={{ display: "grid", gap: 6, justifyItems: "end", minWidth: 240 }}>
-                                <div className="pillChip" style={{ height: 30, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    {meLabel}
-                                </div>
-
                                 <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-                                    <div className="pillChip" style={{ height: 28, display: "flex", alignItems: "center", gap: 8 }}>
+                                    <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", gap: 8, fontSize: 15 }}>
                                         <span style={{ opacity: 0.8 }}>👥</span>
-                                        <span style={{ fontWeight: 900 }}>{players.length}</span>
+                                        <span style={{ fontWeight: 950 }}>{players.length}</span>
                                         <span style={{ opacity: 0.8 }}>/</span>
-                                        <span style={{ fontWeight: 900 }}>{maxPlayers}</span>
+                                        <span style={{ fontWeight: 950 }}>{maxPlayers}</span>
                                     </div>
 
-                                    <div className="pillChip" style={{ height: 28, display: "flex", alignItems: "center", gap: 8 }}>
+                                    <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", gap: 8, fontSize: 15 }}>
                                         <span>{MODES[mode]?.icon ?? "🥔"}</span>
-                                        <span style={{ fontWeight: 900 }}>{MODES[mode]?.label ?? mode}</span>
+                                        <span style={{ fontWeight: 950 }}>{MODES[mode]?.label ?? mode}</span>
                                     </div>
 
                                     {lobby?.topic ? (
@@ -406,8 +398,8 @@ export default function LobbyPage() {
                                 {amIHost ? (
                                     <Link
                                         href={`/lobby/${encodeURIComponent(code)}/admin`}
-                                        className={`btn btnSecondary btnSmall ${starting || isRunning ? "btnDisabled" : ""}`}
-                                        style={{ pointerEvents: "auto" }}
+                                        className={`btn btnSecondary ${starting || isRunning ? "btnDisabled" : ""}`}
+                                        style={{ pointerEvents: "auto", fontSize: 15, padding: "10px 16px", fontWeight: 900 }}
                                         aria-disabled={starting || isRunning}
                                         tabIndex={starting || isRunning ? -1 : 0}
                                         onClick={(e) => {
@@ -437,11 +429,11 @@ export default function LobbyPage() {
                                         letterSpacing: 6,
                                         lineHeight: 1,
                                         backgroundImage: "linear-gradient(90deg,#ff2d55,#ff9500,#ffd60a,#34c759,#0a84ff,#bf5af2,#ff2d55)",
-                                        backgroundSize: "220% 100%",
+                                        backgroundSize: "200% 100%",
                                         WebkitBackgroundClip: "text",
                                         backgroundClip: "text",
                                         color: "transparent",
-                                        animation: "kumpir-rainbow 2.8s linear infinite",
+                                        animation: "kumpir-rainbow 3.4s linear infinite",
                                         textShadow: "0 10px 30px rgba(0,0,0,0.18)",
                                         userSelect: "none",
                                         opacity: isRunning ? 0.75 : 1,
@@ -464,7 +456,7 @@ export default function LobbyPage() {
                             <style>{`
                     @keyframes kumpir-rainbow {
                       0% { background-position: 0% 50%; }
-                      100% { background-position: 100% 50%; }
+                      100% { background-position: 200% 50%; }
                     }
                   `}</style>
                         </div>
