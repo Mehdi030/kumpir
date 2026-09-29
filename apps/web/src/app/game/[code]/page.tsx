@@ -545,6 +545,7 @@ export default function GamePage() {
                   current_attempt_id: lobby.current_attempt_id,
                   used_answers: lobby.used_answers ?? [],
                   round_number: lobby.round_number,
+                  current_song_id: lobby.current_song_id,
               }
             : null,
         players,
