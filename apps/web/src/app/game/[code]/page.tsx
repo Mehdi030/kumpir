@@ -17,13 +17,11 @@ import { useAuth } from "@/components/AuthProvider";
 import { AchievementToastPortal } from "@/components/AchievementToastPortal";
 import { BackdropFx } from "@/components/game/BackdropFx";
 import { notify } from "@/lib/notifications";
-import { GAME_MODES, type GameMode } from "@/lib/gameConfig";
 import { MUSIC_PLAYLISTS } from "@/lib/musicGenres";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { Spinner } from "@/components/Spinner";
 import { Confetti } from "@/components/Confetti";
-import { ConnectionPill } from "@/components/ConnectionPill";
 import { AudioControl } from "@/components/AudioControl";
 import { playFx } from "@/lib/gameFx";
 
@@ -1125,11 +1123,8 @@ export default function GamePage() {
 
             if (!lobby) return;
 
-            // Topic vote: 1 / 2 / 3 -- "3" nur, wenn es wirklich ein drittes Thema gibt.
-            if (
-                lobby.phase === "topic_vote" &&
-                (ev.key === "1" || ev.key === "2" || (ev.key === "3" && lobby.topic_c))
-            ) {
+            // Topic vote: 1 / 2 / 3 -- "3" ist immer gültig (echtes Thema C oder Zufällig).
+            if (lobby.phase === "topic_vote" && (ev.key === "1" || ev.key === "2" || ev.key === "3")) {
                 ev.preventDefault();
                 const choice = Number(ev.key) as 1 | 2 | 3;
                 void vote(choice);
@@ -1172,11 +1167,12 @@ export default function GamePage() {
             </main>
         );
 
-    // Labels
+    // Labels -- dritte Karte ist ein ECHTES drittes Thema, wenn der Pool
+    // genug Verschiedenes hergibt (topic_c gesetzt), sonst bleibt sie
+    // "Zufällig" wie eh und je (verlost dann zwischen Thema A und B).
     const aLabel = lobby.topic_a ?? "…";
     const bLabel = lobby.topic_b ?? "…";
-    const cLabel = lobby.topic_c ?? "…";
-    const hasThirdTopic = !!lobby.topic_c;
+    const cLabel = lobby.topic_c ?? "Zufällig";
 
     // =========================================================
     // PHASE: TOPIC VOTE  (NO blinking)
@@ -1249,22 +1245,22 @@ export default function GamePage() {
                                 <div className="cardHint">{myVote === 2 ? "Ausgewählt" : "Tippe zum Voten"}</div>
                             </button>
 
-                            {hasThirdTopic ? (
-                                <button
-                                    type="button"
-                                    onClick={() => void vote(3)}
-                                    disabled={voteBusy || !mePlayerId}
-                                    className={`glassCard ${myVote === 3 ? "active" : ""}`}
-                                >
-                                    <div className="glassShine" aria-hidden />
-                                    <div className="cardTop">
-                                        <span className="chip">③</span>
-                                        <span className="micro">Thema C</span>
-                                    </div>
-                                    <div className="cardTitle">{cLabel}</div>
-                                    <div className="cardHint">{myVote === 3 ? "Ausgewählt" : "Tippe zum Voten"}</div>
-                                </button>
-                            ) : null}
+                            <button
+                                type="button"
+                                onClick={() => void vote(3)}
+                                disabled={voteBusy || !mePlayerId}
+                                className={`glassCard ${myVote === 3 ? "active" : ""}`}
+                            >
+                                <div className="glassShine" aria-hidden />
+                                <div className="cardTop">
+                                    <span className="chip">{lobby.topic_c ? "③" : "🎲"}</span>
+                                    <span className="micro">{lobby.topic_c ? "Thema C" : "Random"}</span>
+                                </div>
+                                <div className="cardTitle">{cLabel}</div>
+                                <div className="cardHint">
+                                    {myVote === 3 ? "Ausgewählt" : lobby.topic_c ? "Tippe zum Voten" : "Überraschen lassen"}
+                                </div>
+                            </button>
                         </div>
 
                         <div className="statusLine">
@@ -1387,7 +1383,7 @@ export default function GamePage() {
         const labelForChoice = (c: number) => {
             if (c === 1) return `① ${aLabel}`;
             if (c === 2) return `② ${bLabel}`;
-            if (c === 3) return `③ ${cLabel}`;
+            if (c === 3) return lobby.topic_c ? `③ ${cLabel}` : `🎲 ${cLabel}`;
             return String(c);
         };
 
@@ -1412,7 +1408,7 @@ export default function GamePage() {
                         style={{
                             marginTop: 16,
                             display: "grid",
-                            gridTemplateColumns: `repeat(${hasThirdTopic ? 3 : 2}, minmax(0,1fr))`,
+                            gridTemplateColumns: "repeat(3, minmax(0,1fr))",
                             gap: 14,
                             alignItems: "stretch",
                         }}
@@ -1425,12 +1421,10 @@ export default function GamePage() {
                             <div className="resultBadge">②</div>
                             <div className="resultTitle">{bLabel}</div>
                         </div>
-                        {hasThirdTopic ? (
-                            <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
-                                <div className="resultBadge">③</div>
-                                <div className="resultTitle">{cLabel}</div>
-                            </div>
-                        ) : null}
+                        <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
+                            <div className="resultBadge">{lobby.topic_c ? "③" : "🎲"}</div>
+                            <div className="resultTitle">{cLabel}</div>
+                        </div>
                     </div>
 
                     <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>{selectedTopic}</div>
@@ -2071,11 +2065,6 @@ export default function GamePage() {
         return "low";
     })();
 
-    const heatStyle: Record<typeof heatLevel, { label: string; color: string; glow: string }> = {
-        low: { label: "🟢 Ruhig", color: "rgba(52,199,89,0.78)", glow: "0 0 12px rgba(52,199,89,0.32)" },
-        mid: { label: "🟠 Heiß", color: "rgba(255,149,0,0.85)", glow: "0 0 18px rgba(255,149,0,0.42)" },
-        high: { label: "🔴 KRITISCH", color: "rgba(255,69,58,0.92)", glow: "0 0 26px rgba(255,69,58,0.56)" },
-    };
 
     return (
         <main
@@ -2110,31 +2099,10 @@ export default function GamePage() {
 
             {/* Top-right: Modus + Heat + Connection + Audio */}
             <div className="topRight" aria-hidden={false}>
-                <div className="modePill" title={`${aliveNow} von ${totalPlayers} Spielern noch am Leben`}>
+                <div className="modePill modePillBig" title={`${aliveNow} von ${totalPlayers} Spielern noch am Leben`}>
                     <span>👥</span>
                     <span>{aliveNow}/{totalPlayers}</span>
                 </div>
-                <div className="modePill" title={GAME_MODES[(lobby.game_mode as GameMode) ?? "original"]?.desc ?? lobby.game_mode ?? "Original"}>
-                    <span>{GAME_MODES[(lobby.game_mode as GameMode) ?? "original"]?.icon ?? "🥔"}</span>
-                    <span>{GAME_MODES[(lobby.game_mode as GameMode) ?? "original"]?.label ?? lobby.game_mode ?? "Original"}</span>
-                    {lobby.game_mode === "reverse" ? (
-                        <span
-                            className="modeArrow"
-                            aria-hidden
-                            style={{ transform: `rotate(${(lobby.pass_direction ?? 1) < 0 ? 180 : 0}deg)` }}
-                        >
-                            ➜
-                        </span>
-                    ) : null}
-                </div>
-                <div
-                    className={`heatPill heat-${heatLevel}`}
-                    style={{ background: heatStyle[heatLevel].color, boxShadow: heatStyle[heatLevel].glow }}
-                    title="Hitzelevel"
-                >
-                    {heatStyle[heatLevel].label}
-                </div>
-                <ConnectionPill status={realtimeStatus} onlyOnIssue />
                 <AudioControl />
             </div>
 
@@ -2582,17 +2550,6 @@ export default function GamePage() {
           align-items: center;
           gap: 8px;
         }
-        .heatPill{
-          padding: 8px 14px;
-          border-radius: 999px;
-          font-weight: 950;
-          font-size: 13px;
-          letter-spacing: 0.3px;
-          border: 1px solid rgba(255,255,255,0.16);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          user-select: none;
-        }
         .modePill{
           display: flex;
           align-items: center;
@@ -2608,19 +2565,10 @@ export default function GamePage() {
           -webkit-backdrop-filter: blur(10px);
           user-select: none;
         }
-        .modeArrow{
-          display: inline-block;
-          transition: transform 260ms cubic-bezier(.2,1,.2,1);
-        }
-        .heatPill.heat-high{
-          animation: heatBlink 0.9s ease-in-out infinite;
-        }
-        @media (prefers-reduced-motion: reduce){
-          .heatPill.heat-high{ animation: none; }
-        }
-        @keyframes heatBlink{
-          0%,100% { filter: brightness(1.0); }
-          50%     { filter: brightness(1.32); }
+        .modePillBig{
+          padding: 10px 18px;
+          font-size: 17px;
+          gap: 8px;
         }
 
         .edgeFire{

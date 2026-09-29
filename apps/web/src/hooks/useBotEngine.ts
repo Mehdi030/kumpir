@@ -161,13 +161,12 @@ export function useBotEngine(
                 if (seenVoteRoundsRef.current.get(bot.player_id) === roundSig) return;
                 seenVoteRoundsRef.current.set(bot.player_id, roundSig);
 
-                // Random delay 800-2400ms, dann random vote -- "3" nur, wenn
-                // es wirklich ein drittes Thema gibt (topic_c), sonst würde
-                // der Bot eine nicht angebotene Option wählen.
+                // Random delay 800-2400ms, dann random vote -- "3" ist immer
+                // gültig (echtes Thema C oder "Zufällig", verlost serverseitig
+                // zwischen A und B).
                 const delay = 800 + Math.random() * 1600;
-                const maxChoice = lobby.topic_c ? 3 : 2;
                 window.setTimeout(() => {
-                    const choice = (Math.floor(Math.random() * maxChoice) + 1) as 1 | 2 | 3;
+                    const choice = (Math.floor(Math.random() * 3) + 1) as 1 | 2 | 3;
                     void supabase.rpc("rpc_vote_topic", {
                         p_lobby_id: lobby.id,
                         p_player_id: bot.player_id,

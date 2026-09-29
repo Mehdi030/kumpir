@@ -7026,4 +7026,237 @@ $function$;
 
 COMMIT;
 
+-- ============================================================
+-- 043_topic_c_or_random.sql
+-- ============================================================
+-- ============================================================
+-- Migration 043: dritte Voting-Karte zeigt "Zufällig" statt das
+-- gleiche Thema nochmal, wenn kein echtes drittes Thema existiert
+-- ============================================================
+-- Bug aus Migration 042: wenn der (ggf. gefilterte) Pool keine 3
+-- unterschiedlichen Themen hergibt (z.B. Musik-Filter nur auf
+-- "Deutschrap-Songs" gesetzt -> nur 1 Kategorie verfügbar), wurde
+-- topic_c NULL, und das Frontend blendete die dritte Karte einfach
+-- aus -- aber der davor bestehende Fallback (topic_b := topic_a bei
+-- nur 1 verfügbarem Thema) blieb bestehen, wodurch man "Deutschrap-
+-- Songs" als Thema A UND B sah. Kombiniert mit der neuen dritten
+-- Karte (falls doch mal minimal was da war) wirkte das wie 3x
+-- derselbe Name.
+--
+-- Fix: Wenn topic_c NULL ist (kein echtes drittes Thema), zeigt die
+-- dritte Karte wieder "Zufällig" (wie vor Migration 042) -- ein Klick
+-- darauf verlost bei Sieg/Gleichstand zufällig zwischen Thema A und
+-- B, zählt aber weiterhin als eigene Stimme. Nur wenn der Pool
+-- WIRKLICH 3 unterschiedliche Themen hergibt, ist die dritte Karte
+-- ein echtes drittes Thema (Migration-042-Verhalten bleibt dafür
+-- unverändert).
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.rpc_finalize_topic_vote(p_lobby_id uuid)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_topic_a text; v_topic_b text; v_topic_c text;
+  v_a_count int := 0; v_b_count int := 0; v_c_count int := 0;
+  v_selected text; v_pick int; v_choices int[]; v_best int;
+begin
+  select topic_a, topic_b, topic_c into v_topic_a, v_topic_b, v_topic_c
+  from public.lobbies where id = p_lobby_id limit 1;
+
+  if v_topic_a is null then v_topic_a := 'Thema A'; end if;
+  if v_topic_b is null then v_topic_b := 'Thema B'; end if;
+
+  select count(*) into v_a_count from public.topic_votes where lobby_id = p_lobby_id and choice = 1;
+  select count(*) into v_b_count from public.topic_votes where lobby_id = p_lobby_id and choice = 2;
+  select count(*) into v_c_count from public.topic_votes where lobby_id = p_lobby_id and choice = 3;
+
+  if v_topic_c is not null then
+    -- Echtes drittes Thema: symmetrische 3-Wege-Wertung, Gleichstand
+    -- lost zufällig unter den bestplatzierten Themen aus.
+    v_best := greatest(v_a_count, v_b_count, v_c_count);
+    v_choices := array[]::int[];
+    if v_a_count = v_best then v_choices := array_append(v_choices, 1); end if;
+    if v_b_count = v_best then v_choices := array_append(v_choices, 2); end if;
+    if v_c_count = v_best then v_choices := array_append(v_choices, 3); end if;
+
+    if array_length(v_choices, 1) = 1 then
+      v_pick := v_choices[1];
+      v_choices := null;
+    else
+      v_pick := v_choices[1 + floor(random() * array_length(v_choices, 1))::int];
+    end if;
+
+    v_selected := case v_pick when 1 then v_topic_a when 2 then v_topic_b else v_topic_c end;
+  else
+    -- Kein echtes drittes Thema -- Choice 3 ist "Zufällig" (wie vor
+    -- Migration 042): gewinnt/steht im Gleichstand Choice 3, wird
+    -- zwischen A und B ausgelost statt selbst ein Ziel zu sein.
+    if v_a_count > v_b_count and v_a_count > v_c_count then
+      v_selected := v_topic_a; v_pick := 1; v_choices := null;
+    elsif v_b_count > v_a_count and v_b_count > v_c_count then
+      v_selected := v_topic_b; v_pick := 2; v_choices := null;
+    elsif v_c_count > v_a_count and v_c_count > v_b_count then
+      v_pick := (array[1,2])[1 + floor(random() * 2)::int];
+      v_selected := case when v_pick = 1 then v_topic_a else v_topic_b end;
+      v_choices := array[3];
+    else
+      v_choices := array[]::int[];
+      if v_a_count = greatest(v_a_count, v_b_count, v_c_count) then v_choices := array_append(v_choices, 1); end if;
+      if v_b_count = greatest(v_a_count, v_b_count, v_c_count) then v_choices := array_append(v_choices, 2); end if;
+      if v_c_count = greatest(v_a_count, v_b_count, v_c_count) then v_choices := array_append(v_choices, 3); end if;
+      v_pick := v_choices[1 + floor(random() * array_length(v_choices, 1))::int];
+      if v_pick = 1 then v_selected := v_topic_a;
+      elsif v_pick = 2 then v_selected := v_topic_b;
+      else
+        v_pick := (array[1,2])[1 + floor(random() * 2)::int];
+        v_selected := case when v_pick = 1 then v_topic_a else v_topic_b end;
+      end if;
+    end if;
+  end if;
+
+  update public.lobbies
+  set phase = 'countdown',
+      topic_selected = v_selected,
+      topic_tie_choices = v_choices,
+      topic_tie_pick = v_pick,
+      countdown_started_at = now(),
+      countdown_ends_at = now() + interval '5 seconds',
+      last_activity_at = now()
+  where id = p_lobby_id and phase = 'topic_vote';
+end;
+$function$;
+
+COMMIT;
+
+-- ============================================================
+-- 044_topic_c_null_when_single.sql
+-- ============================================================
+-- ============================================================
+-- Migration 044: topic_c bleibt NULL, wenn der Pool nur 1 Thema hat
+-- ============================================================
+-- Rest von Migration 042/043: rpc_begin_topic_vote/rpc_start_rematch_
+-- if_ready setzten im 1-Themen-Fall (v_b ist null) BEIDE topic_b UND
+-- topic_c auf v_a -- dadurch war topic_c nicht mehr NULL, und die dritte
+-- Voting-Karte zeigte den Themennamen ein drittes Mal statt "Zufällig"
+-- (Migration 043 fixt nur die Auswertung, nicht diese Zuweisung).
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.rpc_begin_topic_vote(p_lobby_id uuid, p_player_id uuid)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare v_host uuid; v_a text; v_b text; v_c text; v_filter text[];
+begin
+  if not public._verify_session(p_lobby_id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  select host_player_id, topic_filter into v_host, v_filter
+  from public.lobbies where id = p_lobby_id for update;
+
+  if not found then raise exception 'Lobby not found'; end if;
+  if v_host is null or v_host <> p_player_id then raise exception 'Only host can start'; end if;
+
+  select t.text into v_a from public.topic_pool t
+  where t.active is true and (v_filter is null or t.text = any(v_filter))
+  order by random() limit 1;
+
+  if v_a is null then raise exception 'Not enough topics in topic_pool'; end if;
+
+  select t.text into v_b from public.topic_pool t
+  where t.active is true and t.text <> v_a and (v_filter is null or t.text = any(v_filter))
+  order by random() limit 1;
+
+  if v_b is null then
+    -- Nur 1 Thema im (ggf. gefilterten) Pool -- topic_c bleibt NULL,
+    -- die UI zeigt dafür "Zufällig" statt den Namen ein drittes Mal.
+    v_b := v_a;
+  else
+    select t.text into v_c from public.topic_pool t
+    where t.active is true and t.text <> v_a and t.text <> v_b and (v_filter is null or t.text = any(v_filter))
+    order by random() limit 1;
+  end if;
+
+  delete from public.topic_votes where lobby_id = p_lobby_id;
+
+  update public.lobbies l
+  set last_topic = coalesce(l.topic, l.last_topic),
+      phase = 'topic_vote',
+      locked = true,
+      topic_a = v_a, topic_b = v_b, topic_c = v_c, topic_selected = null, topic = null,
+      topic_vote_started_at = now(),
+      topic_vote_ends_at = now() + interval '15 seconds',
+      countdown_started_at = null, countdown_ends_at = null,
+      run_started_at = null, holder_player_id = null, explode_at = null,
+      topic_tie_choices = null, topic_tie_pick = null
+  where l.id = p_lobby_id;
+end;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.rpc_start_rematch_if_ready(p_code text)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid; v_ready_count int; v_active_count int; v_filter text[];
+  v_topic_a text; v_topic_b text; v_topic_c text;
+begin
+  select id, topic_filter into v_lobby_id, v_filter
+  from public.lobbies where code = upper(trim(p_code)) limit 1;
+  if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+
+  select count(*) into v_active_count from public.players
+  where lobby_id = v_lobby_id and status = 'active';
+
+  select count(*) into v_ready_count from public.players
+  where lobby_id = v_lobby_id and status = 'active' and coalesce(ready, false) = true;
+
+  if v_active_count < 2 then raise exception 'Mindestens 2 aktive Spieler nötig'; end if;
+  if v_ready_count <> v_active_count then return; end if;
+
+  select t.text into v_topic_a
+  from public.topic_pool t
+  where t.active is true and (v_filter is null or t.text = any(v_filter))
+  order by random() limit 1;
+
+  if v_topic_a is null then
+    raise exception 'Nicht genug Themen im topic_pool';
+  end if;
+
+  select t.text into v_topic_b
+  from public.topic_pool t
+  where t.active is true and t.text <> v_topic_a and (v_filter is null or t.text = any(v_filter))
+  order by random() limit 1;
+
+  if v_topic_b is null then
+    v_topic_b := v_topic_a;
+  else
+    select t.text into v_topic_c
+    from public.topic_pool t
+    where t.active is true and t.text <> v_topic_a and t.text <> v_topic_b and (v_filter is null or t.text = any(v_filter))
+    order by random() limit 1;
+  end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+  update public.players set ready = coalesce(is_bot, false)
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'topic_vote',
+      topic_a = v_topic_a, topic_b = v_topic_b, topic_c = v_topic_c, topic_selected = null,
+      topic_vote_started_at = now(),
+      topic_vote_ends_at = now() + interval '10 seconds',
+      countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      holder_player_id = null, explode_at = null, run_started_at = null,
+      last_activity_at = now()
+  where id = v_lobby_id;
+end;
+$function$;
+
+COMMIT;
+
 
