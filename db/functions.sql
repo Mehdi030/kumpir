@@ -184,12 +184,16 @@ begin
   where id = p_lobby_id;
 
   -- Only mark players as 'left' BEFORE the game is running.
+  -- is_bot ausgeschlossen (Migration 035): Bots haben keinen eigenen Tab,
+  -- der last_seen_at je auffrischt -- ohne den Ausschluss fliegen sie nach
+  -- p_stale_seconds automatisch raus, egal wie aktiv das Match ist.
   if v_phase is null or v_phase in ('lobby', 'topic_vote', 'countdown') then
     update public.players
     set status = 'left',
         left_at = coalesce(left_at, now())
     where lobby_id = p_lobby_id
       and status = 'active'
+      and coalesce(is_bot, false) = false
       and (
         last_seen_at is null
         or last_seen_at < (now() - make_interval(secs => p_stale_seconds))
