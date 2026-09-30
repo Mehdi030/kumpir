@@ -60,6 +60,7 @@ type LobbyState = {
     // Countdown (synced)
     countdown_ends_at: string | null;
     countdown_started_at: string | null;
+    countdown_starter_player_id: string | null;
 
     // Tie visualization
     topic_tie_choices: number[] | null;
@@ -75,6 +76,9 @@ type LobbyState = {
 
     // Song-Raten (Musik-Modus): aktueller, versteckter Song für den Halter
     current_song_id: string | null;
+    // Server-Zeitstempel, seit wann current_song_id läuft -- Basis für
+    // synchrone Wiedergabe (jeder Client rechnet dieselbe Zielposition aus).
+    current_song_started_at: string | null;
     // "title" (Standard, Songtitel erraten) oder "artist" (Interpret nennen)
     song_answer_mode: string | null;
 
@@ -99,6 +103,7 @@ type Player = {
     total_hold_ms?: number;
     survival_streak?: number;
     eliminated_at_round?: number | null;
+    song_points?: number;
     last_seen_at?: string | null;
 };
 
@@ -124,11 +129,31 @@ function clamp(n: number, min: number, max: number) {
     return Math.max(min, Math.min(max, n));
 }
 
+// Client<->Server-Zeitversatz: manche Geräte-Uhren gehen spürbar falsch
+// (Sekunden bis Minuten), was Countdown/Heat-Anzeigen verzerrt, obwohl
+// beide Geräte dieselben Server-Zeitstempel bekommen (gemeldeter Bug:
+// "START IN" stand bei einem Gerät fest auf 10 statt wie beim anderen von
+// 5 runterzuzählen). Wird einmal pro Session grob kalibriert (siehe
+// syncClockOffset) und auf jede msUntil()-Berechnung angewandt.
+let clockOffsetMs = 0;
+
+async function syncClockOffset(supabase: ReturnType<typeof getSupabaseClient>) {
+    const sentAt = Date.now();
+    const { data, error } = await supabase.rpc("rpc_server_time");
+    if (error || !data) return;
+    const serverMs = Date.parse(data as unknown as string);
+    if (Number.isNaN(serverMs)) return;
+    const rttMs = Date.now() - sentAt;
+    // Serverzeit galt ungefähr in der Mitte des Requests -- die halbe
+    // Laufzeit grob rausrechnen, statt sie komplett zu ignorieren.
+    clockOffsetMs = serverMs + rttMs / 2 - Date.now();
+}
+
 function msUntil(ts: string | null): number | null {
     if (!ts) return null;
     const ms = Date.parse(ts);
     if (Number.isNaN(ms)) return null;
-    return ms - Date.now();
+    return ms - (Date.now() + clockOffsetMs);
 }
 
 function fmtMs(ms?: number | null) {
@@ -164,6 +189,12 @@ export default function GamePage() {
     const { mePlayerId } = usePlayerIdentity();
     const { user } = useAuth();
 
+    // Einmal pro Sitzung grob kalibrieren -- reicht, um Geräte mit spürbar
+    // falsch gehender Uhr auf die Server-Zeit auszurichten.
+    useEffect(() => {
+        void syncClockOffset(supabase);
+    }, [supabase]);
+
     const [lobby, setLobby] = useState<LobbyState | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     const [fatalError, setFatalError] = useState<string>("");
@@ -176,6 +207,7 @@ export default function GamePage() {
     // Synced timers (display only)
     const [voteSecondsLeft, setVoteSecondsLeft] = useState<number | null>(null);
     const [countdownSecondsLeft, setCountdownSecondsLeft] = useState<number | null>(null);
+    const [explodeMsLeft, setExplodeMsLeft] = useState<number | null>(null);
 
     // Prevent spamming finalize/advance
     const finalizeInFlightRef = useRef(false);
@@ -187,6 +219,7 @@ export default function GamePage() {
 
     // Topic-Mechanik B: Antwort-Eingabe + Validierung
     const [answerDraft, setAnswerDraft] = useState("");
+    const [answerWrong, setAnswerWrong] = useState(false);
     const [kickBusyId, setKickBusyId] = useState<string | null>(null);
 
     // Motion
@@ -217,11 +250,16 @@ export default function GamePage() {
     const prevPhaseRef = useRef<LobbyPhase | null>(null);
     const lastTickSecondRef = useRef<number>(-1);
 
+    // Für die kontinuierliche Heat-Anzeige: wie viel Zeit hatte DIESE
+    // Halter-Runde ursprünglich (statt nur "wie viel ist noch übrig")?
+    // Wird bei jedem Halterwechsel aus dem frischen explode_at neu gesetzt.
+    const roundTotalMsRef = useRef<number>(15000);
+    const lastHolderForTotalRef = useRef<string | null>(null);
+
     // Rematch / reset busy
     const [endActionBusy, setEndActionBusy] = useState<null | "rematch" | "reset">(null);
 
     // rematch_wait: Bereit-Toggle + Auto-Start sobald alle bereit sind
-    const [readyBusy, setReadyBusy] = useState(false);
     const startRematchInFlightRef = useRef(false);
 
     // post-round feedback
@@ -315,7 +353,8 @@ export default function GamePage() {
             const slowest = p.slowest_pass_ms ?? null;
 
             const fastestBonus = fastest == null ? 0 : Math.max(0, Math.min(12, Math.round((2200 - fastest) / 200)));
-            const score = pass * 10 + clutch * 18 + streak * 6 + fastestBonus;
+            const songPoints = p.song_points ?? 0;
+            const score = pass * 10 + clutch * 18 + streak * 6 + fastestBonus + songPoints * 20;
 
             // "Runden überlebt": Sieger (nie eliminiert) haben alle Runden des
             // Matches überlebt, alle anderen bis zu der Runde, in der sie
@@ -368,10 +407,9 @@ export default function GamePage() {
             fmt: (r: Row) => string;
             higherIsBetter: boolean;
         }[] = [
-            // Genau 3 Award-Kategorien (+ Sieger-Trophäe): Fastest, Slowest,
-            // und Longest Hold als dritte -- mehr wollte der Auftrag nicht.
+            // Slowest Pass ist jetzt eine Ranking-Spalte, kein Award mehr --
+            // 2 Award-Kategorien (+ Sieger-Trophäe): Fastest, Longest Hold.
             { icon: "⚡", label: "Fastest Pass", desc: "Schnellste Reaktion im Match", get: (r) => r.fastest, fmt: (r) => fmtMs(r.fastest), higherIsBetter: false },
-            { icon: "🐢", label: "Slowest Pass", desc: "Ließ sich am meisten Zeit", get: (r) => r.slowest, fmt: (r) => fmtMs(r.slowest), higherIsBetter: true },
             { icon: "🧱", label: "Longest Hold", desc: "Längste Haltezeit insgesamt", get: (r) => r.holdMs, fmt: (r) => fmtHold(r.holdMs), higherIsBetter: true },
         ];
 
@@ -656,6 +694,7 @@ export default function GamePage() {
 
                     countdown_started_at: (raw.countdown_started_at as string | null) ?? null,
                     countdown_ends_at: (raw.countdown_ends_at as string | null) ?? null,
+                    countdown_starter_player_id: (raw.countdown_starter_player_id as string | null) ?? null,
 
                     topic_tie_choices: (raw.topic_tie_choices as number[] | null) ?? null,
                     topic_tie_pick: (raw.topic_tie_pick as number | null) ?? null,
@@ -667,6 +706,7 @@ export default function GamePage() {
                     pass_direction: (raw.pass_direction as number | null) ?? 1,
 
                     current_song_id: (raw.current_song_id as string | null) ?? null,
+                    current_song_started_at: (raw.current_song_started_at as string | null) ?? null,
                     song_answer_mode: (raw.song_answer_mode as string | null) ?? null,
 
                     answer_mode: (raw.answer_mode as string | null) ?? "text",
@@ -736,6 +776,7 @@ export default function GamePage() {
                             "total_hold_ms",
                             "survival_streak",
                             "eliminated_at_round",
+                            "song_points",
                             "last_seen_at",
                         ].join(",")
                     )
@@ -893,10 +934,25 @@ export default function GamePage() {
                 if (!Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150) {
                     void rpcTickGame(code);
                 }
+            } else if (lobby.phase === "rematch_wait" && lobby.countdown_ends_at) {
+                // Rematch startet jetzt zeitgesteuert (10s ab dem ersten "R")
+                // statt erst wenn ALLE nochmal manuell auf Bereit klicken.
+                const dueMs = msUntil(lobby.countdown_ends_at);
+                if (dueMs !== null && dueMs <= 0 && !startRematchInFlightRef.current) {
+                    startRematchInFlightRef.current = true;
+                    void (async () => {
+                        try {
+                            const { error } = await supabase.rpc("rpc_start_rematch_if_ready", { p_code: code });
+                            if (error) showToast(`❌ ${error.message}`, 2400);
+                        } finally {
+                            startRematchInFlightRef.current = false;
+                        }
+                    })();
+                }
             }
         }, 250);
         return () => window.clearInterval(t);
-    }, [lobby, code, rpcFinalizeTopicVote, rpcAdvanceFromCountdown, rpcTickGame]);
+    }, [lobby, code, rpcFinalizeTopicVote, rpcAdvanceFromCountdown, rpcTickGame, supabase, showToast]);
 
     // (realtimeStatus + reloadFromRealtime above, before the poll loop)
 
@@ -981,7 +1037,15 @@ export default function GamePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [passEvent]);
 
-    // Synced timers
+    // Synced timers. requestAnimationFrame pausiert komplett, sobald der Tab
+    // in den Hintergrund geht (Screen-Lock, App-Wechsel, Benachrichtigung) --
+    // genau das erzeugte den gemeldeten Bug ("bei mir stand die Zahl fest bei
+    // 10, beim anderen Gerät lief sie normal runter"): rAF pausierte auf dem
+    // einen Gerät, lief auf dem anderen normal weiter, beide hatten aber
+    // dieselben Server-Zeitstempel. Der explizite visibilitychange-Handler
+    // erzwingt sofort einen frischen step(), sobald der Tab wieder sichtbar
+    // wird, statt auf den nächsten (evtl. erst Sekunden später kommenden)
+    // Frame zu warten.
     useEffect(() => {
         let raf = 0;
 
@@ -989,6 +1053,7 @@ export default function GamePage() {
             if (!lobby) {
                 setVoteSecondsLeft(null);
                 setCountdownSecondsLeft(null);
+                setExplodeMsLeft(null);
                 raf = window.requestAnimationFrame(step);
                 return;
             }
@@ -998,19 +1063,40 @@ export default function GamePage() {
                 setVoteSecondsLeft(ms === null ? null : clamp(Math.ceil(ms / 1000), 0, 99));
             } else setVoteSecondsLeft(null);
 
-            if (lobby.phase === "countdown") {
+            if (lobby.phase === "countdown" || lobby.phase === "rematch_wait") {
                 const ms = msUntil(lobby.countdown_ends_at);
                 setCountdownSecondsLeft(ms === null ? null : clamp(Math.ceil(ms / 1000), 0, 10));
             } else setCountdownSecondsLeft(null);
 
+            if (lobby.phase === "running") {
+                setExplodeMsLeft(msUntil(lobby.explode_at));
+            } else setExplodeMsLeft(null);
+
             raf = window.requestAnimationFrame(step);
         };
+
+        const onVisible = () => {
+            if (document.visibilityState !== "visible") return;
+            if (raf) window.cancelAnimationFrame(raf);
+            step();
+        };
+        document.addEventListener("visibilitychange", onVisible);
 
         raf = window.requestAnimationFrame(step);
         return () => {
             if (raf) window.cancelAnimationFrame(raf);
+            document.removeEventListener("visibilitychange", onVisible);
         };
     }, [lobby]);
+
+    useEffect(() => {
+        if (!lobby || lobby.phase !== "running") return;
+        if (lobby.holder_player_id === lastHolderForTotalRef.current) return;
+        lastHolderForTotalRef.current = lobby.holder_player_id;
+        const ms = msUntil(lobby.explode_at);
+        if (ms != null && ms > 0) roundTotalMsRef.current = ms;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lobby?.holder_player_id, lobby?.explode_at, lobby?.phase]);
 
     // Vote action (optimistic local state so highlight is instant)
     const vote = useCallback(
@@ -1067,7 +1153,21 @@ export default function GamePage() {
         setPassBusy(true);
         try {
             const err = await rpcAttemptPass(code, mePlayerId, clean);
-            if (err) return showToast(`❌ ${err.message}`, 2400);
+            if (err) {
+                if (err.message?.includes("answer_incorrect")) {
+                    // Falsche Song-Antwort: kurzes rotes Aufblitzen + Fehler-Sound
+                    // statt einer Toast-Fehlermeldung -- der Halter darf sofort
+                    // nochmal tippen, die Runde läuft normal weiter.
+                    setAnswerWrong(false);
+                    window.requestAnimationFrame(() => {
+                        setAnswerWrong(true);
+                        window.setTimeout(() => setAnswerWrong(false), 500);
+                    });
+                    playFx("wrong");
+                    return;
+                }
+                return showToast(`❌ ${err.message}`, 2400);
+            }
             setAnswerDraft("");
             showToast("✅ Angenommen", 900);
         } catch (e: unknown) {
@@ -1112,47 +1212,6 @@ export default function GamePage() {
         }
         showToast("🔁 Rematch gestartet", 1200);
     }, [endActionBusy, mePlayerId, supabase, code, showToast]);
-
-    // rematch_wait: Bereit-Toggle (gleiche RPC wie in der Lobby)
-    const handleToggleReady = useCallback(async () => {
-        if (!mePlayerId || !lobby) return;
-        if (readyBusy) return;
-
-        setReadyBusy(true);
-        try {
-            const { error } = await supabase.rpc("rpc_toggle_ready", {
-                p_lobby_id: lobby.id,
-                p_player_id: mePlayerId,
-            });
-            if (error) showToast(`❌ ${error.message}`, 2400);
-        } catch (e: unknown) {
-            showToast(`❌ ${getErrorMessage(e)}`, 2400);
-        } finally {
-            setReadyBusy(false);
-        }
-    }, [mePlayerId, lobby, readyBusy, supabase, showToast]);
-
-    const allReadyForRematch = useMemo(() => {
-        return players.length >= 2 && players.every((p) => !!p.ready);
-    }, [players]);
-
-    // rematch_wait: sobald alle bereit sind, Topic-Vote der nächsten Runde starten.
-    useEffect(() => {
-        if (!lobby) return;
-        if (lobby.phase !== "rematch_wait") return;
-        if (!allReadyForRematch) return;
-        if (startRematchInFlightRef.current) return;
-
-        startRematchInFlightRef.current = true;
-        void (async () => {
-            try {
-                const { error } = await supabase.rpc("rpc_start_rematch_if_ready", { p_code: code });
-                if (error) showToast(`❌ ${error.message}`, 2400);
-            } finally {
-                startRematchInFlightRef.current = false;
-            }
-        })();
-    }, [lobby, allReadyForRematch, supabase, code, showToast]);
 
     // Keyboard shortcuts: Space (pass), 1/2/3 (vote), R (rematch), M (mute)
     useEffect(() => {
@@ -1496,6 +1555,27 @@ export default function GamePage() {
                         {Math.max(0, countdownSecondsLeft ?? 5)}
                     </div>
 
+                    {/* Nur der Startspieler sieht diesen Hinweis -- alle anderen
+                        erfahren es erst, wenn die Runde wirklich losgeht. */}
+                    {mePlayerId && lobby.countdown_starter_player_id === mePlayerId ? (
+                        <div
+                            style={{
+                                marginTop: 12,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 8,
+                                padding: "8px 16px",
+                                borderRadius: 999,
+                                background: "rgba(255,214,10,0.16)",
+                                border: "1px solid rgba(255,214,10,0.4)",
+                                fontWeight: 900,
+                                fontSize: 14,
+                            }}
+                        >
+                            🥔 Du startest gleich!
+                        </div>
+                    ) : null}
+
                     <ToastStack toasts={toasts} inline />
                 </div>
 
@@ -1515,8 +1595,8 @@ export default function GamePage() {
 
     // =========================================================
     // PHASE: FINISHED  (Winner-only hero, NO Top3 podium)
-    // - Awards: Fastest Pass + Slowest Pass + Longest Hold
-    // - Ranking: # | Name | Score | Runden | Fastest
+    // - Awards: Fastest Pass + Longest Hold
+    // - Ranking: # | Name | Score | Runden | Fastest | Slowest
     // =========================================================
     if (lobby.phase === "finished") {
         const winnerName = winnerPlayer?.name ?? "Unbekannt";
@@ -1524,9 +1604,6 @@ export default function GamePage() {
 
         const fastestOverall =
             [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] ?? null;
-
-        const slowestOverall =
-            [...ranking].filter((r) => r.slowest != null).sort((a, b) => (b.slowest ?? 0) - (a.slowest ?? 0))[0] ?? null;
 
         const longestHold = [...ranking].sort((a, b) => (b.holdMs ?? 0) - (a.holdMs ?? 0))[0] ?? null;
 
@@ -1592,6 +1669,7 @@ export default function GamePage() {
                                     <div className="r">Score</div>
                                     <div className="r">Runden</div>
                                     <div className="r">Fastest</div>
+                                    <div className="r">Slowest</div>
                                 </div>
 
                                 {shown.map((p, idx) => {
@@ -1612,6 +1690,7 @@ export default function GamePage() {
                                             </div>
                                             <div className="r">{p.roundsSurvived}</div>
                                             <div className="r">{fmtMs(p.fastest)}</div>
+                                            <div className="r">{fmtMs(p.slowest)}</div>
                                         </div>
                                     );
                                 })}
@@ -1647,23 +1726,6 @@ export default function GamePage() {
                                 </div>
 
                                 <div className="awardTile">
-                                    <div className="awardK">🐢 Slowest Pass</div>
-                                    <div className="awardV">
-                                        {slowestOverall ? (
-                                            <>
-                                                <b>{slowestOverall.name}</b>
-                                                <span className="sep">•</span>
-                                                <span>{fmtMs(slowestOverall.slowest)}</span>
-                                            </>
-                                        ) : (
-                                            "—"
-                                        )}
-                                    </div>
-                                    <div className="awardS">Ließ sich am meisten Zeit</div>
-                                    <span className="awardGlow g2" aria-hidden />
-                                </div>
-
-                                <div className="awardTile">
                                     <div className="awardK">🧱 Longest Hold</div>
                                     <div className="awardV">
                                         {longestHold ? (
@@ -1677,7 +1739,7 @@ export default function GamePage() {
                                         )}
                                     </div>
                                     <div className="awardS">Längste Haltezeit insgesamt</div>
-                                    <span className="awardGlow g3" aria-hidden />
+                                    <span className="awardGlow g2" aria-hidden />
                                 </div>
                             </div>
 
@@ -1837,7 +1899,7 @@ export default function GamePage() {
         .table{ margin-top: 12px; display:grid; gap: 8px; }
         .row{
           display:grid;
-          grid-template-columns: 42px 1fr 90px 90px 100px;
+          grid-template-columns: 36px 1fr 70px 64px 82px 82px;
           gap: 10px;
           padding: 10px 10px;
           border-radius: 16px;
@@ -2003,13 +2065,12 @@ export default function GamePage() {
     // =========================================================
     // PHASE: REMATCH_WAIT
     // =========================================================
-    // rpc_rematch setzt diese Phase; vorher gab es dafür keinen eigenen
-    // Screen (sie fiel in den generischen "WARTEN"-Fallback), und
-    // rpc_start_rematch_if_ready wurde nie aufgerufen -> das Spiel blieb
-    // nach einem Rematch-Klick für immer hier stehen.
+    // rpc_rematch setzt diese Phase UND einen 10s-Countdown
+    // (countdown_started_at/countdown_ends_at). Kein Bereit-Toggle mehr --
+    // der erste Tastendruck auf "R" reicht, alle Anwesenden starten nach
+    // Ablauf automatisch mit, ohne dass jeder einzeln nochmal bestätigen
+    // muss.
     if (lobby.phase === "rematch_wait") {
-        const meReady = !!meRow?.ready;
-
         return (
             <main
                 style={{
@@ -2024,9 +2085,13 @@ export default function GamePage() {
             >
                 <div style={{ width: "min(680px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>REMATCH</div>
-                    <div style={{ fontSize: "clamp(26px, 4vw, 42px)", fontWeight: 950, marginTop: 12 }}>🔁 Bereit für die nächste Runde?</div>
+                    <div style={{ fontSize: "clamp(26px, 4vw, 42px)", fontWeight: 950, marginTop: 12 }}>🔁 Nächste Runde startet gleich</div>
                     <div style={{ marginTop: 8, opacity: 0.82, fontWeight: 700 }}>
-                        Sobald alle bereit sind, geht’s automatisch weiter zur Themenwahl.
+                        Alle Anwesenden gehen automatisch weiter zur Themenwahl.
+                    </div>
+
+                    <div style={{ marginTop: 18, fontSize: "clamp(56px, 8vw, 96px)", fontWeight: 950, textShadow: "0 14px 50px rgba(0,0,0,0.35)" }}>
+                        {Math.max(0, countdownSecondsLeft ?? 10)}
                     </div>
 
                     <div style={{ marginTop: 22, display: "grid", gap: 8 }}>
@@ -2048,20 +2113,9 @@ export default function GamePage() {
                                     {p.name}
                                     {mePlayerId === p.player_id ? " (du)" : ""}
                                 </span>
-                                <span>{p.ready ? "✅ Bereit" : "⏳ Wartet"}</span>
+                                <span>✅ dabei</span>
                             </div>
                         ))}
-                    </div>
-
-                    <div style={{ marginTop: 20 }}>
-                        <button
-                            type="button"
-                            className="btn btnPrimary"
-                            onClick={() => void handleToggleReady()}
-                            disabled={readyBusy || !mePlayerId}
-                        >
-                            {readyBusy ? <Spinner size={16} label="…" /> : meReady ? "❌ Nicht mehr bereit" : "✅ Bereit"}
-                        </button>
                     </div>
 
                     <ToastStack toasts={toasts} inline />
@@ -2143,29 +2197,28 @@ export default function GamePage() {
 
     const aliveNow = players.filter((p) => p.is_alive).length;
 
-    // Heat level: derived from time-to-explode + player count (low/mid/high)
-    const heatLevel: "low" | "mid" | "high" = (() => {
-        if (!lobby.explode_at) return "low";
-        const ms = msUntil(lobby.explode_at);
-        if (ms == null) return "low";
-        const aliveCount = players.filter((p) => p.is_alive).length || 1;
-        const scaledThresholdHigh = 4500 + Math.max(0, 8 - aliveCount) * 250;
-        const scaledThresholdMid = 9000 + Math.max(0, 8 - aliveCount) * 400;
-        if (ms <= scaledThresholdHigh) return "high";
-        if (ms <= scaledThresholdMid) return "mid";
-        return "low";
-    })();
-
+    // Heat-Ratio (0..1): kontinuierlich statt nur 3 Stufen, damit man nach
+    // einem Pass sofort sieht, WIE WEIT die aktuelle Runde schon ist, statt
+    // nur "ruhig/mittel/heiß" grob zu erahnen. Bezugsgröße ist die Dauer
+    // DIESER Halter-Runde (roundTotalMsRef, ab dem letzten Halterwechsel),
+    // nicht ein fixer Wert -- Blitz/Standard/Casual haben ja unterschiedlich
+    // lange Runden.
+    const heatRatio = clamp(
+        explodeMsLeft == null || roundTotalMsRef.current <= 0 ? 0 : 1 - explodeMsLeft / roundTotalMsRef.current,
+        0,
+        1
+    );
 
     return (
         <main
             className={selfShake ? "kumpirSelfShake" : ""}
             style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}
         >
-            {/* Feuerwellen am Bildschirmrand -- werden intensiver, je weniger Zeit
-                bleibt (heatLevel), statt dass man das nur am kleinen "Ruhig/Heiß"-
-                Pill oben rechts ablesen kann. */}
-            <div className={`edgeFire edgeFire-${heatLevel}`} aria-hidden />
+            {/* Feuerwellen am Bildschirmrand -- Intensität/Pulstempo skalieren
+                kontinuierlich mit heatRatio, statt in 3 groben Sprüngen, damit
+                man nach einem Pass sofort ein Gefühl dafür hat, wie weit die
+                Runde schon ist. */}
+            <div className="edgeFire" style={{ ["--heat" as string]: heatRatio }} aria-hidden />
 
             <PlayerRing
                 players={players}
@@ -2234,7 +2287,7 @@ export default function GamePage() {
                     <div className="topic">{selectedTopic}</div>
 
                     {MUSIC_PLAYLISTS[selectedTopic] ? (
-                        <SongRound songId={lobby.current_song_id} />
+                        <SongRound songId={lobby.current_song_id} startedAt={lobby.current_song_started_at} />
                     ) : null}
 
                     <div className="strip" key={hudPulseNonce}>
@@ -2306,7 +2359,7 @@ export default function GamePage() {
                             <div className="answerInputRow">
                                 <input
                                     type="text"
-                                    className="input answerInput"
+                                    className={`input answerInput ${answerWrong ? "answerInputWrong" : ""}`}
                                     value={answerDraft}
                                     onChange={(e) => setAnswerDraft(e.target.value)}
                                     onKeyDown={(e) => {
@@ -2494,6 +2547,17 @@ export default function GamePage() {
         .answerInput:focus{
           outline: 3px solid rgba(255,214,10,0.7);
           border-color: rgba(255,214,10,0.9);
+        }
+        .answerInputWrong{
+          animation: answerWrongFlash 0.5s ease-out;
+        }
+        @keyframes answerWrongFlash{
+          0%{ border-color: rgba(255,59,48,0.95); box-shadow: 0 0 0 4px rgba(255,59,48,0.35); }
+          70%{ border-color: rgba(255,59,48,0.7); box-shadow: 0 0 0 2px rgba(255,59,48,0.15); }
+          100%{ border-color: rgba(255,255,255,0.18); box-shadow: none; }
+        }
+        @media (prefers-reduced-motion: reduce){
+          .answerInputWrong{ animation: none; border-color: rgba(255,59,48,0.9); }
         }
         .voiceInputBtn{
           flex-shrink: 0;
@@ -2721,32 +2785,18 @@ export default function GamePage() {
           inset: 0;
           z-index: 3;
           pointer-events: none;
-          transition: box-shadow 500ms ease, opacity 500ms ease;
+          --heat: 0;
+          opacity: var(--heat);
+          box-shadow: inset 0 0 calc(40px + var(--heat) * 140px) calc(4px + var(--heat) * 30px) rgba(255,70,0,0.55);
+          animation: edgeFirePulse calc(3.2s - var(--heat) * 2.2s) ease-in-out infinite;
+          transition: opacity 400ms ease, box-shadow 400ms ease;
         }
-        .edgeFire-low{
-          opacity: 0;
-          box-shadow: inset 0 0 0 0 rgba(255,90,0,0);
-        }
-        .edgeFire-mid{
-          opacity: 1;
-          box-shadow: inset 0 0 80px 8px rgba(255,120,0,0.30);
-          animation: edgeFirePulseMid 2.6s ease-in-out infinite;
-        }
-        .edgeFire-high{
-          opacity: 1;
-          box-shadow: inset 0 0 120px 18px rgba(255,45,0,0.5);
-          animation: edgeFirePulseHigh 1s ease-in-out infinite;
-        }
-        @keyframes edgeFirePulseMid{
-          0%,100% { box-shadow: inset 0 0 60px 6px rgba(255,120,0,0.26); }
-          50%     { box-shadow: inset 0 0 110px 16px rgba(255,150,20,0.42); }
-        }
-        @keyframes edgeFirePulseHigh{
-          0%,100% { box-shadow: inset 0 0 100px 14px rgba(255,45,0,0.46); }
-          50%     { box-shadow: inset 0 0 170px 32px rgba(255,90,0,0.72); }
+        @keyframes edgeFirePulse{
+          0%,100%{ filter: brightness(1) saturate(1); }
+          50%{ filter: brightness(calc(1 + var(--heat) * 0.55)) saturate(calc(1 + var(--heat) * 0.35)); }
         }
         @media (prefers-reduced-motion: reduce){
-          .edgeFire-mid, .edgeFire-high{ animation: none; }
+          .edgeFire{ animation: none; }
         }
 
         .selfFlash{

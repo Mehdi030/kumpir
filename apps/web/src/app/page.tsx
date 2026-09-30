@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Suspense } from "react";
 import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
+import { HomeStatsSection } from "@/components/HomeStatsSection";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
@@ -86,6 +87,8 @@ export default function Home() {
                     </div>
 
                     <p className="trustLine">Kein Download · Kein Account · Startet in Sekunden</p>
+
+                    <HomeStatsSection />
                 </section>
             </div>
         </main>

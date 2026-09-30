@@ -33,7 +33,18 @@ function prefetchPreviewUrl(url: string) {
     prefetchAudioPool.push(a);
 }
 
-export function SongRound({ songId }: { songId: string | null }) {
+// Wie weit der Song laut Server-Zeitstempel gerade sein müsste (Sekunden).
+// Deckel bei 28s, damit ein spät beigetretener/aufgewachter Client nicht
+// versucht, über das Ende einer typischen 30s-iTunes-Preview hinaus zu
+// seeken.
+function targetOffsetSeconds(startedAt: string | null): number {
+    if (!startedAt) return 0;
+    const startedMs = Date.parse(startedAt);
+    if (Number.isNaN(startedMs)) return 0;
+    return Math.max(0, Math.min(28, (Date.now() - startedMs) / 1000));
+}
+
+export function SongRound({ songId, startedAt }: { songId: string | null; startedAt: string | null }) {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [blocked, setBlocked] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -127,6 +138,17 @@ export function SongRound({ songId }: { songId: string | null }) {
         }
         el.src = previewUrl;
         el.volume = getVolume();
+        // Synchrone Wiedergabe: alle Clients starten an derselben Stelle im
+        // Song, berechnet aus current_song_started_at statt "wann ist mein
+        // eigener Buffer fertig". currentTime lässt sich vor Metadaten schon
+        // setzen (wird beim Laden übernommen), zur Sicherheit zusätzlich
+        // nochmal auf "loadedmetadata".
+        const target = targetOffsetSeconds(startedAt);
+        el.currentTime = target;
+        const onLoadedMeta = () => {
+            el.currentTime = targetOffsetSeconds(startedAt);
+        };
+        el.addEventListener("loadedmetadata", onLoadedMeta);
         el.play()
             .then(() => setBlocked(false))
             .catch(() => {
@@ -137,11 +159,28 @@ export function SongRound({ songId }: { songId: string | null }) {
                 // Tippen-zum-Abspielen-Button, der garantiert funktioniert.
                 setBlocked(true);
             });
-    }, [previewUrl]);
+        return () => el.removeEventListener("loadedmetadata", onLoadedMeta);
+    }, [previewUrl, startedAt]);
 
     useEffect(() => {
         if (!songId) audioRef.current?.pause();
     }, [songId]);
+
+    // Drift-Korrektur: läuft ein Client (Buffering, gedrosselter Hintergrund-
+    // Tab, ...) spürbar aus dem Takt, wird alle paar Sekunden hart auf die
+    // Server-Zielposition zurückgesprungen statt langsam auseinanderzulaufen.
+    useEffect(() => {
+        if (!previewUrl || !startedAt) return;
+        const t = window.setInterval(() => {
+            const el = audioRef.current;
+            if (!el || el.paused) return;
+            const target = targetOffsetSeconds(startedAt);
+            if (Math.abs(el.currentTime - target) > 0.75) {
+                el.currentTime = target;
+            }
+        }, 4000);
+        return () => window.clearInterval(t);
+    }, [previewUrl, startedAt]);
 
     // Live nachziehen, wenn Mute/Lautstärke ÜBER AudioControl geändert wird,
     // während der Song schon läuft -- vorher wirkte der Regler erst beim
@@ -156,17 +195,19 @@ export function SongRound({ songId }: { songId: string | null }) {
             }
             el.volume = getVolume();
             if (el.paused && !blocked) {
+                el.currentTime = targetOffsetSeconds(startedAt);
                 void el.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
             }
         };
         return onAudioSettingsChanged(apply);
-    }, [previewUrl, blocked]);
+    }, [previewUrl, blocked, startedAt]);
 
     const retryPlay = useCallback(() => {
         const el = audioRef.current;
         if (!el) return;
+        el.currentTime = targetOffsetSeconds(startedAt);
         void el.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
-    }, []);
+    }, [startedAt]);
 
     if (!songId) return null;
 

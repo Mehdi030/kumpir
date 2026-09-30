@@ -9,7 +9,7 @@
  *  - prefers-reduced-motion (vibration only)
  */
 
-type FxKind = "vote" | "voteWin" | "tick" | "pass" | "selfExplode" | "explode" | "victory";
+type FxKind = "vote" | "voteWin" | "tick" | "pass" | "selfExplode" | "explode" | "victory" | "wrong";
 
 let ctx: AudioContext | null = null;
 let muted: boolean | null = null;
@@ -209,6 +209,13 @@ export function playFx(kind: FxKind) {
             tone(880, 160, { type: "triangle", gain: 0.18, delayMs: 130 });
             tone(1320, 220, { type: "sine", gain: 0.18, delayMs: 290 });
             vibrate([30, 60, 30, 60, 80]);
+            return;
+        case "wrong":
+            // Zwei kurze, tiefe Buzzer -- eindeutig "falsch", ohne den
+            // Explosions-Sound zu benutzen (der bedeutet Runden-Ende).
+            tone(180, 90, { type: "square", gain: 0.2 });
+            tone(180, 90, { type: "square", gain: 0.2, delayMs: 130 });
+            vibrate([70, 60, 70]);
             return;
     }
 }

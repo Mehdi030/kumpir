@@ -1331,8 +1331,17 @@ body::after{
     border-color: rgba(160,160,170,0.28);
 }
 .playerChipReady {
-    background: rgba(34,197,94,0.22);
-    border-color: rgba(34,197,94,0.4);
+    background: rgba(34,197,94,0.38);
+    border-color: rgba(52,220,110,0.75);
+    box-shadow: 0 0 18px rgba(34,197,94,0.45), inset 0 0 14px rgba(52,220,110,0.18);
+    animation: playerChipReadyGlow 2.4s ease-in-out infinite;
+}
+@keyframes playerChipReadyGlow {
+    0%, 100% { box-shadow: 0 0 14px rgba(34,197,94,0.35), inset 0 0 10px rgba(52,220,110,0.14); }
+    50% { box-shadow: 0 0 26px rgba(34,197,94,0.65), inset 0 0 18px rgba(52,220,110,0.26); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .playerChipReady { animation: none; }
 }
 .playerChipSeat {
     flex-shrink: 0;

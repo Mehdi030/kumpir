@@ -113,29 +113,33 @@ export function PlayerRing({
         return () => mq?.removeEventListener?.("change", apply);
     }, []);
 
-    // Compute positions on ring (in container coords)
+    // Sitzplätze am Tisch: NUR lebende Spieler (plus wer GERADE explodiert,
+    // damit die Explosion noch an der alten Position abspielen kann, bevor
+    // der Platz verschwindet) bekommen einen Slot -- die Anzahl bestimmt den
+    // Winkelabstand. Fliegt jemand raus, schrumpft der Kreis SOFORT und die
+    // übrigen rücken durch die CSS-Transition auf left/top flüssig nach, statt
+    // dass tote Spieler dauerhaft ihren Platz besetzt halten.
+    const seatedPlayers = useMemo(
+        () => players.filter((p) => p.is_alive || p.player_id === explodedPlayerId),
+        [players, explodedPlayerId]
+    );
+
     const positions = useMemo(() => {
-        const n = players.length;
+        const n = seatedPlayers.length;
         const map = new Map<string, Pt>();
-        // fallback if no layout
         if (n === 0) return map;
 
-        // We'll assume the ring container is square-ish; we compute relative coords,
-        // then convert to px using container size.
-        // Use a slightly top-biased start angle so "top" seat feels natural.
         const startAngle = -Math.PI / 2;
         const step = (Math.PI * 2) / n;
 
-        // Base radius in % (converted later)
         for (let i = 0; i < n; i++) {
             const a = startAngle + i * step;
-            // relative [-1..1]
             const x = Math.cos(a);
             const y = Math.sin(a);
-            map.set(players[i]!.player_id, { x, y });
+            map.set(seatedPlayers[i]!.player_id, { x, y });
         }
         return map;
-    }, [players]);
+    }, [seatedPlayers]);
 
     // Convert relative coords to px coords using state-tracked size (no ref reads during render)
     const getPx = useCallback(
@@ -146,8 +150,15 @@ export function PlayerRing({
 
             const minSide = Math.min(size.w, size.h);
             const cx = size.w / 2;
-            const cy = size.h / 2;
-            const r = minSide * 0.38;
+            // Vertikal nach oben verschoben (nicht exakt Bildschirmmitte),
+            // damit der Tisch nicht mit der zentrierten Antwort-Box (.hud)
+            // kollidiert -- beide "in der Mitte", aber übereinander gestapelt
+            // statt deckungsgleich.
+            const cy = size.h * 0.32;
+            // Kompakter, mittiger Tisch statt über den ganzen Bildschirm
+            // verteilter Sitze -- "bestenfalls in der Mitte sowas wie einen
+            // Tisch" statt eines bildschirmfüllenden Rings.
+            const r = Math.min(minSide * 0.26, 200);
 
             return {
                 x: cx + rel.x * r,
@@ -263,116 +274,163 @@ export function PlayerRing({
 
     return (
         <div ref={containerRef} className="ringWrap">
-            {/* Player avatars positioned around the ring */}
-            {players.map((p) => {
-                const pos = getPx(p.player_id);
-                if (!pos) return null;
+            {/* 3D-Tisch: perspective auf dem äußeren Wrap, rotateX auf diesem
+                inneren Layer -- links/oben-Koordinaten der Sitze bleiben
+                dieselbe flache Kreis-Geometrie wie vorher, wirken durch die
+                Kippung aber wie an einem runden Tisch von schräg oben
+                betrachtet. Muss niemand als "echtes 3D" merken, nur so wirken. */}
+            <div className="tableTilt">
+                <div className="tableSurface" aria-hidden />
 
-                const isHolder = !!holderPlayerId && p.player_id === holderPlayerId;
-                const isMe = !!mePlayerId && p.player_id === mePlayerId;
-                const isExploded = !!explodedPlayerId && p.player_id === explodedPlayerId;
-                const isStale = p.is_alive && isDisconnected(p.player_id);
-                const hue = hueFor(p.player_id);
+                {/* Sitze: nur der Halter ist wirklich prominent -- die anderen
+                    sind bewusst klein/still gehalten ("muss man nicht sehen"),
+                    Hauptsache man sieht die Kumpir rotieren. */}
+                {players.map((p) => {
+                    const pos = getPx(p.player_id);
+                    if (!pos) return null;
 
-                return (
-                    <div
-                        key={p.player_id}
-                        className={`seat ${isHolder ? "holder" : ""} ${isMe ? "me" : ""} ${!p.is_alive ? "dead" : ""} ${isExploded ? "exploded" : ""}`}
-                        style={{
-                            left: pos.x,
-                            top: pos.y,
-                            background: `radial-gradient(circle at 30% 30%, hsl(${hue},85%,68%), hsl(${(hue + 30) % 360},75%,42%))`,
-                        }}
-                        aria-label={p.name}
-                        title={p.name}
-                    >
-                        <span className="seatInitials">{initialsFor(p.name)}</span>
-                        <span className="seatName">
-                            {p.name}
-                            {isMe ? " (du)" : ""}
-                        </span>
-                        {isHolder ? <span className="seatBadge" aria-hidden>🥔</span> : null}
-                        {!p.is_alive ? <span className="seatDeadOverlay" aria-hidden>💀</span> : null}
-                        {isExploded ? <span className="seatBoom" aria-hidden>💥</span> : null}
-                        {isStale ? (
-                            <span className="seatStale" title="Verbindung verloren?" aria-label="Verbindung verloren?">
-                                📡
+                    const isHolder = !!holderPlayerId && p.player_id === holderPlayerId;
+                    const isMe = !!mePlayerId && p.player_id === mePlayerId;
+                    const isExploded = !!explodedPlayerId && p.player_id === explodedPlayerId;
+                    const isStale = p.is_alive && isDisconnected(p.player_id);
+                    const hue = hueFor(p.player_id);
+
+                    return (
+                        <div
+                            key={p.player_id}
+                            className={`seat ${isHolder ? "holder" : ""} ${isMe ? "me" : ""} ${!p.is_alive ? "dead" : ""} ${isExploded ? "exploded" : ""}`}
+                            style={{
+                                left: pos.x,
+                                top: pos.y,
+                                background: `radial-gradient(circle at 30% 30%, hsl(${hue},85%,68%), hsl(${(hue + 30) % 360},75%,42%))`,
+                            }}
+                            aria-label={p.name}
+                            title={p.name}
+                        >
+                            <span className="seatInitials">{initialsFor(p.name)}</span>
+                            <span className="seatName">
+                                {p.name}
+                                {isMe ? " (du)" : ""}
                             </span>
-                        ) : null}
+                            {isHolder ? <span className="seatBadge" aria-hidden>🥔</span> : null}
+                            {!p.is_alive ? <span className="seatDeadOverlay" aria-hidden>💀</span> : null}
+                            {isExploded ? <span className="seatBoom" aria-hidden>💥</span> : null}
+                            {isStale ? (
+                                <span className="seatStale" title="Verbindung verloren?" aria-label="Verbindung verloren?">
+                                    📡
+                                </span>
+                            ) : null}
+                        </div>
+                    );
+                })}
+
+                {/* Pass overlay */}
+                {flyRender ? (
+                    <div className="passOverlay" aria-hidden>
+                        {/* trail line using an SVG */}
+                        <svg className="trailSvg" width="100%" height="100%">
+                            <path
+                                d={`M ${flyRender.p0.x} ${flyRender.p0.y} Q ${flyRender.p1.x} ${flyRender.p1.y} ${flyRender.p2.x} ${flyRender.p2.y}`}
+                                className="trailPath"
+                                style={{ strokeDashoffset: `${(1 - flyRender.t) * 220}` }}
+                            />
+                        </svg>
+
+                        {/* flying potato */}
+                        <div
+                            className="potato"
+                            style={{
+                                left: flyRender.x,
+                                top: flyRender.y,
+                                transform: `translate(-50%, -50%) rotate(${flyRender.rot}rad) scale(${flyRender.scale})`,
+                                opacity: 1,
+                            }}
+                        >
+                            🥔
+                            <span className="potatoGlow" />
+                        </div>
                     </div>
-                );
-            })}
+                ) : null}
 
-            {/* Pass overlay */}
-            {flyRender ? (
-                <div className="passOverlay" aria-hidden>
-                    {/* trail line using an SVG */}
-                    <svg className="trailSvg" width="100%" height="100%">
-                        <path
-                            d={`M ${flyRender.p0.x} ${flyRender.p0.y} Q ${flyRender.p1.x} ${flyRender.p1.y} ${flyRender.p2.x} ${flyRender.p2.y}`}
-                            className="trailPath"
-                            style={{ strokeDashoffset: `${(1 - flyRender.t) * 220}` }}
-                        />
-                    </svg>
-
-                    {/* flying potato */}
+                {/* Receiver pop highlight */}
+                {popPlayerId && popRender ? (
                     <div
-                        className="potato"
+                        className="receiverPop"
                         style={{
-                            left: flyRender.x,
-                            top: flyRender.y,
-                            transform: `translate(-50%, -50%) rotate(${flyRender.rot}rad) scale(${flyRender.scale})`,
-                            opacity: 1,
+                            left: popRender.x,
+                            top: popRender.y,
+                            transform: "translate(-50%, -50%)",
                         }}
-                    >
-                        🥔
-                        <span className="potatoGlow" />
-                    </div>
-                </div>
-            ) : null}
-
-            {/* Receiver pop highlight */}
-            {popPlayerId && popRender ? (
-                <div
-                    className="receiverPop"
-                    style={{
-                        left: popRender.x,
-                        top: popRender.y,
-                        transform: "translate(-50%, -50%)",
-                    }}
-                    aria-hidden
-                />
-            ) : null}
+                        aria-hidden
+                    />
+                ) : null}
+            </div>
 
             <style>{`
         .ringWrap{
           position: relative;
           width: 100%;
           height: 100%;
+          perspective: 1300px;
+        }
+
+        /* Runder Tisch in 3D: links/oben der Sitze bleiben eine flache
+           Kreis-Geometrie, die Kippung hier macht optisch die Ellipse
+           "von schräg oben betrachtet" daraus. */
+        .tableTilt{
+          position:absolute;
+          inset:0;
+          transform-style: preserve-3d;
+          transform: rotateX(50deg);
+        }
+        .tableSurface{
+          position:absolute;
+          left:50%;
+          top:32%;
+          width: min(52vmin, 520px);
+          height: min(52vmin, 520px);
+          transform: translate(-50%,-50%);
+          border-radius: 50%;
+          background:
+            radial-gradient(circle at 35% 28%, rgba(255,255,255,0.10), transparent 55%),
+            radial-gradient(circle at 50% 50%, rgba(120,60,20,0.55), rgba(40,18,8,0.88) 78%);
+          border: 2px solid rgba(255,180,110,0.14);
+          box-shadow: 0 50px 110px rgba(0,0,0,0.55), inset 0 0 70px rgba(0,0,0,0.55), inset 0 0 0 14px rgba(255,255,255,0.03);
         }
 
         .seat{
           position:absolute;
-          width: 64px;
-          height: 64px;
+          width: 44px;
+          height: 44px;
           border-radius: 999px;
           transform: translate(-50%, -50%);
           display: grid;
           place-items: center;
-          color: rgba(255,255,255,0.96);
-          font-weight: 1000;
-          font-size: 18px;
+          color: rgba(255,255,255,0.9);
+          font-weight: 900;
+          font-size: 13px;
           letter-spacing: 0.4px;
-          border: 2px solid rgba(255,255,255,0.18);
-          box-shadow: 0 14px 40px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.18);
+          border: 2px solid rgba(255,255,255,0.14);
+          box-shadow: 0 10px 26px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.14);
           z-index: 30;
-          transition: transform .25s cubic-bezier(.2,1,.2,1), box-shadow .25s ease, border-color .25s ease, opacity .25s ease;
+          opacity: 0.55;
+          transition: left .45s cubic-bezier(.2,1,.2,1), top .45s cubic-bezier(.2,1,.2,1), transform .25s cubic-bezier(.2,1,.2,1), box-shadow .25s ease, border-color .25s ease, opacity .25s ease;
         }
-        .seat .seatInitials{
-          text-shadow: 0 4px 14px rgba(0,0,0,0.4);
-          user-select: none;
-        }
+        /* Die anderen muss man nicht wirklich sehen -- bewusst klein und
+           still, Hauptsache die Kumpir-Rotation bleibt klar erkennbar. */
         .seat .seatName{
+          display: none;
+        }
+        .seat.me{
+          opacity: 0.9;
+          border-color: rgba(34,211,238,0.78);
+          box-shadow:
+            0 14px 50px rgba(0,0,0,0.35),
+            0 0 0 4px rgba(34,211,238,0.18),
+            inset 0 1px 0 rgba(255,255,255,0.18);
+        }
+        .seat.me .seatName{
+          display: block;
           position: absolute;
           top: calc(100% + 6px);
           left: 50%;
@@ -385,20 +443,14 @@ export function PlayerRing({
           background: rgba(0,0,0,0.42);
           border: 1px solid rgba(255,255,255,0.10);
           white-space: nowrap;
-          max-width: 130px;
-          overflow: hidden;
-          text-overflow: ellipsis;
           opacity: 0.92;
         }
-        .seat.me{
-          border-color: rgba(34,211,238,0.78);
-          box-shadow:
-            0 14px 50px rgba(0,0,0,0.35),
-            0 0 0 4px rgba(34,211,238,0.18),
-            inset 0 1px 0 rgba(255,255,255,0.18);
-        }
         .seat.holder{
-          transform: translate(-50%, -50%) scale(1.18);
+          width: 56px;
+          height: 56px;
+          opacity: 1;
+          font-size: 15px;
+          transform: translate(-50%, -50%) scale(1.3);
           border-color: rgba(255,214,10,0.92);
           box-shadow:
             0 18px 60px rgba(0,0,0,0.40),

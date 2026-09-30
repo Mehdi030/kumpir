@@ -107,12 +107,6 @@ export default function HostPage() {
     // erst klicken muss.
     const [mode, setMode] = useState<ModeKey | null>("original");
     const [answerMode, setAnswerMode] = useState<AnswerMode>("text");
-    // Musik-Modus ist jetzt ein einfacher An/Aus-Schalter -- AN wählt
-    // automatisch alle verfügbaren Musik-Kategorien (bisher konnte man
-    // versehentlich nur 1 auswählen, wodurch die Themen-Wahl dieselbe
-    // Kategorie mehrfach zeigte).
-    const [musicMode, setMusicMode] = useState(false);
-    const musicGenres = useMemo(() => (musicMode ? MUSIC_GENRE_KEYS : []), [musicMode]);
 
     const activeMode = mode ? MODES[mode] : null;
     const activeSpeed = roundSpeed ? ROUND_SPEEDS[roundSpeed] : null;
@@ -187,7 +181,11 @@ export default function HostPage() {
                 return;
             }
 
-            if ((mode && mode !== "original") || musicGenres.length > 0 || answerMode !== "text") {
+            // Musik läuft jetzt immer (kein Aus/An-Schalter mehr) -- jede Runde
+            // zieht aus den Musik-Kategorien, bis es einen echten neuen Modus
+            // dafür gibt. set_lobby_topic_filter läuft deshalb immer mit,
+            // unabhängig von mode/answerMode.
+            {
                 const { data: lobbyRow, error: lobbyErr } = await supabase
                     .from("lobbies")
                     .select("id")
@@ -202,13 +200,11 @@ export default function HostPage() {
                             p_mode: mode,
                         });
                     }
-                    if (musicGenres.length > 0) {
-                        await supabase.rpc("set_lobby_topic_filter", {
-                            p_lobby_id: lobbyRow.id,
-                            p_me_player_id: hostPlayerId,
-                            p_categories: musicGenres,
-                        });
-                    }
+                    await supabase.rpc("set_lobby_topic_filter", {
+                        p_lobby_id: lobbyRow.id,
+                        p_me_player_id: hostPlayerId,
+                        p_categories: MUSIC_GENRE_KEYS,
+                    });
                     if (answerMode !== "text") {
                         await supabase.rpc("set_lobby_answer_mode", {
                             p_lobby_id: lobbyRow.id,
@@ -226,7 +222,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, musicGenres, answerMode, supabase, maxPlayers, router, user?.id]);
+    }, [canCreate, hostName, roundSpeed, mode, answerMode, supabase, maxPlayers, router, user?.id]);
 
     return (
         <main className="container">
@@ -371,42 +367,12 @@ export default function HostPage() {
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">🎵 Musik-Modus</div>
-                                    <div className="pillCardHint">
-                                        {musicMode ? "An — nur Musik-Runden" : "Aus — Musik mischt sich normal unter alle Themen"}
-                                    </div>
+                                    <div className="pillCardTitle">🎵 Musik</div>
+                                    <div className="pillCardHint">Läuft immer mit</div>
                                 </div>
-
-                                <div className="pillSeg">
-                                    <button
-                                        type="button"
-                                        className={`pillSegBtn segChoice ${!musicMode ? "segChoiceActive" : ""}`}
-                                        onClick={() => setMusicMode(false)}
-                                        aria-pressed={!musicMode}
-                                    >
-                                        Aus
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`pillSegBtn segChoice ${musicMode ? "segChoiceActive" : ""}`}
-                                        data-variant="Shisha Club"
-                                        onClick={() => setMusicMode(true)}
-                                        aria-pressed={musicMode}
-                                    >
-                                        🎵 An
-                                    </button>
-                                </div>
-
-                                <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                    {musicMode ? (
-                                        <>
-                                            <span style={{ fontWeight: 900 }}>Reiner Musik-Abend:</span>{" "}
-                                            jede Runde ist eine der {MUSIC_GENRE_KEYS.length} Playlists ({MUSIC_GENRE_KEYS.join(", ")}) — der Halter
-                                            hört einen Song-Schnipsel und muss Titel oder Interpret erraten.
-                                        </>
-                                    ) : (
-                                        "Aus = Musik-Kategorien mischen sich normal unter alle anderen Themen."
-                                    )}
+                                <div className="fieldHelp" style={{ opacity: 0.9 }}>
+                                    Jede Runde ist eine der {MUSIC_GENRE_KEYS.length} Playlists ({MUSIC_GENRE_KEYS.join(", ")}) — der Halter
+                                    hört einen Song-Schnipsel und muss Titel oder Interpret erraten.
                                 </div>
                             </div>
 
