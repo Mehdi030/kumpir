@@ -18,7 +18,7 @@ const AUTH_ROUTES = ["/login", "/register", "/verified", "/auth"];
 // Nutzer eh nie einloggen (siehe oben), also direkt auf "/" umleiten statt
 // sie auf einer "Bitte einloggen"-Seite stranden zu lassen, deren Login-
 // Button ohnehin wieder hierher umgeleitet würde.
-const AUTH_ONLY_ROUTES = ["/achievements", "/leaderboard", "/friends"];
+const AUTH_ONLY_ROUTES = ["/achievements", "/leaderboard", "/friends", "/profile"];
 
 export function proxy(req: NextRequest) {
     if (!AUTH_DISABLED) return NextResponse.next();

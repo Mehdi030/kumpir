@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
+import { useProfile } from "@/hooks/useProfile";
 import { MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
 import { RulesCard } from "@/components/RulesCard";
 
@@ -98,8 +99,14 @@ export default function HostPage() {
     const supabase = getSupabaseClient();
     const router = useRouter();
     const { user } = useAuth();
+    const { profile } = useProfile();
 
     const [hostName, setHostName] = useState("");
+    // Eingeloggt: Username als Name vorbelegen (bleibt änderbar).
+    useEffect(() => {
+        const u = profile?.username;
+        if (u) setHostName((cur) => (cur ? cur : u.slice(0, 24)));
+    }, [profile?.username]);
     const [maxPlayers, setMaxPlayers] = useState(8);
 
     const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>(null);

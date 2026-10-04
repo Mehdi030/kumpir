@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
+import { useProfile } from "@/hooks/useProfile";
 
 function normalizeCode(input: string) {
     return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
@@ -55,6 +56,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
     const supabase = getSupabaseClient();
     const router = useRouter();
     const { user } = useAuth();
+    const { profile } = useProfile();
 
     const fixedCodeFromLink = normalizeCode(initialCode);
     const hasFixedCode = fixedCodeFromLink.length === 4;
@@ -75,6 +77,12 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
         setMounted(true);
         setName(getStoredName());
     }, []);
+
+    // Eingeloggt und noch kein gespeicherter Name: Username vorbelegen.
+    useEffect(() => {
+        const u = profile?.username;
+        if (u) setName((cur) => (cur ? cur : sanitizeName(u)));
+    }, [profile?.username]);
 
     useEffect(() => {
         if (!showNameModal) return;

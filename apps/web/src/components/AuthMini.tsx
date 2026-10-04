@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { NotifyToggle } from "@/components/NotifyToggle";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useProfile } from "@/hooks/useProfile";
 
 type Props = {
     nextPath?: string;
@@ -13,12 +12,7 @@ type Props = {
 
 export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     const { user, loading } = useAuth();
-    const supabase = useMemo(() => getSupabaseClient(), []);
-
-    async function logout() {
-        await supabase.auth.signOut();
-    }
-
+    const { profile } = useProfile();
     const loginHref = `/login?next=${encodeURIComponent(nextPath)}`;
 
     if (loading) {
@@ -38,30 +32,14 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
         );
     }
 
-    // Achievements/Leaderboard/Friends sind Auth-only (Etappe 3). Diese
-    // Links rendern nur, wenn `user` gesetzt ist -- im aktuellen Gast-Modus
-    // (NEXT_PUBLIC_AUTH_DISABLED=1) kann niemand einloggen, also sind sie
-    // hier faktisch tot. Direkte URL-Aufrufe der drei Routen werden
-    // zusätzlich in src/proxy.ts auf "/" umgeleitet, damit niemand auf
-    // einer nutzlosen "Bitte einloggen"-Seite landet.
+    // Eingeloggt: ein kompakter Konto-Link (alles Weitere liegt unter /profile).
+    const shownName = profile?.username ?? user.email.split("@")[0];
     return (
         <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
             <NotifyToggle className={variant === "header" ? "homeLink" : "btn btnSecondary btnSmall"} />
-            <Link className={variant === "header" ? "homeLink" : "btn btnSecondary"} href="/achievements" title="Achievements & Stats">
-                🏆
+            <Link className={variant === "header" ? "homeLink homeLinkStrong homeUser" : "btn btnSecondary"} href="/profile" title="Mein Konto">
+                👤 {shownName}
             </Link>
-            <Link className={variant === "header" ? "homeLink" : "btn btnSecondary"} href="/leaderboard" title="Leaderboard">
-                📊
-            </Link>
-            <Link className={variant === "header" ? "homeLink" : "btn btnSecondary"} href="/friends" title="Freunde & gespeicherte Lobbies">
-                👥
-            </Link>
-            <span className={variant === "header" ? "homeLink homeUser" : "btn btnSecondary"} title={user.email ?? ""}>
-                {user.email}
-            </span>
-            <button type="button" className={variant === "header" ? "homeLink" : "btn btnSecondary"} onClick={logout}>
-                Abmelden
-            </button>
         </div>
     );
 }

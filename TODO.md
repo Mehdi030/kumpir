@@ -3,12 +3,14 @@
 Reihenfolge = Priorität. Erledigtes wandert nach unten.
 
 ## Als Nächstes
-- [ ] **Account-System mit Login** (startet direkt nach der UI-Überarbeitung)
-  - Login / Registrierung (E-Mail + Passwort, optional Username) sauber durchziehen: Auth wieder produktiv aktivieren (`NEXT_PUBLIC_AUTH_DISABLED`)
-  - Profil (Username, Avatar), Passwort-Reset, E-Mail-Bestätigung
-  - Spielstände an den Account binden: Saison-Punkte, Siege, Achievements, Freunde (Tabellen/Seiten existieren bereits)
-  - Gast → Account: laufende Gast-Identität beim Registrieren übernehmen
-  - Login-Prompt am Spielende („Speichere deine Punkte“)
+- [ ] **Account-System mit Login** (Grundlage steht, Ausbau läuft)
+  - [x] Login (E-Mail oder Username), Registrierung mit Username-Check, E-Mail-Bestätigung, Passwort-Reset – bestanden schon, Auth ist aktiv
+  - [x] Konto-Seite `/profile` (Stats, Saison-Punkte, Passwort ändern, Abmelden), Konto-Link auf der Startseite
+  - [x] Username wird beim Hosten/Beitreten vorbelegt; Endseite zeigt „gespeichert“ bzw. „Konto erstellen“
+  - [ ] Registrierung und Mail-Versand einmal mit einem echten Postfach durchtesten (Mail-Texte auf Deutsch, Absender)
+  - [ ] Gast → Konto: Spielstand der laufenden Gast-Identität beim Registrieren übernehmen
+  - [ ] Avatar/Farbe im Profil wählen, Konto löschen (DSGVO), Username ändern
+  - [ ] Optional: Login mit Google/Apple
 
 ## Spiel
 - [ ] Bots unterschiedlich stark (Anfänger / Profi), damit ein Sieg nicht zufällig ist

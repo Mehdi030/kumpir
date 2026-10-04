@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
 import { Spinner } from "@/components/Spinner";
 import { ToastStack } from "@/components/ToastStack";
@@ -29,6 +30,7 @@ type Props = {
     seriesRows: SeriesRow[];
     mePlayerId: string | null;
     highlights: FinishHighlight[];
+    loggedIn: boolean;
     busy: "reset" | "rematch" | null;
     onRematch: () => void;
     onLobby: () => void;
@@ -42,7 +44,7 @@ const MEDAL = ["🥇", "🥈", "🥉"];
  * Bei mehreren Runden ist die Wertung die Match-Gesamtwertung (Punkte je Runde + Summe),
  * bei einer einzelnen Runde die Rundenwertung.
  */
-export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seriesRows, mePlayerId, highlights, busy, onRematch, onLobby, toasts }: Props) {
+export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seriesRows, mePlayerId, highlights, loggedIn, busy, onRematch, onLobby, toasts }: Props) {
     return (
         <div className="finWrap">
             <header className="finHero">
@@ -100,6 +102,17 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
                 </section>
             ) : null}
 
+            {loggedIn ? (
+                <div className="finAccount ok">✓ Deine Punkte und Siege sind auf deinem Konto gespeichert.</div>
+            ) : (
+                <div className="finAccount">
+                    <span>💾 Punkte, Siege und Saison-Rang behalten?</span>
+                    <Link href="/register?next=/" className="finAccountLink">
+                        Gratis-Konto erstellen
+                    </Link>
+                </div>
+            )}
+
             <div className="finActions">
                 <button type="button" className="btn btnPrimary btnXL" onClick={onRematch} disabled={!!busy} title="Direkt nochmal (Taste R)">
                     {busy === "rematch" ? <Spinner size={16} label="Starte…" /> : "🔁 Nochmal spielen"}
@@ -145,6 +158,9 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
         .finTileName{ font-size: 18px; font-weight: 800; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .finTileValue{ font-size: 14px; font-weight: 700; color: #ffe08a; }
 
+        .finAccount{ display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 12px 16px; border-radius: 16px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.2); font-size: 14px; font-weight: 600; text-align: center; }
+        .finAccount.ok{ background: rgba(60,200,110,.18); border-color: rgba(110,230,150,.45); }
+        .finAccountLink{ color: #2b0f04; background: #ffd23f; padding: 6px 14px; border-radius: 999px; font-weight: 800; text-decoration: none; }
         .finActions{ display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
         .finHint{ text-align: center; font-size: 12px; opacity: .6; }
 

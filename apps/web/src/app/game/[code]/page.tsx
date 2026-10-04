@@ -1722,6 +1722,7 @@ export default function GamePage() {
                     seriesRows={seriesRows}
                     mePlayerId={mePlayerId}
                     highlights={highlights}
+                    loggedIn={!!user}
                     busy={endActionBusy}
                     onRematch={() => void doRematch()}
                     onLobby={() => void doLobby()}
