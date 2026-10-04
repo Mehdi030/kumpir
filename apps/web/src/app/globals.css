@@ -1640,3 +1640,170 @@ body::after{
     0%, 100% { box-shadow: 0 0 0 0 rgba(230,40,40,0.35); }
     50% { box-shadow: 0 0 0 10px rgba(230,40,40,0); }
 }
+
+
+/* =====================================================================
+   THEME 2 — "Kumpir Pop"
+   Rot-gelber Verlauf bleibt. Darüber: ruhige Glas-Karten, klare Typo,
+   gelbe Haupt-Buttons mit "Knopf"-Schatten, runde Formen.
+   (Steht bewusst am Ende, damit es die älteren Regeln überschreibt.)
+   ===================================================================== */
+
+:root{
+    --ink: #2b0f04;
+    --glass: rgba(38, 9, 6, .46);
+    --glass-soft: rgba(255, 255, 255, .08);
+    --glass-line: rgba(255, 255, 255, .17);
+    --sun: #ffd23f;
+    --sun-deep: #ff9f1c;
+    --r-card: 30px;
+}
+
+body{
+    background: linear-gradient(180deg, #8f0f0f 0%, #c53a12 30%, #f08a1a 62%, #f6d645 100%) fixed;
+    box-shadow: none;
+}
+
+/* Statt Diagonal-Streifen: weiche Farbflecken + feines Punktraster */
+body::before{
+    background:
+        radial-gradient(560px 560px at 6% 8%, rgba(255, 224, 110, .30), transparent 70%),
+        radial-gradient(680px 680px at 98% 34%, rgba(255, 84, 52, .30), transparent 70%),
+        radial-gradient(760px 760px at 16% 100%, rgba(255, 255, 255, .20), transparent 70%),
+        radial-gradient(rgba(255, 255, 255, .13) 1.3px, transparent 1.7px) 0 0 / 28px 28px;
+    opacity: 1;
+}
+body::after{
+    background: radial-gradient(1400px 800px at 50% 30%, transparent 62%, rgba(40, 0, 0, .20) 100%);
+    opacity: 1;
+}
+
+/* ---------- Karten ---------- */
+.card{
+    background: var(--glass);
+    border: 1px solid var(--glass-line);
+    border-radius: var(--r-card);
+    padding: 30px;
+    box-shadow: 0 30px 80px rgba(60, 8, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .16);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+.card::before, .card::after{ display: none; }
+
+.stepsBox, .panel, .pillCard{
+    background: var(--glass-soft);
+    border: 1px solid var(--glass-line);
+    box-shadow: none;
+}
+.pillCard{ border-radius: 20px; padding: 14px; }
+.panel{ border-radius: 20px; }
+
+/* ---------- Typografie ---------- */
+.h1{ font-weight: 800; letter-spacing: -0.03em; text-shadow: 0 6px 24px rgba(0, 0, 0, .28); }
+.p{ color: rgba(255, 255, 255, .86); }
+.pillCardTitle, .fieldTitle{ font-weight: 800; letter-spacing: .1px; opacity: 1; }
+.pillCardHint, .fieldHint{ opacity: .7; }
+
+/* ---------- Buttons ---------- */
+.btn{
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, .22);
+    font-weight: 800;
+    letter-spacing: .1px;
+    transition: transform .14s var(--ease), box-shadow .14s var(--ease), filter .2s var(--ease), background .2s var(--ease);
+}
+.btnPrimary, .btnPrimary:visited{
+    background: linear-gradient(180deg, #ffe066 0%, #ffbe2e 55%, #ff9f1c 100%);
+    color: var(--ink);
+    border: 1px solid rgba(255, 255, 255, .55);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, .35);
+    box-shadow: 0 5px 0 #b8620a, 0 14px 26px rgba(80, 20, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+.btnPrimary{ padding: 14px 24px; }
+.btnPrimary:hover{ filter: brightness(1.04); }
+.btnPrimary:active{
+    transform: translateY(4px);
+    box-shadow: 0 1px 0 #b8620a, 0 6px 14px rgba(80, 20, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.btnPrimary:disabled, .btnPrimary.btnDisabled{
+    filter: grayscale(.6) brightness(.9);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, .25);
+    cursor: not-allowed;
+}
+.btnSecondary, .btnAccent{
+    background: rgba(255, 255, 255, .14);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, .28);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, .18);
+}
+.btnSecondary:hover, .btnAccent:hover{ background: rgba(255, 255, 255, .22); }
+.btnSecondary:active, .btnAccent:active{ transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, .18); }
+.btnXL{ padding: 16px 28px; font-size: 1.05rem; border-radius: 18px; }
+.btnSmall{ padding: 9px 14px; border-radius: 14px; }
+
+/* ---------- Formulare ---------- */
+.input{
+    height: 48px;
+    border-radius: 16px;
+    background: rgba(0, 0, 0, .28);
+    border: 1px solid rgba(255, 255, 255, .2);
+}
+.input:focus{ border-color: var(--sun); box-shadow: 0 0 0 4px rgba(255, 210, 63, .25); }
+.pillInputWrap{ background: rgba(0, 0, 0, .24); border: 1px solid rgba(255, 255, 255, .2); box-shadow: none; }
+.pillInputWrap:focus-within{ background: rgba(0, 0, 0, .3); border-color: var(--sun); box-shadow: 0 0 0 4px rgba(255, 210, 63, .22); transform: none; }
+.pillIcon{ background: rgba(255, 255, 255, .1); }
+.pillSegBtn, .pillStepBtn, .pillIconBtn, .segBtn{
+    background: rgba(255, 255, 255, .1);
+    border: 1px solid rgba(255, 255, 255, .2);
+}
+.pillStepValue{ background: rgba(0, 0, 0, .26); border-color: rgba(255, 255, 255, .16); }
+.segChoice{ box-shadow: none; }
+.segChoiceActive{
+    transform: none;
+    background: rgba(255, 210, 63, .26);
+    border-color: var(--sun) !important;
+    box-shadow: 0 0 0 3px rgba(255, 210, 63, .22);
+    filter: none;
+}
+.segChoice:not(.segChoiceActive):hover{ transform: none; }
+.fieldHelp{ color: rgba(255, 255, 255, .72); }
+
+/* ---------- Startseite ---------- */
+.homeCard{ padding-top: 26px; }
+.homeTop{ display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.homeTopRight{ display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.homeBadge{
+    padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    background: rgba(255, 255, 255, .12); border: 1px solid var(--glass-line);
+}
+.homeAuth{ display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.homeLink{
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 700;
+    color: #fff; text-decoration: none; cursor: pointer;
+    background: transparent; border: 1px solid transparent;
+    transition: background .15s ease, border-color .15s ease;
+}
+.homeLink:hover{ background: rgba(255, 255, 255, .12); border-color: var(--glass-line); }
+.homeLinkStrong{ background: rgba(255, 255, 255, .16); border-color: var(--glass-line); }
+.homeUser{ max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(255, 255, 255, .1); }
+.homeHero{ text-align: center; margin-top: 18px; }
+.homeTitle{ font-size: clamp(54px, 11vw, 92px); line-height: 1; }
+.homeTagline{ margin: 12px auto 0; max-width: 34ch; font-size: clamp(16px, 2.6vw, 20px); line-height: 1.45; color: rgba(255, 255, 255, .9); font-weight: 500; }
+.homeCta{ margin-top: 24px; gap: 14px; justify-content: center; }
+.homeFree{ margin: 14px 0 0; text-align: center; font-size: 13px; opacity: .7; }
+.homeSteps{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 26px; }
+.homeStep{ padding: 16px 14px; border-radius: 20px; background: var(--glass-soft); border: 1px solid var(--glass-line); text-align: left; }
+.homeStepIcon{ font-size: 28px; line-height: 1; margin-bottom: 8px; }
+.homeStepTitle{ font-weight: 800; font-size: 15px; margin-bottom: 4px; }
+.homeStepText{ font-size: 13px; line-height: 1.45; color: rgba(255, 255, 255, .78); }
+.homeFooter{ text-align: center; font-size: 11px; opacity: .45; padding-top: 4px; }
+@media (max-width: 720px){
+    .homeSteps{ grid-template-columns: 1fr; }
+    .homeStep{ display: grid; grid-template-columns: 40px 1fr; column-gap: 12px; align-items: start; }
+    .homeStepIcon{ grid-row: span 2; margin: 0; }
+}
+@media (max-width: 720px){ .card{ padding: 22px; border-radius: 26px; } }
+
+/* Überschriften-Schrift überall einheitlich (Bricolage), Fließtext Inter */
+h1, h2, h3, .cardTitle, .resultTitle, .statusTitle, .finWinner, .headline{ font-family: var(--font-display); }

@@ -26,15 +26,15 @@ export const viewport: Viewport = {
     initialScale: 1,
 };
 
+// Variable Fonts (ohne weight-Liste): alle Stärken 100-800 stehen sauber zur Verfügung,
+// statt dass der Browser fette Schnitte künstlich nachbaut.
 const displayFont = Bricolage_Grotesque({
     subsets: ["latin"],
-    weight: ["600", "700", "800"],
     variable: "--font-display",
 });
 
 const bodyFont = Inter({
     subsets: ["latin"],
-    weight: ["400", "500", "600"],
     variable: "--font-body",
 });
 

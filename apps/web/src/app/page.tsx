@@ -9,102 +9,69 @@ import { HomeStatsSection } from "@/components/HomeStatsSection";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
+const STEPS = [
+    { icon: "🎲", title: "Lobby öffnen", text: "Einer hostet, alle anderen kommen mit einem 4-stelligen Code dazu." },
+    { icon: "🎧", title: "Song erkennen", text: "Ein Song läuft. Wer die Kumpir hat, tippt den Titel und gibt sie weiter." },
+    { icon: "💥", title: "Nicht erwischen lassen", text: "Die Zündschnur wird kürzer. Wer sie beim Knall hält, fliegt raus." },
+];
+
 export default function Home() {
     return (
         <main className="container">
             <div className="landingWrap landingWrapDecor">
-                {/* Decor / Mascot – hangs over the card */}
                 <div className="potatoBg" aria-hidden="true">
-                    <Image
-                        src="/HGLogo.png"
-                        alt=""
-                        width={900}
-                        height={600}
-                        priority
-                        quality={100}
-                        className="potatoBgImg"
-                    />
+                    <Image src="/HGLogo.png" alt="" width={900} height={600} priority quality={100} className="potatoBgImg" />
                 </div>
 
-                {/* FOREGROUND card */}
-                <section className="card" aria-label="Kumpir Landing Card">
-                    {/* Suspense boundary required for useSearchParams (inside LobbyExitNotice) */}
+                <section className="card homeCard" aria-label="Kumpir Startseite">
                     <Suspense fallback={null}>
                         <LobbyExitNotice />
                     </Suspense>
 
-                    <div className="metaBar metaBarInCard">
-                        <div className="metaLeft">
-                            <span className="metaPill">👥 2–12 Spieler</span>
-                        </div>
-                        <div className="metaRight" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span className="metaPill" title="Build-Version">
-                                v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"} · {process.env.NEXT_PUBLIC_BUILD_DATE ?? ""}
-                            </span>
+                    <div className="homeTop">
+                        <span className="homeBadge">👥 2–12 Spieler</span>
+                        <div className="homeTopRight">
+                            <Link href="/leaderboard" className="homeLink">
+                                🏆 Bestenliste
+                            </Link>
                             {!AUTH_DISABLED ? <AuthMini nextPath="/host" variant="header" /> : null}
                         </div>
                     </div>
 
-                    <header className="heroRow">
-                        <div className="brandRow">
-                            <h1 className="h1">Kumpir</h1>
-                        </div>
+                    <header className="homeHero">
+                        <h1 className="h1 homeTitle">Kumpir</h1>
+                        <p className="homeTagline">Die heiße Kartoffel mit Musik. Song erkennen, weitergeben, überleben.</p>
                     </header>
 
-                    <div className="heroCopy">
-                        <p className="p">
-                            Die Kumpir wandert.<br />
-                            Der Timer kennt kein Mitleid.<br />
-                            Wer zögert verliert.
-                        </p>
+                    <div className="ctaRow homeCta">
+                        <Link href="/host" className="btn btnPrimary btnXL">
+                            🚀 Spiel hosten
+                        </Link>
+                        <Link href="/join" className="btn btnSecondary btnXL">
+                            Mit Code beitreten
+                        </Link>
                     </div>
+                    <p className="homeFree">Kein Download · Kein Account nötig · Startet in Sekunden</p>
 
-                    <div className="stepsWrap">
-                        <div className="stepsBox">
-                            <div className="stepsTitle">So funktioniert’s</div>
-                            <div className="stepsList">
-                                <Step n="1" title="Starten" text="Host erstellt eine Lobby." />
-                                <Step n="2" title="Mitspielen" text="Alle treten bei und sind bereit." />
-                                <Step n="3" title="Weitergeben" text="Gib weiter – bevor es zu spät ist." />
+                    <div className="homeSteps">
+                        {STEPS.map((s, i) => (
+                            <div key={s.title} className="homeStep">
+                                <div className="homeStepIcon" aria-hidden>
+                                    {s.icon}
+                                </div>
+                                <div className="homeStepTitle">
+                                    {i + 1}. {s.title}
+                                </div>
+                                <div className="homeStepText">{s.text}</div>
                             </div>
-                        </div>
+                        ))}
                     </div>
-
-                    <div className="ctaRow">
-                        <div className="ctaStack">
-                            <Link href="/host" className="btn btnPrimary">
-                                Spiel hosten
-                            </Link>
-                            <div className="ctaHint">Erstellt eine Lobby für Freunde</div>
-                        </div>
-
-                        <div className="ctaStack">
-                            <Link href="/join" className="btn btnSecondary">
-                                Mit Code beitreten
-                            </Link>
-                            <div className="ctaHint">Ohne Account spielbar</div>
-                        </div>
-                    </div>
-
-                    <p className="trustLine">Kein Download · Kein Account · Startet in Sekunden</p>
 
                     <HomeStatsSection />
                 </section>
+
+                <footer className="homeFooter">v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"}</footer>
             </div>
         </main>
-    );
-}
-
-function Step({ n, title, text }: { n: string; title: string; text: string }) {
-    return (
-        <div className="stepRow">
-            <div className="stepBadge" aria-hidden>
-                {n}
-            </div>
-            <div className="stepBody">
-                <div className="stepTitle">{title}</div>
-                <div className="stepText">{text}</div>
-            </div>
-        </div>
     );
 }

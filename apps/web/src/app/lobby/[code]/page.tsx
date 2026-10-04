@@ -318,74 +318,16 @@ export default function LobbyPage() {
         <main className="container">
             <div className="landingWrap">
                 <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
-                    <div
-                        style={{
-                            position: "sticky",
-                            top: 0,
-                            zIndex: 5,
-                            paddingTop: 2,
-                            paddingBottom: 10,
-                            marginBottom: 6,
-                            backdropFilter: "blur(10px)",
-                            WebkitBackdropFilter: "blur(10px)",
-                            // pointerEvents:none hier + gezieltes "auto" auf den echten
-                            // Buttons darunter: der sticky Header überlappt bei kurzer
-                            // Spielerliste (wenige Zeilen) geometrisch die Buttons direkt
-                            // darunter (+Bot/Bereit/Hauptmenü) und blockte deren Klicks
-                            // komplett, weil sein zIndex:5 einen eigenen Stacking-Context
-                            // bildet, der IMMER über den unpositionierten Geschwistern liegt.
-                            pointerEvents: "none",
-                        }}
-                    >
-                        {isRunning ? (
-                            <div className="pillChip" style={{ marginBottom: 10, fontWeight: 950, opacity: 0.95 }}>
-                                🚀 Spiel läuft – Lobby ist read-only
-                            </div>
-                        ) : null}
+                    <div className="lobbyHead">
+                        {isRunning ? <div className="lobbyNotice">🚀 Spiel läuft – Lobby ist read-only</div> : null}
 
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
-                            <div style={{ flex: 1, minWidth: 280 }}>
-                                <h1 className="h1" style={{ marginBottom: 4 }}>
-                                    Private Lobby
-                                </h1>
-                            </div>
-
-                            <div style={{ display: "grid", gap: 6, justifyItems: "end", minWidth: 240 }}>
-                                <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-                                    <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", gap: 8, fontSize: 15 }}>
-                                        <span style={{ opacity: 0.8 }}>👥</span>
-                                        <span style={{ fontWeight: 950 }}>{players.length}</span>
-                                        <span style={{ opacity: 0.8 }}>/</span>
-                                        <span style={{ fontWeight: 950 }}>{maxPlayers}</span>
-                                    </div>
-
-                                    <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", gap: 8, fontSize: 15 }}>
-                                        <span>{MODES[mode]?.icon ?? "🥔"}</span>
-                                        <span style={{ fontWeight: 950 }}>{MODES[mode]?.label ?? mode}</span>
-                                    </div>
-
-                                    {(lobby?.series_total ?? 1) > 1 ? (
-                                        <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", gap: 8, fontSize: 15 }}>
-                                            <span>🎯</span>
-                                            <span style={{ fontWeight: 950 }}>{lobby?.series_total} Runden</span>
-                                        </div>
-                                    ) : null}
-
-                                    {lobby?.topic ? (
-                                        <div className="pillChip" style={{ height: 28, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }} title={lobby.topic ?? undefined}>
-                                            <span style={{ opacity: 0.8 }}>🏷️</span>
-                                            <span style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {lobby.topic}
-                      </span>
-                                        </div>
-                                    ) : null}
-                                </div>
-
+                        <div className="lobbyHeadTop">
+                            <h1 className="h1 lobbyTitle">Lobby</h1>
+                            <div className="lobbyActions">
                                 {user ? (
                                     <button
                                         type="button"
                                         className="btn btnSecondary btnSmall"
-                                        style={{ pointerEvents: "auto" }}
                                         onClick={async () => {
                                             if (isSaved) {
                                                 await savedLobbies.unsave(code);
@@ -406,68 +348,68 @@ export default function LobbyPage() {
                                 {amIHost ? (
                                     <Link
                                         href={`/lobby/${encodeURIComponent(code)}/admin`}
-                                        className={`btn btnSecondary ${starting || isRunning ? "btnDisabled" : ""}`}
-                                        style={{ pointerEvents: "auto", fontSize: 15, padding: "10px 16px", fontWeight: 900 }}
+                                        className={`btn btnSecondary btnSmall ${starting || isRunning ? "btnDisabled" : ""}`}
                                         aria-disabled={starting || isRunning}
                                         tabIndex={starting || isRunning ? -1 : 0}
                                         onClick={(e) => {
                                             if (starting || isRunning) e.preventDefault();
                                         }}
-                                        title="Admin Panel öffnen"
+                                        title="Einstellungen öffnen"
                                     >
-                                        ⚙️ Admin
+                                        ⚙️ Einstellungen
                                     </Link>
                                 ) : null}
                             </div>
                         </div>
 
-                        <div style={{ display: "grid", placeItems: "center", width: "100%", marginTop: -6 }}>
-                            <button
-                                type="button"
-                                onClick={copyInviteByClick}
-                                title="Klick → Join-Link kopieren"
-                                style={{ border: "none", background: "transparent", cursor: isRunning ? "not-allowed" : "pointer", padding: 0, pointerEvents: "auto" }}
-                                aria-label="Join-Link kopieren"
-                                disabled={isRunning}
-                            >
-                                <div
-                                    style={{
-                                        fontSize: 58,
-                                        fontWeight: 950,
-                                        letterSpacing: 6,
-                                        lineHeight: 1,
-                                        backgroundImage: "linear-gradient(90deg,#ff2d55,#ff9500,#ffd60a,#34c759,#0a84ff,#bf5af2,#ff2d55)",
-                                        backgroundSize: "200% 100%",
-                                        WebkitBackgroundClip: "text",
-                                        backgroundClip: "text",
-                                        color: "transparent",
-                                        animation: "kumpir-rainbow 3.4s linear infinite",
-                                        textShadow: "0 10px 30px rgba(0,0,0,0.18)",
-                                        userSelect: "none",
-                                        opacity: isRunning ? 0.75 : 1,
-                                    }}
-                                >
-                                    {code}
-                                </div>
-                            </button>
+                        <button
+                            type="button"
+                            className="codeBox"
+                            onClick={copyInviteByClick}
+                            title="Klick → Einladungslink kopieren"
+                            aria-label="Einladungslink kopieren"
+                            disabled={isRunning}
+                        >
+                            <span className="codeLabel">Lobby-Code</span>
+                            <span className="codeValue">{code}</span>
+                            <span className="codeHint">{toast ? toast : "Tippen kopiert den Einladungslink"}</span>
+                        </button>
 
-                            {toast ? (
-                                <div className="fieldHelp" style={{ marginTop: 8, fontWeight: 900, opacity: 0.95, textAlign: "center" }}>
-                                    {toast}
-                                </div>
-                            ) : (
-                                <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.85, textAlign: "center" }}>
-                                    Klick auf den Code kopiert den Join-Link.
-                                </div>
-                            )}
-
-                            <style>{`
-                    @keyframes kumpir-rainbow {
-                      0% { background-position: 0% 50%; }
-                      100% { background-position: 200% 50%; }
-                    }
-                  `}</style>
+                        <div className="lobbyChips">
+                            <span className="pillChip">
+                                👥 {players.length} / {maxPlayers}
+                            </span>
+                            <span className="pillChip">
+                                {MODES[mode]?.icon ?? "🥔"} {MODES[mode]?.label ?? mode}
+                            </span>
+                            {(lobby?.series_total ?? 1) > 1 ? <span className="pillChip">🎯 {lobby?.series_total} Runden</span> : <span className="pillChip">🎯 1 Runde</span>}
+                            {lobby?.topic ? (
+                                <span className="pillChip" title={lobby.topic ?? undefined}>
+                                    🏷️ {lobby.topic}
+                                </span>
+                            ) : null}
                         </div>
+
+                        <style>{`
+                .lobbyHead{ display: grid; gap: 14px; }
+                .lobbyNotice{ padding: 8px 14px; border-radius: 14px; background: rgba(255,210,63,.18); border: 1px solid rgba(255,210,63,.45); font-weight: 700; }
+                .lobbyHeadTop{ display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+                .lobbyTitle{ font-size: clamp(32px, 6vw, 44px) !important; }
+                .lobbyActions{ display: flex; gap: 8px; flex-wrap: wrap; }
+                .codeBox{
+                  display: grid; justify-items: center; gap: 2px; width: 100%; cursor: pointer; color: #fff;
+                  padding: 14px 16px; border-radius: 22px; border: 2px dashed rgba(255,255,255,.38); background: rgba(255,255,255,.08);
+                  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+                }
+                .codeBox:hover:not(:disabled){ background: rgba(255,255,255,.14); border-color: #ffd23f; }
+                .codeBox:active:not(:disabled){ transform: scale(.99); }
+                .codeBox:disabled{ cursor: default; opacity: .75; }
+                .codeLabel{ font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .7; }
+                .codeValue{ font-family: var(--font-display); font-size: clamp(44px, 12vw, 64px); font-weight: 800; letter-spacing: .18em; padding-left: .18em; line-height: 1.05; color: #ffd23f; text-shadow: 0 4px 0 rgba(120,50,0,.55), 0 10px 26px rgba(0,0,0,.35); }
+                .codeHint{ font-size: 12px; opacity: .72; min-height: 16px; }
+                .lobbyChips{ display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+                .lobbyChips .pillChip{ font-size: 13px; padding: 7px 12px; opacity: 1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+              `}</style>
                     </div>
 
                     <div className="stepsWrap">

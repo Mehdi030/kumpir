@@ -24,7 +24,7 @@ type Props = {
 const MEDAL = ["🥇", "🥈", "🥉"];
 
 /**
- * Gesamtwertung einer Serie: pro Spieler das Ergebnis jedes Rundes
+ * Gesamtwertung einer Serie: pro Spieler das Ergebnis jeder Runde
  * (Punkte, Farbe = Platz) und die Summe. Rang = Summe der Punkte; bei
  * Gleichstand entscheiden mehr Rundensiege, dann der bessere Ø-Platz (unsichtbar).
  */

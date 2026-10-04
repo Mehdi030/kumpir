@@ -25,6 +25,7 @@ import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
 import { playFx } from "@/lib/gameFx";
 import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
+import { FinishScreen, type FinishHighlight } from "@/components/game/FinishScreen";
 
 // Ein pass_attempt ohne Timeout konnte für immer "pending" hängen bleiben,
 // sobald bei wenigen lebenden Spielern (v_alive <= 2) Einstimmigkeit
@@ -149,15 +150,21 @@ function clamp(n: number, min: number, max: number) {
 let clockOffsetMs = 0;
 
 async function syncClockOffset(supabase: ReturnType<typeof getSupabaseClient>) {
-    const sentAt = Date.now();
-    const { data, error } = await supabase.rpc("rpc_server_time");
-    if (error || !data) return;
-    const serverMs = Date.parse(data as unknown as string);
-    if (Number.isNaN(serverMs)) return;
-    const rttMs = Date.now() - sentAt;
-    // Serverzeit galt ungefähr in der Mitte des Requests -- die halbe
-    // Laufzeit grob rausrechnen, statt sie komplett zu ignorieren.
-    clockOffsetMs = serverMs + rttMs / 2 - Date.now();
+    // Mehrere Messungen, die mit der KÜRZESTEN Laufzeit gewinnt: ein einzelner
+    // langsamer Request (Kaltstart, Netz-Hänger) würde sonst die ganze Anzeige
+    // um Sekunden verschieben (z. B. "25 s" statt 10 s beim Voting).
+    let best: { rtt: number; offset: number } | null = null;
+    for (let k = 0; k < 4; k++) {
+        const sentAt = Date.now();
+        const { data, error } = await supabase.rpc("rpc_server_time");
+        if (error || !data) continue;
+        const serverMs = Date.parse(data as unknown as string);
+        if (Number.isNaN(serverMs)) continue;
+        const rtt = Date.now() - sentAt;
+        const offset = serverMs + rtt / 2 - Date.now();
+        if (!best || rtt < best.rtt) best = { rtt, offset };
+    }
+    if (best) clockOffsetMs = best.offset;
 }
 
 function msUntil(ts: string | null): number | null {
@@ -182,16 +189,6 @@ function fmtHold(ms?: number) {
     return `${m}m ${r}s`;
 }
 
-function pickNextAlive(players: Player[], holderId: string | null): Player | null {
-    if (!holderId) return null;
-    const alive = players.filter((p) => p.is_alive);
-    if (alive.length <= 1) return null;
-
-    const idx = alive.findIndex((p) => p.player_id === holderId);
-    if (idx < 0) return alive[0] ?? null;
-    return alive[(idx + 1) % alive.length] ?? null;
-}
-
 export default function GamePage() {
     const supabase = getSupabaseClient();
     const params = useParams<{ code: string }>();
@@ -200,10 +197,11 @@ export default function GamePage() {
     const { mePlayerId } = usePlayerIdentity();
     const { user } = useAuth();
 
-    // Einmal pro Sitzung grob kalibrieren -- reicht, um Geräte mit spürbar
-    // falsch gehender Uhr auf die Server-Zeit auszurichten.
+    // Beim Laden kalibrieren und danach jede Minute nachziehen (Uhren driften).
     useEffect(() => {
         void syncClockOffset(supabase);
+        const t = window.setInterval(() => void syncClockOffset(supabase), 60000);
+        return () => window.clearInterval(t);
     }, [supabase]);
 
     const [lobby, setLobby] = useState<LobbyState | null>(null);
@@ -253,6 +251,7 @@ export default function GamePage() {
     const [elimPopup, setElimPopup] = useState<{ key: number; text: string; kind: "out" | "left" } | null>(null);
     const elimTimersRef = useRef<number[]>([]);
     const [kickOpen, setKickOpen] = useState(false);
+    const answerInputRef = useRef<HTMLInputElement | null>(null);
     const elimKeyRef = useRef(0);
 
     // HUD swap animation trigger
@@ -289,7 +288,6 @@ export default function GamePage() {
     const lastLoserRef = useRef<string | null>(null);
 
     // Finished screen UI
-    const [showFullRanking, setShowFullRanking] = useState(false);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -344,8 +342,6 @@ export default function GamePage() {
     const totalPlayers = players.length;
     const votedPlayers = voteCounts.a + voteCounts.b + voteCounts.r;
     const allVoted = totalPlayers > 0 && votedPlayers >= totalPlayers;
-
-    const nextUp = useMemo(() => pickNextAlive(players, lobby?.holder_player_id ?? null), [players, lobby?.holder_player_id]);
 
     // Verbindung wirkt verloren: last_seen_at (Heartbeat alle ~8s) ist älter
     // als 20s. Reines UI-Signal, ändert keine Server-Logik/Elimination.
@@ -403,79 +399,6 @@ export default function GamePage() {
             return { ...r, place: i + 1, score };
         });
     }, [players, lobby?.round_number]);
-
-    const top5 = useMemo(() => ranking.slice(0, 5), [ranking]);
-
-    // Jeder Spieler bekommt genau eine Auszeichnung -- nicht nur die zwei
-    // Gesamtsieger-Kategorien von früher. Reihenfolge = Priorität: die
-    // erste Kategorie, in der ein Spieler noch nicht durch einen anderen
-    // "verbraucht" wurde, gewinnt er. Wer in keiner Kategorie vorne landet
-    // (bei vielen Spielern normal), bekommt die Teilnahme-Auszeichnung mit
-    // seiner eigenen Bestleistung als Text -- niemand geht leer aus.
-    const playerAwards = useMemo(() => {
-        const awarded = new Map<string, { icon: string; label: string; value: string; desc: string }>();
-
-        if (winnerPlayer) {
-            awarded.set(winnerPlayer.player_id, {
-                icon: "🏆",
-                label: "Sieger",
-                value: winnerPlayer.name,
-                desc: "Hat als letzte(r) überlebt",
-            });
-        }
-
-        type Row = (typeof ranking)[number];
-        const categories: {
-            icon: string;
-            label: string;
-            desc: string;
-            get: (r: Row) => number | null | undefined;
-            fmt: (r: Row) => string;
-            higherIsBetter: boolean;
-        }[] = [
-            // Slowest Pass ist jetzt eine Ranking-Spalte, kein Award mehr --
-            // 2 Award-Kategorien (+ Sieger-Trophäe): Fastest, Longest Hold.
-            { icon: "⚡", label: "Fastest Pass", desc: "Schnellste Reaktion im Match", get: (r) => r.fastest, fmt: (r) => fmtMs(r.fastest), higherIsBetter: false },
-            { icon: "🧱", label: "Longest Hold", desc: "Längste Haltezeit insgesamt", get: (r) => r.holdMs, fmt: (r) => fmtHold(r.holdMs), higherIsBetter: true },
-        ];
-
-        for (const cat of categories) {
-            const candidates = ranking
-                .filter((r) => !awarded.has(r.player_id))
-                .filter((r) => {
-                    const v = cat.get(r);
-                    return v != null && v > 0;
-                })
-                .sort((a, b) => {
-                    const av = cat.get(a) ?? 0;
-                    const bv = cat.get(b) ?? 0;
-                    return cat.higherIsBetter ? bv - av : av - bv;
-                });
-
-            const winner = candidates[0];
-            if (winner) {
-                awarded.set(winner.player_id, {
-                    icon: cat.icon,
-                    label: cat.label,
-                    value: cat.fmt(winner),
-                    desc: cat.desc,
-                });
-            }
-        }
-
-        // Teilnahme-Auszeichnung für alle, die sonst leer ausgehen würden.
-        for (const r of ranking) {
-            if (awarded.has(r.player_id)) continue;
-            awarded.set(r.player_id, {
-                icon: "🎉",
-                label: "Mit vollem Einsatz dabei",
-                value: `${r.pass} ${r.pass === 1 ? "Pass" : "Pässe"}`,
-                desc: "Hat die Kartoffel nie fallen lassen",
-            });
-        }
-
-        return awarded;
-    }, [ranking, winnerPlayer]);
 
     const myRankRow = useMemo(() => {
         if (!mePlayerId) return null;
@@ -597,41 +520,6 @@ export default function GamePage() {
 
         return () => window.clearTimeout(t);
     }, [passAttempt.attempt, supabase]);
-
-    // -----------------------------
-    // Zuschauer-Bewertung (nur kosmetisch): seit Antworten immer sofort
-    // angenommen werden, gibt es kein echtes "gilt/gilt nicht"-Voting mehr.
-    // Bereits raus geflogene Spieler bekommen stattdessen kurz die letzte
-    // Antwort angezeigt und können sie rein optisch mit Daumen bewerten --
-    // ohne jede Auswirkung auf das Spiel. Aktive Spieler sehen das nicht,
-    // die sollen sich nur aufs Spiel konzentrieren.
-    // -----------------------------
-    const [spectatorFlash, setSpectatorFlash] = useState<{ text: string; holderName: string; key: number } | null>(null);
-    const [spectatorRating, setSpectatorRating] = useState<"up" | "down" | null>(null);
-    const prevUsedAnswersLenRef = useRef<number | null>(null);
-    const prevHolderNameRef = useRef("…");
-
-    useEffect(() => {
-        const list = lobby?.used_answers ?? [];
-        const prevLen = prevUsedAnswersLenRef.current;
-        // Erster Stand nach Laden/Reload zählt nicht als "neue Antwort" --
-        // sonst blitzt eine alte Antwort mit leerem Sprechernamen auf.
-        if (prevLen !== null && lobby?.phase === "running" && list.length > prevLen) {
-            setSpectatorFlash({ text: list[list.length - 1], holderName: prevHolderNameRef.current, key: Date.now() });
-            setSpectatorRating(null);
-        }
-        prevUsedAnswersLenRef.current = list.length;
-    }, [lobby?.used_answers, lobby?.phase]);
-
-    useEffect(() => {
-        prevHolderNameRef.current = holderName;
-    }, [holderName]);
-
-    useEffect(() => {
-        if (!spectatorFlash) return;
-        const t = window.setTimeout(() => setSpectatorFlash(null), 5000);
-        return () => window.clearTimeout(t);
-    }, [spectatorFlash]);
 
     // -----------------------------
     // Achievement-Toast — beobachtet neue Unlocks beim Spielende
@@ -1248,7 +1136,8 @@ export default function GamePage() {
                     setAnswerWrong(false);
                     window.requestAnimationFrame(() => {
                         setAnswerWrong(true);
-                        window.setTimeout(() => setAnswerWrong(false), 500);
+                        answerInputRef.current?.select();
+                        window.setTimeout(() => setAnswerWrong(false), 1800);
                     });
                     playFx("wrong");
                     return;
@@ -1265,6 +1154,11 @@ export default function GamePage() {
             setPassBusy(false);
         }
     }, [mePlayerId, lobby, iAmEliminated, isMeHolder, passBusy, code, answerDraft, rpcAttemptPass, showToast]);
+
+    // Eingabefeld sofort fokussieren, sobald man dran ist (und nach einer falschen Antwort).
+    useEffect(() => {
+        if (isMeHolder && lobby?.phase === "running") answerInputRef.current?.focus();
+    }, [isMeHolder, lobby?.phase, lobby?.current_song_id, answerWrong]);
 
     // Host-Live-Kick: ein Klick auf einen Namen eliminiert sofort, ohne
     // Bestätigung -- Ausgleich dafür, dass Antworten jetzt immer akzeptiert
@@ -1443,7 +1337,7 @@ export default function GamePage() {
     if (fatalError) {
         return (
             <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-                <div style={{ width: "min(720px, 96vw)", textAlign: "center" }}>
+                <div style={{ width: "min(720px, calc(100vw - 48px))", textAlign: "center" }}>
                     <div style={{ fontWeight: 950, fontSize: 22 }}>⚠️ Spiel konnte nicht geladen werden</div>
                     <div style={{ marginTop: 10, opacity: 0.8 }}>{fatalError}</div>
                 </div>
@@ -1483,25 +1377,14 @@ export default function GamePage() {
                     position: "relative",
                     overflow: "hidden",
                     color: "white",
-                    background:
-                        "radial-gradient(circle at 25% 15%, rgba(255,255,255,0.16) 0%, rgba(0,0,0,0) 55%)," +
-                        "radial-gradient(circle at 80% 10%, rgba(34,211,238,0.10) 0%, rgba(0,0,0,0) 58%)," +
-                        "radial-gradient(circle at 50% 90%, rgba(255,214,10,0.55) 0%, rgba(240,138,26,0.60) 45%, rgba(197,58,18,0.92) 78%, rgba(143,15,15,0.98) 100%)",
                 }}
             >
-                <div className="grain" aria-hidden />
-                <div className="orbs" aria-hidden>
-                    <span className="orb o1" />
-                    <span className="orb o2" />
-                    <span className="orb o3" />
-                </div>
-
-                <div style={{ width: "min(1160px, 96vw)", position: "relative", zIndex: 2 }}>
+                <div style={{ width: "min(1160px, calc(100vw - 48px))", position: "relative", zIndex: 2 }}>
                     <div style={{ textAlign: "center" }}>
-                        <div className="kicker">THEMA VOTING</div>
+                        <div className="kicker">Abstimmung</div>
 
                         <div className="headline">
-                            Wählt das Thema
+                            Welche Playlist?
                             <span className="headlineGlow" aria-hidden />
                         </div>
 
@@ -1515,10 +1398,10 @@ export default function GamePage() {
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">①</span>
-                                    <span className="micro">Thema A</span>
+                                    <span className="micro">Playlist A</span>
                                 </div>
                                 <div className="cardTitle">{aLabel}</div>
-                                <div className="cardHint">{myVote === 1 ? "Ausgewählt" : "Tippe zum Voten"}</div>
+                                <div className="cardHint">{myVote === 1 ? "✓ Deine Wahl" : "Tippen zum Wählen"}</div>
                             </button>
 
                             <button
@@ -1530,10 +1413,10 @@ export default function GamePage() {
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">②</span>
-                                    <span className="micro">Thema B</span>
+                                    <span className="micro">Playlist B</span>
                                 </div>
                                 <div className="cardTitle">{bLabel}</div>
-                                <div className="cardHint">{myVote === 2 ? "Ausgewählt" : "Tippe zum Voten"}</div>
+                                <div className="cardHint">{myVote === 2 ? "✓ Deine Wahl" : "Tippen zum Wählen"}</div>
                             </button>
 
                             <button
@@ -1549,7 +1432,7 @@ export default function GamePage() {
                                 </div>
                                 <div className="cardTitle">{cLabel}</div>
                                 <div className="cardHint">
-                                    {myVote === 3 ? "Ausgewählt" : lobby.topic_c ? "Tippe zum Voten" : "Eine andere Playlist per Los"}
+                                    {myVote === 3 ? "✓ Deine Wahl" : lobby.topic_c ? "Tippen zum Wählen" : "Das Los zieht eine andere Playlist"}
                                 </div>
                             </button>
                         </div>
@@ -1567,8 +1450,8 @@ export default function GamePage() {
                         <div className="bottomLeft">
                             <div className="brandMark">🥔</div>
                             <div className="bottomText">
-                                <div className="bottomTitle">Countdown</div>
-                                <div className="bottomSub">{myVote ? "Auswahl gesetzt." : "Tippe auf ein Thema."}</div>
+                                <div className="bottomTitle">Abstimmung läuft</div>
+                                <div className="bottomSub">{myVote ? "Du kannst noch wechseln." : "Tippe auf eine Karte."}</div>
                             </div>
                         </div>
 
@@ -1593,10 +1476,10 @@ export default function GamePage() {
 
                 <style>{`
           .kicker{font-size:12px;font-weight:950;letter-spacing:2.2px;opacity:.78;text-transform:uppercase;animation:${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};}
-          .headline{margin-top:10px;font-size:clamp(36px,4.8vw,70px);font-weight:1000;letter-spacing:-0.6px;position:relative;display:inline-block;text-shadow:0 24px 80px rgba(0,0,0,0.35);animation:${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};}
+          .headline{margin-top:10px;font-family:var(--font-display);font-size:clamp(36px,4.8vw,70px);font-weight:800;letter-spacing:-0.6px;position:relative;display:inline-block;text-shadow:0 24px 80px rgba(0,0,0,0.35);animation:${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};}
           .headlineGlow{position:absolute;inset:-30px -60px;background:radial-gradient(circle at 40% 35%, rgba(255,214,10,0.25), rgba(255,149,0,0.18), rgba(255,45,85,0.06), transparent 70%);filter:blur(18px);opacity:.9;pointer-events:none;animation:${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};}
           .topicGrid{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;}
-          .glassCard{color:white;position:relative;width:100%;border-radius:38px;padding:24px 22px 22px;min-height:260px;text-align:left;cursor:pointer;border:1px solid rgba(255,255,255,0.18);background:linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),radial-gradient(circle at 30% 20%, rgba(255,214,10,0.14), rgba(255,149,0,0.08), rgba(0,0,0,0.16) 70%);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);box-shadow:0 18px 70px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.20);overflow:hidden;transform:translateZ(0);transition:transform .22s cubic-bezier(.2,1,.2,1), box-shadow .22s ease, border-color .22s ease, filter .22s ease;animation:${reduceMotion ? "none" : "cardIn 900ms cubic-bezier(.16,1,.3,1) both"};}
+          .glassCard{color:white;position:relative;width:100%;border-radius:28px;padding:22px 22px 20px;min-height:200px;text-align:left;cursor:pointer;border:2px solid rgba(255,255,255,0.18);background:rgba(38,9,6,0.50);backdrop-filter:blur(16px) saturate(130%);-webkit-backdrop-filter:blur(16px) saturate(130%);box-shadow:0 18px 50px rgba(60,8,0,0.35),inset 0 1px 0 rgba(255,255,255,0.14);overflow:hidden;transition:transform .2s cubic-bezier(.2,1,.2,1), box-shadow .2s ease, border-color .2s ease, background .2s ease;animation:${reduceMotion ? "none" : "cardIn 700ms cubic-bezier(.16,1,.3,1) both"};}
           .glassCard:nth-child(2){animation-delay:${reduceMotion ? "0ms" : "70ms"};}
           .glassCard:nth-child(3){animation-delay:${reduceMotion ? "0ms" : "140ms"};}
           .glassCard:hover{transform:scale(1.035);border-color:rgba(255,255,255,0.30);box-shadow:0 26px 90px rgba(0,0,0,0.34),inset 0 1px 0 rgba(255,255,255,0.22);filter:brightness(1.03);}
@@ -1606,22 +1489,15 @@ export default function GamePage() {
           .cardTop{display:flex;justify-content:space-between;align-items:center;gap:10px;position:relative;z-index:2;}
           .chip{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 14px;border-radius:999px;font-weight:1000;background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.16);box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);}
           .micro{font-size:12px;font-weight:950;letter-spacing:1.2px;opacity:.82;text-transform:uppercase;}
-          .cardTitle{margin-top:20px;font-size:clamp(24px,2.8vw,40px);font-weight:1000;letter-spacing:-0.2px;position:relative;z-index:2;text-shadow:0 18px 60px rgba(0,0,0,0.26);}
+          .cardTitle{margin-top:20px;font-family:var(--font-display);font-size:clamp(24px,2.8vw,40px);font-weight:800;letter-spacing:-0.2px;position:relative;z-index:2;text-shadow:0 18px 60px rgba(0,0,0,0.26);}
           .cardHint{margin-top:12px;font-size:13px;font-weight:900;opacity:.85;position:relative;z-index:2;}
 
-          /* ✅ PERMA GREEN OUTLINE (NO blink/pulse) */
+          /* Gewählte Karte: ruhig gelb umrandet (kein Blinken) */
           .glassCard.active{
-            outline: 3px solid rgba(52,199,89,0.95);
-            outline-offset: 2px;
-            border-color: rgba(52,199,89,0.65);
-            box-shadow:
-              0 30px 110px rgba(0,0,0,0.40),
-              0 0 0 2px rgba(52,199,89,0.28) inset,
-              0 0 46px rgba(52,199,89,0.22);
-            background:
-              radial-gradient(circle at 18% 18%, rgba(52,199,89,0.20), rgba(0,0,0,0.10) 58%),
-              linear-gradient(135deg, rgba(52,199,89,0.14), rgba(255,255,255,0.08), rgba(0,0,0,0.10));
-            filter: brightness(1.06) saturate(1.06);
+            border-color: #ffd23f;
+            background: rgba(255,210,63,0.20);
+            box-shadow: 0 0 0 4px rgba(255,210,63,0.28), 0 22px 60px rgba(60,8,0,0.4);
+            transform: translateY(-3px);
           }
 
           .statusLine{margin-top:14px;font-weight:900;opacity:.88;font-size:13px;animation:${reduceMotion ? "none" : "fadeUp 520ms ease both"};}
@@ -1688,12 +1564,10 @@ export default function GamePage() {
                     placeItems: "center",
                     padding: 24,
                     color: "white",
-                    background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.22) 0%, rgba(0,120,45,0.68) 80%)",
                 }}
             >
-                <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
+                <div style={{ width: "min(1100px, calc(100vw - 48px))", textAlign: "center" }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>PLAYLIST GEWÄHLT</div>
 
                     <div className="resultTriGrid">
                         <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`}>
@@ -1720,7 +1594,7 @@ export default function GamePage() {
                             </div>
                         </div>
                     ) : (
-                        <div style={{ marginTop: 10, opacity: 0.85, fontWeight: 800 }}>Sag gleich was zum Thema.</div>
+                        <div style={{ marginTop: 10, opacity: 0.85, fontWeight: 800 }}>Gleich läuft der erste Song.</div>
                     )}
 
                     <div style={{ marginTop: 22, fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>START IN</div>
@@ -1755,12 +1629,12 @@ export default function GamePage() {
                 <style>{`
           .resultTriGrid{margin-top:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:stretch;}
           @media (max-width: 760px){ .resultTriGrid{grid-template-columns:1fr;} }
-          .resultTile{border-radius:28px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.18);padding:16px 14px;text-align:left;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden;position:relative;transform-origin:center;}
+          .resultTile{border-radius:26px;border:2px solid rgba(255,255,255,0.16);background:rgba(38,9,6,0.46);padding:16px 14px;text-align:left;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden;position:relative;transform-origin:center;}
           .resultBadge{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:999px;font-weight:950;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.14);}
           .resultTitle{margin-top:14px;font-size:clamp(18px,2.2vw,28px);font-weight:950;text-shadow:0 10px 30px rgba(0,0,0,0.22);}
           @keyframes winPop {0%{transform:scale(1);filter:brightness(1);}70%{transform:scale(1.06);filter:brightness(1.18);}100%{transform:scale(1.04);filter:brightness(1.12);}}
           @keyframes loseSlide {0%{transform:scale(1);opacity:1;}100%{transform:translateY(14px) scale(0.92);opacity:0.12;}}
-          .resultTile.win{background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18)),linear-gradient(135deg, rgba(52,199,89,0.18), rgba(10,132,255,0.10), rgba(255,214,10,0.12));border-color:rgba(255,255,255,0.28);box-shadow:0 18px 70px rgba(0,0,0,0.25);animation:winPop .55s ease-out forwards;}
+          .resultTile.win{background:rgba(255,210,63,0.22);border-color:#ffd23f;box-shadow:0 0 0 4px rgba(255,210,63,0.25),0 18px 60px rgba(60,8,0,0.35);animation:winPop .55s ease-out forwards;}
           .resultTile.lose{animation:loseSlide .55s ease-out forwards;}
           @media (max-width: 860px){ main div[style*="gridTemplateColumns: repeat(3"]{ grid-template-columns: 1fr !important; } }
         `}</style>
@@ -1776,492 +1650,83 @@ export default function GamePage() {
     if (lobby.phase === "finished") {
         const isSeries = (lobby.series_total ?? 1) > 1;
         const winnerName = (isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? "Unbekannt";
-        const shown = showFullRanking ? ranking : top5;
 
         const fastestOverall =
             [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] ?? null;
+        const longestHold = [...ranking].sort((a, b) => b.holdMs - a.holdMs)[0] ?? null;
+        const bestSong = [...ranking].filter((r) => r.songPoints > 0).sort((a, b) => b.songPoints - a.songPoints)[0] ?? null;
 
-        const longestHold = [...ranking].sort((a, b) => (b.holdMs ?? 0) - (a.holdMs ?? 0))[0] ?? null;
+        const highlights: FinishHighlight[] = [];
+        if (bestSong) highlights.push({ icon: "🎵", label: "Song-Profi", name: bestSong.name, value: `${String(Math.round(bestSong.songPoints * 2) / 2).replace(".", ",")} Treffer` });
+        if (fastestOverall) highlights.push({ icon: "⚡", label: "Schnellster Pass", name: fastestOverall.name, value: fmtMs(fastestOverall.fastest) });
+        if (longestHold && longestHold.holdMs > 0) highlights.push({ icon: "🧱", label: "Längste Haltezeit", name: longestHold.name, value: fmtHold(longestHold.holdMs) });
+
+        const me = isSeries
+            ? mySeriesRank > 0
+                ? { place: mySeriesRank, score: seriesRanked.find((e) => e.id === mePlayerId)?.total ?? 0 }
+                : null
+            : myRankRow
+              ? { place: myRankRow.rank, score: myRankRow.row.score }
+              : null;
+
+        const doRematch = async () => {
+            if (endActionBusy || !mePlayerId) return;
+            setEndActionBusy("rematch");
+            const { error } = await supabase.rpc("rpc_rematch", { p_code: code, p_player_id: mePlayerId });
+            if (error) {
+                setEndActionBusy(null);
+                return showToast(`❌ Rematch: ${error.message}`, 2400);
+            }
+            // Realtime / Polling wechselt gleich in die Themenwahl.
+        };
+        const doLobby = async () => {
+            if (endActionBusy || !mePlayerId) return;
+            setEndActionBusy("reset");
+            const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code, p_player_id: mePlayerId });
+            if (error) {
+                setEndActionBusy(null);
+                return showToast(`❌ Reset: ${error.message}`, 2400);
+            }
+            window.location.href = `/lobby/${encodeURIComponent(code)}`;
+        };
 
         return (
             <main
                 style={{
                     minHeight: "100vh",
                     display: "grid",
-                    placeItems: "center",
-                    padding: 24,
+                    placeItems: "start center",
+                    padding: "28px 16px",
                     color: "white",
                     position: "relative",
                     overflow: "hidden",
-                    background:
-                        "radial-gradient(circle at 50% 12%, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.22) 56%)," +
-                        "radial-gradient(circle at 20% 18%, rgba(34,211,238,0.14) 0%, rgba(0,0,0,0) 52%)," +
-                        "radial-gradient(circle at 82% 22%, rgba(167,139,250,0.12) 0%, rgba(0,0,0,0) 52%)," +
-                        "radial-gradient(circle at 50% 88%, rgba(255,214,10,0.34) 0%, rgba(240,138,26,0.58) 40%, rgba(143,15,15,0.92) 100%)",
                 }}
             >
                 <AchievementToastPortal achievements={newAchievements} onDismiss={dismissAchievement} />
                 <Confetti active />
                 <BackdropFx variant="warm" rays vignette />
-
-                <div style={{ width: "min(1180px, calc(100vw - 64px))", position: "relative", zIndex: 2 }}>
-                    {/* HERO (Winner only) */}
-                    <div className="finishHero">
-                        <div className="finishKicker">{isSeries ? `MATCH BEENDET · ${lobby.series_total} RUNDEN` : "SPIEL BEENDET"}</div>
-
-                        <div className="finishWinner">
-                            <span className="trophy" aria-hidden>
-                                🏆
-                            </span>
-                            <span className="winnerName">{winnerName}</span>
-                            <span className="winnerGlow" aria-hidden />
-                        </div>
-
-                        <div className="finishMeta">
-                            {isSeries ? null : (
-                                <span className="metaPill">
-                                    Züge <b>{lobby.round_number ?? "—"}</b>
-                                </span>
-                            )}
-                            {isSeries ? null : (
-                                <span className="metaPill">
-                                    Thema <b>{selectedTopic}</b>
-                                </span>
-                            )}
-                            {isSeries && mySeriesRank > 0 ? (
-                                <span className="metaPill metaMe">
-                                    Du <b>#{mySeriesRank}</b>
-                                </span>
-                            ) : !isSeries && myRankRow ? (
-                                <span className="metaPill metaMe">
-                                    Du <b>#{myRankRow.rank}</b>
-                                </span>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    {(lobby.series_total ?? 1) > 1 ? (
-                        <div style={{ marginTop: 18 }}>
-                            {seriesLeader ? (
-                                <div style={{ textAlign: "center", marginBottom: 10, fontWeight: 950, fontSize: 18 }}>
-                                    🥇 Match-Sieger: {seriesLeader.name} · {seriesLeader.total} Punkte
-                                </div>
-                            ) : null}
-                            <SeriesTable
-                                rows={seriesRows}
-                                totalSets={lobby.series_total}
-                                playedSets={lobby.series_total}
-                                mePlayerId={mePlayerId}
-                                title="Gesamtwertung"
-                            />
-                        </div>
-                    ) : null}
-
-                    {/* MAIN GRID */}
-                    <div className="finishGrid" style={{ marginTop: 18 }}>
-                        {/* Ranking */}
-                        <div className="card">
-                            <div className="cardTitle">{isSeries ? `🏅 Letzte Runde (${lobby.series_total} von ${lobby.series_total})` : "🏅 Ranking"}</div>
-                            <div className="fieldHelp" style={{ marginTop: 4, opacity: 0.75 }}>
-                                Platz = wer am längsten überlebt hat · Punkte = Platz + Song-Treffer + Clutch
-                            </div>
-
-                            <div className="table">
-                                <div className="row head">
-                                    <div>#</div>
-                                    <div>Player</div>
-                                    <div className="r">Punkte</div>
-                                    <div className="r">Züge</div>
-                                    <div className="r">Fastest</div>
-                                    <div className="r">Slowest</div>
-                                </div>
-
-                                {shown.map((p, idx) => {
-                                    const isWinner = p.player_id === winnerPlayer?.player_id;
-                                    return (
-                                        <div
-                                            key={p.player_id}
-                                            className={`row ${p.player_id === mePlayerId ? "me" : ""} ${isWinner ? "winner" : ""}`}
-                                        >
-                                            <div>{isWinner ? "🏆" : idx + 1}</div>
-                                            <div className="name">
-                                                {p.name}
-                                                {!p.is_alive ? <span className="tag dead">💀</span> : null}
-                                                {p.player_id === lobby.holder_player_id ? <span className="tag holder">🥔</span> : null}
-                                            </div>
-                                            <div className="r">
-                                                <b>{p.score}</b>
-                                            </div>
-                                            <div className="r">{p.roundsSurvived}</div>
-                                            <div className="r">{fmtMs(p.fastest)}</div>
-                                            <div className="r">{fmtMs(p.slowest)}</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="cardActions">
-                                <button className="btn btnSecondary" type="button" onClick={() => setShowFullRanking((v) => !v)}>
-                                    {showFullRanking ? "Nur Top 5" : "Alle anzeigen"}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Awards + Actions */}
-                        <div className="card">
-                            <div className="cardTitle">🎖 Awards</div>
-
-                            <div className="awards">
-                                <div className="awardTile">
-                                    <div className="awardK">⚡ Fastest Pass</div>
-                                    <div className="awardV">
-                                        {fastestOverall ? (
-                                            <>
-                                                <b>{fastestOverall.name}</b>
-                                                <span className="sep">•</span>
-                                                <span>{fmtMs(fastestOverall.fastest)}</span>
-                                            </>
-                                        ) : (
-                                            "—"
-                                        )}
-                                    </div>
-                                    <div className="awardS">Schnellste Reaktion im Match</div>
-                                    <span className="awardGlow g1" aria-hidden />
-                                </div>
-
-                                <div className="awardTile">
-                                    <div className="awardK">🧱 Longest Hold</div>
-                                    <div className="awardV">
-                                        {longestHold ? (
-                                            <>
-                                                <b>{longestHold.name}</b>
-                                                <span className="sep">•</span>
-                                                <span>{fmtHold(longestHold.holdMs)}</span>
-                                            </>
-                                        ) : (
-                                            "—"
-                                        )}
-                                    </div>
-                                    <div className="awardS">Längste Haltezeit insgesamt</div>
-                                    <span className="awardGlow g2" aria-hidden />
-                                </div>
-                            </div>
-
-                            <div className="cardTitle" style={{ marginTop: 18 }}>🎖 Jede Auszeichnung</div>
-                            <div className="personalAwards">
-                                {ranking.map((r) => {
-                                    const a = playerAwards.get(r.player_id);
-                                    if (!a) return null;
-                                    return (
-                                        <div key={r.player_id} className={`personalAwardRow ${r.player_id === mePlayerId ? "me" : ""}`}>
-                                            <span className="personalAwardIcon" aria-hidden>{a.icon}</span>
-                                            <span className="personalAwardName">{r.name}</span>
-                                            <span className="personalAwardLabel">{a.label}</span>
-                                            <span className="personalAwardValue">{a.value}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="cardActions" style={{ marginTop: 14 }}>
-                                <button
-                                    className="btn btnPrimary"
-                                    onClick={async () => {
-                                        if (endActionBusy) return;
-                                        if (!mePlayerId) return;
-                                        setEndActionBusy("reset");
-                                        const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code, p_player_id: mePlayerId });
-                                        if (error) {
-                                            setEndActionBusy(null);
-                                            return showToast(`❌ Reset: ${error.message}`, 2400);
-                                        }
-                                        window.location.href = `/lobby/${encodeURIComponent(code)}`;
-                                    }}
-                                    type="button"
-                                    disabled={!!endActionBusy}
-                                >
-                                    {endActionBusy === "reset" ? <Spinner size={16} label="Lade…" /> : "Zurück zur Lobby"}
-                                </button>
-
-                                <button
-                                    className="btn btnSecondary"
-                                    onClick={async () => {
-                                        if (endActionBusy) return;
-                                        if (!mePlayerId) return;
-                                        setEndActionBusy("rematch");
-                                        const { error } = await supabase.rpc("rpc_rematch", { p_code: code, p_player_id: mePlayerId });
-                                        if (error) {
-                                            setEndActionBusy(null);
-                                            return showToast(`❌ Rematch: ${error.message}`, 2400);
-                                        }
-                                        showToast("🔁 Rematch gestartet", 1200);
-                                        // Realtime / polling will move us to topic_vote phase shortly.
-                                    }}
-                                    type="button"
-                                    disabled={!!endActionBusy}
-                                    title="Direkt nochmal (Taste R)"
-                                >
-                                    {endActionBusy === "rematch" ? <Spinner size={16} label="Starte…" /> : "🔁 Rematch (R)"}
-                                </button>
-                            </div>
-
-                            <ToastStack toasts={toasts} inline />
-                        </div>
-                    </div>
-                </div>
-
-                <style>{`
-        .finishHero{ text-align:center; }
-        .finishKicker{
-          font-size:12px;
-          font-weight:950;
-          letter-spacing:2.2px;
-          opacity:.78;
-          animation: fadeUp 600ms ease both;
-        }
-        .finishWinner{
-          margin-top: 10px;
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          gap: 14px;
-          position:relative;
-          animation: heroIn 900ms cubic-bezier(.16,1,.3,1) both;
-        }
-        .trophy{
-          width: 54px; height: 54px;
-          display:grid; place-items:center;
-          border-radius: 999px;
-          background: rgba(0,0,0,0.22);
-          border: 1px solid rgba(255,255,255,0.14);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 18px 60px rgba(0,0,0,0.28);
-          font-size: 28px;
-        }
-        .winnerName{
-          font-size: clamp(44px, 5.2vw, 86px);
-          font-weight: 1000;
-          letter-spacing: -0.9px;
-          text-shadow: 0 24px 90px rgba(0,0,0,0.38);
-        }
-        .winnerGlow{
-          position:absolute;
-          inset: -40px -70px;
-          background: radial-gradient(circle at 40% 35%, rgba(255,214,10,0.22), rgba(34,211,238,0.14), rgba(255,45,85,0.08), transparent 70%);
-          filter: blur(18px);
-          opacity: .95;
-          pointer-events:none;
-          animation: glowFloat 4.4s ease-in-out infinite;
-        }
-        .finishMeta{
-          margin-top: 12px;
-          display:flex;
-          justify-content:center;
-          flex-wrap:wrap;
-          gap:10px;
-          animation: fadeUp 720ms ease both;
-          animation-delay: 120ms;
-        }
-        .metaPill{
-          padding: 10px 12px;
-          border-radius: 999px;
-          background: rgba(0,0,0,0.24);
-          border: 1px solid rgba(255,255,255,0.14);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          font-weight: 900;
-          opacity: .95;
-        }
-        .metaMe{
-          border-color: rgba(34,211,238,0.22);
-          background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.10), rgba(0,0,0,0.22));
-        }
-
-        .finishGrid{
-          display:grid;
-          grid-template-columns: 1.3fr 1fr;
-          gap: 14px;
-          align-items:start;
-        }
-        .card{
-          border-radius: 28px;
-          background: rgba(0,0,0,0.22);
-          border: 1px solid rgba(255,255,255,0.14);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          padding: 16px;
-          box-shadow: 0 18px 70px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.12);
-          animation: fadeUp 780ms ease both;
-          animation-delay: 160ms;
-        }
-        .cardTitle{
-          font-weight: 1000;
-          letter-spacing: .2px;
-          opacity: .95;
-          text-align:left;
-        }
-
-        .table{ margin-top: 12px; display:grid; gap: 8px; }
-        .row{
-          display:grid;
-          grid-template-columns: 36px 1fr 70px 64px 82px 82px;
-          gap: 10px;
-          padding: 10px 10px;
-          border-radius: 16px;
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.08);
-          align-items:center;
-        }
-        .row.head{
-          background: rgba(255,255,255,0.04);
-          border-color: rgba(255,255,255,0.06);
-          font-size: 12px;
-          font-weight: 950;
-          letter-spacing: 1.2px;
-          text-transform: uppercase;
-          opacity: .86;
-        }
-        .row.me{
-          border-color: rgba(34,211,238,0.22);
-          background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.10), rgba(255,255,255,0.06));
-        }
-        .row.winner{
-          border-color: rgba(255,214,10,0.55);
-          background: radial-gradient(circle at 20% 20%, rgba(255,214,10,0.20), rgba(255,255,255,0.07));
-          padding: 16px 12px;
-          font-size: 1.18em;
-          box-shadow: 0 8px 24px rgba(255,180,10,0.18);
-        }
-        .row.winner .name{ font-weight: 1000; }
-        .name{
-          display:flex;
-          gap: 8px;
-          align-items:center;
-          font-weight: 950;
-          overflow:hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .r{ text-align:right; font-weight: 900; opacity: .92; }
-        .tag{
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          padding: 2px 8px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 950;
-          border: 1px solid rgba(255,255,255,0.14);
-          background: rgba(0,0,0,0.18);
-        }
-        .tag.dead{ opacity: .75; }
-        .tag.holder{ background: rgba(255,214,10,0.16); }
-
-        .awards{ margin-top: 12px; display:grid; gap: 10px; }
-        .awardTile{
-          position:relative;
-          padding: 14px 14px 12px;
-          border-radius: 22px;
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.08);
-          text-align:left;
-          overflow:hidden;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-        }
-        .awardK{
-          font-size: 12px;
-          font-weight: 1000;
-          letter-spacing: 1.6px;
-          opacity: .78;
-          text-transform: uppercase;
-        }
-        .awardV{
-          margin-top: 10px;
-          font-size: 18px;
-          font-weight: 950;
-          letter-spacing: -0.2px;
-          display:flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          align-items: baseline;
-        }
-        .sep{ opacity: .55; }
-        .awardS{
-          margin-top: 6px;
-          font-size: 12px;
-          font-weight: 850;
-          opacity: .74;
-        }
-        .awardGlow{
-          position:absolute;
-          inset:-50px -70px;
-          filter: blur(18px);
-          opacity: .70;
-          pointer-events:none;
-          animation: glowFloat 4.2s ease-in-out infinite;
-        }
-        .awardGlow.g1{ background: radial-gradient(circle at 30% 25%, rgba(34,211,238,0.16), rgba(255,255,255,0.06), transparent 70%); }
-        .awardGlow.g2{
-          background: radial-gradient(circle at 30% 25%, rgba(52,199,89,0.14), rgba(255,214,10,0.10), transparent 72%);
-          animation-delay: -1.4s;
-        }
-        .awardGlow.g3{
-          background: radial-gradient(circle at 30% 25%, rgba(167,139,250,0.16), rgba(255,255,255,0.06), transparent 72%);
-          animation-delay: -2.8s;
-        }
-
-        .personalAwards{ margin-top: 10px; display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
-        .personalAwardRow{
-          display: grid;
-          grid-template-columns: 24px 1fr auto;
-          grid-template-areas: "icon name value" "icon label value";
-          column-gap: 10px;
-          row-gap: 1px;
-          padding: 8px 10px;
-          border-radius: 12px;
-          background: rgba(0,0,0,0.18);
-          border: 1px solid rgba(255,255,255,0.08);
-        }
-        .personalAwardRow.me{ border-color: rgba(255,214,10,0.6); background: rgba(255,214,10,0.08); }
-        .personalAwardIcon{ grid-area: icon; font-size: 18px; align-self: center; }
-        .personalAwardName{ grid-area: name; font-weight: 900; font-size: 13px; }
-        .personalAwardLabel{ grid-area: label; font-size: 11px; opacity: 0.75; }
-        .personalAwardValue{ grid-area: value; align-self: center; font-weight: 800; font-size: 13px; opacity: 0.9; }
-
-        .cardActions{
-          margin-top: 12px;
-          display:flex;
-          gap: 10px;
-          justify-content:flex-start;
-          flex-wrap:wrap;
-        }
-        .btn{
-          appearance:none;
-          border: 1px solid rgba(255,255,255,0.14);
-          background: rgba(0,0,0,0.22);
-          color: white;
-          border-radius: 999px;
-          padding: 10px 14px;
-          font-weight: 950;
-          cursor: pointer;
-          transition: transform .14s ease, filter .14s ease, border-color .14s ease;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-        }
-        .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
-        .btn:active{ transform: translateY(0px) scale(0.99); }
-        .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
-        .btnSecondary{ background: rgba(0,0,0,0.22); }
-
-        @keyframes fadeUp{ from{ opacity:0; transform: translateY(10px); } to{ opacity:1; transform: translateY(0); } }
-        @keyframes heroIn{
-          0%{ opacity:0; transform: translateY(14px) scale(.985); filter: blur(1px); }
-          100%{ opacity:1; transform: translateY(0) scale(1); filter: blur(0); }
-        }
-        @keyframes glowFloat{
-          0%,100%{ transform: translateY(0); opacity:.75; }
-          50%{ transform: translateY(-6px); opacity:1; }
-        }
-        @media (max-width: 980px){ .finishGrid{ grid-template-columns: 1fr; } }
-      `}</style>
+                <FinishScreen
+                    isSeries={isSeries}
+                    totalRounds={lobby.series_total ?? 1}
+                    winnerName={winnerName}
+                    me={me}
+                    rows={ranking.map((r) => ({
+                        id: r.player_id,
+                        name: r.name,
+                        place: r.place,
+                        score: r.score,
+                        songPoints: r.songPoints,
+                        moves: r.roundsSurvived,
+                        isMe: r.player_id === mePlayerId,
+                    }))}
+                    seriesRows={seriesRows}
+                    mePlayerId={mePlayerId}
+                    highlights={highlights}
+                    busy={endActionBusy}
+                    onRematch={() => void doRematch()}
+                    onLobby={() => void doLobby()}
+                    toasts={toasts}
+                />
             </main>
         );
     }
@@ -2288,8 +1753,6 @@ export default function GamePage() {
                     placeItems: "center",
                     padding: 24,
                     color: "white",
-                    background:
-                        "radial-gradient(circle at 50% 20%, rgba(255,214,10,0.18) 0%, rgba(0,0,0,0.25) 55%), radial-gradient(circle at 50% 90%, rgba(52,199,89,0.22) 0%, rgba(0,100,50,0.7) 80%)",
                 }}
             >
                 <div style={{ width: "min(860px, calc(100vw - 48px))", textAlign: "center" }}>
@@ -2323,11 +1786,9 @@ export default function GamePage() {
                     placeItems: "center",
                     padding: 24,
                     color: "white",
-                    background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.22) 0%, rgba(0,120,45,0.68) 80%)",
                 }}
             >
-                <div style={{ width: "min(680px, 96vw)", textAlign: "center" }}>
+                <div style={{ width: "min(680px, calc(100vw - 48px))", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>REMATCH</div>
                     <div style={{ fontSize: "clamp(26px, 4vw, 42px)", fontWeight: 950, marginTop: 12 }}>🔁 Nächstes Match startet gleich</div>
                     <div style={{ marginTop: 8, opacity: 0.82, fontWeight: 700 }}>
@@ -2338,51 +1799,28 @@ export default function GamePage() {
                         {Math.max(0, countdownSecondsLeft ?? 10)}
                     </div>
 
-                    <div style={{ marginTop: 22, display: "grid", gap: 8 }}>
+                    <div style={{ marginTop: 22, display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
                         {players.map((p) => (
-                            <div
+                            <span
                                 key={p.player_id}
                                 style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    padding: "10px 14px",
-                                    borderRadius: 14,
-                                    background: "rgba(0,0,0,0.22)",
-                                    border: "1px solid rgba(255,255,255,0.14)",
+                                    padding: "8px 14px",
+                                    borderRadius: 999,
+                                    background: "rgba(38,9,6,0.46)",
+                                    border: "1px solid rgba(255,255,255,0.18)",
                                     fontWeight: 800,
+                                    fontSize: 14,
                                 }}
                             >
-                                <span>
-                                    {p.name}
-                                    {mePlayerId === p.player_id ? " (du)" : ""}
-                                </span>
-                                <span>✅ dabei</span>
-                            </div>
+                                ✅ {p.name}
+                                {mePlayerId === p.player_id ? " (du)" : ""}
+                            </span>
                         ))}
                     </div>
 
                     <ToastStack toasts={toasts} inline />
                 </div>
 
-                <style>{`
-          .btn{
-            appearance:none;
-            border: 1px solid rgba(255,255,255,0.14);
-            background: rgba(0,0,0,0.22);
-            color: white;
-            border-radius: 999px;
-            padding: 10px 18px;
-            font-weight: 950;
-            cursor: pointer;
-            transition: transform .14s ease, filter .14s ease, border-color .14s ease;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-          }
-          .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
-          .btn:active{ transform: translateY(0px) scale(0.99); }
-          .btn:disabled{ opacity: .7; cursor: not-allowed; transform: none; }
-          .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
-        `}</style>
             </main>
         );
     }
@@ -2399,11 +1837,9 @@ export default function GamePage() {
                     placeItems: "center",
                     padding: 24,
                     color: "white",
-                    background:
-                        "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(243,168,59,0.35) 0%, rgba(192,106,0,0.70) 80%)",
                 }}
             >
-                <div style={{ width: "min(820px, 96vw)", textAlign: "center" }}>
+                <div style={{ width: "min(820px, calc(100vw - 48px))", textAlign: "center" }}>
                     {players.length === 0 || (players.length === 1 && !!mePlayerId && players[0]?.player_id === mePlayerId) ? (
                         <>
                             <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>NIEMAND DA</div>
@@ -2479,6 +1915,7 @@ export default function GamePage() {
                 tempo={tempoFactor}
                 duel={aliveNow === 2}
                 direction={lobby.pass_direction ?? 1}
+                showNext={isMeHolder || iAmEliminated}
             />
 
             {turnOverlay ? (
@@ -2545,86 +1982,58 @@ export default function GamePage() {
 
             <div className="hud">
                 <div className="hudInner">
-                    <div className="topic">{selectedTopic}</div>
+                    <div className="topicRow">
+                        <span className="topicPill">🎵 {selectedTopic}</span>
+                    </div>
 
                     {MUSIC_PLAYLISTS[selectedTopic] ? (
                         <SongRound songId={lobby.current_song_id} startedAt={lobby.current_song_started_at} />
                     ) : null}
 
-                    {/* Wer dran ist / wer danach kommt zeigt der Tisch (Spotlight +
-                        Vorschau-Linie) -- hier nur noch für Screenreader. */}
                     <div className="srOnly" key={hudPulseNonce} aria-live="polite">
-                        Am Zug: {holderName}. Danach: {nextUp?.name ?? "—"}.
+                        Am Zug: {holderName}.
                     </div>
 
-                    {/* Antworten werden serverseitig sofort angenommen -- kein
-                        Gilt/Gilt-nicht-Voting mehr. Aktive Spieler sehen nur noch
-                        ihr eigenes Eingabefeld bzw. "warte, bis du dran bist" und
-                        sollen sich aufs Spiel konzentrieren. Bereits raus geflogene
-                        Zuschauer bekommen stattdessen kurz die letzte Antwort zum
-                        rein kosmetischen Bewerten angezeigt (ohne Spielauswirkung). */}
                     {iAmEliminated ? (
-                        <div className="hint" style={{ display: "grid", gap: 10, justifyItems: "center" }}>
-                            <div>Du schaust zu.</div>
+                        <div className="statusCard">
+                            <div className="statusTitle">Du bist raus – schau zu 👀</div>
+                            <div className="statusSub">Du siehst, wohin die Kumpir als Nächstes fliegt.</div>
                             {(lobby.game_mode ?? "original") === "original" && !meRow?.revenge_used && aliveNow > 2 ? (
                                 <button
                                     type="button"
                                     className="btn btnSecondary btnSmall"
                                     onClick={() => void handleRevenge()}
                                     disabled={revengeBusy}
-                                    title="Einmal pro Runde: die Weitergabe-Richtung drehen"
+                                    title="Einmal pro Runde: die Richtung der Weitergabe drehen"
                                 >
                                     🔄 Rache-Pass: Richtung drehen
                                 </button>
                             ) : null}
-                            {spectatorFlash ? (
-                                <div key={spectatorFlash.key} className="answerVote">
-                                    <div className="answerStatusLabel">{spectatorFlash.holderName} sagte:</div>
-                                    <div className="answerStatusValue">{`„${spectatorFlash.text}"`}</div>
-                                    <div className="actions" style={{ gap: 12 }}>
-                                        <button
-                                            type="button"
-                                            className="btn btnReadyOn"
-                                            onClick={() => setSpectatorRating("up")}
-                                            title="Fand ich gut"
-                                        >
-                                            👍{spectatorRating === "up" ? " Danke!" : ""}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="btn btnReadyOff"
-                                            onClick={() => setSpectatorRating("down")}
-                                            title="Fand ich nicht gut"
-                                        >
-                                            👎{spectatorRating === "down" ? " Notiert" : ""}
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : null}
                         </div>
                     ) : isMeHolder ? (
-                        // ─── Halter darf neue Antwort eingeben ───
-                        <div className="answerInputBox">
-                            {lobby.current_song_id ? (
-                                <div className="diffChip" title="Schwierigkeit dieses Songs (aus echten Trefferquoten) -- schwere Songs geben mehr Bonuszeit">
-                                    Schwierigkeit {"★".repeat(lobby.current_song_difficulty ?? 2)}
-                                    {"☆".repeat(3 - (lobby.current_song_difficulty ?? 2))}
-                                </div>
-                            ) : null}
-                            {lobby?.answer_mode === "voice" ? (
-                                <>
-                                    <VoiceInput
-                                        variant="primary"
-                                        disabled={!!passDisabledReason}
-                                        onResult={(text) => setAnswerDraft(text.slice(0, 60))}
-                                    />
-                                    <div className="fieldHelp" style={{ textAlign: "center", marginBottom: 6, opacity: 0.75 }}>
-                                        {answerDraft ? `Erkannt: „${answerDraft}"` : "…oder unten tippen"}
+                        <div className="answerCard">
+                            <div className="answerHead">
+                                <div className="statusTitle">Du bist dran! 🥔</div>
+                                {lobby.current_song_id ? (
+                                    <div className="diffChip" title="Schwierigkeit des Songs – schwere Songs geben mehr Bonuszeit">
+                                        {"★".repeat(lobby.current_song_difficulty ?? 2)}
+                                        {"☆".repeat(3 - (lobby.current_song_difficulty ?? 2))}
                                     </div>
-                                </>
+                                ) : null}
+                            </div>
+                            <div className="statusSub">
+                                {lobby.current_song_id ? "Welcher Song läuft? Tippe den Titel (oder den Interpreten) und drücke Enter." : "Tippe deine Antwort und drücke Enter."}
+                            </div>
+                            {lobby?.answer_mode === "voice" ? (
+                                <VoiceInput
+                                    variant="primary"
+                                    disabled={!!passDisabledReason}
+                                    onResult={(text) => setAnswerDraft(text.slice(0, 60))}
+                                />
                             ) : null}
                             <div className="answerInputRow">
                                 <input
+                                    ref={answerInputRef}
                                     type="text"
                                     className={`input answerInput ${answerWrong ? "answerInputWrong" : ""}`}
                                     value={answerDraft}
@@ -2635,52 +2044,50 @@ export default function GamePage() {
                                             void handleAttemptPass();
                                         }
                                     }}
-                                    placeholder={
-                                        selectedTopic === "…"
-                                            ? "z.B. deine Antwort"
-                                            : lobby.current_song_id
-                                                ? "z.B. Songtitel oder Interpret"
-                                                : `z.B. Antwort zu ${selectedTopic}`
-                                    }
+                                    placeholder={lobby.current_song_id ? "Songtitel …" : "Deine Antwort …"}
                                     maxLength={60}
+                                    autoFocus
                                     autoComplete="off"
                                     autoCapitalize="none"
                                     autoCorrect="off"
                                     spellCheck={false}
                                     inputMode="text"
                                     enterKeyHint="send"
+                                    aria-label="Antwort"
                                 />
                                 {lobby?.answer_mode !== "voice" ? (
-                                    <VoiceInput
-                                        disabled={!!passDisabledReason}
-                                        onResult={(text) => setAnswerDraft(text.slice(0, 60))}
-                                    />
+                                    <VoiceInput disabled={!!passDisabledReason} onResult={(text) => setAnswerDraft(text.slice(0, 60))} />
                                 ) : null}
+                            </div>
+                            <div className={`answerFeedback ${answerWrong ? "show" : ""}`} aria-live="polite">
+                                {answerWrong ? "Nicht richtig – versuch es nochmal!" : "\u00A0"}
                             </div>
                             <button
                                 type="button"
-                                className="btn btnPrimary"
+                                className="btn btnPrimary answerSend"
                                 onClick={() => void handleAttemptPass()}
                                 disabled={!!passDisabledReason || answerDraft.trim().length === 0}
-                                title={passDisabledReason ?? "Antwort senden"}
+                                title={passDisabledReason ?? "Antwort senden (Enter)"}
                             >
-                                {passBusy ? "…" : "🥔 Antworten + Passen"}
+                                {passBusy ? "…" : "Senden  ⏎"}
                             </button>
                             {lobby.current_song_id && (meRow?.skips_left ?? 0) > 0 ? (
                                 <button
                                     type="button"
-                                    className="btn btnSecondary btnSmall"
+                                    className="linkBtn"
                                     onClick={() => void handleSkipSong()}
                                     disabled={skipBusy || passBusy}
-                                    title="Song tauschen (1x pro Match, kostet 2 Sekunden)"
-                                    style={{ justifySelf: "center" }}
+                                    title="Song tauschen (einmal pro Runde, kostet 2 Sekunden)"
                                 >
-                                    🔀 Song tauschen · {meRow?.skips_left}×  (−2s)
+                                    🔀 Song tauschen (−2 s)
                                 </button>
                             ) : null}
                         </div>
                     ) : (
-                        <div className="hint">Warte, bis du dran bist.</div>
+                        <div className="statusCard">
+                            <div className="statusTitle">{holderName} ist dran</div>
+                            <div className="statusSub">Warte ab – gleich kann es dich treffen.</div>
+                        </div>
                     )}
 
                     {/* Used-Answers: bisher genannte Antworten dieser Runde --
@@ -2689,7 +2096,7 @@ export default function GamePage() {
                         iAmEliminated). */}
                     {lobby.used_answers && lobby.used_answers.length > 0 ? (
                         <div className="usedAnswers" aria-label="Bisher genannte Antworten">
-                            <span className="usedAnswersLabel">Schon gesagt:</span>
+                            <span className="usedAnswersLabel">Schon gesagt</span>
                             {lobby.used_answers.slice(-10).map((a, i) => (
                                 <span key={`${a}-${i}`} className="usedAnswerChip">{a}</span>
                             ))}
@@ -2712,7 +2119,7 @@ export default function GamePage() {
           padding: 22px;
           /* Platz für den Tisch (PlayerRing) darüber, damit Antwort-Box und
              Tisch nicht übereinander liegen. */
-          padding-top: clamp(22px, 36vh, 340px);
+          padding-top: calc(27vh + min(66vmin, 540px) * 0.31 + 84px);
         }
         .hudInner{
           width: min(920px, 94vw);
@@ -2721,12 +2128,46 @@ export default function GamePage() {
           gap: 14px;
           text-align: center;
         }
-        .topic{
-          font-size: clamp(22px, 3.6vw, 46px);
-          font-weight: 950;
-          text-shadow: 0 18px 70px rgba(0,0,0,0.35);
-          opacity: .98;
+        .topicRow{ display:flex; justify-content:center; }
+        .topicPill{
+          font-size: 14px;
+          font-weight: 800;
+          letter-spacing: .3px;
+          padding: 7px 16px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.10);
+          border: 1px solid rgba(255,255,255,0.18);
+          color: rgba(255,255,255,0.92);
         }
+        .statusCard, .answerCard{
+          width: min(560px, 94vw);
+          display: grid;
+          gap: 10px;
+          justify-items: center;
+          padding: 18px 20px;
+          border-radius: 24px;
+          background: rgba(255,255,255,0.07);
+          border: 1px solid rgba(255,255,255,0.14);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
+        .answerCard{
+          border-color: rgba(255,214,10,0.55);
+          box-shadow: 0 0 0 4px rgba(255,214,10,0.10), 0 18px 50px rgba(0,0,0,0.35);
+        }
+        .statusTitle{ font-size: clamp(20px, 3.2vw, 28px); font-weight: 900; letter-spacing: -0.01em; }
+        .statusSub{ font-size: 14px; opacity: .72; font-weight: 600; max-width: 42ch; }
+        .answerHead{ display:flex; align-items:center; gap:12px; justify-content:center; }
+        .answerCard .answerInputRow{ width: 100%; }
+        .answerSend{ width: 100%; }
+        .answerFeedback{ min-height: 20px; font-size: 14px; font-weight: 800; color: #ffb4a8; opacity: 0; transition: opacity .2s ease; }
+        .answerFeedback.show{ opacity: 1; }
+        .linkBtn{
+          background: none; border: 0; color: rgba(255,255,255,0.78); font-weight: 700; font-size: 13px;
+          cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 4px 8px;
+        }
+        .linkBtn:hover{ color: #fff; }
+        .linkBtn:disabled{ opacity: .5; cursor: default; }
 
         .strip{
           width: min(920px, 94vw);
@@ -3129,22 +2570,6 @@ export default function GamePage() {
           .kumpirSelfShake{ animation: none; }
         }
 
-        .btn{
-          appearance:none;
-          border: 1px solid rgba(255,255,255,0.14);
-          background: rgba(0,0,0,0.22);
-          color: white;
-          border-radius: 999px;
-          padding: 12px 18px;
-          font-weight: 950;
-          cursor: pointer;
-          transition: transform .14s ease, filter .14s ease, border-color .14s ease;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-        }
-        .btn:hover{ transform: translateY(-1px); filter: brightness(1.06); border-color: rgba(255,255,255,0.22); }
-        .btn:active{ transform: translateY(0px) scale(0.99); }
-        .btn:disabled{ opacity: .65; cursor:not-allowed; transform:none; filter:none; }
-        .btnPrimary{ background: linear-gradient(180deg, rgba(11,10,138,0.95), rgba(4,4,94,0.95)); }
 
         @media (max-width: 520px){
           .strip{ grid-template-columns: 1fr; gap: 10px; border-radius: 28px; }

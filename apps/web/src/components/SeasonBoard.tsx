@@ -15,7 +15,7 @@ const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "A
 
 /**
  * Saison-Rangliste (aktueller Kalendermonat): Arena-Punkte aus allen
- * Rundenn eingeloggter Spieler (Migration 062/065).
+ * Runden eingeloggter Spieler (Migration 062/065).
  */
 export function SeasonBoard() {
     const [rows, setRows] = useState<Row[] | null>(null);
@@ -44,12 +44,12 @@ export function SeasonBoard() {
                 🗓️ Saison {MONTHS[now.getMonth()]} {now.getFullYear()}
             </div>
             <div style={{ fontSize: 12, opacity: 0.7, fontWeight: 700, marginBottom: 8 }}>
-                Arena-Punkte aus allen Rundenn · setzt sich jeden Monat zurück
+                Arena-Punkte aus allen Runden · setzt sich jeden Monat zurück
             </div>
             {rows === null ? (
                 <div style={{ opacity: 0.7 }}>Lade …</div>
             ) : rows.length === 0 ? (
-                <div style={{ opacity: 0.75, fontWeight: 700 }}>Noch niemand in dieser Saison — spiel einen Runde eingeloggt, um zu starten.</div>
+                <div style={{ opacity: 0.75, fontWeight: 700 }}>Noch niemand in dieser Saison — spiel eine Runde eingeloggt, um zu starten.</div>
             ) : (
                 <div style={{ display: "grid", gap: 6 }}>
                     {rows.map((r) => (

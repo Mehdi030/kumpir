@@ -13,7 +13,7 @@ const RULES: { icon: string; title: string; text: string }[] = [
     { icon: "⏱️", title: "Gute Antworten geben Zeit", text: "Titel gibt mehr Bonuszeit als Interpret. Schwere Songs und Treffer in Folge (Combo) geben extra." },
     { icon: "⚔️", title: "Finale = Duell", text: "Bei 2 Spielern ist die Schnur noch kürzer und es gibt keine Bonuszeit mehr." },
     { icon: "🃏", title: "Joker", text: "Einmal pro Runde den Song tauschen (−2 s). Ausgeschieden? Einmal die Richtung drehen." },
-    { icon: "🏆", title: "Wertung", text: "Wer zuletzt übrig bleibt, gewinnt den Runde. Punkte = Platz + Song-Treffer + Clutch. Bei mehreren Rundenn zählt die Summe." },
+    { icon: "🏆", title: "Wertung", text: "Wer zuletzt übrig bleibt, gewinnt die Runde. Punkte = Platz + Song-Treffer + Clutch. Bei mehreren Runden zählt die Summe." },
 ];
 
 export function RulesCard({ defaultOpen = true }: Props) {

@@ -27,12 +27,11 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
 
     if (!user?.email) {
         return (
-            <div className={variant === "header" ? "seg" : "actionsRow"}>
-                <NotifyToggle className={variant === "header" ? "segBtn" : "btn btnSecondary btnSmall"} />
-                <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href={loginHref}>
+            <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
+                <Link className={variant === "header" ? "homeLink" : "btn btnSecondary"} href={loginHref}>
                     Anmelden
                 </Link>
-                <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href={loginHref}>
+                <Link className={variant === "header" ? "homeLink homeLinkStrong" : "btn btnSecondary"} href="/register">
                     Registrieren
                 </Link>
             </div>
@@ -46,21 +45,21 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     // zusätzlich in src/proxy.ts auf "/" umgeleitet, damit niemand auf
     // einer nutzlosen "Bitte einloggen"-Seite landet.
     return (
-        <div className={variant === "header" ? "seg" : "actionsRow"}>
-            <NotifyToggle className={variant === "header" ? "segBtn" : "btn btnSecondary btnSmall"} />
-            <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href="/achievements" title="Achievements & Stats">
+        <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
+            <NotifyToggle className={variant === "header" ? "homeLink" : "btn btnSecondary btnSmall"} />
+            <Link className={variant === "header" ? "homeLink" : "btn btnSecondary"} href="/achievements" title="Achievements & Stats">
                 🏆
             </Link>
-            <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href="/leaderboard" title="Leaderboard">
+            <Link className={variant === "header" ? "homeLink" : "btn btnSecondary"} href="/leaderboard" title="Leaderboard">
                 📊
             </Link>
-            <Link className={variant === "header" ? "segBtn" : "btn btnSecondary"} href="/friends" title="Freunde & gespeicherte Lobbies">
+            <Link className={variant === "header" ? "homeLink" : "btn btnSecondary"} href="/friends" title="Freunde & gespeicherte Lobbies">
                 👥
             </Link>
-            <span className={variant === "header" ? "segBtn segActive" : "btn btnSecondary"} title={user.email ?? ""}>
+            <span className={variant === "header" ? "homeLink homeUser" : "btn btnSecondary"} title={user.email ?? ""}>
                 {user.email}
             </span>
-            <button type="button" className={variant === "header" ? "segBtn" : "btn btnSecondary"} onClick={logout}>
+            <button type="button" className={variant === "header" ? "homeLink" : "btn btnSecondary"} onClick={logout}>
                 Abmelden
             </button>
         </div>

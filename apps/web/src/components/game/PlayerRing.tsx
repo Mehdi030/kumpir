@@ -37,6 +37,8 @@ type Props = {
     duel?: boolean;
     /** Weitergabe-Richtung: 1 = Sitzreihenfolge vorwärts, -1 = rückwärts (Rache-Pass). */
     direction?: number;
+    /** Vorschau-Linie zum nächsten Spieler: nur für den Halter und Ausgeschiedene (Überraschungseffekt). */
+    showNext?: boolean;
 };
 
 const TILT_DEG = 52;
@@ -87,6 +89,7 @@ export function PlayerRing({
     tempo = 1,
     duel = false,
     direction = 1,
+    showNext = false,
 }: Props) {
     const isDisconnected = useCallback(
         (id: string) => (disconnectedIds instanceof Set ? disconnectedIds.has(id) : (disconnectedIds ?? []).includes(id)),
@@ -280,7 +283,7 @@ export function PlayerRing({
 
     // Vorschau-Linie: wohin fliegt die Kartoffel als Nächstes?
     const nextArc = useMemo(() => {
-        if (!holderPlayerId || size.w <= 0) return null;
+        if (!showNext || !holderPlayerId || size.w <= 0) return null;
         const alive = players.filter((p) => p.is_alive);
         const n = alive.length;
         if (n < 2) return null;
@@ -298,7 +301,7 @@ export function PlayerRing({
         const my = (a.y + b.y) / 2;
         const c = { x: mx + (cx - mx) * 0.5, y: my + (cy - my) * 0.5 };
         return { a, b, c };
-    }, [players, holderPlayerId, direction, getPx, size.w, size.h]);
+    }, [players, holderPlayerId, direction, showNext, getPx, size.w, size.h]);
 
     const popRender = useMemo(() => {
         if (!popPlayerId) return null;
@@ -428,7 +431,7 @@ export function PlayerRing({
                 {holderPos && !flyRender ? (
                     <>
                         <div className="potatoShadow" style={{ left: holderPos.x, top: holderPos.y + 30 }} aria-hidden />
-                        <div className="tablePotato" style={{ left: holderPos.x, top: holderPos.y - 40 }} aria-hidden>
+                        <div className="tablePotato" style={{ left: holderPos.x, top: holderPos.y - 30 }} aria-hidden>
                             🥔
                         </div>
                     </>
@@ -734,7 +737,7 @@ export function PlayerRing({
           z-index: 40;
           font-size: 40px;
           line-height: 1;
-          transform: translate(-50%, -50%) translateZ(132px) rotateX(calc(var(--tilt) * -1));
+          transform: translate(-50%, -50%) translateZ(104px) rotateX(calc(var(--tilt) * -1));
           filter: drop-shadow(0 10px 16px rgba(0,0,0,.55)) drop-shadow(0 0 14px rgba(255,150,40,.55));
           transition: left .5s cubic-bezier(.2,1,.2,1), top .5s cubic-bezier(.2,1,.2,1);
           animation: potatoBob 1.2s ease-in-out infinite;

@@ -1,0 +1,157 @@
+"use client";
+
+import React from "react";
+import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
+import { Spinner } from "@/components/Spinner";
+import { ToastStack } from "@/components/ToastStack";
+
+export type FinishRow = {
+    id: string;
+    name: string;
+    place: number;
+    score: number;
+    songPoints: number;
+    moves: number;
+    isMe: boolean;
+};
+
+export type FinishHighlight = { label: string; icon: string; name: string; value: string };
+
+type ToastItem = React.ComponentProps<typeof ToastStack>["toasts"];
+
+type Props = {
+    isSeries: boolean;
+    totalRounds: number;
+    winnerName: string;
+    /** Eigener Platz + Punkte (Match-Gesamt bei mehreren Runden). */
+    me: { place: number; score: number } | null;
+    rows: FinishRow[];
+    seriesRows: SeriesRow[];
+    mePlayerId: string | null;
+    highlights: FinishHighlight[];
+    busy: "reset" | "rematch" | null;
+    onRematch: () => void;
+    onLobby: () => void;
+    toasts: ToastItem;
+};
+
+const MEDAL = ["🥇", "🥈", "🥉"];
+
+/**
+ * Endseite: ein Held (Sieger), EINE Wertung (Tabelle), kurze Highlights, zwei Buttons.
+ * Bei mehreren Runden ist die Wertung die Match-Gesamtwertung (Punkte je Runde + Summe),
+ * bei einer einzelnen Runde die Rundenwertung.
+ */
+export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seriesRows, mePlayerId, highlights, busy, onRematch, onLobby, toasts }: Props) {
+    return (
+        <div className="finWrap">
+            <header className="finHero">
+                <div className="finKicker">{isSeries ? `Match beendet · ${totalRounds} Runden` : "Runde beendet"}</div>
+                <div className="finTrophy" aria-hidden>
+                    🏆
+                </div>
+                <h1 className="finWinner">{winnerName}</h1>
+                <div className="finSub">{isSeries ? "gewinnt das Match" : "gewinnt die Runde"}</div>
+                {me ? (
+                    <div className="finMe">
+                        Dein Ergebnis: <b>Platz {me.place}</b> · <b>{me.score}</b> Punkte
+                    </div>
+                ) : null}
+            </header>
+
+            {isSeries ? (
+                <SeriesTable rows={seriesRows} totalSets={totalRounds} playedSets={totalRounds} mePlayerId={mePlayerId} title="Endstand" />
+            ) : (
+                <section className="finCard">
+                    <h2 className="finCardTitle">Endstand</h2>
+                    <div className="finTable" role="table">
+                        <div className="finRow finHead" role="row">
+                            <span>#</span>
+                            <span>Spieler</span>
+                            <span className="r">Punkte</span>
+                            <span className="r" title="Richtig erratene Songs">♪ Treffer</span>
+                            <span className="r" title="Überlebte Züge">Züge</span>
+                        </div>
+                        {rows.map((r) => (
+                            <div key={r.id} className={`finRow ${r.isMe ? "me" : ""} ${r.place === 1 ? "first" : ""}`} role="row">
+                                <span>{MEDAL[r.place - 1] ?? r.place}</span>
+                                <span className="finName">{r.name}</span>
+                                <span className="r finPts">{r.score}</span>
+                                <span className="r">{r.songPoints > 0 ? (Math.round(r.songPoints * 2) / 2).toString().replace(".", ",") : "–"}</span>
+                                <span className="r">{r.moves}</span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {highlights.length > 0 ? (
+                <section className="finTiles" aria-label="Highlights">
+                    {highlights.map((h) => (
+                        <div key={h.label} className="finTile">
+                            <div className="finTileIcon" aria-hidden>
+                                {h.icon}
+                            </div>
+                            <div className="finTileLabel">{h.label}</div>
+                            <div className="finTileName">{h.name}</div>
+                            <div className="finTileValue">{h.value}</div>
+                        </div>
+                    ))}
+                </section>
+            ) : null}
+
+            <div className="finActions">
+                <button type="button" className="btn btnPrimary btnXL" onClick={onRematch} disabled={!!busy} title="Direkt nochmal (Taste R)">
+                    {busy === "rematch" ? <Spinner size={16} label="Starte…" /> : "🔁 Nochmal spielen"}
+                </button>
+                <button type="button" className="btn btnSecondary btnXL" onClick={onLobby} disabled={!!busy}>
+                    {busy === "reset" ? <Spinner size={16} label="Lade…" /> : "Zur Lobby"}
+                </button>
+            </div>
+            <div className="finHint">Tipp: Taste R startet direkt eine neue Runde</div>
+
+            <ToastStack toasts={toasts} inline />
+
+            <style>{`
+        .finWrap{ width: min(820px, calc(100vw - 32px)); position: relative; z-index: 2; display: grid; gap: 18px; padding: 8px 0 28px; }
+        .finHero{ text-align: center; display: grid; justify-items: center; gap: 4px; animation: finIn .7s cubic-bezier(.16,1,.3,1) both; }
+        .finKicker{ font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .8; }
+        .finTrophy{
+          width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; font-size: 40px; margin: 6px 0 2px;
+          background: radial-gradient(circle at 35% 30%, #ffe27a, #ffb21a 70%);
+          box-shadow: 0 0 0 6px rgba(255,255,255,.18), 0 16px 40px rgba(0,0,0,.35);
+          animation: finBob 3s ease-in-out infinite;
+        }
+        .finWinner{ margin: 0; font-size: clamp(38px, 8vw, 68px); line-height: 1.05; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 6px 30px rgba(0,0,0,.35); word-break: break-word; }
+        .finSub{ font-size: 15px; opacity: .8; font-weight: 600; }
+        .finMe{ margin-top: 10px; padding: 8px 16px; border-radius: 999px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); font-size: 15px; }
+        .finMe b{ font-weight: 800; }
+
+        .finCard{ border-radius: 24px; padding: 18px; background: rgba(30,8,8,.42); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0,0,0,.28); animation: finIn .7s .1s cubic-bezier(.16,1,.3,1) both; }
+        .finCardTitle{ margin: 0 0 10px; font-size: 18px; font-weight: 800; }
+        .finTable{ display: grid; gap: 6px; }
+        .finRow{ display: grid; grid-template-columns: 38px 1fr 76px 72px 54px; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.07); font-weight: 600; }
+        .finRow.finHead{ background: none; padding-top: 0; padding-bottom: 2px; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; opacity: .65; }
+        .finRow.first{ background: rgba(255,214,10,.16); border: 1px solid rgba(255,214,10,.4); }
+        .finRow.me{ box-shadow: inset 0 0 0 2px rgba(34,211,238,.6); }
+        .finRow .r{ text-align: right; }
+        .finName{ font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .finPts{ font-weight: 800; color: #ffe08a; }
+
+        .finTiles{ display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; animation: finIn .7s .2s cubic-bezier(.16,1,.3,1) both; }
+        .finTile{ border-radius: 20px; padding: 14px; text-align: center; background: rgba(30,8,8,.36); border: 1px solid rgba(255,255,255,.14); display: grid; gap: 2px; justify-items: center; }
+        .finTileIcon{ font-size: 26px; }
+        .finTileLabel{ font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; opacity: .65; }
+        .finTileName{ font-size: 18px; font-weight: 800; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .finTileValue{ font-size: 14px; font-weight: 700; color: #ffe08a; }
+
+        .finActions{ display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
+        .finHint{ text-align: center; font-size: 12px; opacity: .6; }
+
+        @keyframes finIn{ from{ opacity: 0; transform: translateY(14px); } to{ opacity: 1; transform: translateY(0); } }
+        @keyframes finBob{ 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-5px); } }
+        @media (max-width: 520px){ .finRow{ grid-template-columns: 34px 1fr 64px 56px 44px; padding: 9px 10px; font-size: 14px; } }
+      `}</style>
+        </div>
+    );
+}

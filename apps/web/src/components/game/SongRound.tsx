@@ -200,13 +200,13 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
     // zeigt allein der pulsierende Feuer-Rand (.edgeFire in game/[code]/page.tsx).
     // Nur der Autoplay-Fallback-Button bleibt, weil er funktional nötig ist.
     return (
-        <div className="songRoundHint" aria-live="polite">
+        <>
             {blocked ? (
-                <button type="button" onClick={retryPlay} className="btn btnSecondary btnSmall" title="Wiedergabe starten">
-                    ▶️ Song abspielen
+                <button type="button" onClick={retryPlay} className="btn btnPrimary" title="Wiedergabe starten">
+                    ▶️ Tippen, um den Song zu starten
                 </button>
             ) : null}
             <audio ref={audioRef} preload="none" />
-        </div>
+        </>
     );
 }
