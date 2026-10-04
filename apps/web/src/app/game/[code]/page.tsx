@@ -2438,7 +2438,7 @@ export default function GamePage() {
           padding: 22px;
           /* Platz für den Tisch (PlayerRing) darüber, damit Antwort-Box und
              Tisch nicht übereinander liegen. */
-          padding-top: clamp(22px, 40vh, 360px);
+          padding-top: clamp(22px, 36vh, 340px);
         }
         .hudInner{
           width: min(920px, 94vw);

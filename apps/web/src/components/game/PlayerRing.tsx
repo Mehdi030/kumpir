@@ -154,11 +154,11 @@ export function PlayerRing({
             // damit der Tisch nicht mit der zentrierten Antwort-Box (.hud)
             // kollidiert -- beide "in der Mitte", aber übereinander gestapelt
             // statt deckungsgleich.
-            const cy = size.h * 0.22;
+            const cy = size.h * 0.27;
             // Kompakter, mittiger Tisch statt über den ganzen Bildschirm
             // verteilter Sitze -- "bestenfalls in der Mitte sowas wie einen
             // Tisch" statt eines bildschirmfüllenden Rings.
-            const r = Math.min(minSide * 0.19, 150);
+            const r = Math.min(minSide * 0.23, 190);
 
             return {
                 x: cx + rel.x * r,
@@ -397,9 +397,9 @@ export function PlayerRing({
         .tableSurface{
           position:absolute;
           left:50%;
-          top:22%;
-          width: min(44vmin, 370px);
-          height: min(44vmin, 370px);
+          top:27%;
+          width: min(54vmin, 470px);
+          height: min(54vmin, 470px);
           transform: translate(-50%,-50%);
           border-radius: 50%;
           background:
