@@ -104,6 +104,7 @@ type Player = {
     survival_streak?: number;
     eliminated_at_round?: number | null;
     song_points?: number;
+    skips_left?: number;
     last_seen_at?: string | null;
 };
 
@@ -254,7 +255,8 @@ export default function GamePage() {
     // Halter-Runde ursprünglich (statt nur "wie viel ist noch übrig")?
     // Wird bei jedem Halterwechsel aus dem frischen explode_at neu gesetzt.
     const roundTotalMsRef = useRef<number>(15000);
-    const lastHolderForTotalRef = useRef<string | null>(null);
+    const lastExplodeMsRef = useRef<number | null>(null);
+    const lastFuseRoundRef = useRef<number>(-1);
 
     // Rematch / reset busy
     const [endActionBusy, setEndActionBusy] = useState<null | "rematch" | "reset">(null);
@@ -346,38 +348,39 @@ export default function GamePage() {
         return players.find((p) => p.player_id === lobby.holder_player_id) ?? null;
     }, [players, lobby?.holder_player_id]);
 
+    // ARENA-WERTUNG:
+    //  - Platzierung = Überlebensreihenfolge (Sieger = letzter Lebender, dann
+    //    wer in der späteren Runde ausgeschieden ist; Gleichstand -> mehr
+    //    Song-Punkte, dann mehr Pässe). Das ist die einzige Rangfolge.
+    //  - Arena-Punkte (Spalte "Punkte") sind davon getrennt und fließen später
+    //    in Bestenlisten ein: Platzierung (1. = 100 ... Letzter = 0, linear)
+    //    + Song-Punkte x 15 (Titel 15, Interpret 7.5) + Clutch-Pässe x 10.
     const ranking = useMemo(() => {
-        const rows = players.map((p) => {
+        const base = players.map((p) => {
             const pass = p.pass_count ?? 0;
             const clutch = p.clutch_pass_count ?? 0;
             const streak = p.survival_streak ?? 0;
             const fastest = p.fastest_pass_ms ?? null;
             const slowest = p.slowest_pass_ms ?? null;
-
-            const fastestBonus = fastest == null ? 0 : Math.max(0, Math.min(12, Math.round((2200 - fastest) / 200)));
             const songPoints = p.song_points ?? 0;
-            const score = pass * 10 + clutch * 18 + streak * 6 + fastestBonus + songPoints * 20;
 
             // "Runden überlebt": Sieger (nie eliminiert) haben alle Runden des
             // Matches überlebt, alle anderen bis zu der Runde, in der sie
             // ausgeschieden sind (Timer-Explosion oder Host-Kick, Migration 048).
             const roundsSurvived = p.eliminated_at_round ?? lobby?.round_number ?? 0;
+            const survivalKey = p.is_alive ? Number.POSITIVE_INFINITY : (p.eliminated_at_round ?? 0);
 
-            return {
-                ...p,
-                score,
-                pass,
-                clutch,
-                streak,
-                fastest,
-                slowest,
-                roundsSurvived,
-                holdMs: p.total_hold_ms ?? 0,
-            };
+            return { ...p, pass, clutch, streak, fastest, slowest, songPoints, roundsSurvived, survivalKey, holdMs: p.total_hold_ms ?? 0 };
         });
 
-        rows.sort((a, b) => b.score - a.score);
-        return rows;
+        base.sort((a, b) => b.survivalKey - a.survivalKey || b.songPoints - a.songPoints || b.pass - a.pass);
+
+        const n = base.length;
+        return base.map((r, i) => {
+            const placementPts = n > 1 ? Math.round((100 * (n - 1 - i)) / (n - 1)) : 100;
+            const score = placementPts + Math.round(r.songPoints * 15) + r.clutch * 10;
+            return { ...r, place: i + 1, score };
+        });
     }, [players, lobby?.round_number]);
 
     const top5 = useMemo(() => ranking.slice(0, 5), [ranking]);
@@ -785,6 +788,7 @@ export default function GamePage() {
                             "survival_streak",
                             "eliminated_at_round",
                             "song_points",
+                            "skips_left",
                             "last_seen_at",
                         ].join(",")
                     )
@@ -1097,14 +1101,28 @@ export default function GamePage() {
         };
     }, [lobby]);
 
+    // Zündschnur-Länge der aktuellen Runde: startet mit der Restzeit beim
+    // Rundenbeginn (neue Runde = neue Schnur) und wächst um jede Bonuszeit
+    // (Pass-Bonus) -- so springt der Ring nach einem guten Pass sichtbar
+    // zurück, und ein Song-Tausch (verkürzt die Schnur) lässt ihn vorrücken.
     useEffect(() => {
-        if (!lobby || lobby.phase !== "running") return;
-        if (lobby.holder_player_id === lastHolderForTotalRef.current) return;
-        lastHolderForTotalRef.current = lobby.holder_player_id;
-        const ms = msUntil(lobby.explode_at);
-        if (ms != null && ms > 0) roundTotalMsRef.current = ms;
+        if (!lobby || lobby.phase !== "running" || !lobby.explode_at) {
+            lastExplodeMsRef.current = null;
+            return;
+        }
+        const exp = Date.parse(lobby.explode_at);
+        if (Number.isNaN(exp)) return;
+        const round = lobby.round_number ?? 0;
+        if (lastExplodeMsRef.current == null || round !== lastFuseRoundRef.current) {
+            const ms = msUntil(lobby.explode_at);
+            roundTotalMsRef.current = Math.max(1500, ms ?? 15000);
+        } else if (exp > lastExplodeMsRef.current) {
+            roundTotalMsRef.current += exp - lastExplodeMsRef.current;
+        }
+        lastExplodeMsRef.current = exp;
+        lastFuseRoundRef.current = round;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [lobby?.holder_player_id, lobby?.explode_at, lobby?.phase]);
+    }, [lobby?.explode_at, lobby?.round_number, lobby?.phase]);
 
     // Vote action (optimistic local state so highlight is instant)
     const vote = useCallback(
@@ -1210,6 +1228,25 @@ export default function GamePage() {
         },
         [mePlayerId, lobby, kickBusyId, code, rpcHostKickDuringRound, showToast]
     );
+
+    // Song-Tausch-Joker (1x pro Match, kostet 2s Zündschnur)
+    const [skipBusy, setSkipBusy] = useState(false);
+    const handleSkipSong = useCallback(async () => {
+        if (!mePlayerId || skipBusy) return;
+        setSkipBusy(true);
+        try {
+            const { error } = await supabase.rpc("rpc_skip_song", { p_code: code, p_player_id: mePlayerId });
+            if (error) {
+                if (error.message.includes("too_late")) showToast("⏳ Zu spät zum Tauschen", 1500);
+                else if (error.message.includes("no_skips_left")) showToast("Kein Joker mehr übrig", 1500);
+                else showToast(`❌ ${error.message}`, 2200);
+            } else {
+                showToast("🔀 Neuer Song (−2s)", 1400);
+            }
+        } finally {
+            setSkipBusy(false);
+        }
+    }, [mePlayerId, skipBusy, supabase, code, showToast]);
 
     // Rematch handler (also bound to "R" key)
     const handleRematch = useCallback(async () => {
@@ -1667,12 +1704,15 @@ export default function GamePage() {
                         {/* Ranking */}
                         <div className="card">
                             <div className="cardTitle">🏅 Ranking</div>
+                            <div className="fieldHelp" style={{ marginTop: 4, opacity: 0.75 }}>
+                                Platz = wer am längsten überlebt hat · Punkte = Platz + Song-Treffer + Clutch
+                            </div>
 
                             <div className="table">
                                 <div className="row head">
                                     <div>#</div>
                                     <div>Player</div>
-                                    <div className="r">Score</div>
+                                    <div className="r">Punkte</div>
                                     <div className="r">Runden</div>
                                     <div className="r">Fastest</div>
                                     <div className="r">Slowest</div>
@@ -2215,6 +2255,11 @@ export default function GamePage() {
         1
     );
 
+    // Tempo-Anzeige: spiegelt calc_explode_seconds (-6 % Schnurlänge pro
+    // Eliminierung, Boden 45 %) und im Duell nochmal 20 % kürzer.
+    const tempoFactor =
+        (1 / Math.max(0.45, 1 - (Math.max(1, lobby.round_number ?? 1) - 1) * 0.06)) * (aliveNow === 2 ? 1.25 : 1);
+
     return (
         <main
             className={selfShake ? "kumpirSelfShake" : ""}
@@ -2233,6 +2278,10 @@ export default function GamePage() {
                 passEvent={passEvent}
                 explodedPlayerId={explodedPlayerId}
                 disconnectedIds={disconnectedIds}
+                heat={heatRatio}
+                round={Math.max(1, lobby.round_number ?? 1)}
+                tempo={tempoFactor}
+                duel={aliveNow === 2}
             />
 
             {turnOverlay ? (
@@ -2405,6 +2454,18 @@ export default function GamePage() {
                             >
                                 {passBusy ? "…" : "🥔 Antworten + Passen"}
                             </button>
+                            {lobby.current_song_id && (meRow?.skips_left ?? 0) > 0 ? (
+                                <button
+                                    type="button"
+                                    className="btn btnSecondary btnSmall"
+                                    onClick={() => void handleSkipSong()}
+                                    disabled={skipBusy || passBusy}
+                                    title="Song tauschen (1x pro Match, kostet 2 Sekunden)"
+                                    style={{ justifySelf: "center" }}
+                                >
+                                    🔀 Song tauschen · {meRow?.skips_left}×  (−2s)
+                                </button>
+                            ) : null}
                         </div>
                     ) : (
                         <div className="hint">Warte, bis du dran bist.</div>
