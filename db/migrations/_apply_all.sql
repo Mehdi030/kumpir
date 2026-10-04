@@ -9828,3 +9828,1158 @@ end;
 $function$;
 
 COMMIT;
+
+
+-- ============================================================
+-- Migration 062: Serien -- mehrere Durchgänge pro Match + Zwischenstand
+-- ============================================================
+-- Der Host wählt beim Erstellen, wie viele Durchgänge gespielt werden
+-- (1 / 3 / 5). Jeder Durchgang läuft wie bisher bis nur noch EIN Spieler
+-- übrig ist. Danach:
+--   - die Platzierungen + Arena-Punkte des Durchgangs werden in
+--     series_results gespeichert,
+--   - ist es nicht der letzte Durchgang -> Phase 'set_summary' (Zwischen-
+--     stand, 12s), danach automatisch neues Themen-Voting (rpc_start_next_set),
+--   - ist es der letzte -> 'finished' mit Gesamtwertung.
+-- Arena-Punkte pro Durchgang (identisch zur Client-Anzeige):
+--   Platzierung (1. = 100 ... Letzter = 0, linear) + Song-Punkte x 15 + Clutch x 10
+-- Zusätzlich: Saison-Punkte (Monat) für eingeloggte Spieler.
+-- ============================================================
+
+BEGIN;
+
+ALTER TABLE public.lobbies ADD COLUMN IF NOT EXISTS series_total int NOT NULL DEFAULT 1;
+ALTER TABLE public.lobbies ADD COLUMN IF NOT EXISTS series_index int NOT NULL DEFAULT 1;
+
+-- Neue Phase 'set_summary' (Zwischenstand) im Check-Constraint zulassen.
+ALTER TABLE public.lobbies DROP CONSTRAINT IF EXISTS lobbies_phase_check;
+ALTER TABLE public.lobbies ADD CONSTRAINT lobbies_phase_check CHECK (phase = ANY (ARRAY['waiting','lobby','topic_vote','countdown','running','finished','rematch_wait','set_summary']));
+GRANT SELECT ON public.lobbies TO anon, authenticated;
+
+CREATE TABLE IF NOT EXISTS public.series_results (
+  id bigserial PRIMARY KEY,
+  lobby_id uuid NOT NULL,
+  set_index int NOT NULL,
+  player_id uuid NOT NULL,
+  name text NOT NULL,
+  place int NOT NULL,
+  arena_points int NOT NULL,
+  song_points numeric NOT NULL DEFAULT 0,
+  rounds_survived int NOT NULL DEFAULT 0,
+  passes int NOT NULL DEFAULT 0,
+  clutch int NOT NULL DEFAULT 0,
+  is_bot boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (lobby_id, set_index, player_id)
+);
+CREATE INDEX IF NOT EXISTS series_results_lobby_idx ON public.series_results (lobby_id, set_index);
+ALTER TABLE public.series_results ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS series_results_read ON public.series_results;
+CREATE POLICY series_results_read ON public.series_results FOR SELECT USING (true);
+GRANT SELECT ON public.series_results TO anon, authenticated;
+
+CREATE TABLE IF NOT EXISTS public.season_points (
+  user_id uuid NOT NULL,
+  season text NOT NULL,
+  arena_points int NOT NULL DEFAULT 0,
+  sets_played int NOT NULL DEFAULT 0,
+  set_wins int NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, season)
+);
+ALTER TABLE public.season_points ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS season_points_read ON public.season_points;
+CREATE POLICY season_points_read ON public.season_points FOR SELECT USING (true);
+GRANT SELECT ON public.season_points TO anon, authenticated;
+
+-- Neue Serie (Rematch / zurück in die Lobby) beginnt wieder bei Durchgang 1.
+CREATE OR REPLACE FUNCTION public._reset_series_on_phase()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if NEW.phase in ('waiting', 'rematch_wait') and OLD.phase is distinct from NEW.phase then
+    NEW.series_index := 1;
+    delete from public.series_results where lobby_id = NEW.id;
+  end if;
+  return NEW;
+end;
+$function$;
+
+DROP TRIGGER IF EXISTS lobbies_reset_series ON public.lobbies;
+CREATE TRIGGER lobbies_reset_series
+  BEFORE UPDATE OF phase ON public.lobbies
+  FOR EACH ROW EXECUTE FUNCTION public._reset_series_on_phase();
+
+-- Host stellt die Anzahl Durchgänge ein (nur in der Wartelobby).
+CREATE OR REPLACE FUNCTION public.set_lobby_series(p_lobby_id uuid, p_me_player_id uuid, p_total int)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_host uuid; v_phase text;
+begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then raise exception 'invalid_session'; end if;
+  select host_player_id, phase into v_host, v_phase from public.lobbies where id = p_lobby_id;
+  if v_host is null then raise exception 'lobby_not_found'; end if;
+  if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
+  if v_phase not in ('waiting', 'finished') then raise exception 'lobby_not_waiting'; end if;
+  if p_total not in (1, 3, 5) then raise exception 'invalid_series_total'; end if;
+  update public.lobbies
+  set series_total = p_total, settings_version = coalesce(settings_version, 0) + 1
+  where id = p_lobby_id;
+end;
+$function$;
+
+-- ------------------------------------------------------------
+-- Durchgang abschließen: Ergebnisse speichern, dann Zwischenstand
+-- oder Serienende.
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public._finish_round(p_lobby_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_idx int; v_total int; v_winner uuid; v_n int;
+  v_season text := to_char(now(), 'YYYY-MM');
+  r record;
+begin
+  select series_index, series_total into v_idx, v_total from public.lobbies where id = p_lobby_id;
+
+  select player_id into v_winner
+  from public.players
+  where lobby_id = p_lobby_id and status = 'active' and is_alive = true
+  limit 1;
+
+  select count(*) into v_n from public.players where lobby_id = p_lobby_id and status = 'active';
+
+  delete from public.series_results where lobby_id = p_lobby_id and set_index = v_idx;
+
+  insert into public.series_results
+    (lobby_id, set_index, player_id, name, place, arena_points, song_points, rounds_survived, passes, clutch, is_bot)
+  select p_lobby_id, v_idx, t.player_id, t.name, t.place,
+         (case when v_n > 1 then round(100.0 * (v_n - t.place) / (v_n - 1)) else 100 end)::int
+           + round(t.song_points * 15)::int + t.clutch * 10,
+         t.song_points, t.rounds_survived, t.passes, t.clutch, t.is_bot
+  from (
+    select p.player_id, p.name,
+           row_number() over (
+             order by (case when p.is_alive then 1 else 0 end) desc,
+                      p.eliminated_at_round desc nulls last,
+                      p.song_points desc, p.pass_count desc, p.seat_index
+           )::int as place,
+           coalesce(p.song_points, 0) as song_points,
+           coalesce(p.eliminated_at_round, (select round_number from public.lobbies where id = p_lobby_id), 0) as rounds_survived,
+           coalesce(p.pass_count, 0) as passes,
+           coalesce(p.clutch_pass_count, 0) as clutch,
+           coalesce(p.is_bot, false) as is_bot
+    from public.players p
+    where p.lobby_id = p_lobby_id and p.status = 'active'
+  ) t;
+
+  -- Saison-Punkte nur für eingeloggte Spieler.
+  for r in
+    select p.user_id, sr.arena_points, sr.place
+    from public.series_results sr
+    join public.players p on p.lobby_id = sr.lobby_id and p.player_id = sr.player_id
+    where sr.lobby_id = p_lobby_id and sr.set_index = v_idx and p.user_id is not null
+  loop
+    insert into public.season_points (user_id, season, arena_points, sets_played, set_wins)
+    values (r.user_id, v_season, r.arena_points, 1, case when r.place = 1 then 1 else 0 end)
+    on conflict (user_id, season) do update
+      set arena_points = public.season_points.arena_points + excluded.arena_points,
+          sets_played = public.season_points.sets_played + 1,
+          set_wins = public.season_points.set_wins + excluded.set_wins,
+          updated_at = now();
+  end loop;
+
+  if v_idx < v_total then
+    -- Lebenslange Stats pro Durchgang mitzählen, bevor die Spielerwerte
+    -- für den nächsten Durchgang zurückgesetzt werden.
+    begin
+      perform public.aggregate_player_stats(p_lobby_id);
+    exception when others then
+      null;
+    end;
+
+    update public.lobbies
+    set phase = 'set_summary', explode_at = null, current_song_id = null,
+        current_attempt_id = null,
+        holder_player_id = v_winner,
+        countdown_started_at = now(), countdown_ends_at = now() + interval '12 seconds',
+        last_activity_at = now()
+    where id = p_lobby_id;
+  else
+    update public.lobbies
+    set phase = 'finished', explode_at = null, current_song_id = null,
+        current_attempt_id = null,
+        holder_player_id = v_winner,
+        last_activity_at = now()
+    where id = p_lobby_id;
+  end if;
+end;
+$function$;
+
+REVOKE ALL ON FUNCTION public._finish_round(uuid) FROM PUBLIC, anon, authenticated;
+
+-- ------------------------------------------------------------
+-- Nächster Durchgang: Spieler zurücksetzen, neues Themen-Voting.
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rpc_start_next_set(p_code text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid; v_phase text; v_filter text[]; v_prev text; v_ends timestamptz;
+  v_topic_a text; v_topic_b text; v_topic_c text;
+begin
+  select id, phase, topic_filter, topic_selected, countdown_ends_at
+    into v_lobby_id, v_phase, v_filter, v_prev, v_ends
+  from public.lobbies where code = upper(trim(p_code)) for update;
+
+  if v_lobby_id is null then raise exception 'Lobby nicht gefunden'; end if;
+  if v_phase is distinct from 'set_summary' then return; end if;
+  if v_ends is not null and v_ends > now() + interval '1 second' then return; end if;
+
+  -- Neues Thema bevorzugt NICHT dasselbe wie im letzten Durchgang.
+  select t.text into v_topic_a
+  from public.topic_pool t
+  where t.active is true and (v_filter is null or t.text = any(v_filter)) and t.text is distinct from v_prev
+  order by random() limit 1;
+  if v_topic_a is null then
+    select t.text into v_topic_a from public.topic_pool t
+    where t.active is true and (v_filter is null or t.text = any(v_filter)) order by random() limit 1;
+  end if;
+  if v_topic_a is null then raise exception 'Nicht genug Themen im topic_pool'; end if;
+
+  select t.text into v_topic_b from public.topic_pool t
+  where t.active is true and t.text <> v_topic_a and (v_filter is null or t.text = any(v_filter))
+  order by random() limit 1;
+  if v_topic_b is null then
+    v_topic_b := v_topic_a;
+  else
+    select t.text into v_topic_c from public.topic_pool t
+    where t.active is true and t.text <> v_topic_a and t.text <> v_topic_b and (v_filter is null or t.text = any(v_filter))
+    order by random() limit 1;
+  end if;
+
+  delete from public.topic_votes where lobby_id = v_lobby_id;
+
+  update public.players
+  set ready = coalesce(is_bot, false), is_alive = true,
+      pass_count = 0, clutch_pass_count = 0,
+      fastest_pass_ms = null, slowest_pass_ms = null, total_hold_ms = 0,
+      survival_streak = 0, last_pass_at = null, eliminated_at_round = null,
+      song_points = 0
+  where lobby_id = v_lobby_id and status = 'active';
+
+  update public.lobbies
+  set phase = 'topic_vote',
+      series_index = series_index + 1,
+      round_number = 1, pass_direction = 1,
+      topic_a = v_topic_a, topic_b = v_topic_b, topic_c = v_topic_c, topic_selected = null,
+      topic_vote_started_at = now(), topic_vote_ends_at = now() + interval '10 seconds',
+      countdown_started_at = null, countdown_ends_at = null,
+      topic_tie_choices = null, topic_tie_pick = null,
+      holder_player_id = null, explode_at = null, run_started_at = null,
+      last_loser_player_id = null, current_attempt_id = null, used_answers = '{}',
+      last_activity_at = now()
+  where id = v_lobby_id and phase = 'set_summary';
+end;
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.rpc_start_next_set(text) TO anon, authenticated;
+
+-- ------------------------------------------------------------
+-- Matchende läuft jetzt über _finish_round (Tick + Host-Kick)
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rpc_tick_game(p_code text)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_now timestamptz := now();
+  v_lobby_id uuid; v_phase text; v_holder uuid; v_explode_at timestamptz; v_game_mode text;
+  v_round_speed text; v_round_number int;
+  v_alive_count int; v_loser uuid; v_next_holder uuid;
+  v_round_duration interval;
+begin
+  select id, phase, holder_player_id, explode_at, game_mode, round_speed
+    into v_lobby_id, v_phase, v_holder, v_explode_at, v_game_mode, v_round_speed
+  from public.lobbies where code = upper(p_code) for update;
+
+  if v_lobby_id is null then raise exception 'Lobby not found'; end if;
+  if v_phase is distinct from 'running' then return; end if;
+  if v_explode_at is null then return; end if;
+  if v_now < v_explode_at then return; end if;
+
+  v_loser := v_holder;
+  if v_loser is null then return; end if;
+
+  update public.players
+  set is_alive = false, survival_streak = 0
+  where lobby_id = v_lobby_id and player_id = v_loser;
+
+  update public.players
+  set survival_streak = survival_streak + 1
+  where lobby_id = v_lobby_id and status = 'active' and is_alive = true;
+
+  update public.lobbies
+  set round_number = coalesce(round_number, 0) + 1,
+      last_loser_player_id = v_loser,
+      last_activity_at = v_now
+  where id = v_lobby_id
+  returning round_number into v_round_number;
+
+  update public.players
+  set eliminated_at_round = v_round_number
+  where lobby_id = v_lobby_id and player_id = v_loser;
+
+  select count(*) into v_alive_count
+  from public.players
+  where lobby_id = v_lobby_id and status = 'active' and is_alive = true;
+
+  if v_alive_count <= 1 then
+    perform public._finish_round(v_lobby_id);
+    return;
+  end if;
+
+  select p2.player_id into v_next_holder
+  from public.players p_loser
+  join public.players p2 on p2.lobby_id = p_loser.lobby_id
+    and p2.status = 'active' and p2.is_alive = true
+    and p2.seat_index > p_loser.seat_index
+  where p_loser.lobby_id = v_lobby_id and p_loser.player_id = v_loser
+  order by p2.seat_index asc limit 1;
+
+  if v_next_holder is null then
+    select player_id into v_next_holder
+    from public.players
+    where lobby_id = v_lobby_id and status = 'active' and is_alive = true
+    order by seat_index asc limit 1;
+  end if;
+
+  if v_game_mode = 'teleport' then
+    select player_id into v_next_holder
+    from public.players
+    where lobby_id = v_lobby_id and status = 'active' and is_alive = true and player_id != v_loser
+    order by random() limit 1;
+  end if;
+
+  v_round_duration := public.calc_explode_seconds(
+    coalesce(v_round_speed, 'normal'),
+    v_alive_count,
+    coalesce(v_round_number, 1)
+  ) * interval '1 second';
+
+  update public.lobbies
+  set holder_player_id = v_next_holder,
+      explode_at = v_now + v_round_duration,
+      round_bonus_used = 0,
+      pass_direction = case
+        when v_game_mode = 'reverse' then (pass_direction * -1)::smallint
+        else pass_direction
+      end
+  where id = v_lobby_id;
+
+  perform public._pick_next_song(v_lobby_id);
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.rpc_host_kick_during_round(
+    p_code TEXT, p_host_player_id UUID, p_target_player_id UUID
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby public.lobbies%ROWTYPE;
+  v_was_holder boolean;
+  v_alive_count int;
+  v_next_holder uuid;
+  v_round_duration interval;
+  v_round_number int;
+begin
+  select * into v_lobby from public.lobbies where code = upper(p_code) for update;
+  if not found then raise exception 'lobby_not_found'; end if;
+
+  if not public._verify_session(v_lobby.id, p_host_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  if v_lobby.host_player_id is distinct from p_host_player_id then raise exception 'not_host'; end if;
+  if v_lobby.phase <> 'running' then raise exception 'lobby_not_running'; end if;
+  if p_target_player_id = p_host_player_id then raise exception 'cannot_kick_self'; end if;
+
+  if not exists (
+    select 1 from public.players
+    where lobby_id = v_lobby.id and player_id = p_target_player_id
+      and status = 'active' and is_alive = true
+  ) then raise exception 'target_not_active'; end if;
+
+  v_was_holder := (v_lobby.holder_player_id = p_target_player_id);
+
+  update public.players
+  set is_alive = false, survival_streak = 0
+  where lobby_id = v_lobby.id and player_id = p_target_player_id;
+
+  if v_lobby.current_attempt_id is not null and v_was_holder then
+    update public.pass_attempts set status = 'rejected', decided_at = now()
+    where id = v_lobby.current_attempt_id;
+    update public.lobbies set current_attempt_id = null where id = v_lobby.id;
+  end if;
+
+  update public.lobbies
+  set last_loser_player_id = p_target_player_id,
+      round_number = coalesce(round_number, 0) + 1,
+      last_activity_at = now()
+  where id = v_lobby.id
+  returning round_number into v_round_number;
+
+  update public.players
+  set eliminated_at_round = v_round_number
+  where lobby_id = v_lobby.id and player_id = p_target_player_id;
+
+  select count(*) into v_alive_count
+  from public.players
+  where lobby_id = v_lobby.id and status = 'active' and is_alive = true;
+
+  if v_alive_count <= 1 then
+    perform public._finish_round(v_lobby.id);
+    return;
+  end if;
+
+  if not v_was_holder then
+    return;
+  end if;
+
+  select p2.player_id into v_next_holder
+  from public.players p_loser
+  join public.players p2 on p2.lobby_id = p_loser.lobby_id
+    and p2.status = 'active' and p2.is_alive = true
+    and p2.seat_index > p_loser.seat_index
+  where p_loser.lobby_id = v_lobby.id and p_loser.player_id = p_target_player_id
+  order by p2.seat_index asc limit 1;
+
+  if v_next_holder is null then
+    select player_id into v_next_holder
+    from public.players
+    where lobby_id = v_lobby.id and status = 'active' and is_alive = true
+    order by seat_index asc limit 1;
+  end if;
+
+  if v_lobby.game_mode = 'teleport' then
+    select player_id into v_next_holder
+    from public.players
+    where lobby_id = v_lobby.id and status = 'active' and is_alive = true
+    order by random() limit 1;
+  end if;
+
+  v_round_duration := public.calc_explode_seconds(
+    coalesce(v_lobby.round_speed, 'normal'),
+    v_alive_count,
+    coalesce(v_round_number, 1)
+  ) * interval '1 second';
+
+  update public.lobbies
+  set holder_player_id = v_next_holder,
+      explode_at = now() + v_round_duration,
+      round_bonus_used = 0
+  where id = v_lobby.id;
+
+  perform public._pick_next_song(v_lobby.id);
+end;
+$function$;
+
+-- ------------------------------------------------------------
+-- Server-Ticker kennt den Zwischenstand
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public._server_tick()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  r record;
+begin
+  for r in
+    select id, code, phase from public.lobbies
+    where (phase = 'running' and explode_at is not null and explode_at <= now())
+       or (phase = 'topic_vote' and topic_vote_ends_at is not null and topic_vote_ends_at <= now())
+       or (phase = 'countdown' and countdown_ends_at is not null and countdown_ends_at <= now())
+       or (phase in ('rematch_wait', 'set_summary') and countdown_ends_at is not null and countdown_ends_at <= now())
+  loop
+    begin
+      if r.phase = 'running' then
+        perform public.rpc_tick_game(r.code);
+      elsif r.phase = 'topic_vote' then
+        perform public.rpc_finalize_topic_vote(r.id);
+      elsif r.phase = 'countdown' then
+        perform public.rpc_advance_from_countdown(r.id);
+      elsif r.phase = 'rematch_wait' then
+        perform public.rpc_start_rematch_if_ready(r.code);
+      elsif r.phase = 'set_summary' then
+        perform public.rpc_start_next_set(r.code);
+      end if;
+    exception when others then
+      null;
+    end;
+  end loop;
+end;
+$function$;
+
+COMMIT;
+
+
+-- ============================================================
+-- Migration 063: Combo, Song-Schwierigkeit, Rache-Pass, Anti-Leak
+-- ============================================================
+--  1) ANTI-LEAK (wichtig für Fairness): song_pool.title / artist /
+--     lower_title waren für JEDEN Client per API lesbar -- wer die
+--     Browser-Konsole öffnete, konnte die Lösung des laufenden Songs
+--     nachschlagen. Jetzt nur noch Spalten ohne Lösung freigegeben.
+--  2) COMBO: Titel-Treffer in Folge geben Extra-Bonuszeit (+0.5s pro
+--     weiterem Treffer, max +2s). Interpret-Treffer oder Fehlversuch
+--     setzen die Combo zurück.
+--  3) SCHWIERIGKEIT: adaptiv aus echten Daten (Trefferquote Titel pro
+--     Ziehung, ab 5 Ziehungen): leicht x0.8, mittel x1.0, schwer x1.3
+--     auf die Bonuszeit. Sichtbar als Sterne beim Halter.
+--  4) RACHE-PASS: Wer ausgeschieden ist, darf EINMAL pro Durchgang die
+--     Weitergabe-Richtung drehen (rpc_revenge_flip).
+-- ============================================================
+
+BEGIN;
+
+-- ---------- 1) Anti-Leak ----------
+ALTER TABLE public.song_pool ADD COLUMN IF NOT EXISTS plays int NOT NULL DEFAULT 0;
+ALTER TABLE public.song_pool ADD COLUMN IF NOT EXISTS hits int NOT NULL DEFAULT 0;
+
+REVOKE SELECT ON public.song_pool FROM anon, authenticated;
+GRANT SELECT (id, topic_pool_id, created_at, preview_url, preview_checked_at) ON public.song_pool TO anon, authenticated;
+
+-- ---------- Spalten ----------
+ALTER TABLE public.players ADD COLUMN IF NOT EXISTS combo int NOT NULL DEFAULT 0;
+ALTER TABLE public.players ADD COLUMN IF NOT EXISTS revenge_used boolean NOT NULL DEFAULT false;
+GRANT SELECT (combo, revenge_used) ON public.players TO anon, authenticated;
+
+ALTER TABLE public.lobbies ADD COLUMN IF NOT EXISTS last_pass_diff numeric NOT NULL DEFAULT 1;
+ALTER TABLE public.lobbies ADD COLUMN IF NOT EXISTS last_pass_combo_bonus numeric NOT NULL DEFAULT 0;
+ALTER TABLE public.lobbies ADD COLUMN IF NOT EXISTS current_song_difficulty smallint NOT NULL DEFAULT 2;
+ALTER TABLE public.lobbies ADD COLUMN IF NOT EXISTS revenge_nonce int NOT NULL DEFAULT 0;
+ALTER TABLE public.lobbies ADD COLUMN IF NOT EXISTS last_revenge_by uuid;
+GRANT SELECT ON public.lobbies TO anon, authenticated;
+
+-- Combo/Rache-Pass pro Durchgang zurücksetzen (jedes neue Themen-Voting
+-- = neuer Durchgang) und beim Zurück-in-die-Lobby / Rematch.
+CREATE OR REPLACE FUNCTION public._reset_series_on_phase()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ AS $function$
+begin
+  if NEW.phase in ('waiting', 'rematch_wait') and OLD.phase is distinct from NEW.phase then
+    NEW.series_index := 1;
+    delete from public.series_results where lobby_id = NEW.id;
+  end if;
+  if NEW.phase = 'topic_vote' and OLD.phase is distinct from NEW.phase then
+    update public.players set combo = 0, revenge_used = false where lobby_id = NEW.id;
+    NEW.pass_direction := 1;
+  end if;
+  return NEW;
+end;
+$function$;
+
+-- ---------- 3) Schwierigkeit ----------
+CREATE OR REPLACE FUNCTION public._song_difficulty(p_plays int, p_hits int)
+ RETURNS smallint
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  select case
+    when coalesce(p_plays, 0) < 5 then 2
+    when p_hits::numeric / p_plays >= 0.6 then 1
+    when p_hits::numeric / p_plays >= 0.3 then 2
+    else 3
+  end::smallint;
+$function$;
+
+CREATE OR REPLACE FUNCTION public._pick_next_song(p_lobby_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_topic text; v_topic_pool_id uuid; v_used uuid[]; v_song_id uuid; v_current uuid;
+  v_plays int; v_hits int;
+begin
+  select topic_selected, used_song_ids, current_song_id into v_topic, v_used, v_current
+  from public.lobbies where id = p_lobby_id;
+
+  select tp.id into v_topic_pool_id
+  from public.topic_pool tp
+  where tp.is_song_category is true and lower(tp.text) = lower(coalesce(v_topic, ''));
+
+  if v_topic_pool_id is null then
+    update public.lobbies set current_song_id = null, current_song_started_at = null where id = p_lobby_id;
+    return;
+  end if;
+
+  select sp.id into v_song_id
+  from public.song_pool sp
+  where sp.topic_pool_id = v_topic_pool_id
+    and not (sp.id = any(coalesce(v_used, '{}')))
+  order by random() limit 1;
+
+  if v_song_id is null then
+    select sp.id into v_song_id
+    from public.song_pool sp
+    where sp.topic_pool_id = v_topic_pool_id
+      and (v_current is null or sp.id <> v_current)
+    order by random() limit 1;
+    v_used := '{}';
+  end if;
+
+  if v_song_id is not null then
+    update public.song_pool set plays = plays + 1 where id = v_song_id
+    returning plays, hits into v_plays, v_hits;
+  end if;
+
+  update public.lobbies
+  set current_song_id = v_song_id,
+      current_song_started_at = case when v_song_id is null then null else now() end,
+      current_song_difficulty = public._song_difficulty(v_plays, v_hits),
+      used_song_ids = case when v_song_id is null then used_song_ids else array_append(v_used, v_song_id) end
+  where id = p_lobby_id;
+end;
+$function$;
+
+-- ---------- 2+3) Antwort prüfen: Combo + Schwierigkeit ----------
+CREATE OR REPLACE FUNCTION public.rpc_attempt_pass(p_code text, p_player_id uuid, p_answer text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby public.lobbies%ROWTYPE;
+  v_attempt uuid;
+  v_clean text;
+  v_topic text;
+  v_song_title text;
+  v_song_artist text;
+  v_plays int; v_hits int;
+  v_points numeric;
+  v_known boolean;
+  v_last_wrong timestamptz;
+  v_quality numeric := 1;
+  v_diff numeric := 1;
+  v_combo int := 0;
+  v_combo_bonus numeric := 0;
+begin
+  select * into v_lobby from public.lobbies where code = upper(p_code) for update;
+  if not found then raise exception 'lobby_not_found'; end if;
+
+  if not public._verify_session(v_lobby.id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  if v_lobby.phase <> 'running' then raise exception 'lobby_not_running'; end if;
+  if v_lobby.holder_player_id <> p_player_id then raise exception 'not_holder'; end if;
+  if v_lobby.current_attempt_id is not null then raise exception 'attempt_already_open'; end if;
+
+  if v_lobby.explode_at is not null and now() > v_lobby.explode_at + interval '500 milliseconds' then
+    raise exception 'time_up';
+  end if;
+
+  v_clean := trim(p_answer);
+  if length(v_clean) = 0 then raise exception 'empty_answer'; end if;
+  if length(v_clean) > 60 then raise exception 'answer_too_long'; end if;
+
+  if v_lobby.current_song_id is null and exists (
+    select 1 from unnest(v_lobby.used_answers) as used
+    where lower(used) = lower(v_clean)
+  ) then raise exception 'answer_already_used'; end if;
+
+  if v_lobby.current_song_id is not null then
+    select last_wrong_guess_at, combo into v_last_wrong, v_combo
+    from public.players where lobby_id = v_lobby.id and player_id = p_player_id;
+    if v_last_wrong is not null and now() < v_last_wrong + interval '1 second' then
+      raise exception 'too_fast';
+    end if;
+
+    select title, artist, plays, hits into v_song_title, v_song_artist, v_plays, v_hits
+    from public.song_pool where id = v_lobby.current_song_id;
+
+    v_points := 0;
+    v_known := false;
+
+    if public._fuzzy_song_match(v_song_title, v_clean) then
+      v_points := 1;
+      v_known := true;
+    elsif exists (
+      select 1
+      from unnest(regexp_split_to_array(coalesce(v_song_artist, ''), '\s*,\s*|\s*&\s*')) as a(name)
+      where public._fuzzy_song_match(a.name, v_clean)
+    ) then
+      v_points := 0.5;
+      v_known := true;
+    end if;
+
+    if not v_known then
+      update public.players set last_wrong_guess_at = now(), combo = 0
+      where lobby_id = v_lobby.id and player_id = p_player_id;
+      return null;
+    end if;
+
+    v_quality := v_points;
+    v_diff := case public._song_difficulty(v_plays, v_hits) when 1 then 0.8 when 3 then 1.3 else 1.0 end;
+
+    if v_points = 1 then
+      v_combo := coalesce(v_combo, 0) + 1;
+      v_combo_bonus := case when v_combo >= 2 then least(2, 0.5 * (v_combo - 1)) else 0 end;
+      update public.song_pool set hits = hits + 1 where id = v_lobby.current_song_id;
+    else
+      v_combo := 0;
+    end if;
+
+    update public.players
+    set song_points = song_points + v_points, combo = v_combo
+    where lobby_id = v_lobby.id and player_id = p_player_id;
+  end if;
+
+  v_topic := coalesce(v_lobby.topic_selected, v_lobby.topic, '');
+
+  insert into public.pass_attempts (lobby_id, round_number, holder_player_id, answer, topic)
+    values (v_lobby.id, coalesce(v_lobby.round_number, 0), p_player_id, v_clean, v_topic)
+    returning id into v_attempt;
+
+  update public.lobbies
+  set current_attempt_id = v_attempt, last_pass_quality = v_quality,
+      last_pass_diff = v_diff, last_pass_combo_bonus = v_combo_bonus
+  where id = v_lobby.id;
+
+  perform public._finalize_attempt_accept(v_attempt);
+
+  return v_attempt;
+end;
+$function$;
+
+-- ---------- Nächster lebender Spieler in Richtung ----------
+CREATE OR REPLACE FUNCTION public._next_alive(p_lobby_id uuid, p_from uuid, p_dir int)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+declare v_seat int; v_next uuid;
+begin
+  select seat_index into v_seat from public.players where lobby_id = p_lobby_id and player_id = p_from;
+  if coalesce(p_dir, 1) >= 0 then
+    select player_id into v_next from public.players
+    where lobby_id = p_lobby_id and status = 'active' and is_alive = true and seat_index > v_seat
+    order by seat_index asc limit 1;
+    if v_next is null then
+      select player_id into v_next from public.players
+      where lobby_id = p_lobby_id and status = 'active' and is_alive = true
+      order by seat_index asc limit 1;
+    end if;
+  else
+    select player_id into v_next from public.players
+    where lobby_id = p_lobby_id and status = 'active' and is_alive = true and seat_index < v_seat
+    order by seat_index desc limit 1;
+    if v_next is null then
+      select player_id into v_next from public.players
+      where lobby_id = p_lobby_id and status = 'active' and is_alive = true
+      order by seat_index desc limit 1;
+    end if;
+  end if;
+  return v_next;
+end;
+$function$;
+
+-- ---------- Weitergabe: Qualität x Schwierigkeit + Combo, Richtung ----------
+CREATE OR REPLACE FUNCTION public.rpc_pass_potato(p_code text, p_player_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid; v_mode text; v_holder uuid; v_dir smallint; v_explode_at timestamptz;
+  v_round_number int; v_bonus_seconds numeric; v_bonus_used numeric; v_bonus_cap numeric; v_bonus_applied numeric;
+  alive_ids uuid[]; n int; idx int; next_idx int; v_next uuid;
+  v_now timestamptz := now();
+  v_since timestamptz; v_pass_ms int; v_clutch int := 0; v_ms_left int;
+  v_quality numeric; v_diff numeric; v_combo_bonus numeric;
+begin
+  select l.id, l.game_mode, l.holder_player_id, l.pass_direction, l.explode_at, l.round_number,
+         coalesce(l.round_bonus_used, 0), coalesce(l.holder_since, l.run_started_at),
+         coalesce(l.last_pass_quality, 1), coalesce(l.last_pass_diff, 1), coalesce(l.last_pass_combo_bonus, 0)
+    into v_lobby_id, v_mode, v_holder, v_dir, v_explode_at, v_round_number,
+         v_bonus_used, v_since, v_quality, v_diff, v_combo_bonus
+  from public.lobbies l
+  where l.code = upper(p_code) for update;
+
+  if v_lobby_id is null then raise exception 'Lobby not found'; end if;
+
+  if (select phase from public.lobbies where id = v_lobby_id) <> 'running' then
+    raise exception 'Game not running';
+  end if;
+
+  if v_holder is null or v_holder <> p_player_id then
+    raise exception 'Not holder';
+  end if;
+
+  if not exists (
+    select 1 from public.players p
+    where p.lobby_id = v_lobby_id and p.player_id = p_player_id
+      and p.status = 'active' and p.is_alive = true
+  ) then raise exception 'Player not active/alive'; end if;
+
+  select array_agg(p.player_id order by p.seat_index) into alive_ids
+  from public.players p
+  where p.lobby_id = v_lobby_id and p.status = 'active' and p.is_alive = true;
+
+  n := coalesce(array_length(alive_ids, 1), 0);
+  if n <= 1 then return; end if;
+
+  idx := array_position(alive_ids, p_player_id);
+  if idx is null then raise exception 'Holder not in alive list'; end if;
+
+  if v_mode = 'teleport' then
+    select p.player_id into v_next
+    from public.players p
+    where p.lobby_id = v_lobby_id
+      and p.status = 'active' and p.is_alive = true
+      and p.player_id <> p_player_id
+    order by random() limit 1;
+    if v_next is null then return; end if;
+
+  elsif v_mode = 'reverse' then
+    v_dir := coalesce(v_dir, 1) * -1;
+    update public.lobbies set pass_direction = v_dir where id = v_lobby_id;
+    if v_dir = 1 then
+      next_idx := idx + 1;
+      if next_idx > n then next_idx := 1; end if;
+    else
+      next_idx := idx - 1;
+      if next_idx < 1 then next_idx := n; end if;
+    end if;
+    v_next := alive_ids[next_idx];
+
+  else
+    -- Original: Richtung kann durch den Rache-Pass gedreht sein.
+    if coalesce(v_dir, 1) >= 0 then
+      next_idx := idx + 1;
+      if next_idx > n then next_idx := 1; end if;
+    else
+      next_idx := idx - 1;
+      if next_idx < 1 then next_idx := n; end if;
+    end if;
+    v_next := alive_ids[next_idx];
+  end if;
+
+  v_bonus_cap := public.calc_pass_bonus_cap(n);
+  -- Basis (Runde) x Antwortqualität (Titel 1 / Interpret 0.5) x Song-
+  -- Schwierigkeit + Combo-Bonus; im Duell (2 Lebende) gar keine Bonuszeit.
+  v_bonus_seconds := public.calc_pass_bonus_seconds(v_round_number) * v_quality * v_diff + v_combo_bonus;
+  if n <= 2 then v_bonus_seconds := 0; end if;
+  v_bonus_applied := greatest(0, least(v_bonus_seconds, v_bonus_cap - v_bonus_used));
+
+  update public.lobbies
+  set holder_player_id = v_next,
+      explode_at = greatest(coalesce(v_explode_at, v_now), v_now) + (v_bonus_applied * interval '1 second'),
+      round_bonus_used = v_bonus_used + v_bonus_applied,
+      last_pass_quality = 1, last_pass_diff = 1, last_pass_combo_bonus = 0,
+      last_activity_at = v_now
+  where id = v_lobby_id;
+  perform public._pick_next_song(v_lobby_id);
+
+  v_pass_ms := greatest(0, coalesce(extract(epoch from (v_now - coalesce(v_since, v_now))) * 1000, 0));
+
+  if v_explode_at is not null then
+    v_ms_left := extract(epoch from (v_explode_at - v_now)) * 1000;
+    if v_ms_left <= 2000 then v_clutch := 1; end if;
+  end if;
+
+  update public.players
+  set pass_count = coalesce(pass_count, 0) + 1,
+      last_pass_at = v_now,
+      total_hold_ms = coalesce(total_hold_ms, 0) + v_pass_ms,
+      fastest_pass_ms = case
+        when fastest_pass_ms is null then v_pass_ms
+        when v_pass_ms < fastest_pass_ms then v_pass_ms
+        else fastest_pass_ms
+      end,
+      slowest_pass_ms = case
+        when slowest_pass_ms is null then v_pass_ms
+        when v_pass_ms > slowest_pass_ms then v_pass_ms
+        else slowest_pass_ms
+      end,
+      clutch_pass_count = coalesce(clutch_pass_count, 0) + v_clutch
+  where lobby_id = v_lobby_id and player_id = p_player_id;
+end;
+$function$;
+
+-- ---------- Tick/Kick: Richtung beachten ----------
+CREATE OR REPLACE FUNCTION public.rpc_tick_game(p_code text)
+ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+declare
+  v_now timestamptz := now();
+  v_lobby_id uuid; v_phase text; v_holder uuid; v_explode_at timestamptz; v_game_mode text;
+  v_round_speed text; v_round_number int; v_dir int;
+  v_alive_count int; v_loser uuid; v_next_holder uuid;
+  v_round_duration interval;
+begin
+  select id, phase, holder_player_id, explode_at, game_mode, round_speed, pass_direction
+    into v_lobby_id, v_phase, v_holder, v_explode_at, v_game_mode, v_round_speed, v_dir
+  from public.lobbies where code = upper(p_code) for update;
+
+  if v_lobby_id is null then raise exception 'Lobby not found'; end if;
+  if v_phase is distinct from 'running' then return; end if;
+  if v_explode_at is null then return; end if;
+  if v_now < v_explode_at then return; end if;
+
+  v_loser := v_holder;
+  if v_loser is null then return; end if;
+
+  update public.players
+  set is_alive = false, survival_streak = 0, combo = 0
+  where lobby_id = v_lobby_id and player_id = v_loser;
+
+  update public.players
+  set survival_streak = survival_streak + 1
+  where lobby_id = v_lobby_id and status = 'active' and is_alive = true;
+
+  update public.lobbies
+  set round_number = coalesce(round_number, 0) + 1,
+      last_loser_player_id = v_loser,
+      last_activity_at = v_now
+  where id = v_lobby_id
+  returning round_number into v_round_number;
+
+  update public.players
+  set eliminated_at_round = v_round_number
+  where lobby_id = v_lobby_id and player_id = v_loser;
+
+  select count(*) into v_alive_count
+  from public.players
+  where lobby_id = v_lobby_id and status = 'active' and is_alive = true;
+
+  if v_alive_count <= 1 then
+    perform public._finish_round(v_lobby_id);
+    return;
+  end if;
+
+  v_next_holder := public._next_alive(v_lobby_id, v_loser, case when v_game_mode = 'original' then v_dir else 1 end);
+
+  if v_game_mode = 'teleport' then
+    select player_id into v_next_holder
+    from public.players
+    where lobby_id = v_lobby_id and status = 'active' and is_alive = true and player_id != v_loser
+    order by random() limit 1;
+  end if;
+
+  v_round_duration := public.calc_explode_seconds(
+    coalesce(v_round_speed, 'normal'),
+    v_alive_count,
+    coalesce(v_round_number, 1)
+  ) * interval '1 second';
+
+  update public.lobbies
+  set holder_player_id = v_next_holder,
+      explode_at = v_now + v_round_duration,
+      round_bonus_used = 0,
+      last_pass_quality = 1, last_pass_diff = 1, last_pass_combo_bonus = 0,
+      pass_direction = case
+        when v_game_mode = 'reverse' then (pass_direction * -1)::smallint
+        else pass_direction
+      end
+  where id = v_lobby_id;
+
+  perform public._pick_next_song(v_lobby_id);
+end;
+$function$;
+
+-- ---------- 4) Rache-Pass ----------
+CREATE OR REPLACE FUNCTION public.rpc_revenge_flip(p_code text, p_player_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby public.lobbies%ROWTYPE;
+  v_alive int;
+begin
+  select * into v_lobby from public.lobbies where code = upper(p_code) for update;
+  if not found then raise exception 'lobby_not_found'; end if;
+
+  if not public._verify_session(v_lobby.id, p_player_id) then raise exception 'invalid_session'; end if;
+  if v_lobby.phase <> 'running' then raise exception 'lobby_not_running'; end if;
+  if v_lobby.game_mode <> 'original' then raise exception 'mode_not_supported'; end if;
+
+  if not exists (
+    select 1 from public.players
+    where lobby_id = v_lobby.id and player_id = p_player_id and status = 'active'
+      and is_alive = false and eliminated_at_round is not null and revenge_used = false
+  ) then raise exception 'no_revenge_available'; end if;
+
+  select count(*) into v_alive from public.players
+  where lobby_id = v_lobby.id and status = 'active' and is_alive = true;
+  if v_alive <= 2 then raise exception 'duel_no_revenge'; end if;
+
+  update public.players set revenge_used = true
+  where lobby_id = v_lobby.id and player_id = p_player_id;
+
+  update public.lobbies
+  set pass_direction = (coalesce(pass_direction, 1) * -1)::smallint,
+      revenge_nonce = revenge_nonce + 1,
+      last_revenge_by = p_player_id,
+      last_activity_at = now()
+  where id = v_lobby.id;
+end;
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.rpc_revenge_flip(text, uuid) TO anon, authenticated;
+
+COMMIT;
+
+
+-- ============================================================
+-- Migration 064: Bots laufen auf dem Server -- unabhängig vom Host-Browser
+-- ============================================================
+-- Bisher steuerte useBotEngine die Bots NUR im Browser des Hosts: Tab im
+-- Hintergrund / Host weg => alle Bots standen still. Jetzt übernimmt ein
+-- pg_cron-Job (jede Sekunde) die Bots direkt an die Runde gebunden:
+--   - Themen-Voting: jeder Bot stimmt nach 1.0-3.5s ab (deterministisch
+--     pro Bot+Voting aus einem Hash, damit es nicht jede Sekunde neu
+--     gewürfelt wird).
+--   - Laufende Runde: ist ein Bot Halter, antwortet er nach 1.2-3.8s mit
+--     dem ECHTEN Songtitel -- aber nur mit der Erfolgswahrscheinlichkeit
+--     der Runde (Runde 1: 90 %, 2: 60 %, 3: 40 %, 4: 20 %, danach min.
+--     10 %). Bei "Misserfolg" tut der Bot nichts, die Schnur entscheidet.
+-- Alles deterministisch aus holder_since => keine Doppel-Würfe pro Tick.
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public._bot_survival(p_round int)
+ RETURNS numeric
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  select case
+    when coalesce(p_round, 1) <= 1 then 0.9
+    when p_round = 2 then 0.6
+    when p_round = 3 then 0.4
+    when p_round = 4 then 0.2
+    else greatest(0.1, 0.2 - (p_round - 4) * 0.05)
+  end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public._bot_tick()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  r record;
+  v_delay numeric;
+  v_roll numeric;
+  v_answer text;
+  v_seed text;
+begin
+  -- ---------- Themen-Voting ----------
+  for r in
+    select l.id as lobby_id, p.player_id, l.topic_vote_started_at
+    from public.lobbies l
+    join public.players p on p.lobby_id = l.id and p.is_bot = true and p.status = 'active'
+    where l.phase = 'topic_vote' and l.topic_vote_started_at is not null
+      and not exists (select 1 from public.topic_votes v where v.lobby_id = l.id and v.player_id = p.player_id)
+  loop
+    v_seed := r.player_id::text || r.topic_vote_started_at::text;
+    v_delay := 1.0 + (abs(hashtext(v_seed)) % 2500) / 1000.0;
+    if now() - r.topic_vote_started_at >= v_delay * interval '1 second' then
+      insert into public.topic_votes (lobby_id, player_id, choice)
+      values (r.lobby_id, r.player_id, 1 + (abs(hashtext('c' || v_seed)) % 3))
+      on conflict (lobby_id, player_id) do nothing;
+    end if;
+  end loop;
+
+  -- ---------- Laufende Runde: Bot ist Halter ----------
+  for r in
+    select l.id, l.code, l.holder_player_id, l.holder_since, l.round_number, l.current_song_id,
+           l.topic_selected, l.used_answers, l.explode_at
+    from public.lobbies l
+    join public.players p on p.lobby_id = l.id and p.player_id = l.holder_player_id
+    where l.phase = 'running' and p.is_bot = true and p.is_alive = true
+      and l.current_attempt_id is null and l.holder_since is not null
+      and (l.explode_at is null or l.explode_at > now() + interval '300 milliseconds')
+  loop
+    v_seed := r.holder_player_id::text || r.holder_since::text;
+    v_delay := 1.2 + (abs(hashtext(v_seed)) % 2600) / 1000.0;
+    if now() - r.holder_since < v_delay * interval '1 second' then continue; end if;
+
+    v_roll := (abs(hashtext('r' || v_seed)) % 1000) / 1000.0;
+    if v_roll >= public._bot_survival(r.round_number) then continue; end if;
+
+    v_answer := null;
+    if r.current_song_id is not null then
+      select title into v_answer from public.song_pool where id = r.current_song_id;
+    else
+      select ta.answer into v_answer
+      from public.topic_answers ta
+      join public.topic_pool tp on tp.id = ta.topic_pool_id
+      where lower(tp.text) = lower(coalesce(r.topic_selected, ''))
+        and not (ta.lower_answer = any (select lower(u) from unnest(r.used_answers) u))
+      order by random() limit 1;
+      v_answer := coalesce(v_answer, 'Keine Ahnung');
+    end if;
+
+    if v_answer is not null then
+      begin
+        perform public.rpc_attempt_pass(r.code, r.holder_player_id, v_answer);
+      exception when others then
+        null;
+      end;
+    end if;
+  end loop;
+end;
+$function$;
+
+REVOKE ALL ON FUNCTION public._bot_tick() FROM PUBLIC, anon, authenticated;
+
+SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = 'kumpir-bot-tick';
+SELECT cron.schedule('kumpir-bot-tick', '1 seconds', 'select public._bot_tick()');
+
+COMMIT;
+
+
+-- ============================================================
+-- Migration 065: Saison-Bestenliste (Monats-Saison)
+-- ============================================================
+-- season_points wird seit Migration 062 bei jedem Durchgang für
+-- eingeloggte Spieler gefüllt (Arena-Punkte, gespielte Durchgänge,
+-- Durchgangs-Siege). Diese View liefert die Rangliste pro Saison
+-- (Saison = Kalendermonat, 'YYYY-MM') inkl. Benutzername.
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE VIEW public.season_leaderboard_view
+  WITH (security_invoker = true) AS
+SELECT sp.season, sp.user_id, pr.username, sp.arena_points, sp.sets_played, sp.set_wins,
+       rank() OVER (PARTITION BY sp.season ORDER BY sp.arena_points DESC, sp.set_wins DESC) AS rank
+FROM public.season_points sp
+JOIN public.profiles pr ON pr.id = sp.user_id
+WHERE pr.username IS NOT NULL;
+
+GRANT SELECT ON public.season_leaderboard_view TO anon, authenticated;
+
+COMMIT;

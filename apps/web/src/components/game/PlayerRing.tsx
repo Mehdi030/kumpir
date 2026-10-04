@@ -35,11 +35,11 @@ type Props = {
     tempo?: number;
     /** Nur noch 2 Lebende: Duell-Finale. */
     duel?: boolean;
+    /** Weitergabe-Richtung: 1 = Sitzreihenfolge vorwärts, -1 = rückwärts (Rache-Pass). */
+    direction?: number;
 };
 
 const TILT_DEG = 52;
-const FUSE_R = 46.5;
-const FUSE_LEN = 2 * Math.PI * FUSE_R;
 
 function initialsFor(name: string): string {
     const parts = name.trim().split(/\s+/);
@@ -85,6 +85,7 @@ export function PlayerRing({
     round = 1,
     tempo = 1,
     duel = false,
+    direction = 1,
 }: Props) {
     const isDisconnected = useCallback(
         (id: string) => (disconnectedIds instanceof Set ? disconnectedIds.has(id) : (disconnectedIds ?? []).includes(id)),
@@ -146,15 +147,18 @@ export function PlayerRing({
         const map = new Map<string, Pt>();
         if (n === 0) return map;
 
-        const startAngle = -Math.PI / 2;
         const step = (Math.PI * 2) / n;
+        // Jeder sieht sich selbst unten (Winkel 90°), alle anderen in
+        // derselben Reihenfolge um ihn herum -- für alle Spieler identisch.
+        const meIdx = mePlayerId ? seatedPlayers.findIndex((p) => p.player_id === mePlayerId) : -1;
+        const startAngle = Math.PI / 2 - Math.max(0, meIdx) * step;
 
         for (let i = 0; i < n; i++) {
             const a = startAngle + i * step;
             map.set(seatedPlayers[i]!.player_id, { x: Math.cos(a), y: Math.sin(a) });
         }
         return map;
-    }, [seatedPlayers]);
+    }, [seatedPlayers, mePlayerId]);
 
     // Convert relative coords to px coords using state-tracked size (no ref reads during render)
     const getPx = useCallback(
@@ -260,22 +264,44 @@ export function PlayerRing({
 
     const holderPos = holderPlayerId ? getPx(holderPlayerId) : null;
 
+    // Vorschau-Linie: wohin fliegt die Kartoffel als Nächstes?
+    const nextArc = useMemo(() => {
+        if (!holderPlayerId || size.w <= 0) return null;
+        const alive = players.filter((p) => p.is_alive);
+        const n = alive.length;
+        if (n < 2) return null;
+        const hi = alive.findIndex((p) => p.player_id === holderPlayerId);
+        if (hi < 0) return null;
+        const step = direction < 0 ? -1 : 1;
+        const next = alive[(hi + step + n) % n];
+        if (!next) return null;
+        const a = getPx(holderPlayerId);
+        const b = getPx(next.player_id);
+        if (!a || !b) return null;
+        const cx = size.w / 2;
+        const cy = size.h * 0.27;
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        const c = { x: mx + (cx - mx) * 0.5, y: my + (cy - my) * 0.5 };
+        return { a, b, c };
+    }, [players, holderPlayerId, direction, getPx, size.w, size.h]);
+
     const popRender = useMemo(() => {
         if (!popPlayerId) return null;
         return getPx(popPlayerId);
     }, [popPlayerId, getPx]);
 
-    // Zündschnur: Anteil, der noch NICHT abgebrannt ist.
-    const remaining = Math.max(0, Math.min(1, 1 - heat));
-    const fuseHue = Math.round(52 - 52 * Math.max(0, Math.min(1, heat)));
-    const fuseColor = `hsl(${fuseHue} 100% 56%)`;
-    const sparkAngle = -Math.PI / 2 + 2 * Math.PI * remaining;
-    const sparkX = 50 + FUSE_R * Math.cos(sparkAngle);
-    const sparkY = 50 + FUSE_R * Math.sin(sparkAngle);
+    // Pulsierende Zündschnur: Tempo und Stärke steigen mit der Hitze. In
+    // Stufen quantisiert, damit sich die Animationsdauer nicht jeden Frame
+    // ändert (würde die Animation immer neu starten = ruckeln).
+    const heatLevel = Math.round(Math.max(0, Math.min(1, heat)) * 10) / 10;
+    const pulseSec = (2.6 - 2.3 * Math.pow(heatLevel, 1.15)).toFixed(2);
+    const pulseAmp = (0.1 + 0.9 * heatLevel).toFixed(2);
+
     const hot = heat > 0.66;
 
     return (
-        <div ref={containerRef} className={`ringWrap ${hot ? "ringHot" : ""}`} style={{ ["--tilt" as string]: `${TILT_DEG}deg` }}>
+        <div ref={containerRef} className={`ringWrap ${hot ? "ringHot" : ""}`} style={{ ["--tilt" as string]: `${TILT_DEG}deg`, ["--pulse" as string]: `${pulseSec}s`, ["--amp" as string]: pulseAmp }}>
             <div className="tableTilt">
                 {/* ---------- Tisch ---------- */}
                 <div className="tableBase" aria-hidden>
@@ -287,25 +313,9 @@ export function PlayerRing({
                     <div className="tFelt" />
                     <div className="tGoldRing" />
 
-                    {/* Zündschnur rund um den Rand: brennt von oben im Uhrzeigersinn ab. */}
-                    <svg className="tFuse" viewBox="0 0 100 100">
-                        <circle className="fuseTrack" cx="50" cy="50" r={FUSE_R} />
-                        <circle
-                            className="fuseBurn"
-                            cx="50"
-                            cy="50"
-                            r={FUSE_R}
-                            transform="rotate(-90 50 50)"
-                            strokeDasharray={`${(FUSE_LEN * remaining).toFixed(2)} ${FUSE_LEN.toFixed(2)}`}
-                            style={{ stroke: fuseColor }}
-                        />
-                        {remaining > 0.005 && remaining < 0.995 ? (
-                            <>
-                                <circle className="fuseSparkGlow" cx={sparkX} cy={sparkY} r="4.2" />
-                                <circle className="fuseSpark" cx={sparkX} cy={sparkY} r="1.9" />
-                            </>
-                        ) : null}
-                    </svg>
+                    {/* Zündschnur: pulsierende Glut am Tischrand -- je näher die Explosion,
+                        desto schneller und heller. */}
+                    <div className="tPulse" />
                 </div>
 
                 {/* Tisch-Mitte: Runde + Tempo, aufrecht gestellt (Billboard). */}
@@ -324,6 +334,20 @@ export function PlayerRing({
                     if (!pos) return null;
                     return <div key={`sh-${p.player_id}`} className="seatShadow" style={{ left: pos.x, top: pos.y }} aria-hidden />;
                 })}
+                {nextArc && !flyRender ? (
+                    <svg className="nextArc" width="100%" height="100%" aria-hidden>
+                        <defs>
+                            <marker id="nextArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                                <path d="M0,0 L10,5 L0,10 z" fill="rgba(255,255,255,0.7)" />
+                            </marker>
+                        </defs>
+                        <path
+                            d={`M ${nextArc.a.x} ${nextArc.a.y} Q ${nextArc.c.x} ${nextArc.c.y} ${nextArc.b.x} ${nextArc.b.y}`}
+                            className="nextArcPath"
+                            markerEnd="url(#nextArrow)"
+                        />
+                    </svg>
+                ) : null}
                 {holderPos ? <div className="holderSpot" style={{ left: holderPos.x, top: holderPos.y }} aria-hidden /> : null}
 
                 {/* ---------- Spieler ---------- */}
@@ -467,28 +491,37 @@ export function PlayerRing({
           border: 2px solid rgba(255,214,10,.32);
           box-shadow: 0 0 18px rgba(255,214,10,.14), inset 0 0 18px rgba(255,214,10,.08);
         }
-        .tFuse{
-          inset: 0;
-          width: 100%;
-          height: 100%;
+        .tPulse{
+          inset: -1%;
           transform: translateZ(5px);
+          border-radius: 50%;
+          pointer-events: none;
+          animation: fusePulse var(--pulse, 2.6s) ease-in-out infinite;
+        }
+        @keyframes fusePulse{
+          0%,100%{
+            box-shadow: 0 0 calc(10px + 14px * var(--amp, .1)) calc(2px * var(--amp, .1)) rgba(255,90,30, calc(.10 + .25 * var(--amp, .1))),
+                        inset 0 0 calc(12px + 20px * var(--amp, .1)) rgba(255,70,20, calc(.05 + .20 * var(--amp, .1)));
+          }
+          50%{
+            box-shadow: 0 0 calc(24px + 56px * var(--amp, .1)) calc(6px + 10px * var(--amp, .1)) rgba(255,70,20, calc(.20 + .65 * var(--amp, .1))),
+                        inset 0 0 calc(24px + 50px * var(--amp, .1)) rgba(255,50,10, calc(.12 + .50 * var(--amp, .1)));
+          }
+        }
+        .nextArc{
+          position:absolute; inset:0; pointer-events:none;
+          transform: translateZ(7px);
           overflow: visible;
         }
-        .fuseTrack{
-          fill: none;
-          stroke: rgba(0,0,0,.45);
-          stroke-width: 2.6;
-        }
-        .fuseBurn{
-          fill: none;
-          stroke-width: 2.6;
+        .nextArcPath{
+          fill:none;
+          stroke: rgba(255,255,255,.4);
+          stroke-width: 2.4;
           stroke-linecap: round;
-          filter: drop-shadow(0 0 3px currentColor);
-          transition: stroke-dasharray .24s linear, stroke .3s ease;
+          stroke-dasharray: 7 9;
+          animation: arcFlow 1.1s linear infinite;
         }
-        .fuseSparkGlow{ fill: rgba(255,200,60,.38); animation: sparkFlicker .16s steps(2) infinite; }
-        .fuseSpark{ fill: #fff7d6; animation: sparkFlicker .16s steps(2) infinite reverse; }
-        @keyframes sparkFlicker{ 0%{ opacity:1; } 100%{ opacity:.55; } }
+        @keyframes arcFlow{ to{ stroke-dashoffset: -32; } }
 
         /* ===== Mitte ===== */
         .tHub{
@@ -712,7 +745,7 @@ export function PlayerRing({
         }
 
         @media (prefers-reduced-motion: reduce){
-          .tablePotato, .holderSpot, .seat.holder, .tHubTempo.duel, .fuseSparkGlow, .fuseSpark{ animation: none; }
+          .tablePotato, .holderSpot, .seat.holder, .tHubTempo.duel, .tPulse, .nextArcPath{ animation: none; }
         }
       `}</style>
         </div>

@@ -10,6 +10,7 @@ import { useLobbyState } from "@/hooks/useLobbyState";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { useSavedLobbies } from "@/hooks/useSavedLobbies";
 import { useAuth } from "@/components/AuthProvider";
+import { RulesCard } from "@/components/RulesCard";
 import { Spinner } from "@/components/Spinner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSessionToken } from "@/lib/playerSession";
@@ -363,6 +364,13 @@ export default function LobbyPage() {
                                         <span style={{ fontWeight: 950 }}>{MODES[mode]?.label ?? mode}</span>
                                     </div>
 
+                                    {(lobby?.series_total ?? 1) > 1 ? (
+                                        <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", gap: 8, fontSize: 15 }}>
+                                            <span>🎯</span>
+                                            <span style={{ fontWeight: 950 }}>{lobby?.series_total} Durchgänge</span>
+                                        </div>
+                                    ) : null}
+
                                     {lobby?.topic ? (
                                         <div className="pillChip" style={{ height: 28, display: "flex", alignItems: "center", gap: 8, maxWidth: 260 }} title={lobby.topic ?? undefined}>
                                             <span style={{ opacity: 0.8 }}>🏷️</span>
@@ -555,6 +563,8 @@ export default function LobbyPage() {
                             ) : null}
                         </div>
                     </div>
+
+                    <RulesCard defaultOpen />
                 </section>
             </div>
         </main>

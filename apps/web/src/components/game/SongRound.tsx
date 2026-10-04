@@ -75,7 +75,7 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
         (async () => {
             const { data, error } = await supabase
                 .from("song_pool")
-                .select("title,artist,preview_url,preview_checked_at,topic_pool_id")
+                .select("preview_url,preview_checked_at,topic_pool_id")
                 .eq("id", songId)
                 .single();
 
@@ -100,26 +100,11 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
                     });
             }
 
-            if (data.preview_checked_at) {
-                // Bereits gecacht (auch wenn Ergebnis damals "kein Treffer" war,
-                // also preview_url null) -- kein erneuter Live-Request nötig.
-                if (data.preview_url) prefetchPreviewUrl(data.preview_url);
-                setPreviewUrl(data.preview_url ?? null);
-                return;
-            }
-
-            const query = [data.title, data.artist].filter(Boolean).join(" ");
-            try {
-                const res = await fetch(
-                    `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&country=DE&limit=1`
-                );
-                if (cancelled) return;
-                const json = await res.json();
-                const url = json?.results?.[0]?.previewUrl as string | undefined;
-                setPreviewUrl(url ?? null);
-            } catch {
-                if (!cancelled) setPreviewUrl(null);
-            }
+            // Titel/Interpret sind für Clients gesperrt (Anti-Leak, Migration 063)
+            // -- es gibt nur noch die vorab geprüfte preview_url, keinen
+            // Live-Fallback über die iTunes-Suche mehr.
+            if (data.preview_url) prefetchPreviewUrl(data.preview_url);
+            setPreviewUrl(data.preview_url ?? null);
         })();
 
         return () => {

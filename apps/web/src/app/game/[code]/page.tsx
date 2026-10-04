@@ -24,6 +24,7 @@ import { Spinner } from "@/components/Spinner";
 import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
 import { playFx } from "@/lib/gameFx";
+import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
 
 // Ein pass_attempt ohne Timeout konnte für immer "pending" hängen bleiben,
 // sobald bei wenigen lebenden Spielern (v_alive <= 2) Einstimmigkeit
@@ -74,6 +75,13 @@ type LobbyState = {
     game_mode: string | null;
     pass_direction: number | null;
 
+    // Serie (mehrere Durchgänge) + Arena-Extras
+    series_total: number;
+    series_index: number;
+    current_song_difficulty: number;
+    revenge_nonce: number;
+    last_revenge_by: string | null;
+
     // Song-Raten (Musik-Modus): aktueller, versteckter Song für den Halter
     current_song_id: string | null;
     // Server-Zeitstempel, seit wann current_song_id läuft -- Basis für
@@ -105,6 +113,8 @@ type Player = {
     eliminated_at_round?: number | null;
     song_points?: number;
     skips_left?: number;
+    combo?: number;
+    revenge_used?: boolean;
     last_seen_at?: string | null;
 };
 
@@ -260,6 +270,13 @@ export default function GamePage() {
 
     // Rematch / reset busy
     const [endActionBusy, setEndActionBusy] = useState<null | "rematch" | "reset">(null);
+
+    // Bug "Rematch -> beim nächsten Endscreen steht ewig 'Starte…'": nach einem
+    // ERFOLGREICHEN Rematch/Reset wurde der Busy-Zustand nie zurückgesetzt
+    // (nur im Fehlerfall). Sobald das Match nicht mehr 'finished' ist, wieder frei.
+    useEffect(() => {
+        if (lobby?.phase !== "finished") setEndActionBusy(null);
+    }, [lobby?.phase]);
 
     // rematch_wait: Bereit-Toggle + Auto-Start sobald alle bereit sind
     const startRematchInFlightRef = useRef(false);
@@ -625,8 +642,10 @@ export default function GamePage() {
     // Bot-Engine — läuft NUR im Host-Browser, steuert alle is_bot Spieler
     // -----------------------------
     const isHost = !!mePlayerId && lobby?.host_player_id === mePlayerId;
+    // Bots laufen seit Migration 064 serverseitig (pg_cron) -- der Client-
+    // Bot-Motor bleibt aus, sonst würden Bots doppelt handeln.
     useBotEngine(
-        isHost,
+        false,
         lobby
             ? {
                   id: lobby.id,
@@ -715,6 +734,11 @@ export default function GamePage() {
 
                     game_mode: (raw.game_mode as string | null) ?? "original",
                     pass_direction: (raw.pass_direction as number | null) ?? 1,
+                    series_total: (raw.series_total as number | null) ?? 1,
+                    series_index: (raw.series_index as number | null) ?? 1,
+                    current_song_difficulty: (raw.current_song_difficulty as number | null) ?? 2,
+                    revenge_nonce: (raw.revenge_nonce as number | null) ?? 0,
+                    last_revenge_by: (raw.last_revenge_by as string | null) ?? null,
 
                     current_song_id: (raw.current_song_id as string | null) ?? null,
                     current_song_started_at: (raw.current_song_started_at as string | null) ?? null,
@@ -789,6 +813,8 @@ export default function GamePage() {
                             "eliminated_at_round",
                             "song_points",
                             "skips_left",
+                            "combo",
+                            "revenge_used",
                             "last_seen_at",
                         ].join(",")
                     )
@@ -961,6 +987,18 @@ export default function GamePage() {
                         }
                     })();
                 }
+            } else if (lobby.phase === "set_summary" && lobby.countdown_ends_at) {
+                const dueMs = msUntil(lobby.countdown_ends_at);
+                if (dueMs !== null && dueMs <= 0 && !startRematchInFlightRef.current) {
+                    startRematchInFlightRef.current = true;
+                    void (async () => {
+                        try {
+                            await supabase.rpc("rpc_start_next_set", { p_code: code });
+                        } finally {
+                            startRematchInFlightRef.current = false;
+                        }
+                    })();
+                }
             }
         }, 250);
         return () => window.clearInterval(t);
@@ -1075,9 +1113,9 @@ export default function GamePage() {
                 setVoteSecondsLeft(ms === null ? null : clamp(Math.ceil(ms / 1000), 0, 99));
             } else setVoteSecondsLeft(null);
 
-            if (lobby.phase === "countdown" || lobby.phase === "rematch_wait") {
+            if (lobby.phase === "countdown" || lobby.phase === "rematch_wait" || lobby.phase === "set_summary") {
                 const ms = msUntil(lobby.countdown_ends_at);
-                setCountdownSecondsLeft(ms === null ? null : clamp(Math.ceil(ms / 1000), 0, 10));
+                setCountdownSecondsLeft(ms === null ? null : clamp(Math.ceil(ms / 1000), 0, 12));
             } else setCountdownSecondsLeft(null);
 
             if (lobby.phase === "running") {
@@ -1228,6 +1266,78 @@ export default function GamePage() {
         },
         [mePlayerId, lobby, kickBusyId, code, rpcHostKickDuringRound, showToast]
     );
+
+    // Ergebnisse der Serie (nur bei mehreren Durchgängen): für Zwischenstand
+    // und Gesamtwertung am Ende.
+    const [seriesRows, setSeriesRows] = useState<SeriesRow[]>([]);
+    useEffect(() => {
+        if (!lobby || (lobby.phase !== "set_summary" && lobby.phase !== "finished")) return;
+        if ((lobby.series_total ?? 1) <= 1) return;
+        let cancel = false;
+        void (async () => {
+            const { data } = await supabase
+                .from("series_results")
+                .select("set_index,player_id,name,place,arena_points,song_points,is_bot")
+                .eq("lobby_id", lobby.id)
+                .order("set_index", { ascending: true });
+            if (!cancel && data) setSeriesRows(data as unknown as SeriesRow[]);
+        })();
+        return () => {
+            cancel = true;
+        };
+    }, [lobby?.id, lobby?.phase, lobby?.series_index, lobby?.series_total, supabase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Serien-Sieger (Summe der Arena-Punkte, Gleichstand: besserer Ø-Platz)
+    const seriesRanked = useMemo(() => {
+        const m = new Map<string, { id: string; name: string; total: number; placeSum: number; n: number }>();
+        for (const r of seriesRows) {
+            const e = m.get(r.player_id) ?? { id: r.player_id, name: r.name, total: 0, placeSum: 0, n: 0 };
+            e.total += r.arena_points;
+            e.placeSum += r.place;
+            e.n += 1;
+            m.set(r.player_id, e);
+        }
+        return [...m.values()].sort((a, b) => b.total - a.total || a.placeSum / a.n - b.placeSum / b.n);
+    }, [seriesRows]);
+    const seriesLeader = seriesRanked[0] ?? null;
+    const mySeriesRank = seriesRanked.findIndex((e) => e.id === mePlayerId) + 1;
+
+    // Combo-Hinweis für mich
+    const prevComboRef = useRef(0);
+    useEffect(() => {
+        const c = meRow?.combo ?? 0;
+        if (c >= 2 && c > prevComboRef.current) {
+            showToast(`🔥 Combo ×${c} (+${Math.min(2, 0.5 * (c - 1))}s)`, 1500);
+        }
+        prevComboRef.current = c;
+    }, [meRow?.combo, showToast]);
+
+    // Rache-Pass: Ausgeschiedene drehen einmal die Richtung
+    const [revengeBusy, setRevengeBusy] = useState(false);
+    const handleRevenge = useCallback(async () => {
+        if (!mePlayerId || revengeBusy) return;
+        setRevengeBusy(true);
+        try {
+            const { error } = await supabase.rpc("rpc_revenge_flip", { p_code: code, p_player_id: mePlayerId });
+            if (error) {
+                if (error.message.includes("duel_no_revenge")) showToast("Im Duell gibt es keine Rache mehr", 1800);
+                else showToast("Rache-Pass nicht möglich", 1600);
+            }
+        } finally {
+            setRevengeBusy(false);
+        }
+    }, [mePlayerId, revengeBusy, supabase, code, showToast]);
+
+    const prevRevengeNonceRef = useRef<number | null>(null);
+    useEffect(() => {
+        const n = lobby?.revenge_nonce ?? 0;
+        if (prevRevengeNonceRef.current !== null && n > prevRevengeNonceRef.current) {
+            const who = players.find((p) => p.player_id === lobby?.last_revenge_by)?.name ?? "Jemand";
+            showToast(`🔄 ${who} dreht die Richtung!`, 2400);
+            playFx("pass");
+        }
+        prevRevengeNonceRef.current = n;
+    }, [lobby?.revenge_nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Song-Tausch-Joker (1x pro Match, kostet 2s Zündschnur)
     const [skipBusy, setSkipBusy] = useState(false);
@@ -1642,7 +1752,8 @@ export default function GamePage() {
     // - Ranking: # | Name | Score | Runden | Fastest | Slowest
     // =========================================================
     if (lobby.phase === "finished") {
-        const winnerName = winnerPlayer?.name ?? "Unbekannt";
+        const isSeries = (lobby.series_total ?? 1) > 1;
+        const winnerName = (isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? "Unbekannt";
         const shown = showFullRanking ? ranking : top5;
 
         const fastestOverall =
@@ -1671,10 +1782,10 @@ export default function GamePage() {
                 <Confetti active />
                 <BackdropFx variant="warm" rays vignette />
 
-                <div style={{ width: "min(1180px, 96vw)", position: "relative", zIndex: 2 }}>
+                <div style={{ width: "min(1180px, calc(100vw - 64px))", position: "relative", zIndex: 2 }}>
                     {/* HERO (Winner only) */}
                     <div className="finishHero">
-                        <div className="finishKicker">SPIEL BEENDET</div>
+                        <div className="finishKicker">{isSeries ? `SERIE BEENDET · ${lobby.series_total} DURCHGÄNGE` : "SPIEL BEENDET"}</div>
 
                         <div className="finishWinner">
                             <span className="trophy" aria-hidden>
@@ -1685,13 +1796,21 @@ export default function GamePage() {
                         </div>
 
                         <div className="finishMeta">
-                            <span className="metaPill">
-                                Runden <b>{lobby.round_number ?? "—"}</b>
-                            </span>
-                            <span className="metaPill">
-                                Thema <b>{selectedTopic}</b>
-                            </span>
-                            {myRankRow ? (
+                            {isSeries ? null : (
+                                <span className="metaPill">
+                                    Runden <b>{lobby.round_number ?? "—"}</b>
+                                </span>
+                            )}
+                            {isSeries ? null : (
+                                <span className="metaPill">
+                                    Thema <b>{selectedTopic}</b>
+                                </span>
+                            )}
+                            {isSeries && mySeriesRank > 0 ? (
+                                <span className="metaPill metaMe">
+                                    Du <b>#{mySeriesRank}</b>
+                                </span>
+                            ) : !isSeries && myRankRow ? (
                                 <span className="metaPill metaMe">
                                     Du <b>#{myRankRow.rank}</b>
                                 </span>
@@ -1699,11 +1818,28 @@ export default function GamePage() {
                         </div>
                     </div>
 
+                    {(lobby.series_total ?? 1) > 1 ? (
+                        <div style={{ marginTop: 18 }}>
+                            {seriesLeader ? (
+                                <div style={{ textAlign: "center", marginBottom: 10, fontWeight: 950, fontSize: 18 }}>
+                                    🥇 Serien-Sieger: {seriesLeader.name} · {seriesLeader.total} Punkte
+                                </div>
+                            ) : null}
+                            <SeriesTable
+                                rows={seriesRows}
+                                totalSets={lobby.series_total}
+                                playedSets={lobby.series_total}
+                                mePlayerId={mePlayerId}
+                                title="Gesamtwertung aller Durchgänge"
+                            />
+                        </div>
+                    ) : null}
+
                     {/* MAIN GRID */}
                     <div className="finishGrid" style={{ marginTop: 18 }}>
                         {/* Ranking */}
                         <div className="card">
-                            <div className="cardTitle">🏅 Ranking</div>
+                            <div className="cardTitle">{isSeries ? `🏅 Letzter Durchgang (${lobby.series_total} von ${lobby.series_total})` : "🏅 Ranking"}</div>
                             <div className="fieldHelp" style={{ marginTop: 4, opacity: 0.75 }}>
                                 Platz = wer am längsten überlebt hat · Punkte = Platz + Song-Treffer + Clutch
                             </div>
@@ -2116,6 +2252,46 @@ export default function GamePage() {
     // der erste Tastendruck auf "R" reicht, alle Anwesenden starten nach
     // Ablauf automatisch mit, ohne dass jeder einzeln nochmal bestätigen
     // muss.
+    if (lobby.phase === "set_summary") {
+        const idx = lobby.series_index ?? 1;
+        const total = lobby.series_total ?? 1;
+        const setRows = seriesRows.filter((r) => r.set_index === idx).sort((a, b) => a.place - b.place);
+        const setWinner = setRows[0]?.name ?? "…";
+
+        return (
+            <main
+                style={{
+                    minHeight: "100vh",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 24,
+                    color: "white",
+                    background:
+                        "radial-gradient(circle at 50% 20%, rgba(255,214,10,0.18) 0%, rgba(0,0,0,0.25) 55%), radial-gradient(circle at 50% 90%, rgba(52,199,89,0.22) 0%, rgba(0,100,50,0.7) 80%)",
+                }}
+            >
+                <div style={{ width: "min(860px, calc(100vw - 48px))", textAlign: "center" }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>
+                        DURCHGANG {idx} VON {total} · ZWISCHENSTAND
+                    </div>
+                    <div style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 950, marginTop: 10 }}>🏆 {setWinner} holt den Durchgang</div>
+
+                    <div style={{ marginTop: 18, textAlign: "left" }}>
+                        <SeriesTable rows={seriesRows} totalSets={total} playedSets={idx} mePlayerId={mePlayerId} title="Zwischenstand" />
+                    </div>
+
+                    <div style={{ marginTop: 20, opacity: 0.85, fontWeight: 800 }}>
+                        Nächster Durchgang: Themen-Voting in
+                    </div>
+                    <div style={{ fontSize: "clamp(48px, 7vw, 84px)", fontWeight: 950, textShadow: "0 14px 50px rgba(0,0,0,0.35)" }}>
+                        {Math.max(0, countdownSecondsLeft ?? 12)}
+                    </div>
+                    <ToastStack toasts={toasts} inline />
+                </div>
+            </main>
+        );
+    }
+
     if (lobby.phase === "rematch_wait") {
         return (
             <main
@@ -2282,6 +2458,7 @@ export default function GamePage() {
                 round={Math.max(1, lobby.round_number ?? 1)}
                 tempo={tempoFactor}
                 duel={aliveNow === 2}
+                direction={lobby.pass_direction ?? 1}
             />
 
             {turnOverlay ? (
@@ -2298,6 +2475,12 @@ export default function GamePage() {
 
             {/* Top-right: Modus + Heat + Connection + Audio */}
             <div className="topRight" aria-hidden={false}>
+                {(lobby.series_total ?? 1) > 1 ? (
+                    <div className="modePill modePillBig" title="Durchgang der Serie">
+                        <span>🎯</span>
+                        <span>{lobby.series_index}/{lobby.series_total}</span>
+                    </div>
+                ) : null}
                 <div className="modePill modePillBig" title={`${aliveNow} von ${totalPlayers} Spielern noch am Leben`}>
                     <span>👥</span>
                     <span>{aliveNow}/{totalPlayers}</span>
@@ -2345,21 +2528,10 @@ export default function GamePage() {
                         <SongRound songId={lobby.current_song_id} startedAt={lobby.current_song_started_at} />
                     ) : null}
 
-                    <div className="strip" key={hudPulseNonce}>
-                        <div className="now">
-                            <span className="dotNow" aria-hidden />
-                            <span className="label">JETZT</span>
-                            <span className="name">{holderName}</span>
-                        </div>
-
-                        <div className="arrow" aria-hidden>
-                            →
-                        </div>
-
-                        <div className="next">
-                            <span className="label">DANACH</span>
-                            <span className="name">{nextUp?.name ?? "—"}</span>
-                        </div>
+                    {/* Wer dran ist / wer danach kommt zeigt der Tisch (Spotlight +
+                        Vorschau-Linie) -- hier nur noch für Screenreader. */}
+                    <div className="srOnly" key={hudPulseNonce} aria-live="polite">
+                        Am Zug: {holderName}. Danach: {nextUp?.name ?? "—"}.
                     </div>
 
                     {/* Antworten werden serverseitig sofort angenommen -- kein
@@ -2371,6 +2543,17 @@ export default function GamePage() {
                     {iAmEliminated ? (
                         <div className="hint" style={{ display: "grid", gap: 10, justifyItems: "center" }}>
                             <div>Du schaust zu.</div>
+                            {(lobby.game_mode ?? "original") === "original" && !meRow?.revenge_used && aliveNow > 2 ? (
+                                <button
+                                    type="button"
+                                    className="btn btnSecondary btnSmall"
+                                    onClick={() => void handleRevenge()}
+                                    disabled={revengeBusy}
+                                    title="Einmal pro Durchgang: die Weitergabe-Richtung drehen"
+                                >
+                                    🔄 Rache-Pass: Richtung drehen
+                                </button>
+                            ) : null}
                             {spectatorFlash ? (
                                 <div key={spectatorFlash.key} className="answerVote">
                                     <div className="answerStatusLabel">{spectatorFlash.holderName} sagte:</div>
@@ -2399,6 +2582,12 @@ export default function GamePage() {
                     ) : isMeHolder ? (
                         // ─── Halter darf neue Antwort eingeben ───
                         <div className="answerInputBox">
+                            {lobby.current_song_id ? (
+                                <div className="diffChip" title="Schwierigkeit dieses Songs (aus echten Trefferquoten) -- schwere Songs geben mehr Bonuszeit">
+                                    Schwierigkeit {"★".repeat(lobby.current_song_difficulty ?? 2)}
+                                    {"☆".repeat(3 - (lobby.current_song_difficulty ?? 2))}
+                                </div>
+                            ) : null}
                             {lobby?.answer_mode === "voice" ? (
                                 <>
                                     <VoiceInput
@@ -2490,6 +2679,7 @@ export default function GamePage() {
             </div>
 
             <style>{`
+        .srOnly{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
         .hud{
           position: relative;
           z-index: 3;
@@ -2591,6 +2781,17 @@ export default function GamePage() {
         }
 
         /* Topic-Mechanik B */
+        .diffChip{
+          justify-self: center;
+          font-size: 12px;
+          font-weight: 900;
+          letter-spacing: .6px;
+          padding: 4px 12px;
+          border-radius: 999px;
+          background: rgba(0,0,0,.35);
+          border: 1px solid rgba(255,214,10,.4);
+          color: #ffe08a;
+        }
         .answerInputBox{
           margin-top: 8px;
           width: min(680px, 92vw);

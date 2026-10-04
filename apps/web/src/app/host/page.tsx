@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
 import { MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
+import { RulesCard } from "@/components/RulesCard";
 
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
@@ -107,6 +108,8 @@ export default function HostPage() {
     // erst klicken muss.
     const [mode, setMode] = useState<ModeKey | null>("original");
     const [answerMode, setAnswerMode] = useState<AnswerMode>("text");
+    // Anzahl Durchgänge (Serie): nach jedem Durchgang Zwischenstand + neues Themen-Voting.
+    const [seriesTotal, setSeriesTotal] = useState<1 | 3 | 5>(1);
 
     const activeMode = mode ? MODES[mode] : null;
     const activeSpeed = roundSpeed ? ROUND_SPEEDS[roundSpeed] : null;
@@ -200,6 +203,13 @@ export default function HostPage() {
                             p_mode: mode,
                         });
                     }
+                    if (seriesTotal !== 1) {
+                        await supabase.rpc("set_lobby_series", {
+                            p_lobby_id: lobbyRow.id,
+                            p_me_player_id: hostPlayerId,
+                            p_total: seriesTotal,
+                        });
+                    }
                     await supabase.rpc("set_lobby_topic_filter", {
                         p_lobby_id: lobbyRow.id,
                         p_me_player_id: hostPlayerId,
@@ -222,7 +232,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, answerMode, supabase, maxPlayers, router, user?.id]);
+    }, [canCreate, hostName, roundSpeed, mode, answerMode, seriesTotal, supabase, maxPlayers, router, user?.id]);
 
     return (
         <main className="container">
@@ -367,6 +377,31 @@ export default function HostPage() {
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
+                                    <div className="pillCardTitle">Durchgänge</div>
+                                    <div className="pillCardHint">
+                                        {seriesTotal === 1 ? "Ein einzelnes Match" : `${seriesTotal} Durchgänge mit Zwischenstand und Gesamtwertung`}
+                                    </div>
+                                </div>
+                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                    {([1, 3, 5] as const).map((n) => (
+                                        <button
+                                            key={n}
+                                            type="button"
+                                            className={`pillSegBtn segChoice ${seriesTotal === n ? "segChoiceActive" : ""}`}
+                                            onClick={() => setSeriesTotal(n)}
+                                            aria-pressed={seriesTotal === n}
+                                        >
+                                            <span className="segLabel">{n === 1 ? "1 Durchgang" : `${n} Durchgänge`}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
+                                    Nach jedem Durchgang (bis nur noch einer übrig ist) wird der Zwischenstand gespeichert und es geht wieder ins Themen-Voting.
+                                </div>
+                            </div>
+
+                            <div className="pillCard" style={{ marginTop: 14 }}>
+                                <div className="pillCardTop">
                                     <div className="pillCardTitle">🎵 Musik</div>
                                     <div className="pillCardHint">Läuft immer mit</div>
                                 </div>
@@ -403,6 +438,8 @@ export default function HostPage() {
                                     })}
                                 </div>
                             </div>
+
+                            <RulesCard defaultOpen={false} />
 
                             {createError ? (
                                 <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>

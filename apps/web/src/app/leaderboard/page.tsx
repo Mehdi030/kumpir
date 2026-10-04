@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useLeaderboard, type LeaderboardCategory, type LeaderboardEntry } from "@/hooks/useLeaderboard";
 import { Spinner } from "@/components/Spinner";
+import { SeasonBoard } from "@/components/SeasonBoard";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
@@ -77,6 +78,8 @@ export default function LeaderboardPage() {
                     </div>
                     <Link href="/" className="btn btnSecondary btnSmall">← Startseite</Link>
                 </header>
+
+                <SeasonBoard />
 
                 {/* Kategorie-Switcher */}
                 <div className="pillSeg" style={{ flexWrap: "wrap", marginTop: 14 }}>
