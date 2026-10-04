@@ -154,11 +154,11 @@ export function PlayerRing({
             // damit der Tisch nicht mit der zentrierten Antwort-Box (.hud)
             // kollidiert -- beide "in der Mitte", aber übereinander gestapelt
             // statt deckungsgleich.
-            const cy = size.h * 0.32;
+            const cy = size.h * 0.22;
             // Kompakter, mittiger Tisch statt über den ganzen Bildschirm
             // verteilter Sitze -- "bestenfalls in der Mitte sowas wie einen
             // Tisch" statt eines bildschirmfüllenden Rings.
-            const r = Math.min(minSide * 0.26, 200);
+            const r = Math.min(minSide * 0.19, 150);
 
             return {
                 x: cx + rel.x * r,
@@ -267,6 +267,8 @@ export function PlayerRing({
         };
     }, [fly, getPx, size.w, size.h]);
 
+    const holderPos = holderPlayerId ? getPx(holderPlayerId) : null;
+
     const popRender = useMemo(() => {
         if (!popPlayerId) return null;
         return getPx(popPlayerId);
@@ -312,7 +314,6 @@ export function PlayerRing({
                                 {p.name}
                                 {isMe ? " (du)" : ""}
                             </span>
-                            {isHolder ? <span className="seatBadge" aria-hidden>🥔</span> : null}
                             {!p.is_alive ? <span className="seatDeadOverlay" aria-hidden>💀</span> : null}
                             {isExploded ? <span className="seatBoom" aria-hidden>💥</span> : null}
                             {isStale ? (
@@ -323,6 +324,15 @@ export function PlayerRing({
                         </div>
                     );
                 })}
+
+                {/* Kumpir liegt immer sichtbar beim aktuellen Halter und gleitet
+                    beim Wechsel (CSS-Transition auf left/top) zum nächsten Platz;
+                    nur während der Flug-Animation wird sie ausgeblendet. */}
+                {holderPos && !flyRender ? (
+                    <div className="tablePotato" style={{ left: holderPos.x, top: holderPos.y - 38 }} aria-hidden>
+                        🥔
+                    </div>
+                ) : null}
 
                 {/* Pass overlay */}
                 {flyRender ? (
@@ -368,9 +378,10 @@ export function PlayerRing({
 
             <style>{`
         .ringWrap{
-          position: relative;
-          width: 100%;
-          height: 100%;
+          position: fixed;
+          inset: 0;
+          z-index: 2;
+          pointer-events: none;
           perspective: 1300px;
         }
 
@@ -386,9 +397,9 @@ export function PlayerRing({
         .tableSurface{
           position:absolute;
           left:50%;
-          top:32%;
-          width: min(52vmin, 520px);
-          height: min(52vmin, 520px);
+          top:22%;
+          width: min(44vmin, 370px);
+          height: min(44vmin, 370px);
           transform: translate(-50%,-50%);
           border-radius: 50%;
           background:
@@ -403,7 +414,7 @@ export function PlayerRing({
           width: 44px;
           height: 44px;
           border-radius: 999px;
-          transform: translate(-50%, -50%);
+          transform: translate(-50%, -50%) translateZ(30px) rotateX(-50deg);
           display: grid;
           place-items: center;
           color: rgba(255,255,255,0.9);
@@ -450,7 +461,7 @@ export function PlayerRing({
           height: 56px;
           opacity: 1;
           font-size: 15px;
-          transform: translate(-50%, -50%) scale(1.3);
+          transform: translate(-50%, -50%) translateZ(40px) rotateX(-50deg) scale(1.3);
           border-color: rgba(255,214,10,0.92);
           box-shadow:
             0 18px 60px rgba(0,0,0,0.40),
@@ -530,6 +541,20 @@ export function PlayerRing({
           80%     { transform: translate(calc(-50% + 4px), calc(-50% - 4px)); }
         }
 
+        .tablePotato{
+          position: absolute;
+          z-index: 40;
+          font-size: 34px;
+          line-height: 1;
+          transform: translate(-50%, -50%) translateZ(70px) rotateX(-50deg);
+          filter: drop-shadow(0 8px 14px rgba(0,0,0,0.5));
+          transition: left .5s cubic-bezier(.2,1,.2,1), top .5s cubic-bezier(.2,1,.2,1);
+          animation: potatoBob 1.2s ease-in-out infinite;
+        }
+        @keyframes potatoBob{
+          0%,100%{ margin-top: 0; }
+          50%{ margin-top: -6px; }
+        }
         .passOverlay{
           position:absolute;
           inset:0;

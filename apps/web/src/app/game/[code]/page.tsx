@@ -331,7 +331,9 @@ export default function GamePage() {
         const now = Date.now();
         const set = new Set<string>();
         for (const p of players) {
-            if (!p.is_alive || !p.last_seen_at) continue;
+            // Bots haben keinen Browser und damit keinen Heartbeat -- sie
+            // sind nie "getrennt".
+            if (p.is_bot || !p.is_alive || !p.last_seen_at) continue;
             const seen = Date.parse(p.last_seen_at);
             if (!Number.isNaN(seen) && now - seen > STALE_MS) set.add(p.player_id);
         }
@@ -499,11 +501,15 @@ export default function GamePage() {
     // Topic-Mechanik B: Halter sagt seine Antwort und startet einen Validierungs-Versuch.
     const rpcAttemptPass = useCallback(
         async (codeUpper: string, playerId: string, answer: string) => {
-            const { error } = await supabase.rpc("rpc_attempt_pass", {
+            const { data, error } = await supabase.rpc("rpc_attempt_pass", {
                 p_code: codeUpper,
                 p_player_id: playerId,
                 p_answer: answer,
             });
+            // data === null bei erfolgreichem Aufruf = Song-Antwort abgelehnt
+            // (falsch), ohne Fehler -- so kann der Server die 1s-Sperre nach
+            // einem Fehlversuch speichern, ohne dass ein RAISE sie zurückrollt.
+            if (!error && data == null) return { message: "answer_incorrect" };
             return error;
         },
         [supabase]
@@ -578,18 +584,20 @@ export default function GamePage() {
     // -----------------------------
     const [spectatorFlash, setSpectatorFlash] = useState<{ text: string; holderName: string; key: number } | null>(null);
     const [spectatorRating, setSpectatorRating] = useState<"up" | "down" | null>(null);
-    const prevUsedAnswersLenRef = useRef(0);
+    const prevUsedAnswersLenRef = useRef<number | null>(null);
     const prevHolderNameRef = useRef("…");
 
     useEffect(() => {
         const list = lobby?.used_answers ?? [];
         const prevLen = prevUsedAnswersLenRef.current;
-        if (list.length > prevLen) {
+        // Erster Stand nach Laden/Reload zählt nicht als "neue Antwort" --
+        // sonst blitzt eine alte Antwort mit leerem Sprechernamen auf.
+        if (prevLen !== null && lobby?.phase === "running" && list.length > prevLen) {
             setSpectatorFlash({ text: list[list.length - 1], holderName: prevHolderNameRef.current, key: Date.now() });
             setSpectatorRating(null);
         }
         prevUsedAnswersLenRef.current = list.length;
-    }, [lobby?.used_answers]);
+    }, [lobby?.used_answers, lobby?.phase]);
 
     useEffect(() => {
         prevHolderNameRef.current = holderName;
@@ -1146,7 +1154,9 @@ export default function GamePage() {
         if (clean.length > 60) return showToast("Antwort zu lang (max 60)", 1800);
 
         const used = (lobby.used_answers ?? []).map((a) => a.toLowerCase());
-        if (used.includes(clean.toLowerCase())) {
+        // Im Song-Modus gibt es keine Duplikat-Sperre (jeder Song wird einzeln
+        // geprüft, derselbe Interpret darf bei mehreren Songs zählen).
+        if (!lobby.current_song_id && used.includes(clean.toLowerCase())) {
             return showToast("⚠️ Schon gesagt — andere Antwort probieren", 2000);
         }
 
@@ -1166,6 +1176,8 @@ export default function GamePage() {
                     playFx("wrong");
                     return;
                 }
+                if (err.message?.includes("too_fast")) return showToast("⏳ Kurz warten …", 900);
+                if (err.message?.includes("time_up")) return showToast("⏰ Zu spät", 1400);
                 return showToast(`❌ ${err.message}`, 2400);
             }
             setAnswerDraft("");
@@ -1514,15 +1526,7 @@ export default function GamePage() {
                 <div style={{ width: "min(1100px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>THEMA GEWÄHLT</div>
 
-                    <div
-                        style={{
-                            marginTop: 16,
-                            display: "grid",
-                            gridTemplateColumns: "repeat(3, minmax(0,1fr))",
-                            gap: 14,
-                            alignItems: "stretch",
-                        }}
-                    >
+                    <div className="resultTriGrid">
                         <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`}>
                             <div className="resultBadge">①</div>
                             <div className="resultTitle">{aLabel}</div>
@@ -1580,6 +1584,8 @@ export default function GamePage() {
                 </div>
 
                 <style>{`
+          .resultTriGrid{margin-top:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:stretch;}
+          @media (max-width: 760px){ .resultTriGrid{grid-template-columns:1fr;} }
           .resultTile{border-radius:28px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.18);padding:16px 14px;text-align:left;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden;position:relative;transform-origin:center;}
           .resultBadge{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:999px;font-weight:950;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.14);}
           .resultTitle{margin-top:14px;font-size:clamp(18px,2.2vw,28px);font-weight:950;text-shadow:0 10px 30px rgba(0,0,0,0.22);}
@@ -2430,6 +2436,9 @@ export default function GamePage() {
           display: grid;
           place-items: center;
           padding: 22px;
+          /* Platz für den Tisch (PlayerRing) darüber, damit Antwort-Box und
+             Tisch nicht übereinander liegen. */
+          padding-top: clamp(22px, 40vh, 360px);
         }
         .hudInner{
           width: min(920px, 94vw);

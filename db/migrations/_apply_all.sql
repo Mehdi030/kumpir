@@ -9028,3 +9028,371 @@ end;
 $function$;
 
 COMMIT;
+
+
+-- ============================================================
+-- Migration 058: Lücken in der Antwort-Prüfung schließen
+-- ============================================================
+-- Gefunden beim Multi-Bot-Checkup:
+--  1) Fuzzy-Schwelle war für kurze Titel zu großzügig: bei einem Titel wie
+--     "Love" (4 Zeichen) galt "Live"/"Lose"/"Move" (je 1 Fehler) als
+--     richtig. Jetzt: bis 4 Zeichen exakt, 5-8 -> 1 Fehler, 9-14 -> 2,
+--     darüber 3.
+--  2) Antworten NACH Ablauf des Timers (explode_at, +0.5s Toleranz für
+--     Netzwerk-Latenz) wurden noch angenommen und verlängerten die Runde
+--     über das Bonus-Zeit-Verfahren -- wer die Antwort knapp nach 0 absendet,
+--     bevor der Tick feuert, konnte so der Explosion entkommen. Jetzt
+--     'time_up'.
+--  3) Song-Modus blockierte Antworten über used_answers quer über Songs
+--     hinweg: derselbe Interpret ("Eminem") war nach dem ersten Treffer für
+--     jeden weiteren Eminem-Song gesperrt (answer_already_used). Im Song-
+--     Modus entfällt die Duplikat-Sperre, jeder Song wird einzeln geprüft.
+--  4) Unbegrenztes Durchprobieren: nach einer falschen Song-Antwort ist
+--     für denselben Spieler 1s Pause (Spalte last_wrong_guess_at, bewusst
+--     OHNE SELECT-Grant -- nur die SECURITY-DEFINER-RPC liest sie).
+-- ============================================================
+
+BEGIN;
+
+ALTER TABLE public.players ADD COLUMN IF NOT EXISTS last_wrong_guess_at timestamptz;
+
+CREATE OR REPLACE FUNCTION public._fuzzy_song_match(p_candidate text, p_answer text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+declare
+  v_a text := lower(trim(p_candidate));
+  v_b text := lower(trim(p_answer));
+  v_a_clean text;
+  v_len int;
+  v_threshold int;
+begin
+  if v_a = '' or v_b = '' then return false; end if;
+  if v_a = v_b then return true; end if;
+
+  v_a_clean := regexp_replace(v_a, '\s*\(.*?\)\s*', '', 'g');
+  if v_a_clean = '' then return false; end if;
+  if v_a_clean = v_b then return true; end if;
+
+  v_len := length(v_a_clean);
+  v_threshold := case
+    when v_len <= 4 then 0
+    when v_len <= 8 then 1
+    when v_len <= 14 then 2
+    else 3
+  end;
+  if v_threshold = 0 then return false; end if;
+  return levenshtein(v_a_clean, v_b) <= v_threshold;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.rpc_attempt_pass(p_code text, p_player_id uuid, p_answer text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby public.lobbies%ROWTYPE;
+  v_attempt uuid;
+  v_clean text;
+  v_topic text;
+  v_song_title text;
+  v_song_artist text;
+  v_points numeric;
+  v_known boolean;
+  v_last_wrong timestamptz;
+begin
+  select * into v_lobby from public.lobbies where code = upper(p_code) for update;
+  if not found then raise exception 'lobby_not_found'; end if;
+
+  if not public._verify_session(v_lobby.id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  if v_lobby.phase <> 'running' then raise exception 'lobby_not_running'; end if;
+  if v_lobby.holder_player_id <> p_player_id then raise exception 'not_holder'; end if;
+  if v_lobby.current_attempt_id is not null then raise exception 'attempt_already_open'; end if;
+
+  if v_lobby.explode_at is not null and now() > v_lobby.explode_at + interval '500 milliseconds' then
+    raise exception 'time_up';
+  end if;
+
+  v_clean := trim(p_answer);
+  if length(v_clean) = 0 then raise exception 'empty_answer'; end if;
+  if length(v_clean) > 60 then raise exception 'answer_too_long'; end if;
+
+  if v_lobby.current_song_id is null and exists (
+    select 1 from unnest(v_lobby.used_answers) as used
+    where lower(used) = lower(v_clean)
+  ) then raise exception 'answer_already_used'; end if;
+
+  if v_lobby.current_song_id is not null then
+    select last_wrong_guess_at into v_last_wrong
+    from public.players where lobby_id = v_lobby.id and player_id = p_player_id;
+    if v_last_wrong is not null and now() < v_last_wrong + interval '1 second' then
+      raise exception 'too_fast';
+    end if;
+
+    select title, artist into v_song_title, v_song_artist
+    from public.song_pool where id = v_lobby.current_song_id;
+
+    v_points := 0;
+    v_known := false;
+
+    if public._fuzzy_song_match(v_song_title, v_clean) then
+      v_points := 1;
+      v_known := true;
+    elsif exists (
+      select 1
+      from unnest(regexp_split_to_array(coalesce(v_song_artist, ''), '\s*,\s*|\s*&\s*')) as a(name)
+      where public._fuzzy_song_match(a.name, v_clean)
+    ) then
+      v_points := 0.5;
+      v_known := true;
+    end if;
+
+    if not v_known then
+      update public.players set last_wrong_guess_at = now()
+      where lobby_id = v_lobby.id and player_id = p_player_id;
+      -- Fehlerzustand soll das UPDATE oben nicht zurückrollen: Postgres
+      -- rollt bei RAISE die ganze Funktion zurück, daher wird die Sperre
+      -- hier bewusst per Rückgabe-Sentinel statt Exception gesetzt.
+      return null;
+    end if;
+
+    update public.players
+    set song_points = song_points + v_points
+    where lobby_id = v_lobby.id and player_id = p_player_id;
+  end if;
+
+  v_topic := coalesce(v_lobby.topic_selected, v_lobby.topic, '');
+
+  insert into public.pass_attempts (lobby_id, round_number, holder_player_id, answer, topic)
+    values (v_lobby.id, coalesce(v_lobby.round_number, 0), p_player_id, v_clean, v_topic)
+    returning id into v_attempt;
+
+  update public.lobbies set current_attempt_id = v_attempt where id = v_lobby.id;
+
+  perform public._finalize_attempt_accept(v_attempt);
+
+  return v_attempt;
+end;
+$function$;
+
+COMMIT;
+
+
+-- ============================================================
+-- Migration 059: Server-seitiger Ticker (pg_cron) -- Match friert nicht mehr ein
+-- ============================================================
+-- Bisher trieb AUSSCHLIESSLICH die Browser-Seite der Spieler die Phasen
+-- an (setInterval ruft rpc_tick_game / rpc_finalize_topic_vote /
+-- rpc_advance_from_countdown / rpc_start_rematch_if_ready auf). Sobald ALLE
+-- Tabs im Hintergrund waren (Alt-Tab zu Discord, Handy gesperrt, Fenster
+-- minimiert), drosselt der Browser die Timer -- die Runde blieb
+-- stehen, der überfällige Halter explodierte erst, wenn jemand wieder hinsah
+-- (im Multi-Bot-Checkup live reproduziert: explode_at 13s überfällig,
+-- nichts passierte).
+--
+-- Jetzt prüft zusätzlich ein pg_cron-Job alle 2 Sekunden alle Lobbys und ruft
+-- die ohnehin idempotenten RPCs bei überfälligen Timern selbst auf. Die
+-- Client-Ticks bleiben als schnellere Primärquelle bestehen (die RPCs sind
+-- phasengeschützt, doppelte Aufrufe sind harmlos).
+-- ============================================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public._server_tick()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  r record;
+begin
+  for r in
+    select id, code, phase from public.lobbies
+    where (phase = 'running' and explode_at is not null and explode_at <= now())
+       or (phase = 'topic_vote' and topic_vote_ends_at is not null and topic_vote_ends_at <= now())
+       or (phase = 'countdown' and countdown_ends_at is not null and countdown_ends_at <= now())
+       or (phase = 'rematch_wait' and countdown_ends_at is not null and countdown_ends_at <= now())
+  loop
+    begin
+      if r.phase = 'running' then
+        perform public.rpc_tick_game(r.code);
+      elsif r.phase = 'topic_vote' then
+        perform public.rpc_finalize_topic_vote(r.id);
+      elsif r.phase = 'countdown' then
+        perform public.rpc_advance_from_countdown(r.id);
+      elsif r.phase = 'rematch_wait' then
+        perform public.rpc_start_rematch_if_ready(r.code);
+      end if;
+    exception when others then
+      -- Eine kaputte Lobby (z.B. nur 1 Spieler im Rematch) darf den
+      -- Ticker für alle anderen nicht blockieren.
+      null;
+    end;
+  end loop;
+end;
+$function$;
+
+REVOKE ALL ON FUNCTION public._server_tick() FROM PUBLIC, anon, authenticated;
+
+SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = 'kumpir-server-tick';
+SELECT cron.schedule('kumpir-server-tick', '2 seconds', 'select public._server_tick()');
+
+COMMIT;
+
+
+-- ============================================================
+-- Migration 060: Pass-/Haltezeit = Zeit seit ERHALT der Kartoffel
+-- ============================================================
+-- rpc_pass_potato maß v_pass_ms bisher als Zeit seit dem EIGENEN letzten
+-- Pass (beim ersten Pass: seit Rundenstart). Das schloss die komplette
+-- Wartezeit ein, in der andere Spieler dran waren -- im Ende-Screen
+-- standen dadurch "Fastest Pass"-Werte von 47-56 Sekunden, "Fastest" und
+-- "Slowest" waren bei nur einem Pass identisch, und "Longest Hold" war
+-- einfach "wer hat am längsten überlebt".
+--
+-- Neu: lobbies.holder_since wird per Trigger bei JEDEM Halterwechsel auf
+-- now() gesetzt. rpc_pass_potato liest es vor dem Wechsel und misst damit
+-- die echte Haltezeit (Kartoffel erhalten -> abgegeben). Fastest/Slowest/
+-- Longest Hold bekommen dadurch wieder ihre eigentliche Bedeutung.
+-- ============================================================
+
+BEGIN;
+
+ALTER TABLE public.lobbies ADD COLUMN IF NOT EXISTS holder_since timestamptz;
+GRANT SELECT ON public.lobbies TO anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public._set_holder_since()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if NEW.holder_player_id is distinct from OLD.holder_player_id then
+    NEW.holder_since := case when NEW.holder_player_id is null then null else now() end;
+  end if;
+  return NEW;
+end;
+$function$;
+
+DROP TRIGGER IF EXISTS lobbies_set_holder_since ON public.lobbies;
+CREATE TRIGGER lobbies_set_holder_since
+  BEFORE UPDATE OF holder_player_id ON public.lobbies
+  FOR EACH ROW EXECUTE FUNCTION public._set_holder_since();
+
+CREATE OR REPLACE FUNCTION public.rpc_pass_potato(p_code text, p_player_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid; v_mode text; v_holder uuid; v_dir smallint; v_explode_at timestamptz;
+  v_round_number int; v_bonus_seconds numeric; v_bonus_used numeric; v_bonus_cap numeric; v_bonus_applied numeric;
+  alive_ids uuid[]; n int; idx int; next_idx int; v_next uuid;
+  v_now timestamptz := now();
+  v_since timestamptz; v_pass_ms int; v_clutch int := 0; v_ms_left int;
+begin
+  select l.id, l.game_mode, l.holder_player_id, l.pass_direction, l.explode_at, l.round_number, coalesce(l.round_bonus_used, 0), coalesce(l.holder_since, l.run_started_at)
+    into v_lobby_id, v_mode, v_holder, v_dir, v_explode_at, v_round_number, v_bonus_used, v_since
+  from public.lobbies l
+  where l.code = upper(p_code) for update;
+
+  if v_lobby_id is null then raise exception 'Lobby not found'; end if;
+
+  if (select phase from public.lobbies where id = v_lobby_id) <> 'running' then
+    raise exception 'Game not running';
+  end if;
+
+  if v_holder is null or v_holder <> p_player_id then
+    raise exception 'Not holder';
+  end if;
+
+  if not exists (
+    select 1 from public.players p
+    where p.lobby_id = v_lobby_id and p.player_id = p_player_id
+      and p.status = 'active' and p.is_alive = true
+  ) then raise exception 'Player not active/alive'; end if;
+
+  select array_agg(p.player_id order by p.seat_index) into alive_ids
+  from public.players p
+  where p.lobby_id = v_lobby_id and p.status = 'active' and p.is_alive = true;
+
+  n := coalesce(array_length(alive_ids, 1), 0);
+  if n <= 1 then return; end if;
+
+  idx := array_position(alive_ids, p_player_id);
+  if idx is null then raise exception 'Holder not in alive list'; end if;
+
+  if v_mode = 'teleport' then
+    select p.player_id into v_next
+    from public.players p
+    where p.lobby_id = v_lobby_id
+      and p.status = 'active' and p.is_alive = true
+      and p.player_id <> p_player_id
+    order by random() limit 1;
+    if v_next is null then return; end if;
+
+  elsif v_mode = 'reverse' then
+    v_dir := coalesce(v_dir, 1) * -1;
+    update public.lobbies set pass_direction = v_dir where id = v_lobby_id;
+    if v_dir = 1 then
+      next_idx := idx + 1;
+      if next_idx > n then next_idx := 1; end if;
+    else
+      next_idx := idx - 1;
+      if next_idx < 1 then next_idx := n; end if;
+    end if;
+    v_next := alive_ids[next_idx];
+
+  else
+    next_idx := idx + 1;
+    if next_idx > n then next_idx := 1; end if;
+    v_next := alive_ids[next_idx];
+  end if;
+
+  v_bonus_cap := public.calc_pass_bonus_cap(n);
+  v_bonus_seconds := public.calc_pass_bonus_seconds(v_round_number);
+  v_bonus_applied := greatest(0, least(v_bonus_seconds, v_bonus_cap - v_bonus_used));
+
+  update public.lobbies
+  set holder_player_id = v_next,
+      explode_at = greatest(coalesce(v_explode_at, v_now), v_now) + (v_bonus_applied * interval '1 second'),
+      round_bonus_used = v_bonus_used + v_bonus_applied,
+      last_activity_at = v_now
+  where id = v_lobby_id;
+  perform public._pick_next_song(v_lobby_id);
+
+  -- Haltezeit = von Erhalt der Kartoffel (holder_since) bis jetzt.
+  v_pass_ms := greatest(0, coalesce(extract(epoch from (v_now - coalesce(v_since, v_now))) * 1000, 0));
+
+  if v_explode_at is not null then
+    v_ms_left := extract(epoch from (v_explode_at - v_now)) * 1000;
+    if v_ms_left <= 2000 then v_clutch := 1; end if;
+  end if;
+
+  update public.players
+  set pass_count = coalesce(pass_count, 0) + 1,
+      last_pass_at = v_now,
+      total_hold_ms = coalesce(total_hold_ms, 0) + v_pass_ms,
+      fastest_pass_ms = case
+        when fastest_pass_ms is null then v_pass_ms
+        when v_pass_ms < fastest_pass_ms then v_pass_ms
+        else fastest_pass_ms
+      end,
+      slowest_pass_ms = case
+        when slowest_pass_ms is null then v_pass_ms
+        when v_pass_ms > slowest_pass_ms then v_pass_ms
+        else slowest_pass_ms
+      end,
+      clutch_pass_count = coalesce(clutch_pass_count, 0) + v_clutch
+  where lobby_id = v_lobby_id and player_id = p_player_id;
+end;
+$function$;
+
+COMMIT;
