@@ -40,6 +40,7 @@ type Props = {
 };
 
 const TILT_DEG = 52;
+const CY = 0.27; // Tischmitte (Anteil der Höhe)
 
 function initialsFor(name: string): string {
     const parts = name.trim().split(/\s+/);
@@ -96,6 +97,9 @@ export function PlayerRing({
 
     // Container size in state so we don't read refs during render
     const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+    // Tischdurchmesser: wächst mit dem Bildschirm, aber nie so groß, dass die
+    // Namensschilder an den Seiten abgeschnitten werden.
+    const tableSize = Math.max(240, Math.min(Math.min(size.w, size.h) * 0.66, 540));
 
     useEffect(() => {
         const el = containerRef.current;
@@ -167,16 +171,26 @@ export function PlayerRing({
             if (!rel) return null;
             if (size.w <= 0 || size.h <= 0) return null;
 
-            const minSide = Math.min(size.w, size.h);
             const cx = size.w / 2;
             // Oberhalb der Antwort-Box (.hud) statt exakt Bildschirmmitte.
-            const cy = size.h * 0.27;
+            const cy = size.h * CY;
             // Sitze auf der Filzplatte knapp innerhalb des Holzrands.
-            const r = Math.min(minSide * 0.235, 195);
+            const r = tableSize * 0.335;
 
             return { x: cx + rel.x * r, y: cy + rel.y * r };
         },
-        [positions, size.w, size.h]
+        [positions, size.w, size.h, tableSize]
+    );
+
+    // Namensschilder außerhalb des Tischrands (immer gut lesbar).
+    const getLabelPx = useCallback(
+        (id: string): { x: number; y: number; ax: number; ay: number } | null => {
+            const rel = positions.get(id);
+            if (!rel || size.w <= 0 || size.h <= 0) return null;
+            const R = tableSize * 0.5 + 20;
+            return { x: size.w / 2 + rel.x * R, y: size.h * CY + rel.y * R, ax: rel.x, ay: rel.y };
+        },
+        [positions, size.w, size.h, tableSize]
     );
 
     // Trigger nicer animation on passEvent
@@ -279,7 +293,7 @@ export function PlayerRing({
         const b = getPx(next.player_id);
         if (!a || !b) return null;
         const cx = size.w / 2;
-        const cy = size.h * 0.27;
+        const cy = size.h * CY;
         const mx = (a.x + b.x) / 2;
         const my = (a.y + b.y) / 2;
         const c = { x: mx + (cx - mx) * 0.5, y: my + (cy - my) * 0.5 };
@@ -304,7 +318,7 @@ export function PlayerRing({
         <div ref={containerRef} className={`ringWrap ${hot ? "ringHot" : ""}`} style={{ ["--tilt" as string]: `${TILT_DEG}deg`, ["--pulse" as string]: `${pulseSec}s`, ["--amp" as string]: pulseAmp }}>
             <div className="tableTilt">
                 {/* ---------- Tisch ---------- */}
-                <div className="tableBase" aria-hidden>
+                <div className="tableBase" aria-hidden style={{ top: `${CY * 100}%`, width: tableSize, height: tableSize }}>
                     <div className="tShadow" />
                     <div className="tEdge tEdge3" />
                     <div className="tEdge tEdge2" />
@@ -312,6 +326,7 @@ export function PlayerRing({
                     <div className="tRim" />
                     <div className="tFelt" />
                     <div className="tGoldRing" />
+                    <div className="tDial" />
 
                     {/* Zündschnur: pulsierende Glut am Tischrand -- je näher die Explosion,
                         desto schneller und heller. */}
@@ -320,8 +335,8 @@ export function PlayerRing({
 
                 {/* Tisch-Mitte: Runde + Tempo, aufrecht gestellt (Billboard). */}
                 {size.w > 0 ? (
-                    <div className="tHub" style={{ left: size.w / 2, top: size.h * 0.27 }}>
-                        <div className="tHubRound">RUNDE {round}</div>
+                    <div className="tHub" style={{ left: size.w / 2, top: size.h * CY }}>
+                        <div className="tHubRound">ZUG {round}</div>
                         <div className={`tHubTempo ${duel ? "duel" : ""}`}>
                             {duel ? "⚔ DUELL" : `⚡ Tempo ×${tempo.toFixed(1)}`}
                         </div>
@@ -360,7 +375,6 @@ export function PlayerRing({
                     const isExploded = !!explodedPlayerId && p.player_id === explodedPlayerId;
                     const isStale = p.is_alive && isDisconnected(p.player_id);
                     const hue = hueFor(p.player_id);
-                    const pts = p.song_points ?? 0;
 
                     return (
                         <div
@@ -375,11 +389,6 @@ export function PlayerRing({
                             title={p.name}
                         >
                             <span className="seatInitials">{initialsFor(p.name)}</span>
-                            <span className="seatName">
-                                {p.name}
-                                {isMe ? " (du)" : ""}
-                            </span>
-                            {pts > 0 ? <span className="seatPts">♪ {fmtPts(pts)}</span> : null}
                             {!p.is_alive ? <span className="seatDeadOverlay" aria-hidden>💀</span> : null}
                             {isExploded ? <span className="seatBoom" aria-hidden>💥</span> : null}
                             {isStale ? (
@@ -387,6 +396,28 @@ export function PlayerRing({
                                     📡
                                 </span>
                             ) : null}
+                        </div>
+                    );
+                })}
+
+                {/* ---------- Namensschilder außerhalb des Tischs ---------- */}
+                {seatedPlayers.map((p) => {
+                    const lp = getLabelPx(p.player_id);
+                    if (!lp) return null;
+                    const isHolder = !!holderPlayerId && p.player_id === holderPlayerId;
+                    const isMe = !!mePlayerId && p.player_id === mePlayerId;
+                    const pts = p.song_points ?? 0;
+                    const tx = lp.ay > 0.5 || lp.ay < -0.5 ? "-50%" : lp.ax > 0 ? "0%" : "-100%";
+                    const ty = lp.ay > 0.5 ? "0%" : lp.ay < -0.5 ? "-100%" : "-50%";
+                    return (
+                        <div
+                            key={`nm-${p.player_id}`}
+                            className={`nameTag ${isHolder ? "holder" : ""} ${isMe ? "me" : ""} ${!p.is_alive ? "gone" : ""}`}
+                            style={{ left: lp.x, top: lp.y, ["--tx" as string]: tx, ["--ty" as string]: ty }}
+                        >
+                            <span className="nameTagText">{p.name}</span>
+                            {isMe ? <span className="nameTagMe">du</span> : null}
+                            {pts > 0 ? <span className="nameTagPts">♪ {fmtPts(pts)}</span> : null}
                         </div>
                     );
                 })}
@@ -456,8 +487,6 @@ export function PlayerRing({
           position:absolute;
           left:50%;
           top:27%;
-          width: min(58vmin, 500px);
-          height: min(58vmin, 500px);
           transform: translate(-50%,-50%);
           transform-style: preserve-3d;
         }
@@ -490,6 +519,13 @@ export function PlayerRing({
           transform: translateZ(3px);
           border: 2px solid rgba(255,214,10,.32);
           box-shadow: 0 0 18px rgba(255,214,10,.14), inset 0 0 18px rgba(255,214,10,.08);
+        }
+        .tDial{
+          inset: 10.5%;
+          transform: translateZ(3px);
+          background: repeating-conic-gradient(from -1deg, rgba(255,214,10,.34) 0deg 2deg, transparent 2deg 15deg);
+          -webkit-mask: radial-gradient(circle, transparent 0 91%, #000 91.5% 100%);
+          mask: radial-gradient(circle, transparent 0 91%, #000 91.5% 100%);
         }
         .tPulse{
           inset: -1%;
@@ -569,13 +605,14 @@ export function PlayerRing({
           filter: blur(3px);
           transition: left .45s cubic-bezier(.2,1,.2,1), top .45s cubic-bezier(.2,1,.2,1);
         }
+        /* Kein mix-blend-mode/filter/opacity auf Kindern der Tischebene: das flacht den 3D-Kontext ab
+           und quetscht alle Sitze + Namensschilder zu Ellipsen. */
         .holderSpot{
           position:absolute;
           width: 170px; height: 170px;
           transform: translate(-50%,-50%) translateZ(4px);
           border-radius: 50%;
           background: radial-gradient(circle, rgba(255,190,70,.55) 0%, rgba(255,120,30,.22) 45%, transparent 70%);
-          mix-blend-mode: screen;
           transition: left .5s cubic-bezier(.2,1,.2,1), top .5s cubic-bezier(.2,1,.2,1);
           animation: spotBreath 1.6s ease-in-out infinite;
         }
@@ -584,8 +621,8 @@ export function PlayerRing({
         /* ===== Spieler-Sitze (Billboard: stehen aufrecht über dem Tisch) ===== */
         .seat{
           position:absolute;
-          width: 50px;
-          height: 50px;
+          width: 54px;
+          height: 54px;
           border-radius: 999px;
           transform: translate(-50%, -50%) translateZ(60px) rotateX(calc(var(--tilt) * -1));
           display: grid;
@@ -601,45 +638,43 @@ export function PlayerRing({
           transition: left .45s cubic-bezier(.2,1,.2,1), top .45s cubic-bezier(.2,1,.2,1), transform .25s cubic-bezier(.2,1,.2,1), box-shadow .25s ease, border-color .25s ease, opacity .25s ease;
         }
         .seatInitials{ text-shadow: 0 2px 8px rgba(0,0,0,.55); user-select:none; }
-        .seat .seatName{
+        .nameTag{
           position:absolute;
-          top: calc(100% + 6px);
-          left: 50%;
-          transform: translateX(-50%);
-          font-size: 11px;
-          font-weight: 900;
-          padding: 2px 9px;
+          z-index: 35;
+          transform: translate(var(--tx, -50%), var(--ty, 0%)) translateZ(24px) rotateX(calc(var(--tilt) * -1));
+          display:flex; align-items:center; gap:6px;
+          max-width: min(150px, 30vw);
+          padding: 5px 12px;
           border-radius: 999px;
-          background: rgba(10,10,14,.72);
-          border: 1px solid rgba(255,255,255,.14);
-          white-space: nowrap;
-          max-width: 110px;
-          overflow:hidden;
-          text-overflow: ellipsis;
-          box-shadow: 0 4px 10px rgba(0,0,0,.35);
-        }
-        .seat .seatPts{
-          position:absolute;
-          top: calc(100% + 28px);
-          left: 50%;
-          transform: translateX(-50%);
-          font-size: 10px;
+          background: rgba(8,12,24,.82);
+          border: 1px solid rgba(255,255,255,.28);
+          box-shadow: 0 6px 16px rgba(0,0,0,.45);
+          color: #fff;
+          font-size: 15px;
           font-weight: 900;
-          color: #ffe08a;
-          text-shadow: 0 1px 4px rgba(0,0,0,.7);
+          letter-spacing: .2px;
           white-space: nowrap;
+          transition: left .45s cubic-bezier(.2,1,.2,1), top .45s cubic-bezier(.2,1,.2,1), border-color .25s ease, background .25s ease;
         }
+        .nameTagText{ overflow:hidden; text-overflow: ellipsis; min-width: 0; }
+        .nameTagMe{
+          flex: none; font-size: 11px; font-weight: 900; padding: 1px 7px; border-radius: 999px;
+          background: rgba(34,211,238,.22); border: 1px solid rgba(34,211,238,.7); color: #b9f4ff;
+        }
+        .nameTagPts{ flex: none; font-size: 12px; font-weight: 900; color: #ffe08a; }
+        .nameTag.me{ border-color: rgba(34,211,238,.85); }
+        .nameTag.holder{ background: rgba(122,64,0,.92); border-color: rgba(255,214,10,.9); color: #fff3c4; }
+        .nameTag.gone{ opacity: 0; }
         .seat.me{
           border-color: rgba(34,211,238,.95);
           box-shadow: 0 10px 26px rgba(0,0,0,.5), 0 0 0 4px rgba(34,211,238,.22), inset 0 3px 6px rgba(255,255,255,.28);
           opacity: 1;
         }
-        .seat.me .seatName{ border-color: rgba(34,211,238,.6); }
         .seat.holder{
-          width: 60px;
-          height: 60px;
+          width: 64px;
+          height: 64px;
           opacity: 1;
-          font-size: 17px;
+          font-size: 18px;
           transform: translate(-50%, -50%) translateZ(76px) rotateX(calc(var(--tilt) * -1)) scale(1.12);
           border-color: #ffd60a;
           box-shadow:
@@ -649,7 +684,6 @@ export function PlayerRing({
             inset 0 3px 6px rgba(255,255,255,.35);
           animation: seatHolderPulse 1.3s ease-in-out infinite;
         }
-        .seat.holder .seatName{ background: rgba(120,60,0,.85); border-color: rgba(255,214,10,.7); color:#fff3c4; }
         .seat.dead{ opacity:.34; filter: grayscale(.9); }
         .seatDeadOverlay{
           position:absolute; inset:0; display:grid; place-items:center;

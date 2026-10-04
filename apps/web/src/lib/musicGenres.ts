@@ -22,6 +22,23 @@ export const MUSIC_PLAYLISTS: Record<string, { title: string; id: string; icon: 
         id: "37i9dQZF1DX2lUf1uE6Mre",
         icon: "💨",
     },
+    // Playlists 4-6 (Migration 067): Songs liegen in song_pool (iTunes-Previews),
+    // die Spotify-ID ist rein informativ.
+    "80er Hits": {
+        title: "All Out 80s",
+        id: "37i9dQZF1DX4UtSsGT1Sbe",
+        icon: "🕺",
+    },
+    "Deutsch-Pop": {
+        title: "Deutsch-Pop Hits",
+        id: "",
+        icon: "🎤",
+    },
+    "Rock-Klassiker": {
+        title: "Rock Classics",
+        id: "37i9dQZF1DWXRqgorJj26U",
+        icon: "🎸",
+    },
 };
 
 export const MUSIC_GENRE_KEYS = Object.keys(MUSIC_PLAYLISTS);

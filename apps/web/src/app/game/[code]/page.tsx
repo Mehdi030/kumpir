@@ -249,7 +249,11 @@ export default function GamePage() {
 
     // Großes, kurz eingeblendetes "Nur noch X Spieler übrig!" bei jeder
     // Elimination -- verschwindet von selbst wieder.
-    const [aliveDropBanner, setAliveDropBanner] = useState<number | null>(null);
+    // Ausscheide-Pop-up: erst "X ist raus", danach (nach dem Ausblenden) "Nur noch N übrig".
+    const [elimPopup, setElimPopup] = useState<{ key: number; text: string; kind: "out" | "left" } | null>(null);
+    const elimTimersRef = useRef<number[]>([]);
+    const [kickOpen, setKickOpen] = useState(false);
+    const elimKeyRef = useRef(0);
 
     // HUD swap animation trigger
     const [hudPulseNonce, setHudPulseNonce] = useState(0);
@@ -747,11 +751,10 @@ export default function GamePage() {
                     answer_mode: (raw.answer_mode as string | null) ?? "text",
                 };
 
-                // Post-round loser toast (once)
+                // Letzten Verlierer merken (einmalig)
                 if (nextLobby.last_loser_player_id && nextLobby.last_loser_player_id !== lastLoserRef.current) {
+                    // (Die Anzeige "X ist raus" macht das Ausscheide-Pop-up.)
                     lastLoserRef.current = nextLobby.last_loser_player_id;
-                    const loserName = players.find((p) => p.player_id === nextLobby.last_loser_player_id)?.name ?? "Jemand";
-                    showToast(`💥 ${loserName} ist raus`, 1500);
                 }
 
                 // Holder transition (passEvent) + HUD swap animation
@@ -927,7 +930,6 @@ export default function GamePage() {
             alive = false;
             window.clearInterval(t);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [code, supabase, mePlayerId, rpcFinalizeTopicVote, rpcAdvanceFromCountdown, rpcTickGame, showToast, realtimeStatus]);
 
     // Early finalize when all voted
@@ -1039,6 +1041,7 @@ export default function GamePage() {
         }
 
         if (prevAlive.size > 0) {
+            const died = [...prevAlive].filter((id) => !currentAlive.has(id));
             let anyDied = false;
             for (const id of prevAlive) {
                 if (!currentAlive.has(id)) {
@@ -1062,8 +1065,26 @@ export default function GamePage() {
             // eine Elimination passiert ist, zeigt es immer den aktuell
             // korrekten Stand.
             if (anyDied) {
-                setAliveDropBanner(currentAlive.size);
-                window.setTimeout(() => setAliveDropBanner((cur) => (cur === currentAlive.size ? null : cur)), 2200);
+                const nameOf = (id: string) => players.find((p) => p.player_id === id)?.name ?? "Jemand";
+                const diedNames = died.map((id) => (id === mePlayerId ? "Du" : nameOf(id)));
+                const outText =
+                    diedNames.length === 1
+                        ? `${diedNames[0]} ${diedNames[0] === "Du" ? "bist" : "ist"} raus`
+                        : `${diedNames.slice(0, -1).join(", ")} und ${diedNames[diedNames.length - 1]} sind raus`;
+                const aliveNames = players.filter((p) => currentAlive.has(p.player_id)).map((p) => (p.player_id === mePlayerId ? "Du" : p.name));
+                const leftText =
+                    aliveNames.length >= 3
+                        ? `Nur noch ${aliveNames.length} übrig`
+                        : aliveNames.length === 2
+                          ? `Nur noch ${aliveNames[0]} und ${aliveNames[1]} übrig`
+                          : null;
+                elimTimersRef.current.forEach((t) => window.clearTimeout(t));
+                elimTimersRef.current = [];
+                setElimPopup({ key: ++elimKeyRef.current, text: outText, kind: "out" });
+                elimTimersRef.current.push(
+                    window.setTimeout(() => setElimPopup(leftText ? { key: ++elimKeyRef.current, text: leftText, kind: "left" } : null), 2000),
+                    window.setTimeout(() => setElimPopup(null), 4000)
+                );
             }
         }
         prevAliveRef.current = currentAlive;
@@ -1289,15 +1310,16 @@ export default function GamePage() {
 
     // Serien-Sieger (Summe der Arena-Punkte, Gleichstand: besserer Ø-Platz)
     const seriesRanked = useMemo(() => {
-        const m = new Map<string, { id: string; name: string; total: number; placeSum: number; n: number }>();
+        const m = new Map<string, { id: string; name: string; total: number; placeSum: number; n: number; wins: number }>();
         for (const r of seriesRows) {
-            const e = m.get(r.player_id) ?? { id: r.player_id, name: r.name, total: 0, placeSum: 0, n: 0 };
+            const e = m.get(r.player_id) ?? { id: r.player_id, name: r.name, total: 0, placeSum: 0, n: 0, wins: 0 };
+            if (r.place === 1) e.wins += 1;
             e.total += r.arena_points;
             e.placeSum += r.place;
             e.n += 1;
             m.set(r.player_id, e);
         }
-        return [...m.values()].sort((a, b) => b.total - a.total || a.placeSum / a.n - b.placeSum / b.n);
+        return [...m.values()].sort((a, b) => b.total - a.total || b.wins - a.wins || a.placeSum / a.n - b.placeSum / b.n);
     }, [seriesRows]);
     const seriesLeader = seriesRanked[0] ?? null;
     const mySeriesRank = seriesRanked.findIndex((e) => e.id === mePlayerId) + 1;
@@ -1441,7 +1463,7 @@ export default function GamePage() {
     // "Zufällig" wie eh und je (verlost dann zwischen Thema A und B).
     const aLabel = lobby.topic_a ?? "…";
     const bLabel = lobby.topic_b ?? "…";
-    const cLabel = lobby.topic_c ?? "Zufällig";
+    const cLabel = lobby.topic_c ?? "Zufall";
 
     // =========================================================
     // PHASE: TOPIC VOTE  (NO blinking)
@@ -1523,11 +1545,11 @@ export default function GamePage() {
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">{lobby.topic_c ? "③" : "🎲"}</span>
-                                    <span className="micro">{lobby.topic_c ? "Thema C" : "Random"}</span>
+                                    <span className="micro">{lobby.topic_c ? "Thema C" : "Zufall"}</span>
                                 </div>
                                 <div className="cardTitle">{cLabel}</div>
                                 <div className="cardHint">
-                                    {myVote === 3 ? "Ausgewählt" : lobby.topic_c ? "Tippe zum Voten" : "Überraschen lassen"}
+                                    {myVote === 3 ? "Ausgewählt" : lobby.topic_c ? "Tippe zum Voten" : "Eine andere Playlist per Los"}
                                 </div>
                             </button>
                         </div>
@@ -1652,7 +1674,7 @@ export default function GamePage() {
         const labelForChoice = (c: number) => {
             if (c === 1) return `① ${aLabel}`;
             if (c === 2) return `② ${bLabel}`;
-            if (c === 3) return lobby.topic_c ? `③ ${cLabel}` : `🎲 ${cLabel}`;
+            if (c === 3) return lobby.topic_c ? `③ ${cLabel}` : `🎲 Zufall`;
             return String(c);
         };
 
@@ -1684,7 +1706,7 @@ export default function GamePage() {
                         </div>
                         <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
                             <div className="resultBadge">{lobby.topic_c ? "③" : "🎲"}</div>
-                            <div className="resultTitle">{cLabel}</div>
+                            <div className="resultTitle">{isWinner(3) && !lobby.topic_c ? `Zufall: ${selectedTopic}` : cLabel}</div>
                         </div>
                     </div>
 
@@ -1692,9 +1714,9 @@ export default function GamePage() {
 
                     {tie ? (
                         <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 850 }}>
-                            Tie zwischen: <span style={{ opacity: 0.98 }}>{tieChoices.map((c) => labelForChoice(c)).join(" · ")}</span>
+                            Gleichstand zwischen: <span style={{ opacity: 0.98 }}>{tieChoices.map((c) => labelForChoice(c)).join(" · ")}</span>
                             <div style={{ marginTop: 6, opacity: 0.92 }}>
-                                Zufällig gewählt: <b>{pick ? labelForChoice(pick) : "…"}</b>
+                                Das Los entscheidet: <b>{pick ? labelForChoice(pick) : "…"}</b>
                             </div>
                         </div>
                     ) : (
@@ -1785,7 +1807,7 @@ export default function GamePage() {
                 <div style={{ width: "min(1180px, calc(100vw - 64px))", position: "relative", zIndex: 2 }}>
                     {/* HERO (Winner only) */}
                     <div className="finishHero">
-                        <div className="finishKicker">{isSeries ? `SERIE BEENDET · ${lobby.series_total} DURCHGÄNGE` : "SPIEL BEENDET"}</div>
+                        <div className="finishKicker">{isSeries ? `MATCH BEENDET · ${lobby.series_total} RUNDEN` : "SPIEL BEENDET"}</div>
 
                         <div className="finishWinner">
                             <span className="trophy" aria-hidden>
@@ -1798,7 +1820,7 @@ export default function GamePage() {
                         <div className="finishMeta">
                             {isSeries ? null : (
                                 <span className="metaPill">
-                                    Runden <b>{lobby.round_number ?? "—"}</b>
+                                    Züge <b>{lobby.round_number ?? "—"}</b>
                                 </span>
                             )}
                             {isSeries ? null : (
@@ -1822,7 +1844,7 @@ export default function GamePage() {
                         <div style={{ marginTop: 18 }}>
                             {seriesLeader ? (
                                 <div style={{ textAlign: "center", marginBottom: 10, fontWeight: 950, fontSize: 18 }}>
-                                    🥇 Serien-Sieger: {seriesLeader.name} · {seriesLeader.total} Punkte
+                                    🥇 Match-Sieger: {seriesLeader.name} · {seriesLeader.total} Punkte
                                 </div>
                             ) : null}
                             <SeriesTable
@@ -1830,7 +1852,7 @@ export default function GamePage() {
                                 totalSets={lobby.series_total}
                                 playedSets={lobby.series_total}
                                 mePlayerId={mePlayerId}
-                                title="Gesamtwertung aller Durchgänge"
+                                title="Gesamtwertung"
                             />
                         </div>
                     ) : null}
@@ -1839,7 +1861,7 @@ export default function GamePage() {
                     <div className="finishGrid" style={{ marginTop: 18 }}>
                         {/* Ranking */}
                         <div className="card">
-                            <div className="cardTitle">{isSeries ? `🏅 Letzter Durchgang (${lobby.series_total} von ${lobby.series_total})` : "🏅 Ranking"}</div>
+                            <div className="cardTitle">{isSeries ? `🏅 Letzte Runde (${lobby.series_total} von ${lobby.series_total})` : "🏅 Ranking"}</div>
                             <div className="fieldHelp" style={{ marginTop: 4, opacity: 0.75 }}>
                                 Platz = wer am längsten überlebt hat · Punkte = Platz + Song-Treffer + Clutch
                             </div>
@@ -1849,7 +1871,7 @@ export default function GamePage() {
                                     <div>#</div>
                                     <div>Player</div>
                                     <div className="r">Punkte</div>
-                                    <div className="r">Runden</div>
+                                    <div className="r">Züge</div>
                                     <div className="r">Fastest</div>
                                     <div className="r">Slowest</div>
                                 </div>
@@ -2272,16 +2294,16 @@ export default function GamePage() {
             >
                 <div style={{ width: "min(860px, calc(100vw - 48px))", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>
-                        DURCHGANG {idx} VON {total} · ZWISCHENSTAND
+                        RUNDE {idx} VON {total} · ZWISCHENSTAND
                     </div>
-                    <div style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 950, marginTop: 10 }}>🏆 {setWinner} holt den Durchgang</div>
+                    <div style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 950, marginTop: 10 }}>🏆 {setWinner} holt die Runde</div>
 
                     <div style={{ marginTop: 18, textAlign: "left" }}>
                         <SeriesTable rows={seriesRows} totalSets={total} playedSets={idx} mePlayerId={mePlayerId} title="Zwischenstand" />
                     </div>
 
                     <div style={{ marginTop: 20, opacity: 0.85, fontWeight: 800 }}>
-                        Nächster Durchgang: Themen-Voting in
+                        Nächste Runde: Themen-Voting in
                     </div>
                     <div style={{ fontSize: "clamp(48px, 7vw, 84px)", fontWeight: 950, textShadow: "0 14px 50px rgba(0,0,0,0.35)" }}>
                         {Math.max(0, countdownSecondsLeft ?? 12)}
@@ -2307,7 +2329,7 @@ export default function GamePage() {
             >
                 <div style={{ width: "min(680px, 96vw)", textAlign: "center" }}>
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>REMATCH</div>
-                    <div style={{ fontSize: "clamp(26px, 4vw, 42px)", fontWeight: 950, marginTop: 12 }}>🔁 Nächste Runde startet gleich</div>
+                    <div style={{ fontSize: "clamp(26px, 4vw, 42px)", fontWeight: 950, marginTop: 12 }}>🔁 Nächstes Match startet gleich</div>
                     <div style={{ marginTop: 8, opacity: 0.82, fontWeight: 700 }}>
                         Alle Anwesenden gehen automatisch weiter zur Themenwahl.
                     </div>
@@ -2410,10 +2432,8 @@ export default function GamePage() {
     // PHASE: RUNNING (MINIMAL names only + smooth swap)
     // =========================================================
     const runningBg = iAmEliminated
-        ? "radial-gradient(circle at 50% 30%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.35) 60%), radial-gradient(circle at 50% 85%, rgba(180,180,180,0.14) 0%, rgba(25,25,25,0.92) 80%)"
-        : isMeHolder
-            ? "radial-gradient(circle at 50% 35%, rgba(255,120,80,0.55) 0%, rgba(143,15,15,0.96) 72%)"
-            : "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 58%), radial-gradient(circle at 50% 80%, rgba(52,199,89,0.26) 0%, rgba(0,130,60,0.78) 80%)";
+        ? "radial-gradient(circle at 50% 28%, rgba(120,130,150,0.22) 0%, rgba(10,12,18,0) 62%), linear-gradient(180deg, #171a22 0%, #0f1218 60%, #0a0c11 100%)"
+        : "radial-gradient(circle at 50% 28%, rgba(60,110,190,0.30) 0%, rgba(10,16,34,0) 62%), linear-gradient(180deg, #121a33 0%, #0c1226 55%, #080c1c 100%)";
 
     const passDisabledReason = iAmEliminated ? "Du bist raus" : !isMeHolder ? "Nicht dein Turn" : passBusy ? "Busy" : null;
 
@@ -2467,16 +2487,17 @@ export default function GamePage() {
                 </div>
             ) : null}
 
-            {aliveDropBanner != null ? (
-                <div className="aliveDropBanner" role="status" aria-live="assertive">
-                    💥 Nur noch {aliveDropBanner} Spieler übrig!
+            {elimPopup ? (
+                <div key={elimPopup.key} className={`elimPopup ${elimPopup.kind}`} role="status" aria-live="assertive">
+                    {elimPopup.kind === "out" ? "💥 " : "🥔 "}
+                    {elimPopup.text}
                 </div>
             ) : null}
 
             {/* Top-right: Modus + Heat + Connection + Audio */}
             <div className="topRight" aria-hidden={false}>
                 {(lobby.series_total ?? 1) > 1 ? (
-                    <div className="modePill modePillBig" title="Durchgang der Serie">
+                    <div className="modePill modePillBig" title="Runde des Matches">
                         <span>🎯</span>
                         <span>{lobby.series_index}/{lobby.series_total}</span>
                     </div>
@@ -2495,8 +2516,10 @@ export default function GamePage() {
                 anderes im Layout (eigene fixierte Box). */}
             {isHost ? (
                 <div className="hostKickPanel">
-                    <div className="hostKickLabel">👑 Kicken</div>
-                    <div className="hostKickList">
+                    <button type="button" className="hostKickLabel" onClick={() => setKickOpen((v) => !v)} aria-expanded={kickOpen}>
+                        👑 Kicken {kickOpen ? "▴" : "▾"}
+                    </button>
+                    <div className="hostKickList" style={{ display: kickOpen ? "flex" : "none" }}>
                         {players
                             .filter((p) => p.is_alive && p.player_id !== mePlayerId)
                             .map((p) => (
@@ -2549,7 +2572,7 @@ export default function GamePage() {
                                     className="btn btnSecondary btnSmall"
                                     onClick={() => void handleRevenge()}
                                     disabled={revengeBusy}
-                                    title="Einmal pro Durchgang: die Weitergabe-Richtung drehen"
+                                    title="Einmal pro Runde: die Weitergabe-Richtung drehen"
                                 >
                                     🔄 Rache-Pass: Richtung drehen
                                 </button>
@@ -2954,34 +2977,37 @@ export default function GamePage() {
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
         }
-        .aliveDropBanner{
+        .elimPopup{
           position: fixed;
           left: 50%;
-          top: 16%;
+          top: 9%;
           transform: translate(-50%, 0);
           z-index: 9998;
-          padding: 18px 30px;
-          border-radius: 22px;
-          background: rgba(0,0,0,0.7);
-          border: 1px solid rgba(255,80,80,0.4);
-          box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(255,80,80,0.25);
+          max-width: min(560px, calc(100vw - 32px));
+          padding: 16px 28px;
+          border-radius: 20px;
+          background: rgba(12,16,24,0.82);
+          border: 1px solid rgba(255,255,255,0.22);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.45);
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
-          font-size: clamp(20px, 3.6vw, 32px);
+          font-size: clamp(20px, 3.8vw, 30px);
           font-weight: 950;
           text-align: center;
           pointer-events: none;
-          animation: aliveDropIn 2.2s cubic-bezier(.2,.9,.3,1) both;
+          animation: elimPopupLife 2s ease both;
         }
-        @keyframes aliveDropIn{
-          0% { opacity: 0; transform: translate(-50%, -10px) scale(0.92); }
-          10% { opacity: 1; transform: translate(-50%, 0) scale(1.04); }
-          18% { transform: translate(-50%, 0) scale(1); }
-          78% { opacity: 1; }
+        .elimPopup.out{ border-color: rgba(255,120,90,0.65); box-shadow: 0 20px 60px rgba(0,0,0,0.45), 0 0 34px rgba(255,100,70,0.3); }
+        .elimPopup.left{ border-color: rgba(255,214,10,0.55); font-size: clamp(18px, 3.2vw, 26px); }
+        @keyframes elimPopupLife{
+          0% { opacity: 0; transform: translate(-50%, -10px) scale(0.94); }
+          12% { opacity: 1; transform: translate(-50%, 0) scale(1.03); }
+          20% { transform: translate(-50%, 0) scale(1); }
+          72% { opacity: 1; transform: translate(-50%, 0) scale(1); }
           100% { opacity: 0; transform: translate(-50%, -6px) scale(0.98); }
         }
         @media (prefers-reduced-motion: reduce){
-          .aliveDropBanner{ animation: none; }
+          .elimPopup{ animation: none; }
         }
         .topRight{
           position: fixed;
@@ -3027,12 +3053,17 @@ export default function GamePage() {
           -webkit-backdrop-filter: blur(10px);
         }
         .hostKickLabel{
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 900;
           letter-spacing: 0.4px;
-          opacity: 0.7;
-          margin-bottom: 6px;
+          color: #fff;
+          background: none;
+          border: 0;
+          padding: 2px 4px;
+          cursor: pointer;
+          opacity: 0.8;
         }
+        .hostKickList{ margin-top: 6px; }
         .hostKickList{
           display: flex;
           flex-wrap: wrap;
@@ -3058,7 +3089,7 @@ export default function GamePage() {
           pointer-events: none;
           --heat: 0;
           opacity: var(--heat);
-          box-shadow: inset 0 0 calc(40px + var(--heat) * 140px) calc(4px + var(--heat) * 30px) rgba(255,70,0,0.55);
+          box-shadow: inset 0 0 calc(30px + var(--heat) * 80px) calc(0px + var(--heat) * 8px) rgba(255,130,50,0.28);
           animation: edgeFirePulse calc(3.2s - var(--heat) * 2.2s) ease-in-out infinite;
           transition: opacity 400ms ease, box-shadow 400ms ease;
         }

@@ -1,0 +1,686 @@
+{
+ "80er Hits": [
+  [
+   "Take On Me",
+   "a-ha"
+  ],
+  [
+   "Billie Jean",
+   "Michael Jackson"
+  ],
+  [
+   "Girls Just Want to Have Fun",
+   "Cyndi Lauper"
+  ],
+  [
+   "Sweet Dreams (Are Made of This)",
+   "Eurythmics"
+  ],
+  [
+   "Don't You (Forget About Me)",
+   "Simple Minds"
+  ],
+  [
+   "Africa",
+   "Toto"
+  ],
+  [
+   "Like a Virgin",
+   "Madonna"
+  ],
+  [
+   "Material Girl",
+   "Madonna"
+  ],
+  [
+   "Every Breath You Take",
+   "The Police"
+  ],
+  [
+   "Beat It",
+   "Michael Jackson"
+  ],
+  [
+   "Thriller",
+   "Michael Jackson"
+  ],
+  [
+   "Wake Me Up Before You Go-Go",
+   "Wham!"
+  ],
+  [
+   "Last Christmas",
+   "Wham!"
+  ],
+  [
+   "Careless Whisper",
+   "George Michael"
+  ],
+  [
+   "Karma Chameleon",
+   "Culture Club"
+  ],
+  [
+   "Tainted Love",
+   "Soft Cell"
+  ],
+  [
+   "Don't Stop Believin'",
+   "Journey"
+  ],
+  [
+   "Livin' on a Prayer",
+   "Bon Jovi"
+  ],
+  [
+   "Eye of the Tiger",
+   "Survivor"
+  ],
+  [
+   "The Final Countdown",
+   "Europe"
+  ],
+  [
+   "Never Gonna Give You Up",
+   "Rick Astley"
+  ],
+  [
+   "Holding Out for a Hero",
+   "Bonnie Tyler"
+  ],
+  [
+   "Total Eclipse of the Heart",
+   "Bonnie Tyler"
+  ],
+  [
+   "Walking on Sunshine",
+   "Katrina & The Waves"
+  ],
+  [
+   "Time After Time",
+   "Cyndi Lauper"
+  ],
+  [
+   "I Wanna Dance with Somebody (Who Loves Me)",
+   "Whitney Houston"
+  ],
+  [
+   "Come On Eileen",
+   "Dexys Midnight Runners"
+  ],
+  [
+   "Jump",
+   "Van Halen"
+  ],
+  [
+   "Footloose",
+   "Kenny Loggins"
+  ],
+  [
+   "Flashdance... What a Feeling",
+   "Irene Cara"
+  ],
+  [
+   "Purple Rain",
+   "Prince"
+  ],
+  [
+   "When Doves Cry",
+   "Prince"
+  ],
+  [
+   "Let's Dance",
+   "David Bowie"
+  ],
+  [
+   "Down Under",
+   "Men At Work"
+  ],
+  [
+   "Voyage, Voyage",
+   "Desireless"
+  ],
+  [
+   "99 Luftballons",
+   "Nena"
+  ],
+  [
+   "Major Tom (Völlig losgelöst)",
+   "Peter Schilling"
+  ],
+  [
+   "Der Kommissar",
+   "Falco"
+  ],
+  [
+   "Rock Me Amadeus",
+   "Falco"
+  ],
+  [
+   "Blue Monday",
+   "New Order"
+  ],
+  [
+   "Kids in America",
+   "Kim Wilde"
+  ],
+  [
+   "Relax",
+   "Frankie Goes To Hollywood"
+  ],
+  [
+   "The NeverEnding Story",
+   "Limahl"
+  ],
+  [
+   "Gloria",
+   "Laura Branigan"
+  ],
+  [
+   "Hungry Like the Wolf",
+   "Duran Duran"
+  ],
+  [
+   "Girls on Film",
+   "Duran Duran"
+  ],
+  [
+   "Lady in Red",
+   "Chris de Burgh"
+  ],
+  [
+   "Dancing in the Dark",
+   "Bruce Springsteen"
+  ],
+  [
+   "Pump Up the Jam",
+   "Technotronic"
+  ]
+ ],
+ "Deutsch-Pop": [
+  [
+   "Atemlos durch die Nacht",
+   "Helene Fischer"
+  ],
+  [
+   "Auf uns",
+   "Andreas Bourani"
+  ],
+  [
+   "Das Beste",
+   "Silbermond"
+  ],
+  [
+   "Haus am See",
+   "Peter Fox"
+  ],
+  [
+   "Alles neu",
+   "Peter Fox"
+  ],
+  [
+   "Schwarz zu Blau",
+   "Peter Fox"
+  ],
+  [
+   "Nur ein Wort",
+   "Wir sind Helden"
+  ],
+  [
+   "Denkmal",
+   "Wir sind Helden"
+  ],
+  [
+   "Vom selben Stern",
+   "Ich + Ich"
+  ],
+  [
+   "Geile Zeit",
+   "Juli"
+  ],
+  [
+   "Perfekte Welle",
+   "Juli"
+  ],
+  [
+   "Wie schön du bist",
+   "Sarah Connor"
+  ],
+  [
+   "Au revoir",
+   "Mark Forster, Sido"
+  ],
+  [
+   "Chöre",
+   "Mark Forster"
+  ],
+  [
+   "Flash mich",
+   "Mark Forster"
+  ],
+  [
+   "80 Millionen",
+   "Max Giesinger"
+  ],
+  [
+   "Wenn sie tanzt",
+   "Max Giesinger"
+  ],
+  [
+   "Tage wie diese",
+   "Die Toten Hosen"
+  ],
+  [
+   "Männer",
+   "Herbert Grönemeyer"
+  ],
+  [
+   "Mensch",
+   "Herbert Grönemeyer"
+  ],
+  [
+   "Bochum",
+   "Herbert Grönemeyer"
+  ],
+  [
+   "Irgendwas bleibt",
+   "Silbermond"
+  ],
+  [
+   "Symphonie",
+   "Silbermond"
+  ],
+  [
+   "Du hast",
+   "Rammstein"
+  ],
+  [
+   "Schrei nach Liebe",
+   "Die Ärzte"
+  ],
+  [
+   "Junge",
+   "Die Ärzte"
+  ],
+  [
+   "Zusammen",
+   "Die Ärzte"
+  ],
+  [
+   "Dieser Weg",
+   "Xavier Naidoo"
+  ],
+  [
+   "Was wir alleine nicht schaffen",
+   "Xavier Naidoo"
+  ],
+  [
+   "Nur noch kurz die Welt retten",
+   "Tim Bendzko"
+  ],
+  [
+   "Wie soll ein Mensch das ertragen",
+   "Philipp Poisel"
+  ],
+  [
+   "Die immer lacht",
+   "Kerstin Ott"
+  ],
+  [
+   "Halt dich an mir fest",
+   "Revolverheld"
+  ],
+  [
+   "Lass uns gehen",
+   "Revolverheld"
+  ],
+  [
+   "Verdammt, ich lieb' dich",
+   "Matthias Reim"
+  ],
+  [
+   "Remmidemmi (Yippie Yippie Yeah)",
+   "Deichkind"
+  ],
+  [
+   "Ein Hoch auf uns",
+   "Andreas Bourani"
+  ],
+  [
+   "Ohne Dich",
+   "Münchener Freiheit"
+  ],
+  [
+   "Sonne",
+   "Rammstein"
+  ],
+  [
+   "Dein ist mein ganzes Herz",
+   "Die Prinzen"
+  ],
+  [
+   "Millionär",
+   "Die Prinzen"
+  ],
+  [
+   "Mein Herz brennt",
+   "Rammstein"
+  ],
+  [
+   "Marmor, Stein und Eisen bricht",
+   "Drafi Deutscher"
+  ],
+  [
+   "Ich will Spaß",
+   "Markus"
+  ],
+  [
+   "Ich war noch niemals in New York",
+   "Udo Jürgens"
+  ],
+  [
+   "Atemlos",
+   "Helene Fischer"
+  ],
+  [
+   "Fliegen",
+   "Nena"
+  ]
+ ],
+ "Rock-Klassiker": [
+  [
+   "Bohemian Rhapsody",
+   "Queen"
+  ],
+  [
+   "We Will Rock You",
+   "Queen"
+  ],
+  [
+   "Don't Stop Me Now",
+   "Queen"
+  ],
+  [
+   "Another One Bites the Dust",
+   "Queen"
+  ],
+  [
+   "Stairway to Heaven",
+   "Led Zeppelin"
+  ],
+  [
+   "Whole Lotta Love",
+   "Led Zeppelin"
+  ],
+  [
+   "Hotel California",
+   "Eagles"
+  ],
+  [
+   "Smoke on the Water",
+   "Deep Purple"
+  ],
+  [
+   "Highway to Hell",
+   "AC/DC"
+  ],
+  [
+   "Back In Black",
+   "AC/DC"
+  ],
+  [
+   "Thunderstruck",
+   "AC/DC"
+  ],
+  [
+   "Sweet Child O' Mine",
+   "Guns N' Roses"
+  ],
+  [
+   "Paradise City",
+   "Guns N' Roses"
+  ],
+  [
+   "Welcome to the Jungle",
+   "Guns N' Roses"
+  ],
+  [
+   "Nothing Else Matters",
+   "Metallica"
+  ],
+  [
+   "Enter Sandman",
+   "Metallica"
+  ],
+  [
+   "Smells Like Teen Spirit",
+   "Nirvana"
+  ],
+  [
+   "Come as You Are",
+   "Nirvana"
+  ],
+  [
+   "Wonderwall",
+   "Oasis"
+  ],
+  [
+   "Don't Look Back in Anger",
+   "Oasis"
+  ],
+  [
+   "Creep",
+   "Radiohead"
+  ],
+  [
+   "Under the Bridge",
+   "Red Hot Chili Peppers"
+  ],
+  [
+   "Californication",
+   "Red Hot Chili Peppers"
+  ],
+  [
+   "Basket Case",
+   "Green Day"
+  ],
+  [
+   "American Idiot",
+   "Green Day"
+  ],
+  [
+   "Boulevard of Broken Dreams",
+   "Green Day"
+  ],
+  [
+   "Seven Nation Army",
+   "The White Stripes"
+  ],
+  [
+   "Mr. Brightside",
+   "The Killers"
+  ],
+  [
+   "Zombie",
+   "The Cranberries"
+  ],
+  [
+   "Sweet Home Alabama",
+   "Lynyrd Skynyrd"
+  ],
+  [
+   "Paint It Black",
+   "The Rolling Stones"
+  ],
+  [
+   "(I Can't Get No) Satisfaction",
+   "The Rolling Stones"
+  ],
+  [
+   "Born to Be Wild",
+   "Steppenwolf"
+  ],
+  [
+   "Let It Be",
+   "The Beatles"
+  ],
+  [
+   "In the End",
+   "Linkin Park"
+  ],
+  [
+   "Numb",
+   "Linkin Park"
+  ],
+  [
+   "Bring Me to Life",
+   "Evanescence"
+  ],
+  [
+   "Chop Suey!",
+   "System Of A Down"
+  ],
+  [
+   "Iron Man",
+   "Black Sabbath"
+  ],
+  [
+   "Paranoid",
+   "Black Sabbath"
+  ],
+  [
+   "Do I Wanna Know?",
+   "Arctic Monkeys"
+  ],
+  [
+   "Use Somebody",
+   "Kings of Leon"
+  ],
+  [
+   "Sex on Fire",
+   "Kings of Leon"
+  ],
+  [
+   "Knockin' on Heaven's Door",
+   "Bob Dylan"
+  ],
+  [
+   "Hey Jude",
+   "The Beatles"
+  ],
+  [
+   "Light My Fire",
+   "The Doors"
+  ],
+  [
+   "Back in the U.S.S.R.",
+   "The Beatles"
+  ],
+  [
+   "Rock You Like a Hurricane",
+   "Scorpions"
+  ]
+ ],
+ "Deutschrap-Songs": [
+  [
+   "Easy",
+   "Cro"
+  ],
+  [
+   "Traum",
+   "Cro"
+  ],
+  [
+   "Erfolg ist kein Glück",
+   "Kontra K"
+  ],
+  [
+   "NDW 2005",
+   "Fler"
+  ],
+  [
+   "Mein Block",
+   "Sido"
+  ],
+  [
+   "Für immer jung",
+   "Bushido"
+  ],
+  [
+   "Wieder Lila",
+   "Capital Bra, Samra"
+  ],
+  [
+   "Roller",
+   "Apache 207"
+  ],
+  [
+   "Palmen aus Plastik",
+   "Bonez MC, RAF Camora"
+  ],
+  [
+   "Andale",
+   "RAF Camora, Bonez MC"
+  ],
+  [
+   "Ma Chérie",
+   "UFO361"
+  ],
+  [
+   "Lass die Affen aus dem Zoo",
+   "Haftbefehl"
+  ],
+  [
+   "Sonnenbank Flavour",
+   "Bushido"
+  ],
+  [
+   "Vermissen",
+   "Juju"
+  ],
+  [
+   "Lila Wolken",
+   "Marteria"
+  ],
+  [
+   "Hinterland",
+   "Casper"
+  ],
+  [
+   "Willst du",
+   "Alligatoah"
+  ],
+  [
+   "Du bist Boss",
+   "Kollegah"
+  ],
+  [
+   "Bad Chick",
+   "Cro"
+  ],
+  [
+   "Straßenjunge",
+   "Sido"
+  ],
+  [
+   "Jung, brutal, gutaussehend",
+   "Bushido"
+  ],
+  [
+   "Jein",
+   "Fettes Brot"
+  ],
+  [
+   "MfG",
+   "Die Fantastischen Vier"
+  ],
+  [
+   "Kids (2 Finger an den Kopf)",
+   "Marteria"
+  ],
+  [
+   "Augen auf",
+   "Sido"
+  ]
+ ]
+}

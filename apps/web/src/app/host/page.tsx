@@ -108,7 +108,7 @@ export default function HostPage() {
     // erst klicken muss.
     const [mode, setMode] = useState<ModeKey | null>("original");
     const [answerMode, setAnswerMode] = useState<AnswerMode>("text");
-    // Anzahl Durchgänge (Serie): nach jedem Durchgang Zwischenstand + neues Themen-Voting.
+    // Anzahl Runden pro Match: nach jeder Runde Zwischenstand + neues Themen-Voting.
     const [seriesTotal, setSeriesTotal] = useState<1 | 3 | 5>(1);
 
     const activeMode = mode ? MODES[mode] : null;
@@ -350,7 +350,7 @@ export default function HostPage() {
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">Rundendauer</div>
+                                    <div className="pillCardTitle">Tempo</div>
                                     <div className="pillCardHint">{activeSpeed ? activeSpeed.hint : "Bitte auswählen."}</div>
                                 </div>
 
@@ -377,9 +377,9 @@ export default function HostPage() {
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">Durchgänge</div>
+                                    <div className="pillCardTitle">Runden pro Match</div>
                                     <div className="pillCardHint">
-                                        {seriesTotal === 1 ? "Ein einzelnes Match" : `${seriesTotal} Durchgänge mit Zwischenstand und Gesamtwertung`}
+                                        {seriesTotal === 1 ? "Eine einzelne Runde" : `${seriesTotal} Runden mit Zwischenstand und Gesamtwertung`}
                                     </div>
                                 </div>
                                 <div className="pillSeg" style={{ flexWrap: "wrap" }}>
@@ -391,12 +391,12 @@ export default function HostPage() {
                                             onClick={() => setSeriesTotal(n)}
                                             aria-pressed={seriesTotal === n}
                                         >
-                                            <span className="segLabel">{n === 1 ? "1 Durchgang" : `${n} Durchgänge`}</span>
+                                            <span className="segLabel">{n === 1 ? "1 Runde" : `${n} Runden`}</span>
                                         </button>
                                     ))}
                                 </div>
                                 <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                    Nach jedem Durchgang (bis nur noch einer übrig ist) wird der Zwischenstand gespeichert und es geht wieder ins Themen-Voting.
+                                    Nach jeder Runde (bis nur noch einer übrig ist) wird der Zwischenstand gespeichert und es geht wieder ins Themen-Voting.
                                 </div>
                             </div>
 

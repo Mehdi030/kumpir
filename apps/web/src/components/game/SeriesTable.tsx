@@ -16,7 +16,7 @@ type Props = {
     rows: SeriesRow[];
     totalSets: number;
     mePlayerId?: string | null;
-    /** Zwischenstand: Spalten für noch nicht gespielte Durchgänge ausblenden. */
+    /** Zwischenstand: Spalten für noch nicht gespielte Runden ausblenden. */
     playedSets: number;
     title?: string;
 };
@@ -24,15 +24,16 @@ type Props = {
 const MEDAL = ["🥇", "🥈", "🥉"];
 
 /**
- * Gesamtwertung einer Serie: pro Spieler das Ergebnis jedes Durchgangs
- * (Platz + Arena-Punkte) und die Summe. Rang = Summe der Arena-Punkte,
- * bei Gleichstand der bessere Durchschnittsplatz.
+ * Gesamtwertung einer Serie: pro Spieler das Ergebnis jedes Rundes
+ * (Punkte, Farbe = Platz) und die Summe. Rang = Summe der Punkte; bei
+ * Gleichstand entscheiden mehr Rundensiege, dann der bessere Ø-Platz (unsichtbar).
  */
 export function SeriesTable({ rows, totalSets, mePlayerId = null, playedSets, title = "Gesamtwertung" }: Props) {
     const standings = useMemo(() => {
-        const byPlayer = new Map<string, { name: string; sets: Map<number, SeriesRow>; total: number; placeSum: number; n: number }>();
+        const byPlayer = new Map<string, { name: string; sets: Map<number, SeriesRow>; total: number; placeSum: number; n: number; wins: number }>();
         for (const r of rows) {
-            const e = byPlayer.get(r.player_id) ?? { name: r.name, sets: new Map(), total: 0, placeSum: 0, n: 0 };
+            const e = byPlayer.get(r.player_id) ?? { name: r.name, sets: new Map(), total: 0, placeSum: 0, n: 0, wins: 0 };
+            if (r.place === 1) e.wins += 1;
             e.sets.set(r.set_index, r);
             e.total += r.arena_points;
             e.placeSum += r.place;
@@ -41,7 +42,7 @@ export function SeriesTable({ rows, totalSets, mePlayerId = null, playedSets, ti
         }
         return [...byPlayer.entries()]
             .map(([id, e]) => ({ id, ...e, avgPlace: e.n ? e.placeSum / e.n : 99 }))
-            .sort((a, b) => b.total - a.total || a.avgPlace - b.avgPlace);
+            .sort((a, b) => b.total - a.total || b.wins - a.wins || a.avgPlace - b.avgPlace);
     }, [rows]);
 
     const setCols = Array.from({ length: Math.max(1, Math.min(playedSets, totalSets)) }, (_, i) => i + 1);
@@ -56,10 +57,9 @@ export function SeriesTable({ rows, totalSets, mePlayerId = null, playedSets, ti
                             <th>#</th>
                             <th className="l">Spieler</th>
                             {setCols.map((i) => (
-                                <th key={i}>D{i}</th>
+                                <th key={i}>R{i}</th>
                             ))}
                             <th>Gesamt</th>
-                            <th>Ø Platz</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -72,8 +72,8 @@ export function SeriesTable({ rows, totalSets, mePlayerId = null, playedSets, ti
                                     return (
                                         <td key={i}>
                                             {r ? (
-                                                <span className={`setChip p${Math.min(r.place, 4)}`} title={`Durchgang ${i}: Platz ${r.place}`}>
-                                                    <b>{r.place}.</b> {r.arena_points}
+                                                <span className={`setChip p${Math.min(r.place, 4)}`} title={`Runde ${i}: Platz ${r.place}`}>
+                                                    {r.arena_points}
                                                 </span>
                                             ) : (
                                                 "—"
@@ -82,13 +82,12 @@ export function SeriesTable({ rows, totalSets, mePlayerId = null, playedSets, ti
                                     );
                                 })}
                                 <td className="tot">{s.total}</td>
-                                <td>{s.avgPlace.toFixed(1)}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
-            <div className="seriesHint">Chip = Platz im Durchgang + Arena-Punkte · Rang = Summe, bei Gleichstand der bessere Ø-Platz</div>
+            <div className="seriesHint">Gold, Silber, Bronze = Platz in der Runde · Rang = Summe aller Runden</div>
 
             <style>{`
         .seriesCard{
@@ -114,7 +113,9 @@ export function SeriesTable({ rows, totalSets, mePlayerId = null, playedSets, ti
         .seriesTable td:first-child{ border-radius: 12px 0 0 12px; }
         .seriesTable td:last-child{ border-radius: 0 12px 12px 0; }
         .seriesTable tr.first td{ background: rgba(255,214,10,.14); }
-        .seriesTable tr.me td{ box-shadow: inset 0 0 0 1px rgba(34,211,238,.55); }
+        .seriesTable tr.me td{ box-shadow: inset 0 1px 0 rgba(34,211,238,.6), inset 0 -1px 0 rgba(34,211,238,.6); }
+        .seriesTable tr.me td:first-child{ box-shadow: inset 0 1px 0 rgba(34,211,238,.6), inset 0 -1px 0 rgba(34,211,238,.6), inset 1px 0 0 rgba(34,211,238,.6); }
+        .seriesTable tr.me td:last-child{ box-shadow: inset 0 1px 0 rgba(34,211,238,.6), inset 0 -1px 0 rgba(34,211,238,.6), inset -1px 0 0 rgba(34,211,238,.6); }
         .seriesTable td.nm{ max-width: 130px; overflow: hidden; text-overflow: ellipsis; font-weight: 950; }
         .seriesTable td.tot{ font-size: 17px; font-weight: 1000; color: #ffe08a; }
         .setChip{

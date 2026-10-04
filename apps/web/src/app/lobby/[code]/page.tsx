@@ -367,7 +367,7 @@ export default function LobbyPage() {
                                     {(lobby?.series_total ?? 1) > 1 ? (
                                         <div className="pillChip" style={{ height: 34, display: "flex", alignItems: "center", gap: 8, fontSize: 15 }}>
                                             <span>🎯</span>
-                                            <span style={{ fontWeight: 950 }}>{lobby?.series_total} Durchgänge</span>
+                                            <span style={{ fontWeight: 950 }}>{lobby?.series_total} Runden</span>
                                         </div>
                                     ) : null}
 
