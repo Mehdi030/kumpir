@@ -343,12 +343,13 @@ export function PlayerRing({
                     <div className="tEdge tEdge2" />
                     <div className="tEdge tEdge1" />
                     <div className="tRim" />
-                    <div className="tLeather" />
-                    <div className="tStitch" />
-                    <div className="tFelt" />
-                    <div className="tEmblem" />
-                    <div className="tGoldRing" />
-                    <div className="tDial" />
+                    <div className="tNeon" />
+                    <div className="tVinyl" />
+                    <div className="tTracks" />
+                    <div className="tSheen" />
+                    <div className="tTicks" />
+                    <div className="tLabel" />
+                    <div className="tSpindle" />
                     <div className="tGloss" />
 
                     {/* Zündschnur: pulsierende Glut am Tischrand -- je näher die Explosion,
@@ -541,73 +542,90 @@ export function PlayerRing({
           background: radial-gradient(circle, rgba(0,0,0,.65) 0%, rgba(0,0,0,.35) 55%, transparent 72%);
           filter: blur(22px);
         }
-        .tEdge{ background: #1c0f06; }
-        .tEdge1{ transform: translateZ(-7px);  background: linear-gradient(180deg, #4a2b14, #2b170a); }
-        .tEdge2{ transform: translateZ(-15px); background: #24130a; }
-        .tEdge3{ transform: translateZ(-24px); background: #150a04; box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 8px 30px rgba(0,0,0,.5); }
-        /* Holzrand: Maserung (konzentrische Ringe) + Lichtreflex */
+        /* ===== Plattenteller: Kumpir-Arena als Schallplatte =====
+           (statt Pokertisch: dunkles Vinyl, Neon-Ring in den Markenfarben, Label in der Mitte) */
+        .tEdge{ background: #0b0c11; }
+        .tEdge1{ transform: translateZ(-7px);  background: linear-gradient(180deg, #3a3f52, #1a1d28); }
+        .tEdge2{ transform: translateZ(-15px); background: #12141c; }
+        .tEdge3{ transform: translateZ(-24px); background: #08090d; box-shadow: 0 0 0 2px rgba(0,0,0,.5), 0 10px 34px rgba(0,0,0,.55); }
+        /* Metall-Rand (gebürsteter Stahl) */
         .tRim{
           background:
-            radial-gradient(circle at 30% 18%, rgba(255,235,200,.38), transparent 42%),
-            repeating-radial-gradient(circle at 50% 50%, rgba(40,18,4,.14) 0 1.5px, rgba(255,210,150,.05) 1.5px 4px),
-            conic-gradient(from 20deg, #9a6532, #c8924f 10%, #7a4a1f 24%, #b98245 38%, #66401b 52%, #c28a4a 68%, #7a4a1f 84%, #9a6532);
-          box-shadow: inset 0 0 0 2px rgba(255,230,190,.32), inset 0 -12px 28px rgba(0,0,0,.5), inset 0 8px 14px rgba(255,235,200,.12), 0 0 44px rgba(0,0,0,.45);
+            radial-gradient(circle at 30% 16%, rgba(255,255,255,.45), transparent 40%),
+            repeating-conic-gradient(from 0deg, rgba(255,255,255,.07) 0deg 1deg, rgba(0,0,0,.08) 1deg 2deg),
+            conic-gradient(from 30deg, #8d94a8, #dfe4f0 12%, #6d7388 26%, #c3c9da 40%, #565b6f 54%, #d3d8e6 68%, #6d7388 84%, #8d94a8);
+          box-shadow: inset 0 0 0 2px rgba(255,255,255,.35), inset 0 -10px 24px rgba(0,0,0,.5), inset 0 6px 12px rgba(255,255,255,.18), 0 0 40px rgba(0,0,0,.5);
         }
-        /* Lederband zwischen Holz und Filz, mit Steppnaht */
-        .tLeather{
-          inset: 5.2%;
+        /* Neon-Ring in den Markenfarben (Rot -> Orange -> Gelb) */
+        .tNeon{
+          inset: 5%;
           transform: translateZ(1px);
-          background: radial-gradient(circle at 50% 50%, #3a1d12 0%, #2a130b 100%);
-          box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), inset 0 3px 8px rgba(255,200,150,.12), 0 2px 6px rgba(0,0,0,.5);
+          background: conic-gradient(from 90deg, #ff3d2e, #ff7a1a, #ffd23f, #ff7a1a, #ff3d2e, #ff7a1a, #ffd23f, #ff7a1a, #ff3d2e);
+          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px), #000 calc(100% - 2px), transparent calc(100% - 1px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px), #000 calc(100% - 2px), transparent calc(100% - 1px));
+          filter: drop-shadow(0 0 6px rgba(255,140,40,.9));
         }
-        .tStitch{
-          inset: 6.6%;
-          transform: translateZ(1.5px);
-          border: 1.5px dashed rgba(255,214,150,.55);
-          box-shadow: 0 0 6px rgba(255,200,120,.12);
-        }
-        .tFelt{
-          inset: 8.6%;
+        /* Vinyl: tiefes Schwarz mit Rillen */
+        .tVinyl{
+          inset: 7.4%;
           transform: translateZ(2px);
           background:
-            radial-gradient(ellipse at 38% 22%, rgba(255,255,255,.20), transparent 52%),
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E"),
-            radial-gradient(circle at 50% 46%, #23906a 0%, #16714e 46%, #0c4a33 80%, #072b1d 100%);
-          background-blend-mode: normal, soft-light, normal;
-          box-shadow: inset 0 0 0 2px rgba(0,0,0,.5), inset 0 16px 44px rgba(0,0,0,.55), inset 0 0 80px rgba(0,0,0,.38);
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.00) 0 30%, rgba(255,255,255,.04) 31% 100%),
+            repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,.045) 0 1px, rgba(0,0,0,.35) 1px 3px),
+            radial-gradient(circle at 50% 50%, #20222c 0%, #121319 55%, #07080b 100%);
+          box-shadow: inset 0 0 0 2px rgba(0,0,0,.6), inset 0 12px 36px rgba(0,0,0,.5);
         }
-        .tEmblem{
-          inset: 34%;
+        /* Track-Lücken: glatte Ringe wie zwischen den Songs einer Platte */
+        .tTracks{
+          inset: 7.4%;
           transform: translateZ(2.5px);
+          background: radial-gradient(circle,
+            transparent 0 46%, rgba(255,255,255,.10) 46.2% 46.9%, transparent 47.1% 63%,
+            rgba(255,255,255,.10) 63.2% 63.9%, transparent 64.1% 80%, rgba(255,255,255,.10) 80.2% 80.9%, transparent 81.1%);
+        }
+        /* Licht-Glanz, der langsam über die Platte wandert */
+        .tSheen{
+          inset: 7.4%;
+          transform: translateZ(3px);
+          background: conic-gradient(from 0deg, transparent 0deg 20deg, rgba(255,255,255,.14) 36deg, transparent 56deg 200deg, rgba(255,255,255,.09) 216deg, transparent 236deg 360deg);
+          animation: sheenSpin 22s linear infinite;
+          -webkit-mask: radial-gradient(circle, transparent 0 14%, #000 15%);
+          mask: radial-gradient(circle, transparent 0 14%, #000 15%);
+        }
+        @keyframes sheenSpin{ from{ transform: translateZ(3px) rotate(0deg); } to{ transform: translateZ(3px) rotate(360deg); } }
+        /* Skala-Striche außen */
+        .tTicks{
+          inset: 9.2%;
+          transform: translateZ(3.5px);
+          background: repeating-conic-gradient(from -0.6deg, rgba(255,214,120,.5) 0deg 1.2deg, transparent 1.2deg 7.5deg);
+          -webkit-mask: radial-gradient(circle, transparent 0 95%, #000 95.5% 100%);
+          mask: radial-gradient(circle, transparent 0 95%, #000 95.5% 100%);
+        }
+        /* Platten-Label in der Mitte */
+        .tLabel{
+          inset: 37%;
+          transform: translateZ(4px);
           background:
-            radial-gradient(circle, rgba(255,214,10,.10) 0%, rgba(255,214,10,.04) 55%, transparent 70%),
-            repeating-radial-gradient(circle, rgba(255,214,10,.16) 0 1px, transparent 1px 9px);
-          -webkit-mask: radial-gradient(circle, #000 0 62%, transparent 70%);
-          mask: radial-gradient(circle, #000 0 62%, transparent 70%);
+            radial-gradient(circle at 34% 28%, rgba(255,255,255,.45), transparent 46%),
+            conic-gradient(from 20deg, #ff3d2e, #ff9f1c, #ffd23f, #ff9f1c, #ff3d2e);
+          box-shadow: 0 0 0 3px rgba(0,0,0,.65), 0 0 0 4px rgba(255,255,255,.25), 0 4px 14px rgba(0,0,0,.5);
         }
-        .tGoldRing{
-          inset: 20%;
-          transform: translateZ(3px);
-          background: conic-gradient(from 0deg, #fff1b0, #ffc93a, #b8801a, #ffd96a, #fff1b0, #ffc93a, #b8801a, #ffd96a, #fff1b0);
-          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
-          mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
-          opacity: .8;
-          box-shadow: 0 0 16px rgba(255,214,10,.16), inset 0 0 16px rgba(255,214,10,.08);
+        .tLabel::after{
+          content:""; position:absolute; inset: 14%; border-radius: 50%;
+          border: 1.5px dashed rgba(60,10,0,.45);
         }
-        .tDial{
-          inset: 11.6%;
-          transform: translateZ(3px);
-          background: repeating-conic-gradient(from -1deg, rgba(255,214,10,.4) 0deg 1.6deg, transparent 1.6deg 15deg);
-          -webkit-mask: radial-gradient(circle, transparent 0 92%, #000 92.5% 100%);
-          mask: radial-gradient(circle, transparent 0 92%, #000 92.5% 100%);
+        .tSpindle{
+          inset: 48.2%;
+          transform: translateZ(5px);
+          background: radial-gradient(circle at 35% 30%, #fff, #b7bccb 45%, #4a4f60);
+          box-shadow: 0 0 0 2px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.6);
         }
-        /* Politur: weicher Lichtglanz über der ganzen Platte */
         .tGloss{
           inset: 0;
           transform: translateZ(6px);
           background:
-            radial-gradient(ellipse 60% 34% at 34% 16%, rgba(255,255,255,.20), transparent 70%),
-            linear-gradient(160deg, rgba(255,255,255,.07), transparent 38%, transparent 70%, rgba(0,0,0,.14));
+            radial-gradient(ellipse 60% 34% at 34% 16%, rgba(255,255,255,.16), transparent 70%),
+            linear-gradient(160deg, rgba(255,255,255,.06), transparent 38%, transparent 70%, rgba(0,0,0,.18));
           pointer-events: none;
         }
         .tPulse{
