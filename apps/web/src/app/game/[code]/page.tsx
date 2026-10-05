@@ -1537,6 +1537,12 @@ export default function GamePage() {
             .bottomLeft{ min-width: 160px; }
             .timeBox{ min-width: 64px; }
           }
+          @media (max-width: 520px){
+            .bottomLeft{ display: none; }
+            .barWrap{ min-width: 0; }
+            .bottomInner{ padding: 10px 14px; }
+            .topicGrid{ padding-bottom: 76px; }
+          }
         `}</style>
             </main>
         );

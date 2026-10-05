@@ -7,6 +7,7 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
   - [x] Login (E-Mail oder Username), Registrierung mit Username-Check, E-Mail-Bestätigung, Passwort-Reset – bestanden schon, Auth ist aktiv
   - [x] Konto-Seite `/profile` (Stats, Saison-Punkte, Passwort ändern, Abmelden), Konto-Link auf der Startseite
   - [x] Username wird beim Hosten/Beitreten vorbelegt; Endseite zeigt „gespeichert“ bzw. „Konto erstellen“
+  - [x] Profil-Seite und Header mit einer Test-Sitzung gerendert (Desktop/Handy) – echter Login mit echten Daten steht noch aus
   - [ ] Registrierung und Mail-Versand einmal mit einem echten Postfach durchtesten (Mail-Texte auf Deutsch, Absender)
   - [ ] Gast → Konto: Spielstand der laufenden Gast-Identität beim Registrieren übernehmen
   - [ ] Avatar/Farbe im Profil wählen, Konto löschen (DSGVO), Username ändern
@@ -16,7 +17,7 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
 - [ ] Bots unterschiedlich stark (Anfänger / Profi), damit ein Sieg nicht zufällig ist
 - [ ] Vorzeitiges Match-Ende, wenn ein Spieler uneinholbar vorne liegt
 - [ ] Host-Kick während der Runde: Richtung der Weitergabe korrekt berücksichtigen
-- [ ] Song-Bekanntheit prüfen (Ziel: ≥ 85 % kennen jeden Titel) – unbekannte Titel aus Deutschrap/Shisha Club ersetzen
+- [ ] Song-Bekanntheit prüfen (Ziel: ≥ 85 % kennen jeden Titel) – Vorschau-Audit ist erledigt (Migration 069), aber ob jeder Titel bekannt ist, kann nur ein Mensch beurteilen (v. a. Deutschrap/Shisha Club)
 - [ ] Teleport- und Reverse-Modus (derzeit „Kommt bald“)
 
 ## Technik
