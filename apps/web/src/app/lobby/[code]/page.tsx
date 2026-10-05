@@ -232,6 +232,8 @@ export default function LobbyPage() {
     }, [amIHost, mePlayerId, starting, isRunning, code, showToast]);
 
     const [botBusy, setBotBusy] = useState(false);
+    // Stärke des nächsten Bots: 0 = gemischt (Zufall), 1 = Anfänger, 2 = Mittel, 3 = Profi
+    const [botSkill, setBotSkill] = useState<0 | 1 | 2 | 3>(0);
     // Namen, die schon per rpc_add_bot verschickt wurden -- die `players`-Liste
     // kommt erst per Realtime nach (spürbare Lücke), ein schneller zweiter Klick
     // sah sonst noch den alten Stand und griff sich denselben Namen nochmal.
@@ -253,6 +255,7 @@ export default function LobbyPage() {
                 p_lobby_id: lobbyId,
                 p_me_player_id: mePlayerId,
                 p_bot_name: free,
+                ...(botSkill > 0 ? { p_skill: botSkill } : {}),
             });
             if (rpcErr) {
                 dispatchedBotNamesRef.current.delete(free);
@@ -263,7 +266,7 @@ export default function LobbyPage() {
         } finally {
             setBotBusy(false);
         }
-    }, [amIHost, mePlayerId, lobbyId, players, botBusy, showToast]);
+    }, [amIHost, mePlayerId, lobbyId, players, botBusy, botSkill, showToast]);
 
     const removeBot = useCallback(async (botPlayerId: string) => {
         if (!amIHost || !mePlayerId || !lobbyId) return;
@@ -441,6 +444,11 @@ export default function LobbyPage() {
                                             <span className="playerChipName">
                                                 {p.is_bot ? "🤖 " : ""}
                                                 {p.name}
+                                                {p.is_bot && p.bot_skill ? (
+                                                    <span style={{ opacity: 0.8, fontSize: 11, marginLeft: 6 }} title={["", "Anfänger", "Mittel", "Profi"][p.bot_skill]}>
+                                                        {"★".repeat(p.bot_skill)}
+                                                    </span>
+                                                ) : null}
                                                 {isMe ? <span style={{ opacity: 0.6 }}> (du)</span> : null}
                                                 {isHostRow ? <span className="playerChipHostBadge">👑</span> : null}
                                             </span>
@@ -476,6 +484,21 @@ export default function LobbyPage() {
                                         >
                                             🤖 +Bot
                                         </button>
+                                    ) : null}
+                                    {amIHost && !isRunning ? (
+                                        <select
+                                            className="input"
+                                            style={{ height: 36, width: "auto", padding: "0 10px", fontSize: 13, fontWeight: 700 }}
+                                            value={botSkill}
+                                            onChange={(e) => setBotSkill(Number(e.target.value) as 0 | 1 | 2 | 3)}
+                                            aria-label="Stärke des nächsten Bots"
+                                            title="Stärke des nächsten Bots"
+                                        >
+                                            <option value={0}>Stärke: gemischt</option>
+                                            <option value={1}>★ Anfänger</option>
+                                            <option value={2}>★★ Mittel</option>
+                                            <option value={3}>★★★ Profi</option>
+                                        </select>
                                     ) : null}
                                 </div>
 

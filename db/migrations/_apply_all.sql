@@ -11499,3 +11499,228 @@ FROM (VALUES
 JOIN public.topic_pool tp ON tp.text = v.topic;
 
 COMMIT;
+
+-- >>> 069_remove_wrong_previews.sql <<<
+-- Migration 069: falsche Song-Previews entfernt + Playlists aufgefüllt
+-- Audit (db/scripts/audit-previews.mjs): bei 16 alten Songs (Deutschrap-Songs, Shisha Club)
+-- spielte die Preview einen ANDEREN Titel. Entfernt; beide Playlists mit iTunes-verifizierten,
+-- bekannten Titeln wieder auf >= 30 aufgefüllt.
+BEGIN;
+DELETE FROM public.song_pool WHERE id IN ('1515b6ea-6263-4f3a-bedb-64a55ae169c8','75ed00ee-a115-4281-9cb2-d38e75067259','9c40fb11-d0b2-4b25-8ed0-ea2179c51feb','d359bfac-6064-47fa-abc7-59ba96392e1a','789ce9c7-3ed3-482d-a691-742f402171c7','ef1c4a52-d0c7-4117-81f7-d0f8b3ae6982','32d1822f-d5a9-4b74-a18f-b6ebb1b976a0','23035edd-146e-4e99-ab2d-78d7d27a6f9a','251411b7-753f-4887-ae07-53faa5642ea6','7957f0bf-3b58-4404-a9b8-e3535d420b72','5c1ae52d-8dce-4c01-8f18-d2ad524e3600','2c75d371-5c0d-471e-9afc-b9451f3a5384','1decddaa-7480-4790-9f7a-acc711c6ed62','1454d246-6bff-4132-a0b7-3a188e5b4b07','17b395b0-89b9-4767-8759-b13c331bf3de','9df1a008-253e-404c-bbd4-7e674f9eb742','ae8d9b5f-a491-4e78-a04b-c1a5c43e55b8');
+
+INSERT INTO public.topic_pool (text, active, is_song_category)
+SELECT 'Deutschrap-Songs', true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.topic_pool WHERE text = 'Deutschrap-Songs');
+
+INSERT INTO public.song_pool (topic_pool_id, title, artist, preview_url, preview_checked_at)
+SELECT tp.id, v.title, v.artist, v.url, now()
+FROM (VALUES
+    ('Deutschrap-Songs', 'Hi Kids', 'Cro', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/97/66/25/976625d2-e1ee-91a3-00e2-caf8a930f0a5/mzaf_15887768229262030255.plus.aac.p.m4a'),
+    ('Deutschrap-Songs', 'Einmal um die Welt', 'Cro', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/12/c6/70/12c6701a-294e-50d1-a490-d2a3bd91ffa9/mzaf_15225202634199766013.plus.aac.p.m4a'),
+    ('Deutschrap-Songs', 'Bye Bye', 'Cro', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/07/19/d6/0719d63e-7b50-10aa-dbda-ffebac3f9b57/mzaf_11760575587449635273.plus.aac.p.m4a'),
+    ('Deutschrap-Songs', 'Melodie', 'Cro', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/5b/1a/4f/5b1a4f4f-b861-b104-f816-deab8cb8c1da/mzaf_7631167956273878838.plus.aac.p.m4a'),
+    ('Deutschrap-Songs', 'Neymar', 'Capital Bra', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/a7/69/de/a769de2c-18d6-064c-04e2-e82d96ea9225/mzaf_5362429075520904707.plus.aac.p.m4a'),
+    ('Deutschrap-Songs', 'Bläulich', 'Apache 207', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/f2/27/a6/f227a6ef-b6f2-de0b-8060-e0e5a29ba4fa/mzaf_7106802513914058652.plus.aac.p.m4a'),
+    ('Deutschrap-Songs', 'Electro Ghetto', 'Bushido', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/d7/9f/08/d79f0869-01a5-1db5-d414-8381ce4045ee/mzaf_17757541506833908075.plus.aac.p.m4a'),
+    ('Deutschrap-Songs', 'Welt der Wunder', 'Marteria', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/3f/93/01/3f93014d-a17c-f4a0-046d-cd6802b0187b/mzaf_16721263306747837763.plus.aac.p.m4a'),
+    ('Deutschrap-Songs', 'XOXO', 'Casper', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/ec/88/b2/ec88b2bb-9b5a-a723-4591-1d4841837ae5/mzaf_10971516685321414190.plus.aac.p.m4a'),
+    ('Deutschrap-Songs', 'Im Ascheregen', 'Casper', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview125/v4/bc/06/09/bc060979-868b-0cb8-d605-9e298808693f/mzaf_7632267496433031349.plus.aac.p.m4a')
+) AS v(topic, title, artist, url)
+JOIN public.topic_pool tp ON tp.text = v.topic;
+
+INSERT INTO public.topic_pool (text, active, is_song_category)
+SELECT 'Shisha Club', true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.topic_pool WHERE text = 'Shisha Club');
+
+INSERT INTO public.song_pool (topic_pool_id, title, artist, preview_url, preview_checked_at)
+SELECT tp.id, v.title, v.artist, v.url, now()
+FROM (VALUES
+    ('Shisha Club', 'Kein Plan', 'Loredana', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/94/ce/5b/94ce5be4-d487-19ba-b376-a60d38954fd0/mzaf_17595214646994012332.plus.aac.p.m4a'),
+    ('Shisha Club', 'Papaoutai', 'Stromae', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/f5/74/17/f5741739-6e4a-22d1-7d1c-fb1d83cd48fa/mzaf_7090140597883469797.plus.aac.p.m4a'),
+    ('Shisha Club', 'Alors on danse', 'Stromae', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/87/84/ae/8784ae2b-8e39-0053-23ad-940bf2f69d87/mzaf_16356168226426243495.plus.aac.p.m4a'),
+    ('Shisha Club', 'Djadja', 'Aya Nakamura', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/ff/c1/fa/ffc1faa2-506d-4c5b-3e09-b7067959adf3/mzaf_3563312867774255295.plus.aac.p.m4a'),
+    ('Shisha Club', 'Dernière Danse', 'Indila', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/c6/c0/a7/c6c0a7a9-8e64-11d2-1146-5103b1c07004/mzaf_12112688470040263229.plus.aac.p.m4a'),
+    ('Shisha Club', 'Despacito', 'Luis Fonsi', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/46/42/db/4642db8f-13f6-457d-bd3e-1d9c22654ace/mzaf_16062777735482664257.plus.aac.p.m4a'),
+    ('Shisha Club', 'Mi Gente', 'J Balvin', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/71/1f/14/711f149d-9843-7d00-0092-eac653a1e014/mzaf_2844927362482586540.plus.aac.p.m4a'),
+    ('Shisha Club', 'Danza Kuduro', 'Don Omar', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/08/40/df/0840df61-1e6d-c985-1136-500dd9e09cc5/mzaf_13424326045030692319.plus.aac.p.m4a'),
+    ('Shisha Club', 'Gasolina', 'Daddy Yankee', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/80/a6/9f/80a69fdc-b334-a648-6efc-6f57a60782c0/mzaf_18210801488139650311.plus.aac.p.m4a'),
+    ('Shisha Club', 'Bailando', 'Enrique Iglesias', 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/a7/6d/a1/a76da115-ae3f-2d54-0f90-cfd006d8db4e/mzaf_18397821616695221456.plus.aac.p.m4a')
+) AS v(topic, title, artist, url)
+JOIN public.topic_pool tp ON tp.text = v.topic;
+
+COMMIT;
+
+
+-- >>> 070_bot_skill.sql <<<
+-- ============================================================
+-- Migration 070: Bots mit unterschiedlicher Stärke
+-- ============================================================
+-- players.bot_skill: 1 = Anfänger, 2 = Mittel, 3 = Profi (NULL bei Menschen).
+-- Unterschiede (serverseitig in _bot_tick):
+--   * Reaktionszeit:      Anfänger 2.4-5.4 s | Mittel 1.2-3.8 s | Profi 0.8-2.0 s
+--   * Trefferquote/Runde: Anfänger = 70 % der Basis | Mittel = Basis | Profi bleibt hoch
+--   * Interpret statt Titel (halbe Punkte, weniger Bonuszeit):
+--                         Anfänger 45 % | Mittel 15 % | Profi 0 %
+-- rpc_add_bot nimmt optional die Stärke; ohne Angabe wird gemischt gelost
+-- (30 % Anfänger, 45 % Mittel, 25 % Profi).
+-- ============================================================
+
+BEGIN;
+
+ALTER TABLE public.players ADD COLUMN IF NOT EXISTS bot_skill smallint;
+ALTER TABLE public.players DROP CONSTRAINT IF EXISTS players_bot_skill_check;
+ALTER TABLE public.players ADD CONSTRAINT players_bot_skill_check CHECK (bot_skill IS NULL OR bot_skill BETWEEN 1 AND 3);
+-- Spalten-Allowlist (nie Tabellen-GRANT -- session_token!)
+GRANT SELECT (bot_skill) ON public.players TO anon, authenticated;
+
+-- Bots, die schon existieren: mittel
+UPDATE public.players SET bot_skill = 2 WHERE is_bot = true AND bot_skill IS NULL;
+
+-- Trefferwahrscheinlichkeit pro Runde je Stärke
+CREATE OR REPLACE FUNCTION public._bot_survival(p_round integer, p_skill integer)
+ RETURNS numeric
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  select case coalesce(p_skill, 2)
+    when 1 then greatest(0.08, public._bot_survival(p_round) * 0.7)
+    when 3 then greatest(0.5, 0.97 - (greatest(coalesce(p_round, 1), 1) - 1) * 0.11)
+    else public._bot_survival(p_round)
+  end;
+$function$;
+
+-- rpc_add_bot mit optionaler Stärke
+DROP FUNCTION IF EXISTS public.rpc_add_bot(uuid, uuid, text);
+CREATE OR REPLACE FUNCTION public.rpc_add_bot(p_lobby_id uuid, p_me_player_id uuid, p_bot_name text, p_skill smallint DEFAULT NULL)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_host uuid; v_max_players int; v_active_count int; v_next_seat int;
+  v_bot_id uuid := gen_random_uuid();
+  v_skill smallint := p_skill;
+  v_roll numeric;
+begin
+  if not public._verify_session(p_lobby_id, p_me_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  select host_player_id, max_players into v_host, v_max_players
+  from public.lobbies where id = p_lobby_id;
+
+  if v_host is null then raise exception 'lobby_not_found'; end if;
+  if v_host is distinct from p_me_player_id then raise exception 'not_host'; end if;
+
+  if v_skill is not null and v_skill not between 1 and 3 then raise exception 'invalid_skill'; end if;
+  if v_skill is null then
+    v_roll := random();
+    v_skill := case when v_roll < 0.30 then 1 when v_roll < 0.75 then 2 else 3 end;
+  end if;
+
+  select count(*) into v_active_count from public.players where lobby_id = p_lobby_id and status = 'active';
+  if v_active_count >= v_max_players then raise exception 'lobby_full'; end if;
+
+  select coalesce(min(s.i), 0) into v_next_seat
+  from generate_series(0, v_max_players - 1) as s(i)
+  left join public.players p on p.lobby_id = p_lobby_id and p.seat_index = s.i and p.status = 'active'
+  where p.id is null;
+
+  insert into public.players (lobby_id, player_id, name, status, seat_index, joined_at, last_seen_at, is_bot, ready, bot_skill)
+  values (p_lobby_id, v_bot_id, left(trim(p_bot_name), 24), 'active', v_next_seat, now(), now(), true, true, v_skill);
+
+  update public.lobbies set last_activity_at = now() where id = p_lobby_id;
+  return v_bot_id;
+end;
+$function$;
+GRANT EXECUTE ON FUNCTION public.rpc_add_bot(uuid, uuid, text, smallint) TO anon, authenticated;
+
+-- Bot-Ticker: Halter-Teil mit Stärke
+CREATE OR REPLACE FUNCTION public._bot_tick()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  r record;
+  v_delay numeric;
+  v_roll numeric;
+  v_answer text;
+  v_seed text;
+  v_artist_chance numeric;
+  v_base numeric; v_span numeric;
+begin
+  -- ---------- Themen-Voting ----------
+  for r in
+    select l.id as lobby_id, p.player_id, l.topic_vote_started_at
+    from public.lobbies l
+    join public.players p on p.lobby_id = l.id and p.is_bot = true and p.status = 'active'
+    where l.phase = 'topic_vote' and l.topic_vote_started_at is not null
+      and not exists (select 1 from public.topic_votes v where v.lobby_id = l.id and v.player_id = p.player_id)
+  loop
+    v_seed := r.player_id::text || r.topic_vote_started_at::text;
+    v_delay := 1.0 + (abs(hashtext(v_seed)) % 2500) / 1000.0;
+    if now() - r.topic_vote_started_at >= v_delay * interval '1 second' then
+      insert into public.topic_votes (lobby_id, player_id, choice)
+      values (r.lobby_id, r.player_id, 1 + (abs(hashtext('c' || v_seed)) % 3))
+      on conflict (lobby_id, player_id) do nothing;
+    end if;
+  end loop;
+
+  -- ---------- Laufende Runde: Bot ist Halter ----------
+  for r in
+    select l.id, l.code, l.holder_player_id, l.holder_since, l.round_number, l.current_song_id,
+           l.topic_selected, l.used_answers, l.explode_at, coalesce(p.bot_skill, 2) as skill
+    from public.lobbies l
+    join public.players p on p.lobby_id = l.id and p.player_id = l.holder_player_id
+    where l.phase = 'running' and p.is_bot = true and p.is_alive = true
+      and l.current_attempt_id is null and l.holder_since is not null
+      and (l.explode_at is null or l.explode_at > now() + interval '300 milliseconds')
+  loop
+    -- Reaktionszeit je Stärke
+    if r.skill = 1 then v_base := 2.4; v_span := 3.0;
+    elsif r.skill = 3 then v_base := 0.8; v_span := 1.2;
+    else v_base := 1.2; v_span := 2.6; end if;
+
+    v_seed := r.holder_player_id::text || r.holder_since::text;
+    v_delay := v_base + (abs(hashtext(v_seed)) % 1000) / 1000.0 * v_span;
+    if now() - r.holder_since < v_delay * interval '1 second' then continue; end if;
+
+    v_roll := (abs(hashtext('r' || v_seed)) % 1000) / 1000.0;
+    if v_roll >= public._bot_survival(r.round_number, r.skill) then continue; end if;
+
+    v_artist_chance := case r.skill when 1 then 0.45 when 3 then 0 else 0.15 end;
+
+    v_answer := null;
+    if r.current_song_id is not null then
+      if (abs(hashtext('a' || v_seed)) % 1000) / 1000.0 < v_artist_chance then
+        select trim(split_part(artist, ',', 1)) into v_answer from public.song_pool where id = r.current_song_id;
+      end if;
+      if v_answer is null or length(v_answer) = 0 then
+        select title into v_answer from public.song_pool where id = r.current_song_id;
+      end if;
+    else
+      select ta.answer into v_answer
+      from public.topic_answers ta
+      join public.topic_pool tp on tp.id = ta.topic_pool_id
+      where lower(tp.text) = lower(coalesce(r.topic_selected, ''))
+        and not (ta.lower_answer = any (select lower(u) from unnest(r.used_answers) u))
+      order by random() limit 1;
+      v_answer := coalesce(v_answer, 'Keine Ahnung');
+    end if;
+
+    if v_answer is not null then
+      begin
+        perform public.rpc_attempt_pass(r.code, r.holder_player_id, v_answer);
+      exception when others then
+        null;
+      end;
+    end if;
+  end loop;
+end;
+$function$;
+
+COMMIT;
+

@@ -14,7 +14,6 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
   - [ ] Optional: Login mit Google/Apple
 
 ## Spiel
-- [ ] Bots unterschiedlich stark (Anfänger / Profi), damit ein Sieg nicht zufällig ist
 - [ ] Vorzeitiges Match-Ende, wenn ein Spieler uneinholbar vorne liegt
 - [ ] Host-Kick während der Runde: Richtung der Weitergabe korrekt berücksichtigen
 - [ ] Song-Bekanntheit prüfen (Ziel: ≥ 85 % kennen jeden Titel) – Vorschau-Audit ist erledigt (Migration 069), aber ob jeder Titel bekannt ist, kann nur ein Mensch beurteilen (v. a. Deutschrap/Shisha Club)
@@ -25,6 +24,7 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
 - [ ] Hydration-Warnung beim Lade-Spinner (nur Dev-Modus)
 
 ## Erledigt
+- [x] Bots unterschiedlich stark (Anfänger/Mittel/Profi, Auswahl in der Lobby)
 - [x] Runden pro Match (1/3/5) mit Zwischenstand und Gesamtwertung
 - [x] Server-Bots (unabhängig vom Host-Browser)
 - [x] Faires Themen-Voting (2 Playlists + Zufallskarte) und 6 Playlists
