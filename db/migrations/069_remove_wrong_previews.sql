@@ -3,7 +3,7 @@
 -- spielte die Preview einen ANDEREN Titel. Entfernt; beide Playlists mit iTunes-verifizierten,
 -- bekannten Titeln wieder auf >= 30 aufgefüllt.
 BEGIN;
-DELETE FROM public.song_pool WHERE id IN ('');
+DELETE FROM public.song_pool WHERE id IN ('1515b6ea-6263-4f3a-bedb-64a55ae169c8','75ed00ee-a115-4281-9cb2-d38e75067259','9c40fb11-d0b2-4b25-8ed0-ea2179c51feb','d359bfac-6064-47fa-abc7-59ba96392e1a','789ce9c7-3ed3-482d-a691-742f402171c7','ef1c4a52-d0c7-4117-81f7-d0f8b3ae6982','32d1822f-d5a9-4b74-a18f-b6ebb1b976a0','23035edd-146e-4e99-ab2d-78d7d27a6f9a','251411b7-753f-4887-ae07-53faa5642ea6','7957f0bf-3b58-4404-a9b8-e3535d420b72','5c1ae52d-8dce-4c01-8f18-d2ad524e3600','2c75d371-5c0d-471e-9afc-b9451f3a5384','1decddaa-7480-4790-9f7a-acc711c6ed62','1454d246-6bff-4132-a0b7-3a188e5b4b07','17b395b0-89b9-4767-8759-b13c331bf3de','9df1a008-253e-404c-bbd4-7e674f9eb742','ae8d9b5f-a491-4e78-a04b-c1a5c43e55b8');
 
 INSERT INTO public.topic_pool (text, active, is_song_category)
 SELECT 'Deutschrap-Songs', true, true
