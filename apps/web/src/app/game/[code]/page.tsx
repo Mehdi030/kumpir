@@ -2125,11 +2125,12 @@ export default function GamePage() {
           z-index: 3;
           min-height: 100vh;
           display: grid;
-          place-items: center;
+          place-items: start center;
+          align-content: start;
           padding: 22px;
           /* Platz für den Tisch (PlayerRing) darüber, damit Antwort-Box und
              Tisch nicht übereinander liegen. */
-          padding-top: calc(27vh + min(66vmin, 540px) * 0.31 + 84px);
+          padding-top: calc(27vh + min(66vmin, 540px) * 0.31 + 128px);
         }
         .hudInner{
           width: min(920px, 94vw);

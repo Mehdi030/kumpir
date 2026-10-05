@@ -1,5 +1,6 @@
 "use client";
 
+import { KumpirPotato } from "@/components/game/KumpirPotato";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Player = {
@@ -284,6 +285,18 @@ export function PlayerRing({
 
     const holderPos = holderPlayerId ? getPx(holderPlayerId) : null;
 
+    // Nachbilder der fliegenden Kumpir (Bewegungsunschärfe): 3 verblassende Kopien auf der Flugbahn.
+    const flyGhosts = useMemo(() => {
+        if (!flyRender || !fly) return [] as { x: number; y: number; height: number; rot: number }[];
+        return [1, 2, 3].map((k) => {
+            const tt = Math.max(0, fly.t - k * 0.07);
+            const e = easeInOutCubic(tt);
+            const pt = bezier(flyRender.p0, flyRender.p1, flyRender.p2, e);
+            return { x: pt.x, y: pt.y, height: Math.sin(Math.PI * e) * 90, rot: tt * 540 };
+        });
+    }, [flyRender, fly]);
+    const potatoPx = narrow ? 44 : 76;
+
     // Vorschau-Linie: wohin fliegt die Kartoffel als Nächstes?
     const nextArc = useMemo(() => {
         if (!showNext || !holderPlayerId || size.w <= 0) return null;
@@ -321,7 +334,7 @@ export function PlayerRing({
     const hot = heat > 0.66;
 
     return (
-        <div ref={containerRef} className={`ringWrap ${hot ? "ringHot" : ""} ${narrow ? "ringNarrow" : ""}`} style={{ ["--seat" as string]: `${seatPx}px`, ["--seatH" as string]: `${Math.round(seatPx * 1.18)}px`, ["--tagFs" as string]: narrow ? "12px" : "15px", ["--tagMax" as string]: narrow ? "92px" : "210px", ["--potatoFs" as string]: narrow ? "28px" : "40px", ["--tilt" as string]: `${TILT_DEG}deg`, ["--pulse" as string]: `${pulseSec}s`, ["--amp" as string]: pulseAmp }}>
+        <div ref={containerRef} className={`ringWrap ${hot ? "ringHot" : ""} ${narrow ? "ringNarrow" : ""}`} style={{ ["--seat" as string]: `${seatPx}px`, ["--seatH" as string]: `${Math.round(seatPx * 1.18)}px`, ["--tagFs" as string]: narrow ? "12px" : "15px", ["--tagMax" as string]: narrow ? "92px" : "210px", ["--potatoPx" as string]: narrow ? "44px" : "76px", ["--tilt" as string]: `${TILT_DEG}deg`, ["--pulse" as string]: `${pulseSec}s`, ["--amp" as string]: pulseAmp }}>
             <div className="tableTilt">
                 {/* ---------- Tisch ---------- */}
                 <div className="tableBase" aria-hidden style={{ top: `${CY * 100}%`, width: tableSize, height: tableSize }}>
@@ -330,9 +343,13 @@ export function PlayerRing({
                     <div className="tEdge tEdge2" />
                     <div className="tEdge tEdge1" />
                     <div className="tRim" />
+                    <div className="tLeather" />
+                    <div className="tStitch" />
                     <div className="tFelt" />
+                    <div className="tEmblem" />
                     <div className="tGoldRing" />
                     <div className="tDial" />
+                    <div className="tGloss" />
 
                     {/* Zündschnur: pulsierende Glut am Tischrand -- je näher die Explosion,
                         desto schneller und heller. */}
@@ -389,14 +406,22 @@ export function PlayerRing({
                             style={{
                                 left: pos.x,
                                 top: pos.y,
-                                background: `radial-gradient(circle at 32% 26%, hsl(${hue},90%,74%), hsl(${(hue + 24) % 360},78%,46%) 62%, hsl(${(hue + 40) % 360},70%,30%))`,
+                                ["--h" as string]: hue,
                             }}
                             aria-label={p.name}
                             title={p.name}
                         >
+                            <span className="seatFace" aria-hidden />
+                            <span className="seatGloss" aria-hidden />
                             <span className="seatInitials">{initialsFor(p.name)}</span>
                             {!p.is_alive ? <span className="seatDeadOverlay" aria-hidden>💀</span> : null}
-                            {isExploded ? <span className="seatBoom" aria-hidden>💥</span> : null}
+                            {isExploded ? (
+                                <span className="seatBoom" aria-hidden>
+                                    <span className="boomFlash" />
+                                    <span className="boomRing" />
+                                    <span className="boomEmoji">💥</span>
+                                </span>
+                            ) : null}
                             {isStale ? (
                                 <span className="seatStale" title="Verbindung verloren?" aria-label="Verbindung verloren?">
                                     📡
@@ -434,8 +459,8 @@ export function PlayerRing({
                 {holderPos && !flyRender ? (
                     <>
                         <div className="potatoShadow" style={{ left: holderPos.x, top: holderPos.y + 30 }} aria-hidden />
-                        <div className="tablePotato" style={{ left: holderPos.x, top: holderPos.y - 30 }} aria-hidden>
-                            🥔
+                        <div className="tablePotato" style={{ left: holderPos.x, top: holderPos.y - 56 }} aria-hidden>
+                            <KumpirPotato size={potatoPx} heat={heat} />
                         </div>
                     </>
                 ) : null}
@@ -450,6 +475,20 @@ export function PlayerRing({
                                 style={{ strokeDashoffset: `${(1 - flyRender.t) * 220}` }}
                             />
                         </svg>
+                        {flyGhosts.map((g, k) => (
+                            <div
+                                key={k}
+                                className="potatoGhost"
+                                style={{
+                                    left: g.x,
+                                    top: g.y - 40,
+                                    opacity: 0.32 - k * 0.09,
+                                    transform: `translate(-50%, -50%) translateZ(${110 + g.height}px) rotateX(-${TILT_DEG}deg) scale(${0.9 - k * 0.1}) rotate(${g.rot}deg)`,
+                                }}
+                            >
+                                <KumpirPotato size={potatoPx} heat={0} />
+                            </div>
+                        ))}
                         <div className="potatoShadow" style={{ left: flyRender.x, top: flyRender.y + 30, opacity: 0.6 - flyRender.height / 220 }} />
                         <div
                             className="potatoFly"
@@ -459,7 +498,7 @@ export function PlayerRing({
                                 transform: `translate(-50%, -50%) translateZ(${110 + flyRender.height}px) rotateX(-${TILT_DEG}deg) scale(${flyRender.scale}) rotate(${flyRender.t * 540}deg)`,
                             }}
                         >
-                            🥔
+                            <KumpirPotato size={potatoPx} heat={heat} />
                         </div>
                     </div>
                 ) : null}
@@ -503,35 +542,73 @@ export function PlayerRing({
           filter: blur(22px);
         }
         .tEdge{ background: #1c0f06; }
-        .tEdge1{ transform: translateZ(-7px);  background: #3a2110; }
-        .tEdge2{ transform: translateZ(-15px); background: #2a170a; }
-        .tEdge3{ transform: translateZ(-24px); background: #1a0d05; box-shadow: 0 0 0 2px rgba(0,0,0,.4); }
+        .tEdge1{ transform: translateZ(-7px);  background: linear-gradient(180deg, #4a2b14, #2b170a); }
+        .tEdge2{ transform: translateZ(-15px); background: #24130a; }
+        .tEdge3{ transform: translateZ(-24px); background: #150a04; box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 8px 30px rgba(0,0,0,.5); }
+        /* Holzrand: Maserung (konzentrische Ringe) + Lichtreflex */
         .tRim{
           background:
-            conic-gradient(from 20deg, #8a5a2c, #b98245 12%, #6e431d 25%, #a8733a 40%, #5c3718 55%, #b07a3e 70%, #6e431d 85%, #8a5a2c);
-          box-shadow: inset 0 0 0 2px rgba(255,220,170,.28), inset 0 -10px 26px rgba(0,0,0,.45), 0 0 40px rgba(0,0,0,.4);
+            radial-gradient(circle at 30% 18%, rgba(255,235,200,.38), transparent 42%),
+            repeating-radial-gradient(circle at 50% 50%, rgba(40,18,4,.14) 0 1.5px, rgba(255,210,150,.05) 1.5px 4px),
+            conic-gradient(from 20deg, #9a6532, #c8924f 10%, #7a4a1f 24%, #b98245 38%, #66401b 52%, #c28a4a 68%, #7a4a1f 84%, #9a6532);
+          box-shadow: inset 0 0 0 2px rgba(255,230,190,.32), inset 0 -12px 28px rgba(0,0,0,.5), inset 0 8px 14px rgba(255,235,200,.12), 0 0 44px rgba(0,0,0,.45);
+        }
+        /* Lederband zwischen Holz und Filz, mit Steppnaht */
+        .tLeather{
+          inset: 5.2%;
+          transform: translateZ(1px);
+          background: radial-gradient(circle at 50% 50%, #3a1d12 0%, #2a130b 100%);
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), inset 0 3px 8px rgba(255,200,150,.12), 0 2px 6px rgba(0,0,0,.5);
+        }
+        .tStitch{
+          inset: 6.6%;
+          transform: translateZ(1.5px);
+          border: 1.5px dashed rgba(255,214,150,.55);
+          box-shadow: 0 0 6px rgba(255,200,120,.12);
         }
         .tFelt{
-          inset: 7.5%;
+          inset: 8.6%;
           transform: translateZ(2px);
           background:
-            radial-gradient(circle at 36% 28%, rgba(255,255,255,.16), transparent 46%),
-            repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,.025) 0 2px, transparent 2px 6px),
-            radial-gradient(circle at 50% 50%, #1f7a55 0%, #146141 52%, #0b3d2a 100%);
-          box-shadow: inset 0 0 0 3px rgba(0,0,0,.45), inset 0 14px 40px rgba(0,0,0,.55), inset 0 0 70px rgba(0,0,0,.35);
+            radial-gradient(ellipse at 38% 22%, rgba(255,255,255,.20), transparent 52%),
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E"),
+            radial-gradient(circle at 50% 46%, #23906a 0%, #16714e 46%, #0c4a33 80%, #072b1d 100%);
+          background-blend-mode: normal, soft-light, normal;
+          box-shadow: inset 0 0 0 2px rgba(0,0,0,.5), inset 0 16px 44px rgba(0,0,0,.55), inset 0 0 80px rgba(0,0,0,.38);
+        }
+        .tEmblem{
+          inset: 34%;
+          transform: translateZ(2.5px);
+          background:
+            radial-gradient(circle, rgba(255,214,10,.10) 0%, rgba(255,214,10,.04) 55%, transparent 70%),
+            repeating-radial-gradient(circle, rgba(255,214,10,.16) 0 1px, transparent 1px 9px);
+          -webkit-mask: radial-gradient(circle, #000 0 62%, transparent 70%);
+          mask: radial-gradient(circle, #000 0 62%, transparent 70%);
         }
         .tGoldRing{
-          inset: 24%;
+          inset: 20%;
           transform: translateZ(3px);
-          border: 2px solid rgba(255,214,10,.32);
-          box-shadow: 0 0 18px rgba(255,214,10,.14), inset 0 0 18px rgba(255,214,10,.08);
+          background: conic-gradient(from 0deg, #fff1b0, #ffc93a, #b8801a, #ffd96a, #fff1b0, #ffc93a, #b8801a, #ffd96a, #fff1b0);
+          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+          opacity: .8;
+          box-shadow: 0 0 16px rgba(255,214,10,.16), inset 0 0 16px rgba(255,214,10,.08);
         }
         .tDial{
-          inset: 10.5%;
+          inset: 11.6%;
           transform: translateZ(3px);
-          background: repeating-conic-gradient(from -1deg, rgba(255,214,10,.34) 0deg 2deg, transparent 2deg 15deg);
-          -webkit-mask: radial-gradient(circle, transparent 0 91%, #000 91.5% 100%);
-          mask: radial-gradient(circle, transparent 0 91%, #000 91.5% 100%);
+          background: repeating-conic-gradient(from -1deg, rgba(255,214,10,.4) 0deg 1.6deg, transparent 1.6deg 15deg);
+          -webkit-mask: radial-gradient(circle, transparent 0 92%, #000 92.5% 100%);
+          mask: radial-gradient(circle, transparent 0 92%, #000 92.5% 100%);
+        }
+        /* Politur: weicher Lichtglanz über der ganzen Platte */
+        .tGloss{
+          inset: 0;
+          transform: translateZ(6px);
+          background:
+            radial-gradient(ellipse 60% 34% at 34% 16%, rgba(255,255,255,.20), transparent 70%),
+            linear-gradient(160deg, rgba(255,255,255,.07), transparent 38%, transparent 70%, rgba(0,0,0,.14));
+          pointer-events: none;
         }
         .tPulse{
           inset: -1%;
@@ -569,7 +646,7 @@ export function PlayerRing({
         .tHub{
           position:absolute;
           z-index: 20;
-          transform: translate(-50%,-50%) translateZ(18px) rotateX(calc(var(--tilt) * -1)) translateY(-14px);
+          transform: translate(-50%,-50%) translateZ(18px) rotateX(calc(var(--tilt) * -1)) translateY(-62px);
           text-align:center;
           pointer-events:none;
           display:grid;
@@ -615,10 +692,10 @@ export function PlayerRing({
            und quetscht alle Sitze + Namensschilder zu Ellipsen. */
         .holderSpot{
           position:absolute;
-          width: 170px; height: 170px;
+          width: 130px; height: 130px;
           transform: translate(-50%,-50%) translateZ(4px);
           border-radius: 50%;
-          background: radial-gradient(circle, rgba(255,190,70,.55) 0%, rgba(255,120,30,.22) 45%, transparent 70%);
+          background: radial-gradient(circle, rgba(255,160,50,.34) 0%, rgba(255,110,30,.12) 48%, transparent 70%);
           transition: left .5s cubic-bezier(.2,1,.2,1), top .5s cubic-bezier(.2,1,.2,1);
           animation: spotBreath 1.6s ease-in-out infinite;
         }
@@ -633,17 +710,31 @@ export function PlayerRing({
           transform: translate(-50%, -50%) translateZ(60px) rotateX(calc(var(--tilt) * -1));
           display: grid;
           place-items: center;
-          color: rgba(255,255,255,.96);
-          font-weight: 900;
-          font-size: 15px;
-          letter-spacing: .4px;
-          border: 3px solid rgba(255,255,255,.55);
-          box-shadow: 0 10px 22px rgba(0,0,0,.45), inset 0 -6px 12px rgba(0,0,0,.35), inset 0 3px 6px rgba(255,255,255,.28);
+          color: #fff;
+          font-family: var(--font-display);
+          font-weight: 800;
+          font-size: 16px;
+          letter-spacing: .3px;
           z-index: 30;
-          opacity: .92;
-          transition: left .45s cubic-bezier(.2,1,.2,1), top .45s cubic-bezier(.2,1,.2,1), transform .25s cubic-bezier(.2,1,.2,1), box-shadow .25s ease, border-color .25s ease, opacity .25s ease;
+          opacity: .94;
+          /* Metall-Ring in der Spielerfarbe */
+          background: conic-gradient(from 200deg,
+            hsl(var(--h) 80% 86%), hsl(var(--h) 62% 48%) 18%, hsl(var(--h) 85% 82%) 36%,
+            hsl(var(--h) 60% 36%) 58%, hsl(var(--h) 80% 80%) 78%, hsl(var(--h) 80% 86%));
+          box-shadow: 0 12px 24px rgba(0,0,0,.5), 0 2px 0 rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.7);
+          transition: left .45s cubic-bezier(.2,1,.2,1), top .45s cubic-bezier(.2,1,.2,1), transform .25s cubic-bezier(.2,1,.2,1), box-shadow .25s ease, opacity .25s ease;
         }
-        .seatInitials{ text-shadow: 0 2px 8px rgba(0,0,0,.55); user-select:none; }
+        .seatFace{
+          position:absolute; inset: 11%; border-radius: 50%;
+          background: radial-gradient(circle at 34% 26%, hsl(var(--h) 88% 74%), hsl(calc(var(--h) + 20) 74% 46%) 58%, hsl(calc(var(--h) + 36) 70% 26%));
+          box-shadow: inset 0 3px 5px rgba(255,255,255,.38), inset 0 -7px 12px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.35);
+        }
+        .seatGloss{
+          position:absolute; top: 9%; left: 20%; width: 50%; height: 32%; border-radius: 50%;
+          background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,0));
+          pointer-events: none;
+        }
+        .seatInitials{ position: relative; text-shadow: 0 2px 6px rgba(0,0,0,.6); user-select:none; }
         .nameTag{
           position:absolute;
           z-index: 35;
@@ -674,22 +765,22 @@ export function PlayerRing({
         .nameTag.holder{ background: rgba(122,64,0,.92); border-color: rgba(255,214,10,.9); color: #fff3c4; }
         .nameTag.gone{ opacity: 0; }
         .seat.me{
-          border-color: rgba(34,211,238,.95);
-          box-shadow: 0 10px 26px rgba(0,0,0,.5), 0 0 0 4px rgba(34,211,238,.22), inset 0 3px 6px rgba(255,255,255,.28);
+          background: conic-gradient(from 200deg, #d9fbff, #19b5d4 20%, #e8fdff 38%, #0e7f9a 60%, #c9f6ff 80%, #d9fbff);
+          box-shadow: 0 12px 26px rgba(0,0,0,.5), 0 0 0 4px rgba(34,211,238,.28), 0 0 22px rgba(34,211,238,.35), inset 0 1px 1px rgba(255,255,255,.8);
           opacity: 1;
         }
         .seat.holder{
           width: var(--seatH, 64px);
           height: var(--seatH, 64px);
           opacity: 1;
-          font-size: 18px;
+          font-size: 19px;
           transform: translate(-50%, -50%) translateZ(76px) rotateX(calc(var(--tilt) * -1)) scale(1.12);
-          border-color: #ffd60a;
+          background: conic-gradient(from 200deg, #fff6c8, #ffc21a 18%, #fff0a8 36%, #c27a00 58%, #ffe27a 78%, #fff6c8);
           box-shadow:
-            0 16px 34px rgba(0,0,0,.55),
-            0 0 0 5px rgba(255,149,0,.28),
-            0 0 38px rgba(255,110,30,.65),
-            inset 0 3px 6px rgba(255,255,255,.35);
+            0 18px 36px rgba(0,0,0,.55),
+            0 0 0 5px rgba(255,149,0,.30),
+            0 0 40px rgba(255,120,30,.7),
+            inset 0 1px 1px rgba(255,255,255,.9);
           animation: seatHolderPulse 1.3s ease-in-out infinite;
         }
         .seat.dead{ opacity:.34; filter: grayscale(.9); }
@@ -698,10 +789,21 @@ export function PlayerRing({
           font-size: 24px; background: rgba(0,0,0,.34); border-radius: 999px;
         }
         .seatBoom{
-          position:absolute; inset:-22px; display:grid; place-items:center;
-          font-size: 64px; pointer-events:none;
-          animation: seatBoom 700ms cubic-bezier(.2,1,.2,1) both;
+          position:absolute; inset:-34px; display:grid; place-items:center; pointer-events:none;
         }
+        .boomFlash{
+          position:absolute; inset: 6px; border-radius: 50%;
+          background: radial-gradient(circle, #fffbe0 0%, #ffd23f 28%, #ff7a1a 55%, rgba(255,60,0,0) 72%);
+          animation: boomFlash 720ms cubic-bezier(.2,.9,.2,1) both;
+        }
+        .boomRing{
+          position:absolute; inset: 14px; border-radius: 50%;
+          border: 4px solid rgba(255,214,120,.9);
+          animation: boomRing 720ms cubic-bezier(.2,.9,.2,1) both;
+        }
+        .boomEmoji{ position: relative; font-size: 54px; animation: seatBoom 700ms cubic-bezier(.2,1,.2,1) both; }
+        @keyframes boomFlash{ 0%{ opacity:0; transform: scale(.3); } 25%{ opacity:1; transform: scale(1.1); } 100%{ opacity:0; transform: scale(1.8); } }
+        @keyframes boomRing{ 0%{ opacity:.95; transform: scale(.4); } 100%{ opacity:0; transform: scale(2.3); } }
         .seat.exploded{ animation: seatShake 700ms cubic-bezier(.36,.07,.19,.97) both; }
         .seatStale{
           position:absolute; bottom:-8px; left:-8px;
@@ -740,19 +842,22 @@ export function PlayerRing({
         .tablePotato{
           position:absolute;
           z-index: 40;
-          font-size: var(--potatoFs, 40px);
-          line-height: 1;
-          transform: translate(-50%, -50%) translateZ(104px) rotateX(calc(var(--tilt) * -1));
-          filter: drop-shadow(0 10px 16px rgba(0,0,0,.55)) drop-shadow(0 0 14px rgba(255,150,40,.55));
+          width: var(--potatoPx, 52px);
+          height: var(--potatoPx, 52px);
+          line-height: 0;
+          transform: translate(-50%, -50%) translateZ(106px) rotateX(calc(var(--tilt) * -1));
+          filter: drop-shadow(0 10px 14px rgba(0,0,0,.55)) drop-shadow(0 0 16px rgba(255,150,40,.6));
           transition: left .5s cubic-bezier(.2,1,.2,1), top .5s cubic-bezier(.2,1,.2,1);
           animation: potatoBob 1.2s ease-in-out infinite;
         }
-        .potatoFly{
+        .potatoFly, .potatoGhost{
           position:absolute;
-          font-size: var(--potatoFs, 40px);
-          line-height:1;
-          filter: drop-shadow(0 10px 16px rgba(0,0,0,.55)) drop-shadow(0 0 18px rgba(255,170,50,.8));
+          width: var(--potatoPx, 52px);
+          height: var(--potatoPx, 52px);
+          line-height: 0;
         }
+        .potatoFly{ filter: drop-shadow(0 12px 16px rgba(0,0,0,.55)) drop-shadow(0 0 20px rgba(255,170,50,.85)); }
+        .potatoGhost{ pointer-events:none; }
         @keyframes potatoBob{
           0%,100%{ margin-top: 0; }
           50%{ margin-top: -7px; }
