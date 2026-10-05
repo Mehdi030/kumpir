@@ -102,7 +102,10 @@ export function PlayerRing({
     const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
     // Tischdurchmesser: wächst mit dem Bildschirm, aber nie so groß, dass die
     // Namensschilder an den Seiten abgeschnitten werden.
-    const tableSize = Math.max(240, Math.min(Math.min(size.w, size.h) * 0.66, 540));
+    const narrow = size.w > 0 && size.w < 520;
+    const tableSize = Math.max(narrow ? 200 : 240, Math.min(Math.min(size.w, size.h) * (narrow ? 0.56 : 0.66), 540));
+    // Auf dem Handy: kleinere Sitze und Schilder, sonst überlappen sie sich am kleinen Tisch.
+    const seatPx = narrow ? 34 : 54;
 
     useEffect(() => {
         const el = containerRef.current;
@@ -318,7 +321,7 @@ export function PlayerRing({
     const hot = heat > 0.66;
 
     return (
-        <div ref={containerRef} className={`ringWrap ${hot ? "ringHot" : ""}`} style={{ ["--tilt" as string]: `${TILT_DEG}deg`, ["--pulse" as string]: `${pulseSec}s`, ["--amp" as string]: pulseAmp }}>
+        <div ref={containerRef} className={`ringWrap ${hot ? "ringHot" : ""} ${narrow ? "ringNarrow" : ""}`} style={{ ["--seat" as string]: `${seatPx}px`, ["--seatH" as string]: `${Math.round(seatPx * 1.18)}px`, ["--tagFs" as string]: narrow ? "12px" : "15px", ["--tagMax" as string]: narrow ? "92px" : "210px", ["--potatoFs" as string]: narrow ? "28px" : "40px", ["--tilt" as string]: `${TILT_DEG}deg`, ["--pulse" as string]: `${pulseSec}s`, ["--amp" as string]: pulseAmp }}>
             <div className="tableTilt">
                 {/* ---------- Tisch ---------- */}
                 <div className="tableBase" aria-hidden style={{ top: `${CY * 100}%`, width: tableSize, height: tableSize }}>
@@ -566,7 +569,7 @@ export function PlayerRing({
         .tHub{
           position:absolute;
           z-index: 20;
-          transform: translate(-50%,-50%) translateZ(18px) rotateX(calc(var(--tilt) * -1));
+          transform: translate(-50%,-50%) translateZ(18px) rotateX(calc(var(--tilt) * -1)) translateY(-14px);
           text-align:center;
           pointer-events:none;
           display:grid;
@@ -601,7 +604,7 @@ export function PlayerRing({
         /* ===== Schatten + Spotlight auf dem Filz ===== */
         .seatShadow{
           position:absolute;
-          width: 64px; height: 64px;
+          width: calc(var(--seatH, 64px) + 6px); height: calc(var(--seatH, 64px) + 6px);
           transform: translate(-50%,-50%) translateZ(4px);
           border-radius: 50%;
           background: radial-gradient(circle, rgba(0,0,0,.55) 0%, rgba(0,0,0,.25) 55%, transparent 72%);
@@ -624,8 +627,8 @@ export function PlayerRing({
         /* ===== Spieler-Sitze (Billboard: stehen aufrecht über dem Tisch) ===== */
         .seat{
           position:absolute;
-          width: 54px;
-          height: 54px;
+          width: var(--seat, 54px);
+          height: var(--seat, 54px);
           border-radius: 999px;
           transform: translate(-50%, -50%) translateZ(60px) rotateX(calc(var(--tilt) * -1));
           display: grid;
@@ -646,20 +649,22 @@ export function PlayerRing({
           z-index: 35;
           transform: translate(var(--tx, -50%), var(--ty, 0%)) translateZ(24px) rotateX(calc(var(--tilt) * -1));
           display:flex; align-items:center; gap:6px;
-          max-width: min(150px, 30vw);
+          max-width: var(--tagMax, 210px);
           padding: 5px 12px;
           border-radius: 999px;
           background: rgba(8,12,24,.82);
           border: 1px solid rgba(255,255,255,.28);
           box-shadow: 0 6px 16px rgba(0,0,0,.45);
           color: #fff;
-          font-size: 15px;
+          font-size: var(--tagFs, 15px);
           font-weight: 900;
           letter-spacing: .2px;
           white-space: nowrap;
           transition: left .45s cubic-bezier(.2,1,.2,1), top .45s cubic-bezier(.2,1,.2,1), border-color .25s ease, background .25s ease;
         }
         .nameTagText{ overflow:hidden; text-overflow: ellipsis; min-width: 0; }
+        .ringNarrow .nameTag{ white-space: normal; line-height: 1.1; border-radius: 12px; padding: 4px 8px; text-align: center; }
+        .ringNarrow .nameTagText{ overflow: visible; word-break: break-word; }
         .nameTagMe{
           flex: none; font-size: 11px; font-weight: 900; padding: 1px 7px; border-radius: 999px;
           background: rgba(34,211,238,.22); border: 1px solid rgba(34,211,238,.7); color: #b9f4ff;
@@ -674,8 +679,8 @@ export function PlayerRing({
           opacity: 1;
         }
         .seat.holder{
-          width: 64px;
-          height: 64px;
+          width: var(--seatH, 64px);
+          height: var(--seatH, 64px);
           opacity: 1;
           font-size: 18px;
           transform: translate(-50%, -50%) translateZ(76px) rotateX(calc(var(--tilt) * -1)) scale(1.12);
@@ -735,7 +740,7 @@ export function PlayerRing({
         .tablePotato{
           position:absolute;
           z-index: 40;
-          font-size: 40px;
+          font-size: var(--potatoFs, 40px);
           line-height: 1;
           transform: translate(-50%, -50%) translateZ(104px) rotateX(calc(var(--tilt) * -1));
           filter: drop-shadow(0 10px 16px rgba(0,0,0,.55)) drop-shadow(0 0 14px rgba(255,150,40,.55));
@@ -744,7 +749,7 @@ export function PlayerRing({
         }
         .potatoFly{
           position:absolute;
-          font-size: 40px;
+          font-size: var(--potatoFs, 40px);
           line-height:1;
           filter: drop-shadow(0 10px 16px rgba(0,0,0,.55)) drop-shadow(0 0 18px rgba(255,170,50,.8));
         }

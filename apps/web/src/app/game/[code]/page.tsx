@@ -959,7 +959,10 @@ export default function GamePage() {
                     diedNames.length === 1
                         ? `${diedNames[0]} ${diedNames[0] === "Du" ? "bist" : "ist"} raus`
                         : `${diedNames.slice(0, -1).join(", ")} und ${diedNames[diedNames.length - 1]} sind raus`;
-                const aliveNames = players.filter((p) => currentAlive.has(p.player_id)).map((p) => (p.player_id === mePlayerId ? "Du" : p.name));
+                const aliveNames = players
+                    .filter((p) => currentAlive.has(p.player_id))
+                    .sort((x, y) => (x.player_id === mePlayerId ? -1 : 0) - (y.player_id === mePlayerId ? -1 : 0))
+                    .map((p) => (p.player_id === mePlayerId ? "du" : p.name));
                 const leftText =
                     aliveNames.length >= 3
                         ? `Nur noch ${aliveNames.length} übrig`

@@ -166,7 +166,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
 
         @keyframes finIn{ from{ opacity: 0; transform: translateY(14px); } to{ opacity: 1; transform: translateY(0); } }
         @keyframes finBob{ 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-5px); } }
-        @media (max-width: 520px){ .finRow{ grid-template-columns: 34px 1fr 64px 56px 44px; padding: 9px 10px; font-size: 14px; } }
+        @media (max-width: 520px){ .finRow{ grid-template-columns: 30px 1fr 56px 56px; padding: 9px 10px; font-size: 14px; } .finRow > :nth-child(5){ display: none; } .finName{ white-space: normal; } }
       `}</style>
         </div>
     );

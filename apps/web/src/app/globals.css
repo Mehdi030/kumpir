@@ -1807,3 +1807,9 @@ body::after{
 
 /* Überschriften-Schrift überall einheitlich (Bricolage), Fließtext Inter */
 h1, h2, h3, .cardTitle, .resultTitle, .statusTitle, .finWinner, .headline{ font-family: var(--font-display); }
+
+/* Handy: das Maskottchen ragt in die Karte -> oben Platz lassen */
+@media (max-width: 520px){
+    .homeCard{ padding-top: 84px; }
+    .homeTop{ justify-content: center; }
+}
