@@ -104,7 +104,7 @@ export function PlayerRing({
     // Tischdurchmesser: wächst mit dem Bildschirm, aber nie so groß, dass die
     // Namensschilder an den Seiten abgeschnitten werden.
     const narrow = size.w > 0 && size.w < 520;
-    const tableSize = Math.max(narrow ? 200 : 240, Math.min(Math.min(size.w, size.h) * (narrow ? 0.56 : 0.66), 540));
+    const tableSize = Math.max(narrow ? 200 : 240, Math.min(Math.min(size.w, size.h) * (narrow ? 0.7 : 0.66), 540));
     // Auf dem Handy: kleinere Sitze und Schilder, sonst überlappen sie sich am kleinen Tisch.
     const seatPx = narrow ? 34 : 54;
 
@@ -194,10 +194,10 @@ export function PlayerRing({
         (id: string): { x: number; y: number; ax: number; ay: number } | null => {
             const rel = positions.get(id);
             if (!rel || size.w <= 0 || size.h <= 0) return null;
-            const R = tableSize * 0.5 + 20;
+            const R = tableSize * 0.5 + (narrow ? 2 : 20);
             return { x: size.w / 2 + rel.x * R, y: size.h * CY + rel.y * R, ax: rel.x, ay: rel.y };
         },
-        [positions, size.w, size.h, tableSize]
+        [positions, size.w, size.h, tableSize, narrow]
     );
 
     // Trigger nicer animation on passEvent
@@ -358,7 +358,7 @@ export function PlayerRing({
                 </div>
 
                 {/* Tisch-Mitte: Runde + Tempo, aufrecht gestellt (Billboard). */}
-                {size.w > 0 ? (
+                {size.w > 0 && !narrow ? (
                     <div className="tHub" style={{ left: size.w / 2, top: size.h * CY }}>
                         <div className="tHubRound">ZUG {round}</div>
                         <div className={`tHubTempo ${duel ? "duel" : ""}`}>
@@ -439,8 +439,9 @@ export function PlayerRing({
                     const isHolder = !!holderPlayerId && p.player_id === holderPlayerId;
                     const isMe = !!mePlayerId && p.player_id === mePlayerId;
                     const pts = p.song_points ?? 0;
-                    const tx = lp.ay > 0.5 || lp.ay < -0.5 ? "-50%" : lp.ax > 0 ? "0%" : "-100%";
-                    const ty = lp.ay > 0.5 ? "0%" : lp.ay < -0.5 ? "-100%" : "-50%";
+                    // Handy: Schild mittig auf den Tischrand setzen (sonst ragt es seitlich aus dem Bildschirm)
+                    const tx = narrow ? (lp.ay < -0.5 ? (lp.ax < 0 ? "-90%" : "-10%") : "-50%") : lp.ay > 0.5 || lp.ay < -0.5 ? "-50%" : lp.ax > 0 ? "0%" : "-100%";
+                    const ty = narrow ? (lp.ay < -0.5 ? "-110%" : lp.ay > 0.5 ? "-5%" : "-50%") : lp.ay > 0.5 ? "0%" : lp.ay < -0.5 ? "-100%" : "-50%";
                     return (
                         <div
                             key={`nm-${p.player_id}`}
@@ -772,8 +773,9 @@ export function PlayerRing({
           transition: left .45s cubic-bezier(.2,1,.2,1), top .45s cubic-bezier(.2,1,.2,1), border-color .25s ease, background .25s ease;
         }
         .nameTagText{ overflow:hidden; text-overflow: ellipsis; min-width: 0; }
-        .ringNarrow .nameTag{ white-space: normal; line-height: 1.1; border-radius: 12px; padding: 4px 8px; text-align: center; }
-        .ringNarrow .nameTagText{ overflow: visible; word-break: break-word; }
+        .ringNarrow .nameTag{ white-space: nowrap; padding: 3px 8px; gap: 4px; }
+        .ringNarrow .nameTagMe{ display: none; }
+        .ringNarrow .nameTagPts{ font-size: 10px; }
         .nameTagMe{
           flex: none; font-size: 11px; font-weight: 900; padding: 1px 7px; border-radius: 999px;
           background: rgba(34,211,238,.22); border: 1px solid rgba(34,211,238,.7); color: #b9f4ff;

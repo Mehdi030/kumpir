@@ -1994,6 +1994,8 @@ export default function GamePage() {
                 <div className="hudInner">
                     <div className="topicRow">
                         <span className="topicPill">🎵 {selectedTopic}</span>
+                        <span className="topicPill hudMeta">Zug {Math.max(1, lobby.round_number ?? 1)}</span>
+                        <span className="topicPill hudMeta">{aliveNow === 2 ? "⚔ Duell" : `⚡ ×${tempoFactor.toFixed(1)}`}</span>
                     </div>
 
                     {MUSIC_PLAYLISTS[selectedTopic] ? (
@@ -2139,7 +2141,14 @@ export default function GamePage() {
           gap: 14px;
           text-align: center;
         }
-        .topicRow{ display:flex; justify-content:center; }
+        .topicRow{ display:flex; justify-content:center; gap: 8px; flex-wrap: wrap; }
+        .hudMeta{ display: none; }
+        @media (max-width: 520px){
+          .hudMeta{ display: inline-block; }
+          .hud{ padding-top: calc(27vh + 70vmin * 0.31 + 76px); }
+          .topicRow .topicPill{ font-size: 12px; padding: 5px 10px; }
+          .topicRow{ flex-wrap: nowrap; }
+        }
         .topicPill{
           font-size: 14px;
           font-weight: 800;
