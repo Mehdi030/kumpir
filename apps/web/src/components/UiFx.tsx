@@ -9,7 +9,7 @@ import { useEffect } from "react";
  * Läuft über Event-Delegation am Dokument (kein Eingriff in einzelne Seiten) und ist bei
  * "Bewegung reduzieren" komplett aus.
  */
-const SPOT = ".card, .pillCard, .homeStep, .panel, .frCard";
+const SPOT = ".card, .pillCard, .homeStep, .panel, .frCard, .playChoice";
 
 export function UiFx() {
     useEffect(() => {

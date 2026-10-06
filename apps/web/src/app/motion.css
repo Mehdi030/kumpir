@@ -59,14 +59,14 @@ main{ animation: kmPageIn .45s ease backwards; }
 .card{ animation: kmCardIn .75s var(--ease-out) .05s backwards; }
 
 /* Listen/Raster: Kinder erscheinen nacheinander (Neuzugänge poppen einzeln auf) */
-.homeCta > *, .homeSteps > *, .statsGrid > *, .achievementsGrid > *, .hostGrid > *, .frGrid > *, .profLinks > *{
+.homeCta > *, .playChoices > *, .homeSteps > *, .statsGrid > *, .achievementsGrid > *, .hostGrid > *, .frGrid > *, .profLinks > *{
     animation: kmRise .6s var(--ease-out) backwards;
 }
 .playerGrid > .playerChip{ animation: kmPop .5s var(--ease-spring) backwards; }
 .playerGrid > .playerChipReady{ animation: kmPop .5s var(--ease-spring) backwards, playerChipReadyGlow 2.4s ease-in-out .5s infinite; }
 
-.homeCta > *:nth-child(1), .homeSteps > *:nth-child(1), .statsGrid > *:nth-child(1), .achievementsGrid > *:nth-child(1), .frGrid > *:nth-child(1), .playerGrid > *:nth-child(1), .profLinks > *:nth-child(1){ animation-delay: .10s; }
-.homeCta > *:nth-child(2), .homeSteps > *:nth-child(2), .statsGrid > *:nth-child(2), .achievementsGrid > *:nth-child(2), .frGrid > *:nth-child(2), .playerGrid > *:nth-child(2), .profLinks > *:nth-child(2){ animation-delay: .17s; }
+.homeCta > *:nth-child(1), .playChoices > *:nth-child(1), .homeSteps > *:nth-child(1), .statsGrid > *:nth-child(1), .achievementsGrid > *:nth-child(1), .frGrid > *:nth-child(1), .playerGrid > *:nth-child(1), .profLinks > *:nth-child(1){ animation-delay: .10s; }
+.homeCta > *:nth-child(2), .playChoices > *:nth-child(2), .homeSteps > *:nth-child(2), .statsGrid > *:nth-child(2), .achievementsGrid > *:nth-child(2), .frGrid > *:nth-child(2), .playerGrid > *:nth-child(2), .profLinks > *:nth-child(2){ animation-delay: .17s; }
 .homeCta > *:nth-child(3), .homeSteps > *:nth-child(3), .statsGrid > *:nth-child(3), .achievementsGrid > *:nth-child(3), .frGrid > *:nth-child(3), .playerGrid > *:nth-child(3), .profLinks > *:nth-child(3){ animation-delay: .24s; }
 .statsGrid > *:nth-child(4), .achievementsGrid > *:nth-child(4), .frGrid > *:nth-child(4), .playerGrid > *:nth-child(4), .profLinks > *:nth-child(4){ animation-delay: .31s; }
 .achievementsGrid > *:nth-child(5), .frGrid > *:nth-child(5), .playerGrid > *:nth-child(5){ animation-delay: .38s; }
@@ -201,6 +201,23 @@ main{ animation: kmPageIn .45s ease backwards; }
     .homeStep:hover{ transform: translateY(-4px); border-color: rgba(255, 255, 255, .34); }
     .pillCard:hover{ border-color: rgba(255, 255, 255, .3); }
 }
+
+/* ---------- "Jetzt spielen": Auswahlkarten ---------- */
+.playChoice{ position: relative; overflow: hidden; transition: transform .35s var(--ease-spring), background .25s ease, border-color .25s ease, box-shadow .3s ease; }
+@media (hover: hover){
+    .playChoice:hover{ transform: translateY(-6px) scale(1.02); box-shadow: 0 22px 44px rgba(0, 0, 0, .3); }
+    .playChoicePrimary:hover{ box-shadow: 0 22px 44px rgba(0, 0, 0, .3), 0 0 36px rgba(255, 210, 63, .35); }
+    .playChoice:hover .playChoiceIcon{ transform: scale(1.18) rotate(-8deg); }
+}
+.playChoice:active{ transform: scale(.97); transition-duration: .1s; }
+.playChoiceIcon{ display: inline-block; transition: transform .4s var(--ease-spring); }
+.playChoicePrimary .playChoiceIcon{ animation: kmFloat 3.6s var(--ease-inout) infinite; }
+@keyframes kmFloat{ 0%, 100%{ transform: translateY(0); } 50%{ transform: translateY(-6px); } }
+.playChoice::before{
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s ease;
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .16), transparent 62%);
+}
+.playChoice:hover::before{ opacity: 1; }
 
 /* ---------- Eingabefelder ---------- */
 .input, .pillInputWrap, .frInput, .sideDockInput{
