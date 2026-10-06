@@ -6,6 +6,11 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
 - [ ] **Konto-Verlauf & Analyse (Migration 076) mit echten Spielern prüfen**: 2 echte Konten ein Match spielen lassen, danach Profil (Verlauf, Musik, Gegner, Rückblick) und /admin/stats (Songs, Balance, Weg der Spieler) ansehen. DB-Test: `node db/scripts/test-account-history.mjs`
   - [x] A Match-Verlauf, B Musik-Statistik pro Playlist, C Gegner-Bilanz, D Musik-/Match-Achievements, E Monats-Rückblick (teilbar), F Matches/Runden getrennt, G Song-Bekanntheit, H Balance aus echten Zügen, I Weg der Spieler (anonym)
   - [ ] Nach 2–4 Wochen echter Spiele: Song-Liste (rot markierte Songs austauschen) und Balance-Punkte unten mit echten Zahlen entscheiden
+- [x] **Admin-Panel** `/admin` (Migration 078): Rollen Admin/Supporter, Nutzer sperren/entsperren, Namen/Avatar zurücksetzen, Passwort-Reset-Mail, Rollen vergeben (Admin), Löschanträge (Spieler beantragt → Zugang sofort zu → Admin löscht endgültig oder lehnt ab), Lobbys schließen, Songs archivieren (Admin), Protokoll aller Aktionen. DB-Test: `node db/scripts/test-admin-panel.mjs`
+  - [ ] Mit echtem Admin-Konto einmal durchklicken (Nutzer sperren/entsperren, Löschantrag ablehnen)
+- [x] **Playlists auswählbar** (Standard alle, rausnehmen beim Hosten/in den Lobby-Einstellungen/im Profil; Solo beachtet die Auswahl)
+- [ ] **Deutschrap aktuell** (Migration 079, >200 Songs der letzten 4 Jahre): Liste in `db/scripts/data/deutschrap-rapper.json`, neu bauen mit `node db/scripts/build-deutschrap.mjs db/migrations/079_deutschrap_aktuell.sql`. Nach ein paar Spielen unbekannte Songs im Admin-Panel → Songs archivieren
+- [x] Musik startet zuverlässig (gemeinsamer Player, Freischaltung beim ersten Tipp, automatisches Nachholen) – auf echtem iPhone/Android noch gegenprüfen
 - [ ] **Account-System mit Login** (Grundlage steht, Ausbau läuft)
   - [x] Login (E-Mail oder Username), Registrierung mit Username-Check, E-Mail-Bestätigung, Passwort-Reset – bestanden schon, Auth ist aktiv
   - [x] Konto-Seite `/profile` (Stats, Saison-Punkte, Passwort ändern, Abmelden), Konto-Link auf der Startseite
