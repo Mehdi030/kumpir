@@ -7,18 +7,13 @@ import { track } from "@/lib/track";
 
 type Props = { code: string; disabled?: boolean };
 
-/** Einladen mit einem Tipp: Teilen (System-Teilen / WhatsApp), Link kopieren, QR-Code zum Abscannen. */
+/** Einladen mit einem Tipp: Teilen (System-Teilen / WhatsApp) und QR-Code zum Abscannen. */
 export function InviteActions({ code, disabled = false }: Props) {
     const { t } = useI18n();
     const [showQr, setShowQr] = useState(false);
-    const [msg, setMsg] = useState("");
 
     const link = () => `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
     const text = () => `${t("invite.text", { code })}\n${link()}`;
-    const flash = (m: string) => {
-        setMsg(m);
-        window.setTimeout(() => setMsg(""), 1800);
-    };
 
     const share = useCallback(async () => {
         track("invite_share");
@@ -36,25 +31,11 @@ export function InviteActions({ code, disabled = false }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [code, t]);
 
-    const copy = useCallback(async () => {
-        track("invite_copy");
-        try {
-            await navigator.clipboard.writeText(link());
-            flash(t("invite.copied"));
-        } catch {
-            flash(t("invite.copyFail"));
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [code]);
-
     return (
         <div className="inviteWrap">
             <div className="inviteRow">
                 <button type="button" className="btn btnPrimary btnSmall" onClick={() => void share()} disabled={disabled}>
                     {t("invite.share")}
-                </button>
-                <button type="button" className="btn btnSecondary btnSmall" onClick={() => void copy()} disabled={disabled}>
-                    {t("invite.copy")}
                 </button>
                 <button type="button" className="btn btnSecondary btnSmall" onClick={() => {
                         if (!showQr) track("invite_qr");
@@ -62,9 +43,6 @@ export function InviteActions({ code, disabled = false }: Props) {
                     }} aria-expanded={showQr} disabled={disabled}>
                     {showQr ? t("invite.qrHide") : t("invite.qr")}
                 </button>
-            </div>
-            <div className="inviteMsg" aria-live="polite">
-                {msg || " "}
             </div>
             {showQr ? (
                 <div className="inviteQr">
@@ -77,7 +55,6 @@ export function InviteActions({ code, disabled = false }: Props) {
             <style>{`
         .inviteWrap{ display:grid; gap:6px; justify-items:center; }
         .inviteRow{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
-        .inviteMsg{ font-size:12px; font-weight:700; opacity:.85; min-height:16px; }
         .inviteQr{ display:grid; gap:8px; justify-items:center; animation: inviteIn .25s ease both; }
         .inviteQrBox{ background:#fff; padding:10px; border-radius:18px; box-shadow:0 12px 30px rgba(0,0,0,.35); line-height:0; }
         .inviteQrHint{ font-size:13px; opacity:.8; }

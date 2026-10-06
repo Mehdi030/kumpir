@@ -80,11 +80,8 @@ const de = {
 
     // Einladen
     "invite.share": "📲 Einladung teilen",
-    "invite.copy": "🔗 Link kopieren",
     "invite.qr": "📷 QR-Code",
     "invite.qrHide": "QR ausblenden",
-    "invite.copied": "✅ Link kopiert",
-    "invite.copyFail": "⚠️ Kopieren nicht möglich",
     "invite.qrHint": "Mit der Handy-Kamera scannen und direkt beitreten",
     "invite.text": "Komm in meine Kumpir-Lobby! Code: {code}",
 
@@ -192,11 +189,8 @@ const en: Partial<Record<TranslationKey, string>> = {
     "join.badCode": "Please enter a valid 4-character code.",
 
     "invite.share": "📲 Share invite",
-    "invite.copy": "🔗 Copy link",
     "invite.qr": "📷 QR code",
     "invite.qrHide": "Hide QR",
-    "invite.copied": "✅ Link copied",
-    "invite.copyFail": "⚠️ Couldn't copy",
     "invite.qrHint": "Scan with your phone camera to join right away",
     "invite.text": "Join my Kumpir lobby! Code: {code}",
 
