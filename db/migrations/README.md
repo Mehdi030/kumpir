@@ -94,3 +94,5 @@ Bei Konflikten (z.B. „relation already exists"): die Migrations sind mit `IF N
 | 068 | [`068_shisha_topup.sql`](068_shisha_topup.sql) | Shisha Club auf 30 Titel aufgefüllt | Optional |
 | 069 | [`069_remove_wrong_previews.sql`](069_remove_wrong_previews.sql) | 16 Songs mit falscher Vorschau entfernt (Audit `db/scripts/audit-previews.mjs`), Deutschrap/Shisha Club mit verifizierten Titeln aufgefüllt | Empfohlen |
 | 070 | [`070_bot_skill.sql`](070_bot_skill.sql) | Bots mit Stärke (Anfänger/Mittel/Profi): `players.bot_skill`, Reaktionszeit, Trefferquote und Interpret-Antworten je Stärke in `_bot_tick`; `rpc_add_bot` mit optionalem `p_skill` | Empfohlen |
+| 071 | [`071_revoke_legacy_unsafe_rpcs.sql`](071_revoke_legacy_unsafe_rpcs.sql) | **Sicherheit**: Alt-RPCs ohne Session-Prüfung (rpc_pass_potato, rpc_eliminate_player, kick_player(2 Arg.), leave_lobby, rpc_start_game, set_ready ...) für anon/authenticated gesperrt | **Pflicht** |
+| 072 | [`072_restore_round_reset.sql`](072_restore_round_reset.sql) | Combo/Rache-Pass/Richtung pro Runde wieder zurücksetzen (Regression aus 066) | **Pflicht** |
