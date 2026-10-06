@@ -4,6 +4,7 @@
 // verglichen, was tatsächlich eingegeben wurde.
 //
 //   node db/scripts/play-claude.mjs            (legt "Claude" an, falls nötig, und spielt)
+//   node db/scripts/play-claude.mjs --account-only   (nur das Konto anlegen/anmelden, nicht spielen)
 //   node db/scripts/play-claude.mjs --reset    (vorher den Konto-Verlauf von Claude leeren)
 //
 // Zugangsdaten für "Claude" landen in db/.env.local (CLAUDE_TEST_EMAIL / CLAUDE_TEST_PASSWORD, nicht im Git).
@@ -284,6 +285,7 @@ async function verify(acc, played) {
 
 try {
     const acc = await ensureClaude();
+    if (process.argv.includes("--account-only")) { console.log("✅ Konto bereit."); await db.end(); process.exit(0); }
     if (process.argv.includes("--reset")) {
         await q("delete from account_matches where user_id = $1", [acc.uid]);
         await q("delete from account_rounds where user_id = $1", [acc.uid]);

@@ -148,6 +148,9 @@ export default function RegisterPage() {
             return "Benutzername ist bereits vergeben. Bitte wähle einen anderen.";
         }
 
+        if (msg.includes("email rate limit")) {
+            return "Der Mail-Dienst hat gerade sein Stundenlimit für Bestätigungsmails erreicht. Bitte in etwa einer Stunde erneut versuchen.";
+        }
         if (msg.includes("rate limit") || msg.includes("seconds")) {
             return "Zu viele Versuche. Bitte kurz warten und dann erneut versuchen.";
         }
