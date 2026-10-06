@@ -11,6 +11,7 @@ import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { useSavedLobbies } from "@/hooks/useSavedLobbies";
 import { useAuth } from "@/components/AuthProvider";
 import { RulesCard } from "@/components/RulesCard";
+import { LobbyNotFound, isNotFoundError } from "@/components/LobbyNotFound";
 import { Spinner } from "@/components/Spinner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSessionToken } from "@/lib/playerSession";
@@ -313,6 +314,9 @@ export default function LobbyPage() {
             go("/?left=1");
         }
     }, [mePlayerId, lobbyId, go]);
+
+    // Unbekannter Code: statt einer leeren Lobby mit Rohfehler eine klare Seite zeigen
+    if (!loading && !lobby && isNotFoundError(error)) return <LobbyNotFound code={code} />;
 
     const maxPlayers = lobby?.max_players ?? 8;
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";

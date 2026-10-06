@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { loginWithIdentifier } from "@/actions/login";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
@@ -56,6 +57,36 @@ function LoginInner() {
             router.replace(nextPath);
         }
     }, [user, authLoading, router, nextPath]);
+
+    // Passwort vergessen: Mail mit Reset-Link (landet über /auth/callback auf /auth/reset)
+    const [showReset, setShowReset] = useState(false);
+    const [resetEmail, setResetEmail] = useState("");
+    const [resetBusy, setResetBusy] = useState(false);
+    const [resetMsg, setResetMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+    const sendReset = useCallback(async () => {
+        if (resetBusy) return;
+        const email = resetEmail.trim().toLowerCase();
+        if (!/^[^s@]+@[^s@]+.[^s@]+$/.test(email)) {
+            setResetMsg({ ok: false, text: "Bitte eine gültige E-Mail-Adresse eingeben." });
+            return;
+        }
+        setResetBusy(true);
+        setResetMsg(null);
+        const origin = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+        const { error: rErr } = await getSupabaseClient().auth.resetPasswordForEmail(email, {
+            redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/auth/reset")}`,
+        });
+        setResetBusy(false);
+        // Bewusst keine Aussage, ob die Adresse existiert (kein Konto-Ausspähen).
+        setResetMsg(
+            rErr && !/rate|limit|seconds/i.test(rErr.message)
+                ? { ok: false, text: "Das hat gerade nicht geklappt. Bitte später erneut versuchen." }
+                : rErr
+                  ? { ok: false, text: "Bitte kurz warten und dann erneut anfordern." }
+                  : { ok: true, text: "Wenn die Adresse bei uns registriert ist, ist eine Mail mit dem Link unterwegs." }
+        );
+    }, [resetEmail, resetBusy]);
 
     const onLogin = useCallback(async () => {
         if (busy) return;
@@ -184,6 +215,35 @@ function LoginInner() {
                                     <Link href="/" className="btn btnSecondary">
                                         ← Als Gast spielen
                                     </Link>
+                                </div>
+
+                                <div style={{ marginTop: 14 }}>
+                                    <button type="button" className="linkBtnLogin" onClick={() => setShowReset((v) => !v)} aria-expanded={showReset}>
+                                        Passwort vergessen?
+                                    </button>
+                                    {showReset ? (
+                                        <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                                            <div className="fieldHelp">Gib deine E-Mail-Adresse ein – wir schicken dir einen Link zum Zurücksetzen.</div>
+                                            <div className="fieldControl">
+                                                <input
+                                                    className="input"
+                                                    type="email"
+                                                    value={resetEmail}
+                                                    onChange={(e) => setResetEmail(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter") void sendReset();
+                                                    }}
+                                                    placeholder="du@beispiel.de"
+                                                    autoComplete="email"
+                                                />
+                                                <button type="button" className="btn btnSecondary" onClick={() => void sendReset()} disabled={resetBusy}>
+                                                    {resetBusy ? "…" : "Link senden"}
+                                                </button>
+                                            </div>
+                                            {resetMsg ? <div className={`fieldHelp ${resetMsg.ok ? "" : "fieldHelpError"}`}>{resetMsg.text}</div> : null}
+                                        </div>
+                                    ) : null}
+                                    <style>{`.linkBtnLogin{background:none;border:0;color:rgba(255,255,255,.85);font-weight:700;font-size:14px;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:4px 2px}.linkBtnLogin:hover{color:#fff}`}</style>
                                 </div>
                             </div>
                         </div>

@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
+import { LobbyNotFound, isNotFoundError } from "@/components/LobbyNotFound";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
@@ -257,6 +258,8 @@ export default function LobbyAdminPage() {
         );
     }
 
+    if (!lobby && isNotFoundError(error)) return <LobbyNotFound code={code} />;
+
     if (!lobby) {
         return (
             <main className="container">
@@ -345,9 +348,11 @@ export default function LobbyAdminPage() {
                                             type="button"
                                             className={`btn btnSecondary btnSmall ${mode === k ? "btnGlow" : ""}`}
                                             onClick={() => setModeSetting(k)}
-                                            disabled={settingsBusy}
+                                            disabled={settingsBusy || k !== "original"}
+                                            title={k !== "original" ? "Kommt bald" : undefined}
                                         >
                                             {MODES[k].icon} {MODES[k].label}
+                                            {k !== "original" ? <span style={{ opacity: 0.7, fontSize: 11, marginLeft: 6 }}>SOON</span> : null}
                                         </button>
                                     ))}
                                 </div>
@@ -446,7 +451,7 @@ export default function LobbyAdminPage() {
                                                 </span>
                                                 <span className="playerChipState">{p.ready ? "✅" : "⏳"}</span>
                                                 <div className="playerChipAdminActions">
-                                                    {!isHostRow ? (
+                                                    {!isHostRow && !p.is_bot ? (
                                                         <button
                                                             type="button"
                                                             className="btn btnSecondary btnSmall"

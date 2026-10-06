@@ -11,7 +11,6 @@ import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { usePassAttempt } from "@/hooks/usePassAttempt";
-import { useBotEngine } from "@/hooks/useBotEngine";
 import { useNewAchievements } from "@/hooks/useNewAchievements";
 import { useAuth } from "@/components/AuthProvider";
 import { AchievementToastPortal } from "@/components/AchievementToastPortal";
@@ -20,6 +19,7 @@ import { notify } from "@/lib/notifications";
 import { MUSIC_PLAYLISTS } from "@/lib/musicGenres";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
+import { LobbyNotFound, isNotFoundError } from "@/components/LobbyNotFound";
 import { Spinner } from "@/components/Spinner";
 import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
@@ -530,36 +530,8 @@ export default function GamePage() {
         achievementTrigger
     );
 
-    // -----------------------------
-    // Bot-Engine — läuft NUR im Host-Browser, steuert alle is_bot Spieler
-    // -----------------------------
     const isHost = !!mePlayerId && lobby?.host_player_id === mePlayerId;
-    // Bots laufen seit Migration 064 serverseitig (pg_cron) -- der Client-
-    // Bot-Motor bleibt aus, sonst würden Bots doppelt handeln.
-    useBotEngine(
-        false,
-        lobby
-            ? {
-                  id: lobby.id,
-                  code: lobby.code,
-                  phase: lobby.phase,
-                  host_player_id: lobby.host_player_id,
-                  holder_player_id: lobby.holder_player_id,
-                  topic_selected: lobby.topic_selected,
-                  topic_a: lobby.topic_a,
-                  topic_b: lobby.topic_b,
-                  topic_c: lobby.topic_c,
-                  current_attempt_id: lobby.current_attempt_id,
-                  used_answers: lobby.used_answers ?? [],
-                  round_number: lobby.round_number,
-                  current_song_id: lobby.current_song_id,
-                  song_answer_mode: lobby.song_answer_mode,
-              }
-            : null,
-        players,
-        mePlayerId,
-        passAttempt.attempt
-    );
+    // Bots laufen serverseitig (pg_cron, Migration 064/070) -- kein Client-Bot-Motor mehr.
 
     // -----------------------------
     // Poll loop (fallback when realtime is offline)
@@ -1337,6 +1309,7 @@ export default function GamePage() {
     // -----------------------------
     // UI: fatal / loading
     // -----------------------------
+    if (fatalError && isNotFoundError(fatalError)) return <LobbyNotFound code={code} />;
     if (fatalError) {
         return (
             <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
