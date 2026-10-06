@@ -103,6 +103,11 @@ const de = {
     "fin.keep": "💾 Punkte, Siege und Saison-Rang behalten?",
     "fin.create": "Gratis-Konto erstellen",
     "fin.tip": "Tipp: Taste R startet direkt eine neue Runde",
+
+    "pwa.install": "📲 Kumpir als App aufs Handy – startet schneller, ohne Browserleiste.",
+    "pwa.ios": "📲 Als App speichern: unten auf Teilen tippen, dann „Zum Home-Bildschirm“.",
+    "pwa.btn": "Installieren",
+    "pwa.dismiss": "Hinweis schließen",
 } as const;
 
 export type TranslationKey = keyof typeof de;
@@ -186,6 +191,11 @@ const en: Partial<Record<TranslationKey, string>> = {
     "fin.keep": "💾 Keep your points, wins and season rank?",
     "fin.create": "Create free account",
     "fin.tip": "Tip: press R to start a new round right away",
+
+    "pwa.install": "📲 Add Kumpir to your phone as an app – starts faster, no browser bar.",
+    "pwa.ios": "📲 Save as app: tap Share at the bottom, then “Add to Home Screen”.",
+    "pwa.btn": "Install",
+    "pwa.dismiss": "Dismiss",
 };
 
 const dictionaries: Record<Locale, Partial<Record<TranslationKey, string>>> = { de, en };

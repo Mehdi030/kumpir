@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#8f0f0f">
+<title>Kein Internet · Kumpir</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px;text-align:center;color:#fff;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:linear-gradient(180deg,#8f0f0f 0%,#c53a12 30%,#f08a1a 62%,#f6d645 100%)}
+  main{max-width:420px;padding:28px;border-radius:28px;background:rgba(38,9,6,.6);border:1px solid rgba(255,255,255,.2)}
+  img{width:96px;height:96px;border-radius:22px}
+  h1{margin:14px 0 6px;font-size:28px}
+  p{margin:0 0 18px;line-height:1.45;opacity:.92}
+  button{font:inherit;font-weight:800;border:0;border-radius:999px;padding:12px 22px;background:#ffd23f;color:#2b0f04;cursor:pointer}
+  button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+  <img src="/icon-192.png" alt="" width="96" height="96">
+  <h1 id="t">Kein Internet</h1>
+  <p id="p">Kumpir braucht eine Verbindung, damit alle gleichzeitig spielen können. Sobald du wieder online bist, geht es weiter.</p>
+  <button id="b" type="button" onclick="location.reload()">Nochmal versuchen</button>
+</main>
+<script>
+  if ((navigator.language || "").toLowerCase().indexOf("en") === 0) {
+    document.documentElement.lang = "en";
+    document.title = "Offline · Kumpir";
+    document.getElementById("t").textContent = "You are offline";
+    document.getElementById("p").textContent = "Kumpir needs a connection so everyone can play together. Come back once you are online.";
+    document.getElementById("b").textContent = "Try again";
+  }
+  window.addEventListener("online", function () { location.reload(); });
+</script>
+</body>
+</html>

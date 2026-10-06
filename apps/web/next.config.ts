@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
         return [
             { source: "/:file(.*\\.(?:png|webp|svg|ico|woff2))", headers: long },
             { source: "/manifest.webmanifest", headers: long },
+            // Service Worker nie lange cachen, sonst kommen Updates nicht an
+            { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, max-age=0" }, { key: "Service-Worker-Allowed", value: "/" }] },
         ];
     },
     env: {

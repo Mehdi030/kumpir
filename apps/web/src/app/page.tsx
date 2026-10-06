@@ -7,6 +7,7 @@ import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
 import { HomeStatsSection } from "@/components/HomeStatsSection";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { PwaSetup } from "@/components/PwaSetup";
 import { useI18n } from "@/lib/i18n";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
@@ -74,6 +75,7 @@ export default function Home() {
                     </div>
 
                     <HomeStatsSection />
+                    <PwaSetup showHint />
                 </section>
 
                 <footer className="homeFooter">v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"}</footer>

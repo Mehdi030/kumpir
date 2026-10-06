@@ -14,18 +14,18 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
   - [ ] Optional: Login mit Google/Apple
 
 ## Ideen aus der Gesamtanalyse (Außenstehende gewinnen)
-- [ ] 1. „Solo gegen Bots“ mit einem Tipp auf der Startseite (heute: 7 Klicks bis zum ersten Spiel)
-- [ ] 2. Einladen: WhatsApp-/Teilen-Knopf (Web Share), QR-Code in der Lobby
-- [ ] 3. Link-Vorschau (Open Graph, Vorschaubild, „Du wurdest eingeladen · Code …“), robots.txt, sitemap
+- [x] 1. „Solo gegen Bots“ mit einem Tipp auf der Startseite (heute: 7 Klicks bis zum ersten Spiel)
+- [x] 2. Einladen: WhatsApp-/Teilen-Knopf (Web Share), QR-Code in der Lobby
+- [x] 3. Link-Vorschau (Open Graph, Vorschaubild, „Du wurdest eingeladen · Code …“), robots.txt, sitemap
 - [ ] 4. Kurzes Tutorial in der ersten Runde (3 Hinweise zum Einblenden) + Ton beim ersten Klick freischalten
-- [ ] 5. Bild-Gewicht: HGLogo.png 2,4 MB (auch Icon!), logo.png 1,6 MB, LogoK.png 1 MB verkleinern; echte App-Icons 192/512 px
-- [ ] 6. Schrift/JS: zwei Variable-Fonts (90 KB) auf Subset reduzieren, Supabase/Auth nicht auf jeder Seite laden (Startseite ~250 KB JS)
-- [ ] 7. Zuschauen statt „Lobby gesperrt“ für Nachzügler, Wiedereinstieg nach Verbindungsabbruch
-- [ ] 8. Ergebnis teilen (Bild-Karte mit Platz/Punkten) + Revanche-Anreiz
-- [ ] 9. Handy-Feinschliff: 100vh → dvh, Tastatur-Verhalten, größere Tisch-Darstellung
-- [ ] 10. Barrierefreiheit: sichtbarer Tastatur-Fokus, Kontrast der Glas-Karten, Screenreader-Texte
-- [ ] 11. Englisch als zweite Sprache (i18n-Datei ist vorhanden, wird nirgends genutzt)
-- [ ] 12. PWA „Zum Home-Bildschirm“ mit Hinweis + Offline-Seite
+- [x] 5. Bild-Gewicht: HGLogo.png 2,4 MB (auch Icon!), logo.png 1,6 MB, LogoK.png 1 MB verkleinern; echte App-Icons 192/512 px
+- [x] 6. Schrift/JS: zwei Variable-Fonts (90 KB) auf Subset reduzieren, Supabase/Auth nicht auf jeder Seite laden (Startseite ~250 KB JS) – erledigt: nur noch eine Webschrift; JS der Startseite bleibt ~244 KB gzip (React/Next/Supabase), Auth-Lazy-Load offen
+- [x] 7. Zuschauen statt „Lobby gesperrt“ für Nachzügler, Wiedereinstieg nach Verbindungsabbruch
+- [x] 8. Ergebnis teilen (Bild-Karte mit Platz/Punkten) + Revanche-Anreiz
+- [x] 9. Handy-Feinschliff: 100vh → dvh, Tastatur-Verhalten, größere Tisch-Darstellung – erledigt (dvh, Safe-Area)
+- [x] 10. Barrierefreiheit: sichtbarer Tastatur-Fokus, Kontrast der Glas-Karten, Screenreader-Texte – erledigt (Fokus-Ring, dunklere Glas-Karten, Live-Regionen)
+- [x] 11. Englisch als zweite Sprache (i18n-Datei ist vorhanden, wird nirgends genutzt) – erledigt für Start, Solo, Beitreten, Einladen, Endbildschirm; Spielfeld, Host-/Lobby-Seiten noch deutsch
+- [x] 12. PWA „Zum Home-Bildschirm“ mit Hinweis + Offline-Seite – erledigt (Service Worker nur in der Produktion, im Handy-Browser noch nicht getestet)
 
 ## Spiel
 - [ ] **Balance Duell/Tempo:** In großen Lobbys ist die Duell-Zündschnur zu kurz (Blitz, 12 Spieler: Ø 4,4 s ohne Bonus; Überlebenschance eines normalen Spielers sinkt von 72 % auf 34 %). Vorschlag: Mindest-Zündschnur 6 s, Tempo-Boden 60 % statt 45 % (Simulation: db/scripts/simulate-humans.mjs)
