@@ -13,13 +13,6 @@ import { track } from "@/lib/track";
 
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
-type AnswerMode = "text" | "voice";
-
-const ANSWER_MODES: Record<AnswerMode, { label: string; icon: string; hint: string }> = {
-    text: { label: "Schreiben", icon: "⌨️", hint: "Antwort eintippen (Standard)." },
-    voice: { label: "Mündlich", icon: "🎤", hint: "Antwort per Sprache sagen statt zu tippen." },
-};
-
 const ROUND_SPEEDS: Record<
     RoundSpeed,
     { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }
@@ -115,7 +108,6 @@ export default function HostPage() {
     // sind mit "SOON" gesperrt) -- direkt vorausgewählt, damit man nicht
     // erst klicken muss.
     const [mode, setMode] = useState<ModeKey | null>("original");
-    const [answerMode, setAnswerMode] = useState<AnswerMode>("text");
     // Anzahl Runden pro Match: nach jeder Runde Zwischenstand + neues Themen-Voting.
     const [seriesTotal, setSeriesTotal] = useState<1 | 3 | 5>(1);
 
@@ -151,7 +143,6 @@ export default function HostPage() {
         if (h.maxPlayers) setMaxPlayers(h.maxPlayers);
         if (h.speed) setRoundSpeed(h.speed);
         if (h.rounds) setSeriesTotal(h.rounds);
-        if (h.answerMode) setAnswerMode(h.answerMode);
     }, [profile?.preferences?.host]);
 
     const activeMode = mode ? MODES[mode] : null;
@@ -267,13 +258,6 @@ export default function HostPage() {
                             void savePreferences({ host: { excludedPlaylists: excluded } });
                         }
                     }
-                    if (answerMode !== "text") {
-                        await supabase.rpc("set_lobby_answer_mode", {
-                            p_lobby_id: lobbyRow.id,
-                            p_me_player_id: hostPlayerId,
-                            p_answer_mode: answerMode,
-                        });
-                    }
                 }
             }
 
@@ -285,7 +269,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, answerMode, seriesTotal, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, profile?.preferences?.host?.excludedPlaylists, savePreferences]);
+    }, [canCreate, hostName, roundSpeed, mode, seriesTotal, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, profile?.preferences?.host?.excludedPlaylists, savePreferences]);
 
     return (
         <main className="container">
@@ -464,33 +448,6 @@ export default function HostPage() {
                                 <PlaylistPicker selected={playlists} onChange={setPlaylists} />
                             </div>
 
-                            <div className="pillCard" style={{ marginTop: 14 }}>
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">Antwort-Modus</div>
-                                    <div className="pillCardHint">{ANSWER_MODES[answerMode].hint}</div>
-                                </div>
-
-                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                    {(Object.keys(ANSWER_MODES) as AnswerMode[]).map((key) => {
-                                        const a = ANSWER_MODES[key];
-                                        const active = answerMode === key;
-
-                                        return (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
-                                                data-variant={key}
-                                                onClick={() => setAnswerMode(key)}
-                                                aria-pressed={active}
-                                            >
-                                                <span className="segIcon" aria-hidden>{a.icon}</span>
-                                                <span className="segLabel">{a.label}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
 
                             <RulesCard defaultOpen={false} />
 

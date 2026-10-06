@@ -25,12 +25,6 @@ const MODES: Record<ModeKey, { label: string; icon: string }> = {
     reverse: { label: "Reverse", icon: "🔁" },
 };
 
-type AnswerModeKey = "text" | "voice";
-const ANSWER_MODES: Record<AnswerModeKey, { label: string; icon: string }> = {
-    text: { label: "Schreiben", icon: "⌨️" },
-    voice: { label: "Mündlich", icon: "🎤" },
-};
-
 function getErrorMessage(e: unknown): string {
     if (e instanceof Error) return e.message;
     if (typeof e === "string") return e;
@@ -157,15 +151,9 @@ export default function LobbyAdminPage() {
     // damit das Admin Panel nach der Erstellung tatsächlich der Ort ist, an
     // dem der Host alles verwalten kann -- nicht eine zweite, unverlinkte Seite) ----
     const [settingsBusy, setSettingsBusy] = useState(false);
-    const [topicDraft, setTopicDraft] = useState("");
-
-    useEffect(() => {
-        setTopicDraft(lobby?.topic ?? "");
-    }, [lobby?.topic]);
 
     const maxPlayers = lobby?.max_players ?? 8;
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
-    const answerMode = ((lobby?.answer_mode ?? "text") as AnswerModeKey) ?? "text";
     const playlistList = usePlaylists();
     // Kein Filter in der Lobby = alle Playlists
     const musicGenres = useMemo(
@@ -219,18 +207,6 @@ export default function LobbyAdminPage() {
         [mePlayerId, lobbyId, runSetting]
     );
 
-    const setAnswerModeSetting = useCallback(
-        (next: AnswerModeKey) => {
-            if (!mePlayerId || !lobbyId) return;
-            const supabase = getSupabaseClient();
-            runSetting(
-                () => supabase.rpc("set_lobby_answer_mode", { p_lobby_id: lobbyId, p_me_player_id: mePlayerId, p_answer_mode: next }),
-                "✅ Antwort-Modus gespeichert"
-            );
-        },
-        [mePlayerId, lobbyId, runSetting]
-    );
-
     const setGenresSetting = useCallback(
         (selected: string[]) => {
             if (!mePlayerId || !lobbyId) return;
@@ -244,15 +220,6 @@ export default function LobbyAdminPage() {
         },
         [mePlayerId, lobbyId, playlistList, runSetting]
     );
-
-    const saveTopicSetting = useCallback(() => {
-        if (!mePlayerId || !lobbyId) return;
-        const supabase = getSupabaseClient();
-        runSetting(
-            () => supabase.rpc("set_lobby_topic", { p_lobby_id: lobbyId, p_me_player_id: mePlayerId, p_topic: topicDraft }),
-            "✅ Thema gespeichert"
-        );
-    }, [mePlayerId, lobbyId, topicDraft, runSetting]);
 
     if (loading && !lobby) {
         return (
@@ -364,24 +331,6 @@ export default function LobbyAdminPage() {
                                 </div>
                             </div>
 
-                            <div className="pillCard" style={{ marginTop: 14 }}>
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">Antwort-Modus</div>
-                                </div>
-                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                                    {(Object.keys(ANSWER_MODES) as AnswerModeKey[]).map((k) => (
-                                        <button
-                                            key={k}
-                                            type="button"
-                                            className={`btn btnSecondary btnSmall ${answerMode === k ? "btnGlow" : ""}`}
-                                            onClick={() => setAnswerModeSetting(k)}
-                                            disabled={settingsBusy}
-                                        >
-                                            {ANSWER_MODES[k].icon} {ANSWER_MODES[k].label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
@@ -393,25 +342,6 @@ export default function LobbyAdminPage() {
                                 </div>
                             </div>
 
-                            <div className="pillCard" style={{ marginTop: 14 }}>
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">Thema</div>
-                                    <div className="pillCardHint">Optional (max 60)</div>
-                                </div>
-                                <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
-                                    <input
-                                        value={topicDraft}
-                                        onChange={(e) => setTopicDraft(e.target.value)}
-                                        placeholder="z.B. Filmzitate"
-                                        maxLength={60}
-                                        className="pillInput"
-                                        style={{ flex: 1 }}
-                                    />
-                                    <button type="button" className="btn btnPrimary btnSmall" onClick={saveTopicSetting} disabled={settingsBusy}>
-                                        💾 Speichern
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
 

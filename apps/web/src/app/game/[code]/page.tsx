@@ -60,6 +60,7 @@ type LobbyState = {
     topic_a: string | null;
     topic_b: string | null;
     topic_c: string | null;
+    topic_vote_cards: number;
     topic_selected: string | null;
     topic_vote_ends_at: string | null;
 
@@ -610,6 +611,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     topic_a: (raw.topic_a as string | null) ?? null,
                     topic_b: (raw.topic_b as string | null) ?? null,
                     topic_c: (raw.topic_c as string | null) ?? null,
+                    topic_vote_cards: (raw.topic_vote_cards as number | null) ?? 3,
                     topic_selected: (raw.topic_selected as string | null) ?? null,
                     topic_vote_ends_at: (raw.topic_vote_ends_at as string | null) ?? null,
 
@@ -1312,7 +1314,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             if (!lobby) return;
 
             // Topic vote: 1 / 2 / 3 -- "3" ist immer gültig (echtes Thema C oder Zufällig).
-            if (lobby.phase === "topic_vote" && (ev.key === "1" || ev.key === "2" || ev.key === "3")) {
+            if (lobby.phase === "topic_vote" && (ev.key === "1" || ev.key === "2" || ev.key === "3") && Number(ev.key) <= (lobby.topic_vote_cards ?? 3) && (lobby.topic_vote_cards ?? 3) > 1) {
                 ev.preventDefault();
                 const choice = Number(ev.key) as 1 | 2 | 3;
                 void vote(choice);
@@ -1362,6 +1364,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     const aLabel = lobby.topic_a ?? "…";
     const bLabel = lobby.topic_b ?? "…";
     const cLabel = lobby.topic_c ?? "Zufall";
+    // Anzahl Karten: 1 Playlist = keine Abstimmung, 2 Playlists = nur A und B, ab 3 = A, B und Zufall
+    const voteCards = Math.min(3, Math.max(1, lobby.topic_vote_cards ?? 3));
 
     // =========================================================
     // PHASE: TOPIC VOTE  (NO blinking)
@@ -1396,7 +1400,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <button
                                 type="button"
                                 onClick={() => void vote(1)}
-                                disabled={voteBusy || !mePlayerId || isSpectator}
+                                disabled={voteBusy || !mePlayerId || isSpectator || voteCards === 1}
                                 className={`glassCard ${myVote === 1 ? "active" : ""}`}
                             >
                                 <div className="glassShine" aria-hidden />
@@ -1405,10 +1409,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                     <span className="micro">Playlist A</span>
                                 </div>
                                 <div className="cardTitle">{aLabel}</div>
-                                <div className="cardHint">{myVote === 1 ? "✓ Deine Wahl" : "Tippen zum Wählen"}</div>
+                                <div className="cardHint">{voteCards === 1 ? "Nur diese Playlist ist aktiv" : myVote === 1 ? "✓ Deine Wahl" : "Tippen zum Wählen"}</div>
                             </button>
 
-                            <button
+                            {voteCards >= 2 ? (
+<button
                                 type="button"
                                 onClick={() => void vote(2)}
                                 disabled={voteBusy || !mePlayerId || isSpectator}
@@ -1422,8 +1427,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 <div className="cardTitle">{bLabel}</div>
                                 <div className="cardHint">{myVote === 2 ? "✓ Deine Wahl" : "Tippen zum Wählen"}</div>
                             </button>
+                            ) : null}
 
-                            <button
+                            {voteCards >= 3 ? (
+<button
                                 type="button"
                                 onClick={() => void vote(3)}
                                 disabled={voteBusy || !mePlayerId || isSpectator}
@@ -1439,10 +1446,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                     {myVote === 3 ? "✓ Deine Wahl" : lobby.topic_c ? "Tippen zum Wählen" : "Das Los zieht eine andere Playlist"}
                                 </div>
                             </button>
+                            ) : null}
                         </div>
 
                         <div className="statusLine">
-                            {allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
+                            {voteCards === 1 ? "Es geht gleich los…" : allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
                         </div>
 
                         <ToastStack toasts={toasts} inline />
@@ -1584,14 +1592,18 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <div className="resultBadge">①</div>
                             <div className="resultTitle">{aLabel}</div>
                         </div>
-                        <div className={`resultTile ${isWinner(2) ? "win" : "lose"}`}>
+                        {voteCards >= 2 ? (
+<div className={`resultTile ${isWinner(2) ? "win" : "lose"}`}>
                             <div className="resultBadge">②</div>
                             <div className="resultTitle">{bLabel}</div>
                         </div>
-                        <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
+                        ) : null}
+                        {voteCards >= 3 ? (
+<div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
                             <div className="resultBadge">{lobby.topic_c ? "③" : "🎲"}</div>
                             <div className="resultTitle">{isWinner(3) && !lobby.topic_c ? `Zufall: ${selectedTopic}` : cLabel}</div>
                         </div>
+                        ) : null}
                     </div>
 
                     <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>{selectedTopic}</div>
