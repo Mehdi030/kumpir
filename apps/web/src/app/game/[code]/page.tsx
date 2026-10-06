@@ -1708,6 +1708,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         isMe: r.player_id === mePlayerId,
                     }))}
                     seriesRows={seriesRows}
+                    shareRows={
+                        isSeries
+                            ? seriesRanked.map((e, i) => ({ place: i + 1, name: e.name, score: e.total, isMe: e.id === mePlayerId }))
+                            : ranking.map((r) => ({ place: r.place, name: r.name, score: r.score, isMe: r.player_id === mePlayerId }))
+                    }
                     mePlayerId={mePlayerId}
                     highlights={highlights}
                     loggedIn={!!user}

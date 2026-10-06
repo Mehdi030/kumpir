@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
 import { Spinner } from "@/components/Spinner";
 import { ToastStack } from "@/components/ToastStack";
+import { renderResultCard } from "@/lib/resultCard";
 
 export type FinishRow = {
     id: string;
@@ -28,6 +29,8 @@ type Props = {
     me: { place: number; score: number } | null;
     rows: FinishRow[];
     seriesRows: SeriesRow[];
+    /** Kompakte Wertung für die teilbare Ergebniskarte (bei Match: Gesamtwertung). */
+    shareRows: { place: number; name: string; score: number; isMe?: boolean }[];
     mePlayerId: string | null;
     highlights: FinishHighlight[];
     loggedIn: boolean;
@@ -44,7 +47,43 @@ const MEDAL = ["🥇", "🥈", "🥉"];
  * Bei mehreren Runden ist die Wertung die Match-Gesamtwertung (Punkte je Runde + Summe),
  * bei einer einzelnen Runde die Rundenwertung.
  */
-export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seriesRows, mePlayerId, highlights, loggedIn, busy, onRematch, onLobby, toasts }: Props) {
+export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seriesRows, shareRows, mePlayerId, highlights, loggedIn, busy, onRematch, onLobby, toasts }: Props) {
+    const [shareMsg, setShareMsg] = useState("");
+    const [shareBusy, setShareBusy] = useState(false);
+
+    const shareResult = async () => {
+        if (shareBusy) return;
+        setShareBusy(true);
+        try {
+            const blob = await renderResultCard({ winnerName, isSeries, totalRounds, me, rows: shareRows, siteUrl: window.location.origin });
+            const file = new File([blob], "kumpir-ergebnis.png", { type: "image/png" });
+            const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+            const text = `${winnerName} gewinnt bei Kumpir${me ? ` – ich: Platz ${me.place}, ${me.score} Punkte` : ""}. Spiel mit: ${window.location.origin}`;
+            if (typeof nav.canShare === "function" && nav.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({ files: [file], text, title: "Kumpir-Ergebnis" });
+                    return;
+                } catch (e) {
+                    if (e instanceof Error && e.name === "AbortError") return;
+                }
+            }
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "kumpir-ergebnis.png";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            setShareMsg("✅ Bild gespeichert");
+            window.setTimeout(() => setShareMsg(""), 2500);
+        } catch {
+            setShareMsg("⚠️ Bild konnte nicht erstellt werden");
+            window.setTimeout(() => setShareMsg(""), 2500);
+        } finally {
+            setShareBusy(false);
+        }
+    };
+
     return (
         <div className="finWrap">
             <header className="finHero">
@@ -121,6 +160,14 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
                     {busy === "reset" ? <Spinner size={16} label="Lade…" /> : "Zur Lobby"}
                 </button>
             </div>
+            <div className="finShare">
+                <button type="button" className="btn btnSecondary btnSmall" onClick={() => void shareResult()} disabled={shareBusy}>
+                    {shareBusy ? <Spinner size={14} label="Erstelle Bild…" /> : "📤 Ergebnis teilen"}
+                </button>
+                <span className="finShareMsg" aria-live="polite">
+                    {shareMsg}
+                </span>
+            </div>
             <div className="finHint">Tipp: Taste R startet direkt eine neue Runde</div>
 
             <ToastStack toasts={toasts} inline />
@@ -162,6 +209,8 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
         .finAccount.ok{ background: rgba(60,200,110,.18); border-color: rgba(110,230,150,.45); }
         .finAccountLink{ color: #2b0f04; background: #ffd23f; padding: 6px 14px; border-radius: 999px; font-weight: 800; text-decoration: none; }
         .finActions{ display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
+        .finShare{ display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+        .finShareMsg{ font-size: 13px; font-weight: 700; opacity: .85; }
         .finHint{ text-align: center; font-size: 12px; opacity: .6; }
 
         @keyframes finIn{ from{ opacity: 0; transform: translateY(14px); } to{ opacity: 1; transform: translateY(0); } }
