@@ -7,6 +7,13 @@
  * Reihenfolge hier = Reihenfolge im Host-/Settings-UI.
  */
 export const MUSIC_PLAYLISTS: Record<string, { title: string; id: string; icon: string }> = {
+    // Migration 079: aktuelle Deutschrap-Hits der letzten 4 Jahre (Deezer-Beliebtheit + iTunes-Vorschau,
+    // gebaut mit db/scripts/build-deutschrap.mjs aus db/scripts/data/deutschrap-rapper.json)
+    "Deutschrap aktuell": {
+        title: "Deutschrap aktuell",
+        id: "",
+        icon: "🔥",
+    },
     "Deutschrap-Songs": {
         title: "German Hip Hop Mix",
         id: "37i9dQZF1EIhtg5PfzSFt2",

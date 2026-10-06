@@ -119,6 +119,13 @@ export default function ProfilePage() {
                     )}
 
                     <div className="profLinks">
+                        {profile.isStaff ? (
+                            <Link href="/admin" className="profLink">
+                                <span>🛡️</span>
+                                <b>Admin-Panel</b>
+                                <small>{profile.role === "admin" ? "Admin" : "Supporter"} · Nutzer, Löschanträge, Lobbys</small>
+                            </Link>
+                        ) : null}
                         <Link href="/achievements" className="profLink">
                             <span>🏅</span>
                             <b>Achievements</b>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile } from "@/components/ProfileProvider";
 import { PasswordInput } from "@/components/PasswordInput";
+import { PlaylistPicker, selectedFromExcluded, usePlaylists } from "@/components/PlaylistPicker";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useI18n } from "@/lib/i18n";
 import { getMuted, getVolume, setMuted, setVolume } from "@/lib/gameFx";
@@ -25,7 +26,7 @@ export type AccountApi = {
     isUsernameAvailable: (u: string) => Promise<boolean | null>;
     changeEmail: (email: string) => Promise<{ error?: string }>;
     changePassword: (pw: string) => Promise<{ error?: string }>;
-    deleteAccount: () => Promise<{ error?: string }>;
+    requestDeletion: (reason: string) => Promise<{ error?: string }>;
     logout: () => Promise<void>;
 };
 
@@ -52,8 +53,8 @@ export function supabaseAccountApi(): AccountApi {
             const { error } = await sb.auth.updateUser({ password: pw });
             return { error: error?.message };
         },
-        async deleteAccount() {
-            const { error } = await sb.rpc("delete_my_account");
+        async requestDeletion(reason) {
+            const { error } = await sb.rpc("request_account_deletion", { p_reason: reason || null });
             if (!error) await sb.auth.signOut();
             return { error: error?.message };
         },
@@ -321,13 +322,18 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
     const [speed, setSpeed] = useState<"fast" | "normal" | "calm">(p.host?.speed ?? "normal");
     const [rounds, setRounds] = useState<1 | 3 | 5>(p.host?.rounds ?? 1);
     const [answerMode, setAnswerMode] = useState<"text" | "voice">(p.host?.answerMode ?? "text");
+    const playlistList = usePlaylists();
+    const allNames = (playlistList ?? []).map((x) => x.name);
+    const [playlistSel, setPlaylistSel] = useState<string[] | null>(null);
+    const selectedPlaylists = playlistSel ?? selectedFromExcluded(allNames, p.host?.excludedPlaylists);
     const [msg, setMsg] = useState<Msg>(null);
     const [busy, setBusy] = useState(false);
 
     const save = async () => {
         setBusy(true);
         setMsg(null);
-        const res = await onSavePreferences({ solo: { bots, skill }, host: { maxPlayers, speed, rounds, answerMode } });
+        const excludedPlaylists = allNames.filter((n) => !selectedPlaylists.includes(n));
+        const res = await onSavePreferences({ solo: { bots, skill }, host: { maxPlayers, speed, rounds, answerMode, excludedPlaylists } });
         setBusy(false);
         setMsg(res.ok ? { ok: true, text: "✅ Gespeichert – gilt ab dem nächsten Spiel" } : { ok: false, text: settingsErrorText(res.error) });
     };
@@ -378,6 +384,12 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
                         style={{ flex: "1 1 160px" }}
                     />
                 </div>
+            </div>
+
+            <div className="setGroup">
+                <h3>🎵 Playlists</h3>
+                <div className="setHint">Rausgenommene Playlists kommen beim Hosten und im Solo-Modus nicht vor. Neue Playlists sind automatisch dabei.</div>
+                <PlaylistPicker selected={selectedPlaylists} onChange={setPlaylistSel} />
             </div>
 
             <div className="setGroup">
@@ -462,7 +474,7 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
 
             <div className="setRow">
                 <button type="button" className="btn btnPrimary btnSmall" onClick={() => void save()} disabled={busy}>
-                    {busy ? "…" : "Solo- & Host-Einstellungen speichern"}
+                    {busy ? "…" : "Playlists, Solo & Host speichern"}
                 </button>
                 <Note msg={msg} />
             </div>
@@ -481,6 +493,7 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
     const [pBusy, setPBusy] = useState(false);
     const [delOpen, setDelOpen] = useState(false);
     const [delText, setDelText] = useState("");
+    const [delReason, setDelReason] = useState("");
     const [dMsg, setDMsg] = useState<Msg>(null);
     const [dBusy, setDBusy] = useState(false);
 
@@ -522,10 +535,10 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
         if (delText.trim().toUpperCase() !== "LÖSCHEN") return setDMsg({ ok: false, text: "Bitte zur Bestätigung LÖSCHEN eintippen." });
         setDBusy(true);
         setDMsg(null);
-        const res = await api.deleteAccount();
+        const res = await api.requestDeletion(delReason.trim());
         setDBusy(false);
         if (res.error) return setDMsg({ ok: false, text: settingsErrorText(res.error) });
-        window.location.assign("/login?m=account_deleted");
+        window.location.assign("/login?m=deletion_requested");
     };
 
     return (
@@ -582,22 +595,25 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
             </div>
 
             <div className="setGroup setDanger">
-                <h3>Konto löschen</h3>
+                <h3>Konto-Löschung beantragen</h3>
                 {!delOpen ? (
                     <div className="setRow">
                         <button type="button" className="btn btnSecondary btnSmall" onClick={() => setDelOpen(true)}>
-                            Konto löschen …
+                            Löschung beantragen …
                         </button>
                     </div>
                 ) : (
                     <>
                         <div className="setHint">
-                            Löscht dein Konto mit Verlauf, Achievements, Saison-Punkten und Freunden. Das lässt sich <b>nicht rückgängig</b> machen. Zum Bestätigen <b>LÖSCHEN</b> eintippen:
+                            Dein Zugang wird <b>sofort gesperrt</b> und du wirst überall abgemeldet. Ein Admin löscht das Konto danach endgültig – mit Verlauf, Achievements, Saison-Punkten und Freunden. Bis dahin kann ein Admin es auf Wunsch wiederherstellen. Zum Bestätigen <b>LÖSCHEN</b> eintippen:
+                        </div>
+                        <div className="setRow">
+                            <input className="input" value={delReason} onChange={(e) => setDelReason(e.target.value)} placeholder="Grund (optional)" maxLength={300} aria-label="Grund für die Löschung (optional)" />
                         </div>
                         <div className="setRow">
                             <input className="input" value={delText} onChange={(e) => setDelText(e.target.value)} placeholder="LÖSCHEN" aria-label="Zur Bestätigung LÖSCHEN eintippen" />
                             <button type="button" className="btn btnSmall btnDanger" onClick={() => void deleteAccount()} disabled={dBusy}>
-                                {dBusy ? "…" : "Endgültig löschen"}
+                                {dBusy ? "…" : "Löschung beantragen"}
                             </button>
                             <button type="button" className="btn btnSecondary btnSmall" onClick={() => (setDelOpen(false), setDelText(""), setDMsg(null))}>
                                 Abbrechen

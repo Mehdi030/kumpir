@@ -7,7 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSessionToken } from "@/lib/playerSession";
-import { MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
+import { loadPlaylists, selectedFromExcluded } from "@/components/PlaylistPicker";
 import { startGame } from "@/actions/startGame";
 import { Spinner } from "@/components/Spinner";
 import { useI18n } from "@/lib/i18n";
@@ -94,7 +94,14 @@ export default function SoloPage() {
             const { data: lobby, error: lErr } = await supabase.from("lobbies").select("id").eq("code", code).single();
             if (lErr || !lobby?.id) throw new Error(lErr?.message ?? "Lobby nicht gefunden.");
 
-            await supabase.rpc("set_lobby_topic_filter", { p_lobby_id: lobby.id, p_me_player_id: me, p_categories: MUSIC_GENRE_KEYS });
+            // Playlists: alle, außer den im Konto rausgenommenen (leer = alle)
+            const excluded = profile?.preferences?.host?.excludedPlaylists ?? [];
+            const allNames = excluded.length ? (await loadPlaylists()).map((p) => p.name) : [];
+            await supabase.rpc("set_lobby_topic_filter", {
+                p_lobby_id: lobby.id,
+                p_me_player_id: me,
+                p_categories: excluded.length ? selectedFromExcluded(allNames, excluded) : [],
+            });
             for (const b of bots) {
                 const { error: bErr } = await supabase.rpc("rpc_add_bot", { p_lobby_id: lobby.id, p_me_player_id: me, p_bot_name: b.name, p_skill: b.skill });
                 if (bErr) throw new Error(bErr.message);

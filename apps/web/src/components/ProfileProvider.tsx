@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { User } from "@supabase/supabase-js";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { mergePreferences, type AccountSettings, type Preferences } from "@/lib/accountSettings";
+import { mergePreferences, type AccountSettings, type AccountStatus, type Preferences, type StaffRole } from "@/lib/accountSettings";
 
 export type Profile = {
     username: string | null;
@@ -17,6 +17,10 @@ export type Profile = {
     preferences: Preferences;
     /** Name für Lobbys: Spielername, sonst Benutzername. */
     playerName: string | null;
+    role: StaffRole;
+    status: AccountStatus;
+    /** Admin oder Supporter -> Admin-Panel sichtbar */
+    isStaff: boolean;
 };
 
 type ProfileCtx = {
@@ -29,7 +33,7 @@ type ProfileCtx = {
     savePreferences: (patch: Preferences) => Promise<{ ok: boolean; error?: string }>;
 };
 
-const EMPTY: AccountSettings = { username: null, displayName: null, avatarEmoji: null, avatarColor: null, preferences: {} };
+const EMPTY: AccountSettings = { role: "user", status: "active", username: null, displayName: null, avatarEmoji: null, avatarColor: null, preferences: {} };
 
 const Ctx = createContext<ProfileCtx>({
     profile: null,
@@ -51,7 +55,15 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         const { data, error } = await supabase.rpc("get_my_settings");
         if (!error && data) {
             const d = data as Partial<AccountSettings>;
+            // Gesperrt oder Löschung beantragt: sofort abmelden (der Server lässt ohnehin nichts mehr zu)
+            if (d.status && d.status !== "active") {
+                await supabase.auth.signOut();
+                window.location.assign(`/login?m=${d.status === "deletion_requested" ? "deletion_requested" : "account_suspended"}`);
+                return;
+            }
             setSettings({
+                role: (d.role as StaffRole) ?? "user",
+                status: "active",
                 username: d.username ?? null,
                 displayName: d.displayName ?? null,
                 avatarEmoji: d.avatarEmoji ?? null,
@@ -107,6 +119,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
                   avatarColor: s.avatarColor,
                   preferences: s.preferences,
                   playerName: s.displayName || s.username,
+                  role: s.role,
+                  status: s.status,
+                  isStaff: s.role === "admin" || s.role === "supporter",
               }
             : null;
         return {

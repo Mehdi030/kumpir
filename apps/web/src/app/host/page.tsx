@@ -7,7 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
-import { MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
+import { PlaylistPicker, loadPlaylists, selectedFromExcluded } from "@/components/PlaylistPicker";
 import { RulesCard } from "@/components/RulesCard";
 import { track } from "@/lib/track";
 
@@ -100,7 +100,7 @@ export default function HostPage() {
     const supabase = getSupabaseClient();
     const router = useRouter();
     const { user } = useAuth();
-    const { profile } = useProfile();
+    const { profile, savePreferences } = useProfile();
 
     const [hostName, setHostName] = useState("");
     // Eingeloggt: Spielername aus dem Konto vorbelegen (sonst Benutzername) – bleibt änderbar.
@@ -120,6 +120,29 @@ export default function HostPage() {
     const [seriesTotal, setSeriesTotal] = useState<1 | 3 | 5>(1);
 
     // Gespeicherte Host-Standards aus den Konto-Einstellungen (einmal beim Laden übernehmen).
+    // Playlists: Standard alle; im Konto rausgenommene bleiben draußen (wird beim Erstellen gemerkt)
+    const [allPlaylists, setAllPlaylists] = useState<string[]>([]);
+    const [playlists, setPlaylists] = useState<string[]>([]);
+    useEffect(() => {
+        let alive = true;
+        void loadPlaylists().then((list) => {
+            if (!alive) return;
+            const names = list.map((p) => p.name);
+            setAllPlaylists(names);
+            setPlaylists((cur) => (cur.length ? cur : names));
+        });
+        return () => {
+            alive = false;
+        };
+    }, []);
+    const appliedPlaylistPrefs = useRef(false);
+    useEffect(() => {
+        const ex = profile?.preferences?.host?.excludedPlaylists;
+        if (!ex || !allPlaylists.length || appliedPlaylistPrefs.current) return;
+        appliedPlaylistPrefs.current = true;
+        setPlaylists(selectedFromExcluded(allPlaylists, ex));
+    }, [profile?.preferences?.host?.excludedPlaylists, allPlaylists]);
+
     const appliedHostPrefs = useRef(false);
     useEffect(() => {
         const h = profile?.preferences?.host;
@@ -230,11 +253,20 @@ export default function HostPage() {
                             p_total: seriesTotal,
                         });
                     }
+                    // Alle ausgewählt -> leerer Filter = "alle", auch künftig neue Playlists
+                    const allSelected = !allPlaylists.length || allPlaylists.every((n) => playlists.includes(n));
                     await supabase.rpc("set_lobby_topic_filter", {
                         p_lobby_id: lobbyRow.id,
                         p_me_player_id: hostPlayerId,
-                        p_categories: MUSIC_GENRE_KEYS,
+                        p_categories: allSelected ? [] : playlists,
                     });
+                    if (user?.id && allPlaylists.length) {
+                        const excluded = allPlaylists.filter((n) => !playlists.includes(n));
+                        const before = profile?.preferences?.host?.excludedPlaylists ?? [];
+                        if ([...excluded].sort().join("|") !== [...before].sort().join("|")) {
+                            void savePreferences({ host: { excludedPlaylists: excluded } });
+                        }
+                    }
                     if (answerMode !== "text") {
                         await supabase.rpc("set_lobby_answer_mode", {
                             p_lobby_id: lobbyRow.id,
@@ -253,7 +285,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, answerMode, seriesTotal, supabase, maxPlayers, router, user?.id]);
+    }, [canCreate, hostName, roundSpeed, mode, answerMode, seriesTotal, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, profile?.preferences?.host?.excludedPlaylists, savePreferences]);
 
     return (
         <main className="container">
@@ -423,13 +455,13 @@ export default function HostPage() {
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">🎵 Musik</div>
-                                    <div className="pillCardHint">Läuft immer mit</div>
+                                    <div className="pillCardTitle">🎵 Playlists</div>
+                                    <div className="pillCardHint">Antippen = rausnehmen</div>
                                 </div>
-                                <div className="fieldHelp" style={{ opacity: 0.9 }}>
-                                    Jede Runde ist eine der {MUSIC_GENRE_KEYS.length} Playlists ({MUSIC_GENRE_KEYS.join(", ")}) — der Halter
-                                    hört einen Song-Schnipsel und muss Titel oder Interpret erraten.
+                                <div className="fieldHelp" style={{ opacity: 0.9, marginBottom: 8 }}>
+                                    Jede Runde wird eine der ausgewählten Playlists gespielt – der Halter hört einen Song-Schnipsel und muss Titel oder Interpret erraten.
                                 </div>
+                                <PlaylistPicker selected={playlists} onChange={setPlaylists} />
                             </div>
 
                             <div className="pillCard" style={{ marginTop: 14 }}>

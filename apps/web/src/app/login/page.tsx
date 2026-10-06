@@ -64,6 +64,12 @@ function LoginInner() {
         if (msg === "account_deleted") {
             return "Dein Konto wurde gelöscht. Du kannst jederzeit als Gast weiterspielen.";
         }
+        if (msg === "deletion_requested") {
+            return "🗑️ Deine Löschung ist beantragt. Der Zugang ist gesperrt; ein Admin löscht das Konto endgültig. Als Gast kannst du weiterspielen.";
+        }
+        if (msg === "account_suspended") {
+            return "⛔ Dieses Konto ist gesperrt. Wende dich an einen Admin, wenn das ein Irrtum ist. Als Gast kannst du weiterspielen.";
+        }
         return "";
     }, [msg, preloadEmail, errorParam, errorCodeParam, errorDescParam]);
 

@@ -32,6 +32,7 @@ async function resolveEmail(identifier: string): Promise<{ ok: true; email: stri
 function friendlyAuthError(raw: string | undefined): string {
     const msg = (raw ?? "").toLowerCase();
     if (msg.includes("invalid login") || msg.includes("invalid credentials")) return "Benutzername/E-Mail oder Passwort falsch.";
+    if (msg.includes("banned")) return "Dieses Konto ist gesperrt oder zur Löschung beantragt. Wende dich an einen Admin, wenn das ein Irrtum ist.";
     if (msg.includes("rate limit") || msg.includes("too many") || msg.includes("seconds")) return "Zu viele Versuche. Bitte kurz warten und dann erneut versuchen.";
     if (msg.includes("fetch") || msg.includes("network")) return "Keine Verbindung zum Server. Bitte erneut versuchen.";
     return raw || "Anmelden fehlgeschlagen.";

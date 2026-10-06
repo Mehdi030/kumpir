@@ -14,7 +14,7 @@ import { Spinner } from "@/components/Spinner";
 import { kickPlayerAction, setLobbyLockAction, transferHostAction } from "@/actions/hostActions";
 import { getSessionToken } from "@/lib/playerSession";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { MUSIC_PLAYLISTS, MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
+import { PlaylistPicker, usePlaylists } from "@/components/PlaylistPicker";
 
 const GAME_PHASES = new Set(["topic_vote", "countdown", "running"]);
 
@@ -166,7 +166,12 @@ export default function LobbyAdminPage() {
     const maxPlayers = lobby?.max_players ?? 8;
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
     const answerMode = ((lobby?.answer_mode ?? "text") as AnswerModeKey) ?? "text";
-    const musicGenres = useMemo(() => lobby?.topic_filter ?? [], [lobby?.topic_filter]);
+    const playlistList = usePlaylists();
+    // Kein Filter in der Lobby = alle Playlists
+    const musicGenres = useMemo(
+        () => (lobby?.topic_filter && lobby.topic_filter.length ? lobby.topic_filter : (playlistList ?? []).map((p) => p.name)),
+        [lobby?.topic_filter, playlistList]
+    );
 
     const runSetting = useCallback(
         (fn: () => PromiseLike<{ error: { message: string } | null }>, okMsg: string) => {
@@ -226,17 +231,18 @@ export default function LobbyAdminPage() {
         [mePlayerId, lobbyId, runSetting]
     );
 
-    const toggleGenreSetting = useCallback(
-        (key: string) => {
+    const setGenresSetting = useCallback(
+        (selected: string[]) => {
             if (!mePlayerId || !lobbyId) return;
-            const next = musicGenres.includes(key) ? musicGenres.filter((g) => g !== key) : [...musicGenres, key];
+            const all = (playlistList ?? []).map((p) => p.name);
+            const next = all.length && all.every((n) => selected.includes(n)) ? [] : selected;
             const supabase = getSupabaseClient();
             runSetting(
                 () => supabase.rpc("set_lobby_topic_filter", { p_lobby_id: lobbyId, p_me_player_id: mePlayerId, p_categories: next }),
-                "✅ Musik-Genres gespeichert"
+                "✅ Playlists gespeichert"
             );
         },
-        [mePlayerId, lobbyId, musicGenres, runSetting]
+        [mePlayerId, lobbyId, playlistList, runSetting]
     );
 
     const saveTopicSetting = useCallback(() => {
@@ -379,30 +385,11 @@ export default function LobbyAdminPage() {
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">🎵 Musik-Genre-Filter</div>
-                                    <div className="pillCardHint">
-                                        {musicGenres.length === 0 ? "Optional — sonst alle Themen gemischt" : `${musicGenres.length} ausgewählt`}
-                                    </div>
+                                    <div className="pillCardTitle">🎵 Playlists</div>
+                                    <div className="pillCardHint">Antippen = rausnehmen · gilt ab der nächsten Themenwahl</div>
                                 </div>
-                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                                    {MUSIC_GENRE_KEYS.map((key) => {
-                                        const g = MUSIC_PLAYLISTS[key];
-                                        const active = musicGenres.includes(key);
-                                        return (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
-                                                data-variant={key}
-                                                onClick={() => toggleGenreSetting(key)}
-                                                disabled={settingsBusy}
-                                                title={`Playlist: ${g.title}`}
-                                            >
-                                                <span className="segIcon" aria-hidden>{g.icon}</span>
-                                                <span className="segLabel">{key}</span>
-                                            </button>
-                                        );
-                                    })}
+                                <div style={{ marginTop: 10 }}>
+                                    <PlaylistPicker selected={musicGenres} onChange={setGenresSetting} disabled={settingsBusy} />
                                 </div>
                             </div>
 

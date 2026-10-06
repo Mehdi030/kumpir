@@ -122,12 +122,14 @@ try {
     await q("reset role");
     check("Gäste können Einstellungen nicht aufrufen", anonBlocked);
 
-    // Konto löschen
-    r = await asUser(admin.id, "select public.delete_my_account()");
-    check("Admin-Konto kann sich nicht versehentlich löschen", /admin_cannot_delete/.test(r.error ?? ""), r.error);
+    // Konto löschen: seit Migration 078 nur noch beantragen, endgültig löscht ein Admin (siehe test-admin-panel.mjs)
     r = await asUser(user.id, "select public.delete_my_account()");
-    const [gone] = await q("select (select count(*) from auth.users where id = $1)::int u, (select count(*) from public.profiles where id = $1)::int p", [user.id]);
-    check("Konto löschen entfernt Auth-Nutzer + Profil", !r.error && gone.u === 0 && gone.p === 0, r.error ?? JSON.stringify(gone));
+    check("Sofortiges Selbst-Löschen ist gesperrt", /permission denied/.test(r.error ?? ""), r.error);
+    r = await asUser(admin.id, "select public.request_account_deletion()");
+    check("Admin-Konto kann keine Löschung beantragen", /admin_cannot_delete/.test(r.error ?? ""), r.error);
+    r = await asUser(user.id, "select public.request_account_deletion('Test')");
+    const [req] = await q("select (select count(*) from auth.users where id = $1)::int u, (select status from public.profiles where id = $1) s", [user.id]);
+    check("Löschantrag: Konto bleibt, Status beantragt", !r.error && req.u === 1 && req.s === "deletion_requested", r.error ?? JSON.stringify(req));
 
     // Profil-Trigger-Regeln
     const [v] = await q("select public._valid_username('ab') a, public._valid_username('medo_99') b, public._valid_display_name('Sinan') c, public._valid_display_name('Sinan2') d, public._is_profane('xwichserx') e");

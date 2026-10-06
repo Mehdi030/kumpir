@@ -8,7 +8,8 @@ const GUEST_ONLY = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 /**
  * Gut sichtbarer Konto-Einstieg im Hauptmenü (unter den Spiel-Knöpfen):
- * Gäste sehen "Anmelden" + "Konto erstellen", Eingeloggte ihr Konto mit Avatar.
+ * Gäste sehen "Anmelden" + "Konto erstellen", Eingeloggte ihr Konto mit Avatar,
+ * Admins/Supporter zusätzlich den Weg ins Admin-Panel.
  */
 export function HomeAccountBar() {
     const { user, profile, loading } = useProfile();
@@ -18,10 +19,17 @@ export function HomeAccountBar() {
     return (
         <div className="homeAcc">
             {user ? (
-                <Link href="/profile" className="btn btnSecondary homeAccBtn">
-                    <span aria-hidden>{profile?.avatarEmoji || "👤"}</span> {t("home.myAccount")}
-                    {profile?.playerName ? <b className="homeAccName">· {profile.playerName}</b> : null}
-                </Link>
+                <>
+                    <Link href="/profile" className="btn btnSecondary homeAccBtn">
+                        <span aria-hidden>{profile?.avatarEmoji || "👤"}</span> {t("home.myAccount")}
+                        {profile?.playerName ? <b className="homeAccName">· {profile.playerName}</b> : null}
+                    </Link>
+                    {profile?.isStaff ? (
+                        <Link href="/admin" className="homeAccLink">
+                            🛡️ Admin-Panel
+                        </Link>
+                    ) : null}
+                </>
             ) : (
                 <>
                     <Link href="/login?next=%2F" className="btn btnSecondary homeAccBtn">
