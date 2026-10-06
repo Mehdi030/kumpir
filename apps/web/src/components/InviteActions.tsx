@@ -2,16 +2,18 @@
 
 import { useCallback, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { useI18n } from "@/lib/i18n";
 
 type Props = { code: string; disabled?: boolean };
 
 /** Einladen mit einem Tipp: Teilen (System-Teilen / WhatsApp), Link kopieren, QR-Code zum Abscannen. */
 export function InviteActions({ code, disabled = false }: Props) {
+    const { t } = useI18n();
     const [showQr, setShowQr] = useState(false);
     const [msg, setMsg] = useState("");
 
     const link = () => `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
-    const text = () => `Komm in meine Kumpir-Lobby! Code: ${code}\n${link()}`;
+    const text = () => `${t("invite.text", { code })}\n${link()}`;
     const flash = (m: string) => {
         setMsg(m);
         window.setTimeout(() => setMsg(""), 1800);
@@ -30,14 +32,14 @@ export function InviteActions({ code, disabled = false }: Props) {
         // Desktop ohne System-Teilen: WhatsApp-Link öffnen
         window.open(`https://wa.me/?text=${encodeURIComponent(text())}`, "_blank", "noopener,noreferrer");
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [code]);
+    }, [code, t]);
 
     const copy = useCallback(async () => {
         try {
             await navigator.clipboard.writeText(link());
-            flash("✅ Link kopiert");
+            flash(t("invite.copied"));
         } catch {
-            flash("⚠️ Kopieren nicht möglich");
+            flash(t("invite.copyFail"));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [code]);
@@ -46,13 +48,13 @@ export function InviteActions({ code, disabled = false }: Props) {
         <div className="inviteWrap">
             <div className="inviteRow">
                 <button type="button" className="btn btnPrimary btnSmall" onClick={() => void share()} disabled={disabled}>
-                    📲 Einladung teilen
+                    {t("invite.share")}
                 </button>
                 <button type="button" className="btn btnSecondary btnSmall" onClick={() => void copy()} disabled={disabled}>
-                    🔗 Link kopieren
+                    {t("invite.copy")}
                 </button>
                 <button type="button" className="btn btnSecondary btnSmall" onClick={() => setShowQr((v) => !v)} aria-expanded={showQr} disabled={disabled}>
-                    {showQr ? "QR ausblenden" : "📷 QR-Code"}
+                    {showQr ? t("invite.qrHide") : t("invite.qr")}
                 </button>
             </div>
             <div className="inviteMsg" aria-live="polite">
@@ -63,7 +65,7 @@ export function InviteActions({ code, disabled = false }: Props) {
                     <div className="inviteQrBox">
                         <QRCodeSVG value={typeof window !== "undefined" ? `${window.location.origin}/join?code=${code}` : ""} size={200} level="M" marginSize={2} bgColor="#ffffff" fgColor="#2b0f04" title={`QR-Code für Lobby ${code}`} />
                     </div>
-                    <div className="inviteQrHint">Mit der Handy-Kamera scannen und direkt beitreten</div>
+                    <div className="inviteQrHint">{t("invite.qrHint")}</div>
                 </div>
             ) : null}
             <style>{`

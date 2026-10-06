@@ -6,16 +6,18 @@ import { Suspense } from "react";
 import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
 import { HomeStatsSection } from "@/components/HomeStatsSection";
+import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { useI18n } from "@/lib/i18n";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
-const STEPS = [
-    { icon: "🎲", title: "Lobby öffnen", text: "Einer hostet, alle anderen kommen mit einem 4-stelligen Code dazu." },
-    { icon: "🎧", title: "Song erkennen", text: "Ein Song läuft. Wer die Kumpir hat, tippt den Titel und gibt sie weiter." },
-    { icon: "💥", title: "Nicht erwischen lassen", text: "Die Zündschnur wird kürzer. Wer sie beim Knall hält, fliegt raus." },
-];
-
 export default function Home() {
+    const { t } = useI18n();
+    const STEPS = [
+        { icon: "🎲", title: t("home.step1.title"), text: t("home.step1.text") },
+        { icon: "🎧", title: t("home.step2.title"), text: t("home.step2.text") },
+        { icon: "💥", title: t("home.step3.title"), text: t("home.step3.text") },
+    ];
     return (
         <main className="container">
             <div className="landingWrap landingWrapDecor">
@@ -29,32 +31,33 @@ export default function Home() {
                     </Suspense>
 
                     <div className="homeTop">
-                        <span className="homeBadge">👥 2–12 Spieler</span>
+                        <span className="homeBadge">{t("home.players")}</span>
                         <div className="homeTopRight">
                             <Link href="/leaderboard" className="homeLink">
-                                🏆 Bestenliste
+                                {t("home.leaderboard")}
                             </Link>
+                            <LanguageSwitch />
                             {!AUTH_DISABLED ? <AuthMini nextPath="/host" variant="header" /> : null}
                         </div>
                     </div>
 
                     <header className="homeHero">
                         <h1 className="h1 homeTitle">Kumpir</h1>
-                        <p className="homeTagline">Die heiße Kartoffel mit Musik. Song erkennen, weitergeben, überleben.</p>
+                        <p className="homeTagline">{t("home.tagline")}</p>
                     </header>
 
                     <div className="ctaRow homeCta">
                         <Link href="/solo" className="btn btnPrimary btnXL">
-                            🤖 Solo ausprobieren
+                            {t("home.solo")}
                         </Link>
                         <Link href="/host" className="btn btnSecondary btnXL">
-                            🚀 Mit Freunden spielen
+                            {t("home.host")}
                         </Link>
                         <Link href="/join" className="btn btnSecondary btnXL">
-                            Mit Code beitreten
+                            {t("home.join")}
                         </Link>
                     </div>
-                    <p className="homeFree">Kein Download · Kein Konto nötig · „Solo ausprobieren“ startet in Sekunden</p>
+                    <p className="homeFree">{t("home.free")}</p>
 
                     <div className="homeSteps">
                         {STEPS.map((s, i) => (

@@ -10,6 +10,7 @@ import { getSessionToken } from "@/lib/playerSession";
 import { MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
 import { startGame } from "@/actions/startGame";
 import { Spinner } from "@/components/Spinner";
+import { useI18n } from "@/lib/i18n";
 
 const NAMES = ["Baro", "Medo", "Sero", "Sinan", "Elias", "Jonas", "Max", "Leo", "Emir", "Can", "Ali", "Omar", "Nico", "Sami", "Amir", "Milan"];
 const BOTS: { name: string; skill: 1 | 2 | 3 }[] = [
@@ -32,9 +33,10 @@ function storedName(): string {
  */
 export default function SoloPage() {
     const router = useRouter();
+    const { t } = useI18n();
     const { user, loading: authLoading } = useAuth();
     const { profile, loading: profileLoading } = useProfile();
-    const [step, setStep] = useState("Lobby wird erstellt …");
+    const [step, setStep] = useState<"solo.creating" | "solo.bots" | "solo.go">("solo.creating");
     const [error, setError] = useState("");
     const startedRef = useRef(false);
 
@@ -70,7 +72,7 @@ export default function SoloPage() {
             const join = await supabase.rpc("rpc_join_lobby", { p_code: code, p_player_id: me, p_name: name, p_user_id: user?.id ?? null });
             if (join.error) throw new Error(join.error.message);
 
-            setStep("Bots machen sich bereit …");
+            setStep("solo.bots");
             const { data: lobby, error: lErr } = await supabase.from("lobbies").select("id").eq("code", code).single();
             if (lErr || !lobby?.id) throw new Error(lErr?.message ?? "Lobby nicht gefunden.");
 
@@ -80,7 +82,7 @@ export default function SoloPage() {
                 if (bErr) throw new Error(bErr.message);
             }
 
-            setStep("Los geht's – Themenwahl …");
+            setStep("solo.go");
             const res = await startGame(code, me, getSessionToken() ?? "");
             if (!res.ok) throw new Error("error" in res ? res.error : "Start fehlgeschlagen.");
             router.replace(`/game/${code}`);
@@ -104,12 +106,12 @@ export default function SoloPage() {
                         🤖
                     </div>
                     <h1 className="h1" style={{ fontSize: 34, marginTop: 6 }}>
-                        Solo gegen Bots
+                        {t("solo.title")}
                     </h1>
                     {error ? (
                         <>
                             <p className="p" style={{ marginTop: 12, color: "#ffd0c8" }}>
-                                Das hat nicht geklappt: {error}
+                                {t("solo.failed")} {error}
                             </p>
                             <div className="ctaRow" style={{ marginTop: 16 }}>
                                 <button
@@ -120,18 +122,18 @@ export default function SoloPage() {
                                         void run();
                                     }}
                                 >
-                                    Nochmal versuchen
+                                    {t("solo.retry")}
                                 </button>
                                 <Link href="/" className="btn btnSecondary btnXL">
-                                    Zur Startseite
+                                    {t("solo.home")}
                                 </Link>
                             </div>
                         </>
                     ) : (
                         <div style={{ marginTop: 16, display: "grid", placeItems: "center", gap: 10 }} role="status" aria-live="polite">
-                            <Spinner size={26} label={step} />
+                            <Spinner size={26} label={t(step)} />
                             <p className="p" style={{ opacity: 0.8, fontSize: 14, maxWidth: 360 }}>
-                                Du spielst gegen drei Bots. Ein Song läuft – tippe den Titel, bevor die Zündschnur durch ist.
+                                {t("solo.info")}
                             </p>
                         </div>
                     )}

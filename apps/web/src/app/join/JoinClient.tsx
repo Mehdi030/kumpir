@@ -8,6 +8,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
+import { useI18n } from "@/lib/i18n";
 
 function normalizeCode(input: string) {
     return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
@@ -53,6 +54,7 @@ function getErrorMessage(err: unknown): string {
 }
 
 export default function JoinClient({ initialCode }: { initialCode: string }) {
+    const { t } = useI18n();
     const supabase = getSupabaseClient();
     const router = useRouter();
     const { user } = useAuth();
@@ -112,7 +114,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             const playerName = sanitizeName(name).trim();
 
             if (lobbyCode.length !== 4) {
-                setError("Bitte einen gültigen 4-stelligen Code eingeben.");
+                setError(t("join.badCode"));
                 return;
             }
             const v = validatePlayerName(playerName);
@@ -135,11 +137,11 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 return;
             }
             if (!lobbyRow) {
-                setError("Lobby nicht gefunden.");
+                setError(t("join.notFound"));
                 return;
             }
             if (lobbyRow.locked) {
-                setError("Das Spiel läuft schon – beitreten geht erst in der nächsten Runde. Du kannst aber zuschauen.");
+                setError(t("join.running"));
                 setSpectateCode(lobbyCode);
                 return;
             }
@@ -202,15 +204,15 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             <div className="landingWrap">
                 <section
                     className="card"
-                    aria-label="Lobby beitreten"
+                    aria-label={t("join.title")}
                     style={{ maxWidth: 760, margin: "0 auto" }}
                 >
                     <header className="hostHeader" style={{ paddingBottom: 10 }}>
                         <h1 className="h1" style={{ lineHeight: 1.05 }}>
-                            Lobby beitreten
+                            {t("join.title")}
                         </h1>
                         <p className="p subline" style={{ marginTop: 8 }}>
-                            Schnell rein – ohne Account.
+                            {t("join.sub")}
                         </p>
                     </header>
 
@@ -219,7 +221,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                             <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
                                 <div className="fieldRow" style={{ margin: 0 }}>
                                     <label className="fieldLabel" htmlFor="code">
-                                        1) Lobby-Code
+                                        {t("join.codeLabel")}
                                     </label>
                                     <div className="fieldControl">
                                         <input
@@ -235,12 +237,12 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                             inputMode="text"
                                         />
                                     </div>
-                                    <div className="fieldHelp">4 Zeichen (A–Z, 0–9).</div>
+                                    <div className="fieldHelp">{t("join.codeHelp")}</div>
                                 </div>
 
                                 <div className="fieldRow" style={{ margin: 0 }}>
                                     <label className="fieldLabel" htmlFor="name">
-                                        2) Dein Name
+                                        {t("join.nameLabel")}
                                     </label>
                                     <div className="fieldControl">
                                         <input
@@ -256,7 +258,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                             autoCorrect="off"
                                         />
                                     </div>
-                                    <div className="fieldHelp">Nur Buchstaben, max. 12 Zeichen.</div>
+                                    <div className="fieldHelp">{t("join.nameHelp")}</div>
                                 </div>
                             </div>
 
@@ -267,7 +269,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                             ) : null}
                             {spectateCode ? (
                                 <Link href={`/game/${spectateCode}`} className="btn btnSecondary btnSmall" style={{ marginTop: 10 }}>
-                                    👀 Zuschauen
+                                    {t("join.spectate")}
                                 </Link>
                             ) : null}
 
@@ -330,19 +332,19 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                 }}
                             >
                                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                                    <div style={{ fontWeight: 950, fontSize: 18 }}>Name eingeben</div>
+                                    <div style={{ fontWeight: 950, fontSize: 18 }}>{t("join.modalTitle")}</div>
                                     <div className="pillChip" style={{ height: 30, display: "flex", alignItems: "center" }}>
                                         {fixedCodeFromLink}
                                     </div>
                                 </div>
 
                                 <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.85 }}>
-                                    Nur kurz – dann bist du drin.
+                                    {t("join.modalSub")}
                                 </div>
 
                                 <div style={{ marginTop: 12 }}>
                                     <label className="fieldLabel" htmlFor="modalName">
-                                        Dein Name
+                                        {t("join.yourName")}
                                     </label>
                                     <div className="fieldControl" style={{ marginTop: 8 }}>
                                         <input
@@ -371,7 +373,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                 ) : null}
                                 {spectateCode ? (
                                     <Link href={`/game/${spectateCode}`} className="btn btnSecondary btnSmall" style={{ marginTop: 10 }}>
-                                        👀 Zuschauen
+                                        {t("join.spectate")}
                                     </Link>
                                 ) : null}
 
@@ -382,7 +384,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                         onClick={() => void joinLobby()} // ✅ void
                                         disabled={!canJoin || loading}
                                     >
-                                        {loading ? "Trete bei…" : "🚀 Beitreten"}
+                                        {loading ? t("join.joining") : t("join.btn")}
                                     </button>
                                 </div>
                             </div>

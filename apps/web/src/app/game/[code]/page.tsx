@@ -25,6 +25,7 @@ import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
 import { playFx } from "@/lib/gameFx";
 import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
+import { useI18n } from "@/lib/i18n";
 import { FinishScreen, type FinishHighlight } from "@/components/game/FinishScreen";
 
 // Ein pass_attempt ohne Timeout konnte für immer "pending" hängen bleiben,
@@ -2587,12 +2588,13 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
 /** Hülle: zeigt über allen Spielphasen ein Zuschauer-Schild, wenn man nicht mitspielt. */
 export default function GamePage() {
+    const { t } = useI18n();
     const [spectator, setSpectator] = useState(false);
     return (
         <>
             {spectator ? (
                 <div className="spectatorBadge" role="status">
-                    👀 Du schaust zu
+                    {t("game.spectating")}
                 </div>
             ) : null}
             <GamePageInner onSpectator={setSpectator} />

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { NotifyToggle } from "@/components/NotifyToggle";
 import { useProfile } from "@/hooks/useProfile";
+import { useI18n } from "@/lib/i18n";
 
 type Props = {
     nextPath?: string;
@@ -12,6 +13,7 @@ type Props = {
 
 export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     const { user, loading } = useAuth();
+    const { t } = useI18n();
     const { profile } = useProfile();
     const loginHref = `/login?next=${encodeURIComponent(nextPath)}`;
 
@@ -23,10 +25,10 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
         return (
             <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
                 <Link className={variant === "header" ? "homeLink" : "btn btnSecondary"} href={loginHref}>
-                    Anmelden
+                    {t("auth.login")}
                 </Link>
                 <Link className={variant === "header" ? "homeLink homeLinkStrong" : "btn btnSecondary"} href="/register">
-                    Registrieren
+                    {t("auth.register")}
                 </Link>
             </div>
         );
@@ -37,7 +39,7 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     return (
         <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
             <NotifyToggle className={variant === "header" ? "homeLink" : "btn btnSecondary btnSmall"} />
-            <Link className={variant === "header" ? "homeLink homeLinkStrong homeUser" : "btn btnSecondary"} href="/profile" title="Mein Konto">
+            <Link className={variant === "header" ? "homeLink homeLinkStrong homeUser" : "btn btnSecondary"} href="/profile" title={t("auth.account")}>
                 👤 {shownName}
             </Link>
         </div>

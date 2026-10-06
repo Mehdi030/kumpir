@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useAchievements } from "@/hooks/useAchievements";
 import { Spinner } from "@/components/Spinner";
+import { useI18n } from "@/lib/i18n";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
@@ -18,6 +19,7 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
  */
 export function HomeStatsSection() {
     const { user, loading: authLoading } = useAuth();
+    const { t } = useI18n();
     const { stats, unlocked, catalog, loading: statsLoading } = useAchievements(AUTH_DISABLED ? null : user?.id ?? null);
 
     let body: ReactNode;
@@ -43,14 +45,14 @@ export function HomeStatsSection() {
         body = (
             <>
                 <div className="statsSectionHead">
-                    <div className="stepsTitle">📊 Statistik</div>
+                    <div className="stepsTitle">{t("stats.title")}</div>
                 </div>
                 <p className="p hostSub" style={{ marginTop: 4 }}>
-                    Mit Account merkt sich Kumpir Siege, Pässe und Achievements.
+                    {t("stats.guest")}
                 </p>
                 <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-                    <Link href="/login?next=/" className="btn btnSecondary btnSmall">🔓 Einloggen</Link>
-                    <Link href="/leaderboard" className="btn btnSecondary btnSmall">🏆 Bestenliste ansehen</Link>
+                    <Link href="/login?next=/" className="btn btnSecondary btnSmall">{t("stats.login")}</Link>
+                    <Link href="/leaderboard" className="btn btnSecondary btnSmall">{t("stats.board")}</Link>
                 </div>
             </>
         );

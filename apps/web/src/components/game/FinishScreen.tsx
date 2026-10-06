@@ -6,6 +6,7 @@ import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
 import { Spinner } from "@/components/Spinner";
 import { ToastStack } from "@/components/ToastStack";
 import { renderResultCard } from "@/lib/resultCard";
+import { useI18n } from "@/lib/i18n";
 
 export type FinishRow = {
     id: string;
@@ -48,6 +49,7 @@ const MEDAL = ["🥇", "🥈", "🥉"];
  * bei einer einzelnen Runde die Rundenwertung.
  */
 export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seriesRows, shareRows, mePlayerId, highlights, loggedIn, busy, onRematch, onLobby, toasts }: Props) {
+    const { t } = useI18n();
     const [shareMsg, setShareMsg] = useState("");
     const [shareBusy, setShareBusy] = useState(false);
 
@@ -74,10 +76,10 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
             a.click();
             a.remove();
             window.setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-            setShareMsg("✅ Bild gespeichert");
+            setShareMsg(t("fin.saved"));
             window.setTimeout(() => setShareMsg(""), 2500);
         } catch {
-            setShareMsg("⚠️ Bild konnte nicht erstellt werden");
+            setShareMsg(t("fin.shareFail"));
             window.setTimeout(() => setShareMsg(""), 2500);
         } finally {
             setShareBusy(false);
@@ -87,29 +89,29 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
     return (
         <div className="finWrap">
             <header className="finHero">
-                <div className="finKicker">{isSeries ? `Match beendet · ${totalRounds} Runden` : "Runde beendet"}</div>
+                <div className="finKicker">{isSeries ? t("fin.match", { n: totalRounds }) : t("fin.round")}</div>
                 <div className="finTrophy" aria-hidden>
                     🏆
                 </div>
                 <h1 className="finWinner">{winnerName}</h1>
-                <div className="finSub">{isSeries ? "gewinnt das Match" : "gewinnt die Runde"}</div>
+                <div className="finSub">{isSeries ? t("fin.winsMatch") : t("fin.winsRound")}</div>
                 {me ? (
                     <div className="finMe">
-                        Dein Ergebnis: <b>Platz {me.place}</b> · <b>{me.score}</b> Punkte
+                        {t("fin.me", { place: me.place, score: me.score })}
                     </div>
                 ) : null}
             </header>
 
             {isSeries ? (
-                <SeriesTable rows={seriesRows} totalSets={totalRounds} playedSets={totalRounds} mePlayerId={mePlayerId} title="Endstand" />
+                <SeriesTable rows={seriesRows} totalSets={totalRounds} playedSets={totalRounds} mePlayerId={mePlayerId} title={t("fin.final")} />
             ) : (
                 <section className="finCard">
-                    <h2 className="finCardTitle">Endstand</h2>
+                    <h2 className="finCardTitle">{t("fin.final")}</h2>
                     <div className="finTable" role="table">
                         <div className="finRow finHead" role="row">
                             <span>#</span>
-                            <span>Spieler</span>
-                            <span className="r">Punkte</span>
+                            <span>{t("fin.player")}</span>
+                            <span className="r">{t("fin.points")}</span>
                             <span className="r" title="Richtig erratene Songs">♪ Treffer</span>
                             <span className="r" title="Überlebte Züge">Züge</span>
                         </div>
@@ -142,33 +144,33 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
             ) : null}
 
             {loggedIn ? (
-                <div className="finAccount ok">✓ Deine Punkte und Siege sind auf deinem Konto gespeichert.</div>
+                <div className="finAccount ok">{t("fin.saved2")}</div>
             ) : (
                 <div className="finAccount">
-                    <span>💾 Punkte, Siege und Saison-Rang behalten?</span>
+                    <span>{t("fin.keep")}</span>
                     <Link href="/register?next=/" className="finAccountLink">
-                        Gratis-Konto erstellen
+                        {t("fin.create")}
                     </Link>
                 </div>
             )}
 
             <div className="finActions">
                 <button type="button" className="btn btnPrimary btnXL" onClick={onRematch} disabled={!!busy} title="Direkt nochmal (Taste R)">
-                    {busy === "rematch" ? <Spinner size={16} label="Starte…" /> : "🔁 Nochmal spielen"}
+                    {busy === "rematch" ? <Spinner size={16} label="Starte…" /> : t("fin.again")}
                 </button>
                 <button type="button" className="btn btnSecondary btnXL" onClick={onLobby} disabled={!!busy}>
-                    {busy === "reset" ? <Spinner size={16} label="Lade…" /> : "Zur Lobby"}
+                    {busy === "reset" ? <Spinner size={16} label="Lade…" /> : t("fin.lobby")}
                 </button>
             </div>
             <div className="finShare">
                 <button type="button" className="btn btnSecondary btnSmall" onClick={() => void shareResult()} disabled={shareBusy}>
-                    {shareBusy ? <Spinner size={14} label="Erstelle Bild…" /> : "📤 Ergebnis teilen"}
+                    {shareBusy ? <Spinner size={14} label={t("fin.shareBusy")} /> : t("fin.share")}
                 </button>
                 <span className="finShareMsg" aria-live="polite">
                     {shareMsg}
                 </span>
             </div>
-            <div className="finHint">Tipp: Taste R startet direkt eine neue Runde</div>
+            <div className="finHint">{t("fin.tip")}</div>
 
             <ToastStack toasts={toasts} inline />
 
