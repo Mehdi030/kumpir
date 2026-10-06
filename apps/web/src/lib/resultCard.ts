@@ -20,7 +20,7 @@ export type ResultCardInput = {
 
 const MEDAL = ["🥇", "🥈", "🥉"];
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -30,26 +30,17 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
     ctx.closePath();
 }
 
-function fit(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+export function fit(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
     if (ctx.measureText(text).width <= maxW) return text;
     let t = text;
     while (t.length > 1 && ctx.measureText(`${t}…`).width > maxW) t = t.slice(0, -1);
     return `${t}…`;
 }
 
-/** Zeichnet eine 1080×1350-Ergebniskarte (Hochformat, gut für Stories/Chats) und liefert sie als PNG. */
-export async function renderResultCard(input: ResultCardInput): Promise<Blob> {
-    const W = 1080;
-    const H = 1350;
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas nicht verfügbar");
+export const CARD_FONT = "'Bricolage Grotesque', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif";
 
-    const font = "'Bricolage Grotesque', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif";
-
-    // Hintergrund: Marken-Verlauf
+/** Marken-Verlauf (Rot -> Orange -> Gelb) mit hellem Schein – gemeinsam für alle Teilen-Bilder. */
+export function paintCardBackground(ctx: CanvasRenderingContext2D, W: number, H: number) {
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, "#8f0f0f");
     g.addColorStop(0.4, "#c53a12");
@@ -62,6 +53,43 @@ export async function renderResultCard(input: ResultCardInput): Promise<Blob> {
     glow.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
+}
+
+/** Bild teilen (Handy: System-Teilen mit Datei) oder als PNG herunterladen. Gibt "shared" / "saved" zurück. */
+export async function shareOrDownloadPng(blob: Blob, fileName: string, text: string, title: string): Promise<"shared" | "saved" | "aborted"> {
+    const file = new File([blob], fileName, { type: "image/png" });
+    const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+    if (typeof nav.canShare === "function" && nav.canShare({ files: [file] })) {
+        try {
+            await navigator.share({ files: [file], text, title });
+            return "shared";
+        } catch (e) {
+            if (e instanceof Error && e.name === "AbortError") return "aborted";
+        }
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    return "saved";
+}
+
+/** Zeichnet eine 1080×1350-Ergebniskarte (Hochformat, gut für Stories/Chats) und liefert sie als PNG. */
+export async function renderResultCard(input: ResultCardInput): Promise<Blob> {
+    const W = 1080;
+    const H = 1350;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas nicht verfügbar");
+
+    const font = CARD_FONT;
+
+    paintCardBackground(ctx, W, H);
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#fff";

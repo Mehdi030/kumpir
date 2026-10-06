@@ -9,6 +9,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
 import { MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
 import { RulesCard } from "@/components/RulesCard";
+import { track } from "@/lib/track";
 
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
@@ -232,6 +233,7 @@ export default function HostPage() {
                 }
             }
 
+            track("host_created");
             router.push(`/lobby/${code}`);
         } catch (e: unknown) {
             setCreateError(getErrorMessage(e));

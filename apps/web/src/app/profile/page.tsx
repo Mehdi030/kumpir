@@ -6,52 +6,46 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { useProfile } from "@/hooks/useProfile";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/Spinner";
+import { AccountStats } from "@/components/profile/AccountStats";
+import { seasonKey, type ProfileStats } from "@/lib/profileStats";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
-type Season = { arena_points: number; sets_played: number; set_wins: number; rank: number } | null;
-
-function seasonKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function fmtHold(ms: number) {
-    if (!ms) return "–";
-    const sec = Math.floor(ms / 1000);
-    if (sec < 60) return `${sec} s`;
-    const m = Math.floor(sec / 60);
-    if (m < 60) return `${m} min`;
-    return `${Math.floor(m / 60)} h ${m % 60} min`;
-}
 
 export default function ProfilePage() {
     const { profile, user, loading } = useProfile();
-    const { stats, unlocked, catalog } = useAchievements(user?.id ?? null);
+    const { unlocked, catalog } = useAchievements(user?.id ?? null);
     const supabase = getSupabaseClient();
 
-    const [season, setSeason] = useState<Season>(null);
+    const [season, setSeason] = useState(() => seasonKey(0));
+    const [accStats, setAccStats] = useState<ProfileStats | null>(null);
+    const [accLoading, setAccLoading] = useState(false);
+    const [accError, setAccError] = useState("");
     const [pw, setPw] = useState("");
     const [pw2, setPw2] = useState("");
     const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
     const [pwBusy, setPwBusy] = useState(false);
 
+    // Verlauf, Musik-Werte, Gegner und Monats-Rückblick kommen gesammelt aus EINER Funktion (Migration 076).
     useEffect(() => {
         if (!user?.id) return;
         let cancel = false;
         void (async () => {
-            const { data } = await supabase
-                .from("season_leaderboard_view")
-                .select("arena_points,sets_played,set_wins,rank")
-                .eq("season", seasonKey())
-                .eq("user_id", user.id)
-                .maybeSingle();
-            if (!cancel) setSeason((data as unknown as Season) ?? null);
+            setAccLoading(true);
+            const { data, error } = await supabase.rpc("get_my_profile_stats", { p_season: season });
+            if (cancel) return;
+            setAccLoading(false);
+            if (error) {
+                setAccError(error.message);
+                return;
+            }
+            setAccError("");
+            setAccStats(data as ProfileStats);
         })();
         return () => {
             cancel = true;
         };
-    }, [supabase, user?.id]);
+    }, [supabase, user?.id, season]);
 
     const changePassword = useCallback(async () => {
         setPwMsg(null);
@@ -132,25 +126,17 @@ export default function ProfilePage() {
                         </Link>
                     </div>
 
-                    <div className="profGrid">
-                        <Stat label="Spiele" value={stats ? String(stats.games_played) : "0"} />
-                        <Stat label="Siege" value={stats ? String(stats.wins) : "0"} />
-                        <Stat label="Pässe" value={stats ? String(stats.total_passes) : "0"} />
-                        <Stat label="Clutch-Pässe" value={stats ? String(stats.total_clutch_passes) : "0"} />
-                        <Stat label="Schnellster Pass" value={stats?.fastest_pass_ms != null ? `${(stats.fastest_pass_ms / 1000).toFixed(2)} s` : "–"} />
-                        <Stat label="Haltezeit gesamt" value={fmtHold(stats?.total_hold_ms ?? 0)} />
-                    </div>
-
-                    <div className="profSeason">
-                        <div className="profSeasonTitle">🗓️ Saison-Punkte (dieser Monat)</div>
-                        {season ? (
-                            <div className="profSeasonRow">
-                                <b>{season.arena_points}</b> Punkte · Platz <b>{season.rank}</b> · {season.set_wins}× Rundensieg
-                            </div>
-                        ) : (
-                            <div className="profSeasonRow muted">Noch keine Runde in dieser Saison gespielt.</div>
-                        )}
-                    </div>
+                    {accStats ? (
+                        <AccountStats data={accStats} username={name} season={season} onSeasonChange={setSeason} seasonLoading={accLoading} />
+                    ) : accError ? (
+                        <div className="fieldHelp fieldHelpError" style={{ marginTop: 18 }}>
+                            Statistik konnte nicht geladen werden: {accError}
+                        </div>
+                    ) : (
+                        <div style={{ marginTop: 22, display: "grid", placeItems: "center" }}>
+                            <Spinner size={20} label="Lade Statistik…" />
+                        </div>
+                    )}
 
                     <div className="profLinks">
                         <Link href="/achievements" className="profLink">
@@ -207,14 +193,6 @@ export default function ProfilePage() {
             .profOk{ color:#8df0a6; font-weight:700; margin-left:6px; }
             .profWarn{ color:#ffd28a; font-weight:700; margin-left:6px; }
             .profBack{ align-self:flex-start; }
-            .profGrid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-top:22px; }
-            .profStat{ padding:14px; border-radius:18px; background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); text-align:center; }
-            .profStatVal{ font-size:24px; font-weight:800; font-family: var(--font-display); color:#ffe08a; }
-            .profStatLabel{ font-size:11px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; opacity:.65; margin-top:2px; }
-            .profSeason{ margin-top:14px; padding:14px 16px; border-radius:18px; background: rgba(255,210,63,.12); border:1px solid rgba(255,210,63,.35); }
-            .profSeasonTitle{ font-weight:800; font-size:14px; }
-            .profSeasonRow{ margin-top:4px; font-size:15px; }
-            .profSeasonRow.muted{ opacity:.7; }
             .profLinks{ display:grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap:10px; margin-top:14px; }
             .profLink{ display:grid; grid-template-columns:34px 1fr; column-gap:10px; padding:12px 14px; border-radius:18px; background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); color:#fff; text-decoration:none; transition: background .15s ease, transform .15s ease; }
             .profLink:hover{ background: rgba(255,255,255,.15); transform: translateY(-1px); }
@@ -228,14 +206,5 @@ export default function ProfilePage() {
                 </section>
             </div>
         </main>
-    );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="profStat">
-            <div className="profStatVal">{value}</div>
-            <div className="profStatLabel">{label}</div>
-        </div>
     );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { useI18n } from "@/lib/i18n";
+import { track } from "@/lib/track";
 
 type Props = { code: string; disabled?: boolean };
 
@@ -20,6 +21,7 @@ export function InviteActions({ code, disabled = false }: Props) {
     };
 
     const share = useCallback(async () => {
+        track("invite_share");
         const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
         if (typeof nav.share === "function") {
             try {
@@ -35,6 +37,7 @@ export function InviteActions({ code, disabled = false }: Props) {
     }, [code, t]);
 
     const copy = useCallback(async () => {
+        track("invite_copy");
         try {
             await navigator.clipboard.writeText(link());
             flash(t("invite.copied"));
@@ -53,7 +56,10 @@ export function InviteActions({ code, disabled = false }: Props) {
                 <button type="button" className="btn btnSecondary btnSmall" onClick={() => void copy()} disabled={disabled}>
                     {t("invite.copy")}
                 </button>
-                <button type="button" className="btn btnSecondary btnSmall" onClick={() => setShowQr((v) => !v)} aria-expanded={showQr} disabled={disabled}>
+                <button type="button" className="btn btnSecondary btnSmall" onClick={() => {
+                        if (!showQr) track("invite_qr");
+                        setShowQr((v) => !v);
+                    }} aria-expanded={showQr} disabled={disabled}>
                     {showQr ? t("invite.qrHide") : t("invite.qr")}
                 </button>
             </div>

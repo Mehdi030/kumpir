@@ -7,6 +7,7 @@ import { Spinner } from "@/components/Spinner";
 import { ToastStack } from "@/components/ToastStack";
 import { renderResultCard } from "@/lib/resultCard";
 import { useI18n } from "@/lib/i18n";
+import { track } from "@/lib/track";
 
 export type FinishRow = {
     id: string;
@@ -59,6 +60,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
 
     const shareResult = async () => {
         if (shareBusy) return;
+        track("result_share");
         setShareBusy(true);
         try {
             const blob = await renderResultCard({
@@ -167,7 +169,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
             {spectator ? (
                 <div className="finAccount">{t("fin.spectator")}</div>
             ) : !ranked ? (
-                <div className="finAccount">{t("fin.unranked")}</div>
+                <div className="finAccount">{loggedIn ? t("fin.unrankedAccount") : t("fin.unranked")}</div>
             ) : loggedIn ? (
                 <div className="finAccount ok">{t("fin.saved2")}</div>
             ) : (

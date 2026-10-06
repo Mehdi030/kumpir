@@ -1,13 +1,17 @@
 "use client";
 
 import { useI18n, type Locale } from "@/lib/i18n";
+import { track } from "@/lib/track";
 
 /** Kleiner DE | EN-Schalter (das lang-Attribut setzt LocaleSync im Layout). */
 export function LanguageSwitch() {
     const { locale, setLocale, t } = useI18n();
 
     const opt = (l: Locale, label: string) => (
-        <button type="button" className={`langOpt${locale === l ? " langOptOn" : ""}`} onClick={() => setLocale(l)} aria-pressed={locale === l} lang={l}>
+        <button type="button" className={`langOpt${locale === l ? " langOptOn" : ""}`} onClick={() => {
+                if (l === "en" && locale !== "en") track("lang_en");
+                setLocale(l);
+            }} aria-pressed={locale === l} lang={l}>
             {label}
         </button>
     );

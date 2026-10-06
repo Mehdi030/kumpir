@@ -26,6 +26,7 @@ import { AudioControl } from "@/components/AudioControl";
 import { playFx } from "@/lib/gameFx";
 import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
 import { useI18n } from "@/lib/i18n";
+import { track } from "@/lib/track";
 import { FinishScreen, type FinishHighlight } from "@/components/game/FinishScreen";
 
 // Ein pass_attempt ohne Timeout konnte für immer "pending" hängen bleiben,
@@ -321,6 +322,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     useEffect(() => {
         onSpectator(isSpectator);
     }, [isSpectator, onSpectator]);
+
+    // Anonyme Auswertung "Weg der Spieler": einmal pro Wechsel in die Endphase (nicht beim Neuladen).
+    const trackedPhaseRef = useRef<string | null>(null);
+    useEffect(() => {
+        const phase = lobby?.phase ?? null;
+        const prev = trackedPhaseRef.current;
+        trackedPhaseRef.current = phase;
+        if (phase === "finished" && prev && prev !== "finished") {
+            track("game_finished", {
+                solo: players.filter((p) => !p.is_bot).length < 2,
+                spectator: isSpectator,
+                rounds: lobby?.series_total ?? 1,
+            });
+        }
+    }, [lobby?.phase, lobby?.series_total, players, isSpectator]);
 
     const isMeHolder = useMemo(() => {
         if (!mePlayerId || !lobby?.holder_player_id) return false;

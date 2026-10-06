@@ -9,6 +9,7 @@ import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
 import { useI18n } from "@/lib/i18n";
+import { track } from "@/lib/track";
 
 function normalizeCode(input: string) {
     return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
@@ -190,6 +191,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             }
 
             setStoredPlayerId(myPlayerId);
+            track("join_success");
 
             router.push(`/lobby/${lobbyCode}`);
         } catch (err: unknown) {
@@ -292,7 +294,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                 </div>
                             ) : null}
                             {spectateCode ? (
-                                <Link href={`/game/${spectateCode}`} className="btn btnSecondary btnSmall" style={{ marginTop: 10 }}>
+                                <Link href={`/game/${spectateCode}`} className="btn btnSecondary btnSmall" style={{ marginTop: 10 }} onClick={() => track("spectate")}>
                                     {t("join.spectate")}
                                 </Link>
                             ) : null}
@@ -396,7 +398,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                     </div>
                                 ) : null}
                                 {spectateCode ? (
-                                    <Link href={`/game/${spectateCode}`} className="btn btnSecondary btnSmall" style={{ marginTop: 10 }}>
+                                    <Link href={`/game/${spectateCode}`} className="btn btnSecondary btnSmall" style={{ marginTop: 10 }} onClick={() => track("spectate")}>
                                         {t("join.spectate")}
                                     </Link>
                                 ) : null}

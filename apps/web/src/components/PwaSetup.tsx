@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n";
+import { track } from "@/lib/track";
 
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
@@ -70,6 +71,7 @@ export function PwaSetup({ showHint = false }: { showHint?: boolean }) {
 
     const install = async () => {
         if (!evt) return;
+        track("install_click");
         await evt.prompt();
         await evt.userChoice.catch(() => undefined);
         setEvt(null);

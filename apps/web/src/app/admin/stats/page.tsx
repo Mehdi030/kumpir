@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "@/components/AuthProvider";
 import { Spinner } from "@/components/Spinner";
+import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
 
 type Stats = {
     lobbies: {
@@ -269,6 +270,9 @@ export default function AdminStatsPage() {
                                 <InfraRow name="CI" value="GitHub Actions — Lint/Test/Build auf jeden Push/PR" />
                                 <InfraRow name="Discord-Bot" value="apps/discord-bot — kein Deploy-Config im Repo gefunden (vermutlich nicht aktiv)" tone="warn" />
                             </StatGroup>
+
+                            {/* Song-Bekanntheit, Balance aus echten Spielen, Weg der Spieler (Migration 076) */}
+                            <AdminAnalytics />
                         </div>
                     )}
                 </section>

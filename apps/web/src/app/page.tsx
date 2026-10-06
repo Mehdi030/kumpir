@@ -2,18 +2,22 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
 import { HomeStatsSection } from "@/components/HomeStatsSection";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { PwaSetup } from "@/components/PwaSetup";
 import { useI18n } from "@/lib/i18n";
+import { track } from "@/lib/track";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
 export default function Home() {
     const { t } = useI18n();
+    useEffect(() => {
+        track("home_view");
+    }, []);
     const STEPS = [
         { icon: "🎲", title: t("home.step1.title"), text: t("home.step1.text") },
         { icon: "🎧", title: t("home.step2.title"), text: t("home.step2.text") },

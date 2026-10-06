@@ -3,6 +3,10 @@
 Reihenfolge = Priorität. Erledigtes wandert nach unten.
 
 ## Als Nächstes
+- [ ] **Datenschutzerklärung + Impressum** fehlen komplett (Pflicht für eine öffentliche Seite in DE). Inhalt: Konto (E-Mail, Username), Konto-Verlauf (Matches/Runden/Musik-Werte, dauerhaft bis Konto gelöscht), Spielprotokoll (90 Tage), anonyme Nutzungs-Ereignisse mit Zufalls-Geräte-ID (90 Tage), Vercel Analytics, Supabase als Auftragsverarbeiter
+- [ ] **Konto-Verlauf & Analyse (Migration 076) mit echten Spielern prüfen**: 2 echte Konten ein Match spielen lassen, danach Profil (Verlauf, Musik, Gegner, Rückblick) und /admin/stats (Songs, Balance, Weg der Spieler) ansehen. DB-Test: `node db/scripts/test-account-history.mjs`
+  - [x] A Match-Verlauf, B Musik-Statistik pro Playlist, C Gegner-Bilanz, D Musik-/Match-Achievements, E Monats-Rückblick (teilbar), F Matches/Runden getrennt, G Song-Bekanntheit, H Balance aus echten Zügen, I Weg der Spieler (anonym)
+  - [ ] Nach 2–4 Wochen echter Spiele: Song-Liste (rot markierte Songs austauschen) und Balance-Punkte unten mit echten Zahlen entscheiden
 - [ ] **Account-System mit Login** (Grundlage steht, Ausbau läuft)
   - [x] Login (E-Mail oder Username), Registrierung mit Username-Check, E-Mail-Bestätigung, Passwort-Reset – bestanden schon, Auth ist aktiv
   - [x] Konto-Seite `/profile` (Stats, Saison-Punkte, Passwort ändern, Abmelden), Konto-Link auf der Startseite
@@ -10,7 +14,7 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
   - [x] Profil-Seite und Header mit einer Test-Sitzung gerendert (Desktop/Handy) – echter Login mit echten Daten steht noch aus
   - [ ] Registrierung und Mail-Versand einmal mit einem echten Postfach durchtesten (Mail-Texte auf Deutsch, Absender)
   - [ ] Gast → Konto: Spielstand der laufenden Gast-Identität beim Registrieren übernehmen
-  - [ ] Avatar/Farbe im Profil wählen, Konto löschen (DSGVO), Username ändern
+  - [ ] Avatar/Farbe im Profil wählen, Konto löschen (DSGVO – Verlauf wird per Fremdschlüssel automatisch mitgelöscht, Spielprotokoll verliert die Konto-Verknüpfung), Username ändern
   - [ ] Optional: Login mit Google/Apple
 
 ## Ideen aus der Gesamtanalyse (Außenstehende gewinnen)

@@ -71,8 +71,8 @@ export function HomeStatsSection() {
                     </div>
                 ) : (
                     <div className="statsGrid" style={{ marginTop: 10 }}>
-                        <StatBox label="Spiele" value={String(stats?.games_played ?? 0)} />
-                        <StatBox label="Siege" value={String(stats?.wins ?? 0)} />
+                        <StatBox label="Runden" value={String(stats?.games_played ?? 0)} />
+                        <StatBox label="Rundensiege" value={String(stats?.wins ?? 0)} />
                         <StatBox label="Beste Streak" value={String(stats?.best_survival_streak ?? 0)} />
                         <StatBox label="Achievements" value={`${unlocked.length}/${catalog.length}`} />
                     </div>

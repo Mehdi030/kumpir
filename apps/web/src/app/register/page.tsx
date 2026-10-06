@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { track } from "@/lib/track";
 
 function isEmailLike(v: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -187,6 +188,7 @@ export default function RegisterPage() {
             });
 
             if (error) throw error;
+            track("register_success");
 
             // ✅ go to check_email screen
             const loginUrl =

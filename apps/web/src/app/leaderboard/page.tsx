@@ -11,9 +11,9 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 const CATEGORIES: Array<{ key: LeaderboardCategory; label: string; icon: string; unit: string; render: (e: LeaderboardEntry) => string }> = [
     {
         key: "wins",
-        label: "Siege",
+        label: "Rundensiege",
         icon: "🏆",
-        unit: "Wins",
+        unit: "Siege",
         render: (e) => `${e.wins} (${e.win_rate_pct}%)`,
     },
     {
@@ -112,7 +112,7 @@ export default function LeaderboardPage() {
                                 <tr style={{ textAlign: "left", opacity: 0.7, fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase" }}>
                                     <th style={{ padding: "10px 8px" }}>#</th>
                                     <th style={{ padding: "10px 8px" }}>Username</th>
-                                    <th style={{ padding: "10px 8px" }}>Spiele</th>
+                                    <th style={{ padding: "10px 8px" }}>Runden</th>
                                     <th style={{ padding: "10px 8px", textAlign: "right" }}>{cfg.unit}</th>
                                 </tr>
                             </thead>

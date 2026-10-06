@@ -110,7 +110,8 @@ const de = {
     "pwa.btn": "Installieren",
     "pwa.dismiss": "Hinweis schließen",
 
-    "fin.unranked": "🤖 Spiele mit nur einem Menschen zählen nicht für Bestenliste und Statistik.",
+    "fin.unranked": "🤖 Übungsspiel (nur ein Mensch): zählt nicht für die Bestenliste.",
+    "fin.unrankedAccount": "🤖 Übungsspiel (nur ein Mensch): zählt nicht für Bestenliste, Siege und Achievements – steht aber in deinem Verlauf.",
     "fin.spectator": "👀 Du hast zugeschaut. Sobald der Host zurück zur Lobby geht, kannst du mitspielen.",
     "spec.kicker": "ZUSCHAUEN",
     "spec.openTitle": "Jetzt kannst du mitspielen",
@@ -216,7 +217,8 @@ const en: Partial<Record<TranslationKey, string>> = {
     "pwa.btn": "Install",
     "pwa.dismiss": "Dismiss",
 
-    "fin.unranked": "🤖 Games with only one human don't count towards the leaderboard or stats.",
+    "fin.unranked": "🤖 Practice game (only one human): doesn't count towards the leaderboard.",
+    "fin.unrankedAccount": "🤖 Practice game (only one human): doesn't count towards leaderboard, wins or achievements – but it's in your history.",
     "fin.spectator": "👀 You were watching. Once the host returns to the lobby, you can join.",
     "spec.kicker": "WATCHING",
     "spec.openTitle": "You can join now",

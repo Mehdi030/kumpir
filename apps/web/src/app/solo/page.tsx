@@ -11,6 +11,7 @@ import { MUSIC_GENRE_KEYS } from "@/lib/musicGenres";
 import { startGame } from "@/actions/startGame";
 import { Spinner } from "@/components/Spinner";
 import { useI18n } from "@/lib/i18n";
+import { track } from "@/lib/track";
 
 const NAMES = ["Baro", "Medo", "Sero", "Sinan", "Elias", "Jonas", "Max", "Leo", "Emir", "Can", "Ali", "Omar", "Nico", "Sami", "Amir", "Milan"];
 const BOTS: { name: string; skill: 1 | 2 | 3 }[] = [
@@ -48,6 +49,7 @@ export default function SoloPage() {
 
     const run = useCallback(async () => {
         setError("");
+        track("solo_start");
         try {
             const supabase = getSupabaseClient();
             const name = (profile?.username || storedName() || NAMES[Math.floor(Math.random() * NAMES.length)]!).slice(0, 24);
@@ -91,6 +93,7 @@ export default function SoloPage() {
             setStep("solo.go");
             const res = await startGame(code, me, getSessionToken() ?? "");
             if (!res.ok) throw new Error("error" in res ? res.error : "Start fehlgeschlagen.");
+            track("solo_game_started");
             router.replace(`/game/${code}`);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Unbekannter Fehler.");
