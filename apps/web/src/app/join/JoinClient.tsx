@@ -82,11 +82,11 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
         setName(getStoredName());
     }, []);
 
-    // Eingeloggt und noch kein gespeicherter Name: Username vorbelegen.
+    // Eingeloggt: Spielername aus dem Konto vorbelegen (sonst Benutzername) – bleibt änderbar.
     useEffect(() => {
-        const u = profile?.username;
-        if (u) setName((cur) => (cur ? cur : sanitizeName(u)));
-    }, [profile?.username]);
+        const u = profile?.playerName;
+        if (u && sanitizeName(u).length >= 2) setName(sanitizeName(u));
+    }, [profile?.playerName]);
 
     useEffect(() => {
         if (!showNameModal) return;

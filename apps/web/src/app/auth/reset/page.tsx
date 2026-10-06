@@ -1,50 +1,41 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { PasswordInput } from "@/components/PasswordInput";
 
 export default function ResetPasswordPage() {
     const supabase = getSupabaseClient();
     const [pw1, setPw1] = useState("");
     const [pw2, setPw2] = useState("");
     const [loading, setLoading] = useState(false);
-    const [msg, setMsg] = useState<string>("");
-    const [err, setErr] = useState<string>("");
-
-    const nextPath = useMemo(() => {
-        if (typeof window === "undefined") return "/login";
-        const url = new URL(window.location.href);
-        const next = url.searchParams.get("next");
-        return next && next.startsWith("/") ? next : "/login";
-    }, []);
+    const [msg, setMsg] = useState("");
+    const [err, setErr] = useState("");
+    const [linkInvalid, setLinkInvalid] = useState(false);
 
     useEffect(() => {
-        // Supabase Recovery setzt Session automatisch via URL-Params,
-        // solange die Callback/Redirect URL stimmt.
+        // Die Sitzung aus dem Reset-Link wurde auf /auth/callback schon gesetzt.
         void supabase.auth.getSession().then((res) => {
-            if (!res.data.session) {
-                setErr("Reset-Link ungültig oder abgelaufen. Bitte erneut anfordern.");
-            }
+            if (!res.data.session) setLinkInvalid(true);
         });
     }, [supabase]);
 
     async function onSubmit() {
         setErr("");
         setMsg("");
-
-        if (pw1.length < 8) return setErr("Passwort muss mindestens 8 Zeichen haben.");
-        if (pw1 !== pw2) return setErr("Passwörter stimmen nicht überein.");
+        if (pw1.length < 8) return setErr("Das Passwort braucht mindestens 8 Zeichen.");
+        if (pw1 !== pw2) return setErr("Die beiden Passwörter sind nicht gleich.");
 
         setLoading(true);
         try {
             const { error } = await supabase.auth.updateUser({ password: pw1 });
             if (error) throw error;
-
-            setMsg("Passwort wurde geändert. Du kannst dich jetzt einloggen.");
-            window.location.href = nextPath;
+            setMsg("✅ Passwort geändert – du bist angemeldet und wirst weitergeleitet…");
+            window.setTimeout(() => window.location.assign("/"), 1200);
         } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : null;
-            setErr(msg ?? "Passwort ändern fehlgeschlagen.");
+            const m = e instanceof Error ? e.message : "";
+            setErr(/different from the old|same password/i.test(m) ? "Das neue Passwort muss sich vom alten unterscheiden." : m || "Passwort ändern fehlgeschlagen.");
         } finally {
             setLoading(false);
         }
@@ -58,45 +49,67 @@ export default function ResetPasswordPage() {
                         <div className="hostTitleRow">
                             <h1 className="h1">Neues Passwort</h1>
                         </div>
-                        <p className="p hostSub">Wähle ein neues Passwort für deinen Account.</p>
+                        <p className="p hostSub">Wähle ein neues Passwort für dein Konto.</p>
                     </header>
 
-                    <div className="hostGrid">
-                        <div className="panel" style={{ gridColumn: "1 / -1" }}>
-                            <div className="previewCard">
-                                <div className="fieldRow">
-                                    <label className="fieldLabel" htmlFor="pw1">Neues Passwort</label>
-                                    <div className="fieldControl">
-                                        <input id="pw1" className="input" type="password" value={pw1}
-                                               onChange={(e) => setPw1(e.target.value)} placeholder="mind. 8 Zeichen" />
-                                    </div>
-                                </div>
-
-                                <div className="fieldRow" style={{ marginTop: 12 }}>
-                                    <label className="fieldLabel" htmlFor="pw2">Wiederholen</label>
-                                    <div className="fieldControl">
-                                        <input id="pw2" className="input" type="password" value={pw2}
-                                               onChange={(e) => setPw2(e.target.value)} placeholder="Passwort wiederholen" />
-                                    </div>
-                                </div>
-
-                                {err && <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>{err}</div>}
-                                {msg && <div className="fieldHelp" style={{ marginTop: 10 }}>{msg}</div>}
-
-                                <div className="actionsRow" style={{ marginTop: 14 }}>
-                                    <button
-                                        type="button"
-                                        className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
-                                        onClick={onSubmit}
-                                        disabled={loading}
-                                    >
-                                        {loading ? "…" : "Passwort speichern"}
-                                    </button>
-                                </div>
-
+                    {linkInvalid ? (
+                        <div className="panel">
+                            <div className="fieldHelp fieldHelpError">
+                                Der Link ist abgelaufen oder wurde in einem anderen Browser geöffnet. Fordere einfach einen neuen an.
+                            </div>
+                            <div className="actionsRow" style={{ marginTop: 14 }}>
+                                <Link href="/login?m=reset_other_device" className="btn btnPrimary">
+                                    Neuen Link anfordern
+                                </Link>
                             </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="hostGrid">
+                            <div className="panel" style={{ gridColumn: "1 / -1" }}>
+                                <div className="previewCard">
+                                    <div className="fieldRow">
+                                        <label className="fieldLabel" htmlFor="pw1">
+                                            Neues Passwort
+                                        </label>
+                                        <div className="fieldControl">
+                                            <PasswordInput id="pw1" value={pw1} onChange={(e) => setPw1(e.target.value)} placeholder="mind. 8 Zeichen" autoComplete="new-password" />
+                                        </div>
+                                    </div>
+
+                                    <div className="fieldRow" style={{ marginTop: 12 }}>
+                                        <label className="fieldLabel" htmlFor="pw2">
+                                            Wiederholen
+                                        </label>
+                                        <div className="fieldControl">
+                                            <PasswordInput
+                                                id="pw2"
+                                                value={pw2}
+                                                onChange={(e) => setPw2(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") void onSubmit();
+                                                }}
+                                                placeholder="Passwort wiederholen"
+                                                autoComplete="new-password"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {err ? (
+                                        <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }} role="alert">
+                                            {err}
+                                        </div>
+                                    ) : null}
+                                    {msg ? <div className="fieldHelp" style={{ marginTop: 10 }}>{msg}</div> : null}
+
+                                    <div className="actionsRow" style={{ marginTop: 14 }}>
+                                        <button type="button" className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`} onClick={() => void onSubmit()} disabled={loading}>
+                                            {loading ? "…" : "Passwort speichern"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </section>
             </div>
         </main>

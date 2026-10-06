@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { track } from "@/lib/track";
+import { validateUsername } from "@/lib/accountSettings";
+import { PasswordInput } from "@/components/PasswordInput";
 
 function isEmailLike(v: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -16,9 +18,8 @@ function normalizeEmail(v: string) {
 }
 
 function isUsernameValid(u: string) {
-    if (u.length < 3) return { ok: false, msg: "Benutzername muss mindestens 3 Zeichen haben." };
-    if (!/^[a-z0-9._-]+$/.test(u)) return { ok: false, msg: "Benutzername: nur a-z, 0-9, Punkt, Unterstrich, Minus." };
-    return { ok: true, msg: "" };
+    const v = validateUsername(u);
+    return v.ok ? { ok: true, msg: "" } : { ok: false, msg: `Benutzername: ${v.message}` };
 }
 
 function isPasswordStrongEnough(pw: string) {
@@ -45,10 +46,10 @@ export default function RegisterPage() {
     const lastUsernameChecked = useRef<string>("");
 
     const nextPath = useMemo(() => {
-        if (typeof window === "undefined") return "/host";
+        if (typeof window === "undefined") return "/";
         const url = new URL(window.location.href);
         const next = url.searchParams.get("next");
-        return next && next.startsWith("/") ? next : "/host";
+        return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
     }, []);
 
     // ✅ Stable callback origin for email links + OAuth redirects
@@ -146,6 +147,13 @@ export default function RegisterPage() {
             return "Benutzername ist bereits vergeben. Bitte wähle einen anderen.";
         }
 
+        if (msg.includes("rate limit") || msg.includes("seconds")) {
+            return "Zu viele Versuche. Bitte kurz warten und dann erneut versuchen.";
+        }
+        if (msg.includes("password")) {
+            return "Das Passwort ist zu schwach. Bitte mindestens 8 Zeichen verwenden.";
+        }
+
         // Generic
         return rawMsg || "Registrierung fehlgeschlagen.";
     }
@@ -215,7 +223,7 @@ export default function RegisterPage() {
                         <div className="hostTitleRow">
                             <h1 className="h1">Registrieren</h1>
                         </div>
-                        <p className="p hostSub">Erstelle deinen Account und sichere dir deinen Benutzernamen.</p>
+                        <p className="p hostSub">Erstelle dein Konto und sichere dir deinen Benutzernamen. Spielername, Avatar und mehr kannst du danach im Profil einstellen.</p>
                     </header>
 
                     <div className="hostGrid">
@@ -234,14 +242,18 @@ export default function RegisterPage() {
                                                 className="input"
                                                 value={username}
                                                 onChange={(e) => setUsername(e.target.value)}
-                                                placeholder="z.B. Medo"
+                                                placeholder="z.B. medo"
                                                 autoComplete="username"
+                                                autoCapitalize="none"
+                                                autoCorrect="off"
+                                                spellCheck={false}
+                                                maxLength={20}
                                             />
                                         </div>
 
                                         <div className="fieldHelp" style={{ flex: "1 1 auto", textAlign: "left", whiteSpace: "nowrap", opacity: 0.9 }}>
                                             {!uValid ? (
-                                                <b>Mind. 3 Zeichen</b>
+                                                <b>{username.trim() ? (validateUsername(username) as { message?: string }).message : "3–20 Zeichen"}</b>
                                             ) : usernameStatus === "checking" ? (
                                                 <b>prüfe…</b>
                                             ) : usernameStatus === "available" ? (
@@ -251,7 +263,7 @@ export default function RegisterPage() {
                                             ) : usernameStatus === "error" ? (
                                                 <b style={{ opacity: 0.95 }}>⚠️ prüfen fehlgeschlagen</b>
                                             ) : (
-                                                <b>Mind. 3 Zeichen</b>
+                                                <b>3–20 Zeichen</b>
                                             )}
                                         </div>
                                     </div>
@@ -287,10 +299,8 @@ export default function RegisterPage() {
                                     </label>
 
                                     <div className="fieldControl">
-                                        <input
+                                        <PasswordInput
                                             id="password"
-                                            className="input"
-                                            type="password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
                                             placeholder="mind. 8 Zeichen"
@@ -306,10 +316,8 @@ export default function RegisterPage() {
                                     </label>
 
                                     <div className="fieldControl">
-                                        <input
+                                        <PasswordInput
                                             id="confirmPassword"
-                                            className="input"
-                                            type="password"
                                             value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
                                             placeholder="nochmal eingeben"
@@ -319,7 +327,7 @@ export default function RegisterPage() {
                                 </div>
 
                                 {error ? (
-                                    <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>
+                                    <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }} role="alert">
                                         {error}
                                     </div>
                                 ) : null}
@@ -336,9 +344,9 @@ export default function RegisterPage() {
                                         className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
                                         onClick={onSubmit}
                                         disabled={loading}
-                                        title={usernameStatus !== "available" ? "Bitte freien Benutzernamen wählen" : "Account erstellen"}
+                                        title={usernameStatus !== "available" ? "Bitte freien Benutzernamen wählen" : "Konto erstellen"}
                                     >
-                                        {loading ? "…" : "Account erstellen"}
+                                        {loading ? "…" : "Konto erstellen"}
                                     </button>
 
                                     <Link href={`/login?next=${encodeURIComponent(nextPath)}`} className="btn btnSecondary">

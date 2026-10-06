@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useProfile } from "@/hooks/useProfile";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/Spinner";
 import { AccountStats } from "@/components/profile/AccountStats";
 import { seasonKey, type ProfileStats } from "@/lib/profileStats";
+import { AccountSettings, AvatarBadge, supabaseAccountApi } from "@/components/profile/AccountSettings";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
 
 export default function ProfilePage() {
-    const { profile, user, loading } = useProfile();
+    const { profile, user, loading, refresh, savePreferences } = useProfile();
+    const accountApi = useMemo(() => supabaseAccountApi(), []);
     const { unlocked, catalog } = useAchievements(user?.id ?? null);
     const supabase = getSupabaseClient();
 
@@ -21,10 +23,6 @@ export default function ProfilePage() {
     const [accStats, setAccStats] = useState<ProfileStats | null>(null);
     const [accLoading, setAccLoading] = useState(false);
     const [accError, setAccError] = useState("");
-    const [pw, setPw] = useState("");
-    const [pw2, setPw2] = useState("");
-    const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
-    const [pwBusy, setPwBusy] = useState(false);
 
     // Verlauf, Musik-Werte, Gegner und Monats-Rückblick kommen gesammelt aus EINER Funktion (Migration 076).
     useEffect(() => {
@@ -47,23 +45,6 @@ export default function ProfilePage() {
         };
     }, [supabase, user?.id, season]);
 
-    const changePassword = useCallback(async () => {
-        setPwMsg(null);
-        if (pw.length < 8) return setPwMsg({ ok: false, text: "Das Passwort braucht mindestens 8 Zeichen." });
-        if (pw !== pw2) return setPwMsg({ ok: false, text: "Die beiden Passwörter sind nicht gleich." });
-        setPwBusy(true);
-        const { error } = await supabase.auth.updateUser({ password: pw });
-        setPwBusy(false);
-        if (error) return setPwMsg({ ok: false, text: error.message });
-        setPw("");
-        setPw2("");
-        setPwMsg({ ok: true, text: "Passwort geändert." });
-    }, [pw, pw2, supabase]);
-
-    const logout = useCallback(async () => {
-        await supabase.auth.signOut();
-        window.location.assign("/");
-    }, [supabase]);
 
     if (AUTH_DISABLED) {
         return (
@@ -105,18 +86,17 @@ export default function ProfilePage() {
         );
     }
 
-    const name = profile.username ?? profile.email?.split("@")[0] ?? "Spieler";
+    const name = profile.displayName || profile.username || profile.email?.split("@")[0] || "Spieler";
 
     return (
         <main className="container">
             <div className="landingWrap">
                 <section className="card">
                     <div className="profHead">
-                        <div className="profAvatar" aria-hidden>
-                            {name.slice(0, 1).toUpperCase()}
-                        </div>
+                        <AvatarBadge emoji={profile.avatarEmoji} color={profile.avatarColor} name={name} />
                         <div className="profWho">
                             <h1 className="h1 profName">{name}</h1>
+                            {profile.username ? <div className="profUser">@{profile.username}</div> : null}
                             <div className="profMail">
                                 {profile.email} {profile.emailVerified ? <span className="profOk">✓ bestätigt</span> : <span className="profWarn">nicht bestätigt</span>}
                             </div>
@@ -156,39 +136,13 @@ export default function ProfilePage() {
                         </Link>
                     </div>
 
-                    <div className="profBox">
-                        <h2 className="profH2">Passwort ändern</h2>
-                        <div className="profPw">
-                            <input className="input" type="password" placeholder="Neues Passwort (mind. 8 Zeichen)" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" />
-                            <input
-                                className="input"
-                                type="password"
-                                placeholder="Nochmal eingeben"
-                                value={pw2}
-                                onChange={(e) => setPw2(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") void changePassword();
-                                }}
-                                autoComplete="new-password"
-                            />
-                            <button type="button" className="btn btnSecondary" onClick={() => void changePassword()} disabled={pwBusy || !pw}>
-                                {pwBusy ? "…" : "Speichern"}
-                            </button>
-                        </div>
-                        {pwMsg ? <div className={`fieldHelp ${pwMsg.ok ? "" : "fieldHelpError"}`} style={{ marginTop: 8 }}>{pwMsg.text}</div> : null}
-                    </div>
-
-                    <div style={{ marginTop: 18, display: "flex", justifyContent: "center" }}>
-                        <button type="button" className="btn btnSecondary" onClick={() => void logout()}>
-                            Abmelden
-                        </button>
-                    </div>
+                    <AccountSettings profile={profile} api={accountApi} onRefresh={refresh} onSavePreferences={savePreferences} />
 
                     <style>{`
             .profHead{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-            .profAvatar{ width:68px; height:68px; border-radius:50%; display:grid; place-items:center; font-size:30px; font-weight:800; color:#2b0f04; background: radial-gradient(circle at 35% 30%, #ffe27a, #ffb21a 75%); box-shadow: 0 0 0 4px rgba(255,255,255,.2), 0 10px 24px rgba(0,0,0,.3); flex:none; font-family: var(--font-display); }
             .profWho{ flex:1; min-width:180px; }
             .profName{ font-size: clamp(28px,6vw,40px) !important; }
+            .profUser{ font-size:14px; font-weight:700; opacity:.85; margin-top:2px; }
             .profMail{ font-size:13px; opacity:.8; margin-top:2px; word-break:break-all; }
             .profOk{ color:#8df0a6; font-weight:700; margin-left:6px; }
             .profWarn{ color:#ffd28a; font-weight:700; margin-left:6px; }
@@ -198,10 +152,6 @@ export default function ProfilePage() {
             .profLink:hover{ background: rgba(255,255,255,.15); transform: translateY(-1px); }
             .profLink span{ grid-row: span 2; font-size:24px; align-self:center; }
             .profLink small{ opacity:.7; font-size:12px; }
-            .profBox{ margin-top:18px; padding:16px; border-radius:18px; background: rgba(0,0,0,.18); border:1px solid rgba(255,255,255,.12); }
-            .profH2{ margin:0 0 10px; font-size:16px; }
-            .profPw{ display:grid; grid-template-columns: 1fr 1fr auto; gap:8px; }
-            @media (max-width:720px){ .profPw{ grid-template-columns: 1fr; } }
           `}</style>
                 </section>
             </div>

@@ -2,6 +2,8 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
+import { ProfileProvider } from "@/components/ProfileProvider";
+import { PreferencesSync } from "@/components/PreferencesSync";
 import { LocaleSync } from "@/components/LocaleSync";
 import { PwaSetup } from "@/components/PwaSetup";
 import { Analytics } from "@vercel/analytics/next"
@@ -54,7 +56,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
         <html lang="de" className={`${displayFont.variable}`}>
         <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+            <ProfileProvider>
+                {children}
+                <PreferencesSync />
+            </ProfileProvider>
+        </AuthProvider>
         <Analytics />
         <LocaleSync />
         <PwaSetup />

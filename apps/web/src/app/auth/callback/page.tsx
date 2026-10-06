@@ -37,13 +37,19 @@ function AuthCallbackInner() {
         const supabase = getSupabaseClient();
         const next = safeNextPath(sp.get("next"));
         const code = sp.get("code");
-        const errorParam = sp.get("error");
-        const errorDescription = sp.get("error_description");
+        // Fehler kommen je nach Flow als ?query oder als #fragment (z. B. abgelaufener Link)
+        const hash = new URLSearchParams(typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "");
+        const errorParam = sp.get("error") ?? hash.get("error");
+        const errorCode = sp.get("error_code") ?? hash.get("error_code");
+        const errorDescription = sp.get("error_description") ?? hash.get("error_description");
+        const isReset = next.startsWith("/auth/reset");
 
         (async () => {
-            if (errorParam) {
+            if (errorParam || errorCode) {
                 router.replace(
-                    `/login?m=auth_error&next=${encodeURIComponent(next)}&error=${encodeURIComponent(errorParam)}` +
+                    `/login?m=auth_error&next=${encodeURIComponent(isReset ? "/" : next)}` +
+                        (errorParam ? `&error=${encodeURIComponent(errorParam)}` : "") +
+                        (errorCode ? `&error_code=${encodeURIComponent(errorCode)}` : "") +
                         (errorDescription ? `&error_description=${encodeURIComponent(errorDescription)}` : "")
                 );
                 return;
@@ -52,7 +58,14 @@ function AuthCallbackInner() {
             if (code) {
                 const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
                 if (exErr) {
-                    router.replace(`/login?m=oauth_exchange_failed&next=${encodeURIComponent(next)}`);
+                    // Häufigster Fall: Link auf einem anderen Gerät/Browser geöffnet als angefordert.
+                    // Bei der Registrierung ist die E-Mail dann trotzdem schon bestätigt -> einfach anmelden.
+                    const otherDevice = /code verifier|code_verifier|flow state|both auth code/i.test(exErr.message);
+                    if (isReset) {
+                        router.replace(`/login?m=${otherDevice ? "reset_other_device" : "link_expired"}`);
+                    } else {
+                        router.replace(`/login?m=${otherDevice ? "confirmed" : "link_expired"}&next=${encodeURIComponent(next)}`);
+                    }
                     return;
                 }
             }
@@ -61,8 +74,13 @@ function AuthCallbackInner() {
             // schon automatisch verarbeitet -- hier nur noch prüfen, ob's saß.
             const { data } = await supabase.auth.getSession();
             if (!data.session) {
-                setError("Bestätigung fehlgeschlagen oder Link abgelaufen.");
-                window.setTimeout(() => router.replace(`/verified?m=session_missing&next=${encodeURIComponent(next)}`), 1500);
+                // Keine Sitzung: beim Passwort-Reset ist der Link unbrauchbar; bei der Registrierung
+                // einfach anmelden (ist die E-Mail doch noch offen, bietet der Login "erneut senden" an).
+                setError(isReset ? "Link abgelaufen – du wirst weitergeleitet…" : "Fast geschafft – bitte jetzt anmelden…");
+                window.setTimeout(
+                    () => router.replace(isReset ? "/login?m=link_expired" : `/login?m=confirmed&next=${encodeURIComponent(next)}`),
+                    1200
+                );
                 return;
             }
 

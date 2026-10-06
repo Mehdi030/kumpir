@@ -103,11 +103,11 @@ export default function HostPage() {
     const { profile } = useProfile();
 
     const [hostName, setHostName] = useState("");
-    // Eingeloggt: Username als Name vorbelegen (bleibt änderbar).
+    // Eingeloggt: Spielername aus dem Konto vorbelegen (sonst Benutzername) – bleibt änderbar.
     useEffect(() => {
-        const u = profile?.username;
-        if (u) setHostName((cur) => (cur ? cur : u.slice(0, 24)));
-    }, [profile?.username]);
+        const u = profile?.playerName;
+        if (u) setHostName(u.slice(0, 24));
+    }, [profile?.playerName]);
     const [maxPlayers, setMaxPlayers] = useState(8);
 
     const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>(null);
@@ -118,6 +118,18 @@ export default function HostPage() {
     const [answerMode, setAnswerMode] = useState<AnswerMode>("text");
     // Anzahl Runden pro Match: nach jeder Runde Zwischenstand + neues Themen-Voting.
     const [seriesTotal, setSeriesTotal] = useState<1 | 3 | 5>(1);
+
+    // Gespeicherte Host-Standards aus den Konto-Einstellungen (einmal beim Laden übernehmen).
+    const appliedHostPrefs = useRef(false);
+    useEffect(() => {
+        const h = profile?.preferences?.host;
+        if (!h || appliedHostPrefs.current) return;
+        appliedHostPrefs.current = true;
+        if (h.maxPlayers) setMaxPlayers(h.maxPlayers);
+        if (h.speed) setRoundSpeed(h.speed);
+        if (h.rounds) setSeriesTotal(h.rounds);
+        if (h.answerMode) setAnswerMode(h.answerMode);
+    }, [profile?.preferences?.host]);
 
     const activeMode = mode ? MODES[mode] : null;
     const activeSpeed = roundSpeed ? ROUND_SPEEDS[roundSpeed] : null;

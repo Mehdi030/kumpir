@@ -42,7 +42,7 @@ export default function Home() {
                                 {t("home.leaderboard")}
                             </Link>
                             <LanguageSwitch />
-                            {!AUTH_DISABLED ? <AuthMini nextPath="/host" variant="header" /> : null}
+                            {!AUTH_DISABLED ? <AuthMini nextPath="/" variant="header" /> : null}
                         </div>
                     </div>
 

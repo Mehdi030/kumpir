@@ -35,12 +35,12 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     }
 
     // Eingeloggt: ein kompakter Konto-Link (alles Weitere liegt unter /profile).
-    const shownName = profile?.username ?? user.email.split("@")[0];
+    const shownName = profile?.displayName || profile?.username || user.email.split("@")[0];
     return (
         <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
             <NotifyToggle className={variant === "header" ? "homeLink" : "btn btnSecondary btnSmall"} />
             <Link className={variant === "header" ? "homeLink homeLinkStrong homeUser" : "btn btnSecondary"} href="/profile" title={t("auth.account")}>
-                👤 {shownName}
+                {profile?.avatarEmoji || "👤"} {shownName}
             </Link>
         </div>
     );

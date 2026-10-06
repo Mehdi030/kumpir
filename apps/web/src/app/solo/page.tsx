@@ -12,13 +12,22 @@ import { startGame } from "@/actions/startGame";
 import { Spinner } from "@/components/Spinner";
 import { useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
+import type { Preferences } from "@/lib/accountSettings";
 
 const NAMES = ["Baro", "Medo", "Sero", "Sinan", "Elias", "Jonas", "Max", "Leo", "Emir", "Can", "Ali", "Omar", "Nico", "Sami", "Amir", "Milan"];
-const BOTS: { name: string; skill: 1 | 2 | 3 }[] = [
-    { name: "Bot Anna", skill: 1 },
-    { name: "Bot Ben", skill: 2 },
-    { name: "Bot Cleo", skill: 1 },
-];
+const BOT_NAMES = ["Bot Anna", "Bot Ben", "Bot Cleo", "Bot Dino", "Bot Emma"];
+// "Gemischt" = wie bisher überwiegend Anfänger mit einem mittleren Bot (+ ab 4 Bots ein Profi)
+const MIXED_SKILLS: (1 | 2 | 3)[] = [1, 2, 1, 3, 2];
+
+/** Solo-Gegner aus den Konto-Einstellungen (Standard: 3 gemischte Bots). */
+function soloBots(prefs?: Preferences): { name: string; skill: 1 | 2 | 3 }[] {
+    const n = Math.max(1, Math.min(5, prefs?.solo?.bots ?? 3));
+    const skill = prefs?.solo?.skill ?? "mixed";
+    return BOT_NAMES.slice(0, n).map((name, i) => ({
+        name,
+        skill: skill === "mixed" ? MIXED_SKILLS[i]! : (Number(skill) as 1 | 2 | 3),
+    }));
+}
 
 // Suchmaschinen-Crawler führen JavaScript aus – die sollen keine echten Lobbys anlegen.
 // Bewusst konkrete Namen statt nur "bot" (sonst träfe es z. B. Handys der Marke CUBOT).
@@ -52,12 +61,13 @@ export default function SoloPage() {
         track("solo_start");
         try {
             const supabase = getSupabaseClient();
-            const name = (profile?.username || storedName() || NAMES[Math.floor(Math.random() * NAMES.length)]!).slice(0, 24);
+            const name = (profile?.playerName || storedName() || NAMES[Math.floor(Math.random() * NAMES.length)]!).slice(0, 24);
+            const bots = soloBots(profile?.preferences);
 
             const { data, error: cErr } = await supabase.rpc("rpc_create_lobby", {
                 p_host_name: name,
                 p_privacy: "private",
-                p_max_players: 6,
+                p_max_players: Math.max(6, bots.length + 1),
                 p_round_seconds: 25,
                 p_user_id: user?.id ?? null,
                 p_round_speed: "normal",
@@ -85,7 +95,7 @@ export default function SoloPage() {
             if (lErr || !lobby?.id) throw new Error(lErr?.message ?? "Lobby nicht gefunden.");
 
             await supabase.rpc("set_lobby_topic_filter", { p_lobby_id: lobby.id, p_me_player_id: me, p_categories: MUSIC_GENRE_KEYS });
-            for (const b of BOTS) {
+            for (const b of bots) {
                 const { error: bErr } = await supabase.rpc("rpc_add_bot", { p_lobby_id: lobby.id, p_me_player_id: me, p_bot_name: b.name, p_skill: b.skill });
                 if (bErr) throw new Error(bErr.message);
             }
@@ -98,7 +108,7 @@ export default function SoloPage() {
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Unbekannter Fehler.");
         }
-    }, [profile?.username, router, user?.id]);
+    }, [profile?.playerName, profile?.preferences, router, user?.id]);
 
     useEffect(() => {
         if (startedRef.current) return;

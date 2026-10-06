@@ -5,6 +5,8 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Row = {
     username: string;
+    avatar_emoji?: string | null;
+    avatar_color?: string | null;
     arena_points: number;
     sets_played: number;
     set_wins: number;
@@ -27,7 +29,7 @@ export function SeasonBoard() {
         void (async () => {
             const { data } = await getSupabaseClient()
                 .from("season_leaderboard_view")
-                .select("username,arena_points,sets_played,set_wins,rank")
+                .select("username,arena_points,sets_played,set_wins,rank,avatar_emoji,avatar_color")
                 .eq("season", season)
                 .order("rank", { ascending: true })
                 .limit(10);
@@ -58,7 +60,9 @@ export function SeasonBoard() {
                             style={{ display: "grid", gridTemplateColumns: "36px 1fr auto auto", gap: 10, alignItems: "center", padding: "8px 12px", borderRadius: 12, background: "rgba(255,255,255,0.06)", fontWeight: 800 }}
                         >
                             <span>{["🥇", "🥈", "🥉"][r.rank - 1] ?? r.rank}</span>
-                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.username}</span>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.avatar_emoji ? <span aria-hidden style={{ marginRight: 6 }}>{r.avatar_emoji}</span> : null}
+                                {r.username}
+                            </span>
                             <span style={{ fontSize: 12, opacity: 0.7 }}>{r.set_wins}× Sieg · {r.sets_played} Runden</span>
                             <span style={{ color: "#ffe08a", fontWeight: 1000 }}>{r.arena_points}</span>
                         </div>

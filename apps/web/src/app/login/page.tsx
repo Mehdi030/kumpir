@@ -4,16 +4,27 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { loginWithIdentifier } from "@/actions/login";
+import { loginWithIdentifier, resendConfirmation } from "@/actions/login";
+import { PasswordInput } from "@/components/PasswordInput";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
 
 function safeNextPath(v: string | null) {
-    if (!v) return "/host";
-    if (!v.startsWith("/")) return "/host";
-    if (v.startsWith("//")) return "/host";
+    if (!v) return "/";
+    if (!v.startsWith("/")) return "/";
+    if (v.startsWith("//")) return "/";
     return v;
+}
+
+/** Fehlercodes aus Supabase-Mail-Links in verständliche Hinweise übersetzen. */
+function authErrorText(code: string | null, desc: string | null): string {
+    const c = (code ?? "").toLowerCase();
+    const d = (desc ?? "").toLowerCase();
+    if (c.includes("otp_expired") || d.includes("expired") || d.includes("invalid")) {
+        return "⚠️ Der Link ist abgelaufen oder wurde schon benutzt. Melde dich an – oder fordere unten einen neuen Link an.";
+    }
+    return `⚠️ ${desc || code || "Anmelden fehlgeschlagen."}`;
 }
 
 function LoginInner() {
@@ -25,6 +36,7 @@ function LoginInner() {
     const msg = sp.get("m");
     const preloadEmail = sp.get("email") ?? "";
     const errorParam = sp.get("error");
+    const errorCodeParam = sp.get("error_code");
     const errorDescParam = sp.get("error_description");
 
     const [identifier, setIdentifier] = useState(preloadEmail); // email oder username
@@ -37,14 +49,23 @@ function LoginInner() {
         if (msg === "check_email" && preloadEmail) {
             return `📨 Bestätigungsmail an ${preloadEmail} gesendet. Klick den Link, dann hier einloggen.`;
         }
-        if (msg === "auth_error" && (errorParam || errorDescParam)) {
-            return `⚠️ ${errorDescParam || errorParam}`;
+        if (msg === "auth_error" && (errorParam || errorCodeParam || errorDescParam)) {
+            return authErrorText(errorCodeParam || errorParam, errorDescParam);
         }
-        if (msg === "oauth_exchange_failed") {
-            return "⚠️ Login fehlgeschlagen — bitte erneut versuchen.";
+        if (msg === "confirmed") {
+            return "✅ Deine E-Mail ist bestätigt. Melde dich jetzt an.";
+        }
+        if (msg === "reset_other_device") {
+            return "⚠️ Den Link zum Zurücksetzen bitte im selben Browser öffnen, in dem du ihn angefordert hast – oder hier einfach einen neuen anfordern.";
+        }
+        if (msg === "link_expired" || msg === "oauth_exchange_failed") {
+            return "⚠️ Der Link ist abgelaufen oder wurde schon benutzt. Melde dich an – oder fordere einen neuen Link an.";
+        }
+        if (msg === "account_deleted") {
+            return "Dein Konto wurde gelöscht. Du kannst jederzeit als Gast weiterspielen.";
         }
         return "";
-    }, [msg, preloadEmail, errorParam, errorDescParam]);
+    }, [msg, preloadEmail, errorParam, errorCodeParam, errorDescParam]);
 
     useEffect(() => {
         if (initialNotice) setInfo(initialNotice);
@@ -59,7 +80,9 @@ function LoginInner() {
     }, [user, authLoading, router, nextPath]);
 
     // Passwort vergessen: Mail mit Reset-Link (landet über /auth/callback auf /auth/reset)
-    const [showReset, setShowReset] = useState(false);
+    const [showReset, setShowReset] = useState(msg === "reset_other_device");
+    const [needsConfirm, setNeedsConfirm] = useState(false);
+    const [resendBusy, setResendBusy] = useState(false);
     const [resetEmail, setResetEmail] = useState("");
     const [resetBusy, setResetBusy] = useState(false);
     const [resetMsg, setResetMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -67,7 +90,7 @@ function LoginInner() {
     const sendReset = useCallback(async () => {
         if (resetBusy) return;
         const email = resetEmail.trim().toLowerCase();
-        if (!/^[^s@]+@[^s@]+.[^s@]+$/.test(email)) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             setResetMsg({ ok: false, text: "Bitte eine gültige E-Mail-Adresse eingeben." });
             return;
         }
@@ -92,6 +115,7 @@ function LoginInner() {
         if (busy) return;
         setError("");
         setInfo("");
+        setNeedsConfirm(false);
         setBusy(true);
         try {
             // Löst Email/Username + Login komplett serverseitig auf (siehe
@@ -101,6 +125,7 @@ function LoginInner() {
             const res = await loginWithIdentifier(identifier, password);
             if (!res.ok) {
                 setError(res.error);
+                if (res.code === "not_confirmed") setNeedsConfirm(true);
                 return;
             }
 
@@ -118,6 +143,20 @@ function LoginInner() {
             setBusy(false);
         }
     }, [busy, identifier, password, nextPath]);
+
+    const onResend = useCallback(async () => {
+        if (resendBusy) return;
+        setResendBusy(true);
+        const res = await resendConfirmation(identifier, window.location.origin);
+        setResendBusy(false);
+        if (res.ok) {
+            setError("");
+            setNeedsConfirm(false);
+            setInfo(res.message);
+        } else {
+            setError(res.message);
+        }
+    }, [identifier, resendBusy]);
 
     if (AUTH_DISABLED) {
         return (
@@ -155,7 +194,7 @@ function LoginInner() {
                             <h1 className="h1">Anmelden</h1>
                         </div>
                         <p className="p hostSub">
-                            Mit Account kommen Achievements + Lifetime-Stats. Du kannst auch weiter als Gast spielen.
+                            Mit Konto speichert Kumpir deinen Verlauf, deine Musik-Werte, Achievements und Saison-Punkte – auf jedem Gerät. Spielen geht auch ohne.
                         </p>
                     </header>
 
@@ -164,7 +203,7 @@ function LoginInner() {
                             <div className="previewCard">
                                 <div className="fieldRow">
                                     <label className="fieldLabel" htmlFor="identifier">
-                                        Username oder E-Mail
+                                        Benutzername oder E-Mail
                                     </label>
                                     <div className="fieldControl">
                                         <input
@@ -175,6 +214,9 @@ function LoginInner() {
                                             placeholder="medo oder medo@example.de"
                                             autoComplete="username"
                                             inputMode="email"
+                                            autoCapitalize="none"
+                                            autoCorrect="off"
+                                            spellCheck={false}
                                         />
                                     </div>
                                 </div>
@@ -182,20 +224,29 @@ function LoginInner() {
                                 <div className="fieldRow" style={{ marginTop: 10 }}>
                                     <label className="fieldLabel" htmlFor="password">Passwort</label>
                                     <div className="fieldControl">
-                                        <input
+                                        <PasswordInput
                                             id="password"
-                                            className="input"
-                                            type="password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            onKeyDown={(e) => { if (e.key === "Enter") void onLogin(); }}
-                                            placeholder="mind. 8 Zeichen"
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") void onLogin();
+                                            }}
+                                            placeholder="Dein Passwort"
                                             autoComplete="current-password"
                                         />
                                     </div>
                                 </div>
 
-                                {error ? <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>{error}</div> : null}
+                                {error ? (
+                                    <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }} role="alert">
+                                        {error}
+                                    </div>
+                                ) : null}
+                                {needsConfirm ? (
+                                    <button type="button" className="btn btnSecondary btnSmall" style={{ marginTop: 8 }} onClick={() => void onResend()} disabled={resendBusy}>
+                                        {resendBusy ? "…" : "📨 Bestätigungsmail erneut senden"}
+                                    </button>
+                                ) : null}
                                 {info ? <div className="fieldHelp" style={{ marginTop: 10 }}>{info}</div> : null}
 
                                 <div className="actionsRow" style={{ marginTop: 14, gap: 10, flexWrap: "wrap" }}>
@@ -209,7 +260,7 @@ function LoginInner() {
                                     </button>
 
                                     <Link href={`/register?next=${encodeURIComponent(nextPath)}`} className="btn btnSecondary">
-                                        Account erstellen
+                                        Konto erstellen
                                     </Link>
 
                                     <Link href="/" className="btn btnSecondary">
