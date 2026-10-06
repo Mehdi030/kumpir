@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { notify } from "@/lib/notifications";
 import type { Achievement } from "@/lib/achievements";
 
 type NewAchievement = Achievement & { unlocked_at: string };
@@ -81,10 +80,6 @@ export function useNewAchievements(userId: string | null | undefined, triggerKey
 
             setNewOnes((prev) => [...prev, ...enriched]);
 
-            // Browser-Notifications (eine pro Achievement, nur wenn Tab im Hintergrund)
-            for (const a of enriched) {
-                notify(`${a.icon} ${a.title}`, a.description, { tag: `achievement:${a.code}` });
-            }
         }, 1200);
 
         return () => {

@@ -286,7 +286,7 @@ export default function LobbyAdminPage() {
                             <div className="pillCard" style={{ marginTop: 10 }}>
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">Max. Spieler</div>
-                                    <div className="pillCardHint">Aktiv: {players.length}</div>
+                                    <div className="pillCardHint">Aktiv: {players.length} · empfohlen 4–8 · max. 12</div>
                                 </div>
                                 <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
                                     <button

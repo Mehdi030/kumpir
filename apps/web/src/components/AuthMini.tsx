@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
-import { NotifyToggle } from "@/components/NotifyToggle";
 import { useProfile } from "@/hooks/useProfile";
 import { useI18n } from "@/lib/i18n";
 
@@ -38,7 +37,6 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     const shownName = profile?.displayName || profile?.username || user.email.split("@")[0];
     return (
         <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
-            <NotifyToggle className={variant === "header" ? "homeLink" : "btn btnSecondary btnSmall"} />
             {profile?.isStaff ? (
                 <Link className={variant === "header" ? "homeLink" : "btn btnSecondary btnSmall"} href="/admin" title="Admin-Panel">
                     🛡️<span className="srOnly"> Admin-Panel</span>

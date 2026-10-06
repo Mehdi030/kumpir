@@ -327,7 +327,7 @@ export default function HostPage() {
                             <div className="pillCard">
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">Max. Spieler</div>
-                                    <div className="pillCardHint">Empfohlen: 6–10</div>
+                                    <div className="pillCardHint">Empfohlen: 4–8 · max. 12</div>
                                 </div>
                                 <div className="pillStepper">
                                     <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>
@@ -449,8 +449,6 @@ export default function HostPage() {
                             </div>
 
 
-                            <RulesCard defaultOpen={false} />
-
                             {createError ? (
                                 <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
                                     {createError}
@@ -474,6 +472,8 @@ export default function HostPage() {
                         </div>
                     </div>
                 </section>
+
+                <RulesCard defaultOpen={false} variant="outside" />
             </div>
         </main>
     );

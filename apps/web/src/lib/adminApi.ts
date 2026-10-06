@@ -63,6 +63,20 @@ export type AdminSong = {
     rate: number | null;
 };
 
+export type OnlinePlayer = {
+    playerId: string;
+    name: string;
+    lobbyId: string;
+    lobbyCode: string;
+    phase: string;
+    isHost: boolean;
+    userId: string | null;
+    username: string | null;
+    role: "user" | "supporter" | "admin" | null;
+    accountStatus: UserStatus | null;
+    lastSeen: string;
+};
+
 export type AuditPage = { total: number; rows: AuditEntry[] };
 
 export type AuditEntry = {
@@ -91,6 +105,8 @@ export type AdminApi = {
     listSongs: (playlist: string | null, search: string) => R<AdminSong[]>;
     setSongArchived: (id: string, archived: boolean) => R<null>;
     listAudit: (limit?: number) => R<AuditPage>;
+    onlinePlayers: () => R<OnlinePlayer[]>;
+    kickPlayer: (lobbyId: string, playerId: string) => R<null>;
 };
 
 export function supabaseAdminApi(): AdminApi {
@@ -126,6 +142,8 @@ export function supabaseAdminApi(): AdminApi {
         listSongs: (playlist, search) => call("admin_list_songs", { p_playlist: playlist, p_search: search || null }),
         setSongArchived: (id, archived) => call("admin_set_song_archived", { p_song_id: id, p_archived: archived }),
         listAudit: (limit = 300) => call("admin_list_audit", { p_limit: limit }),
+        onlinePlayers: () => call("admin_online_players"),
+        kickPlayer: (lobbyId, playerId) => call("admin_kick_player", { p_lobby_id: lobbyId, p_player_id: playerId }),
     };
 }
 
@@ -139,6 +157,7 @@ export function adminErrorText(e: string | undefined): string {
     if (m.includes("username_invalid")) return "Benutzername: 3–20 Zeichen, nur a–z, 0–9, Punkt, Unterstrich, Minus.";
     if (m.includes("user_not_found")) return "Nutzer nicht gefunden (evtl. schon gelöscht).";
     if (m.includes("lobby_not_found")) return "Lobby gibt es nicht mehr.";
+    if (m.includes("player_not_found")) return "Spieler ist nicht mehr in der Lobby.";
     if (m.includes("rate") || m.includes("seconds")) return "Bitte kurz warten und erneut versuchen.";
     return m || "Das hat nicht geklappt.";
 }
@@ -153,6 +172,7 @@ export const ACTION_LABEL: Record<string, string> = {
     profile_moderated: "✏️ Profil bearbeitet",
     password_reset_sent: "🔑 Passwort-Reset gesendet",
     lobby_closed: "🚪 Lobby geschlossen",
+    player_kicked: "👢 Spieler gekickt",
     song_archived: "📦 Song archiviert",
     song_restored: "♻️ Song zurückgeholt",
     account_created: "🆕 Konto angelegt",
@@ -187,6 +207,6 @@ const CATEGORY_OF: Record<string, AuditCategory> = {
     username_changed: "profile", display_name_changed: "profile", avatar_changed: "profile", preferences_changed: "profile", profile_moderated: "profile",
     suspended: "access", unsuspended: "access", role_changed: "access", status_changed: "access", platform_admin_changed: "access",
     song_archived: "songs", song_restored: "songs", songs_added: "songs", songs_removed: "songs", songs_changed: "songs", playlist_changed: "songs",
-    lobby_closed: "lobbies", lobbies_expired: "lobbies",
+    lobby_closed: "lobbies", lobbies_expired: "lobbies", player_kicked: "lobbies",
 };
 export const auditCategory = (action: string): AuditCategory => CATEGORY_OF[action] ?? "all";

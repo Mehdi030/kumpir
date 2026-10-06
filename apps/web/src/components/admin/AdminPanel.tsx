@@ -74,7 +74,11 @@ function ConfirmButton({ label, confirmLabel, onConfirm, danger = false, disable
 }
 
 export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }) {
-    const [tab, setTab] = useState<Tab>("overview");
+    const [tab, setTab] = useState<Tab>(() => {
+        if (typeof window === "undefined") return "overview";
+        const t = new URLSearchParams(window.location.search).get("tab");
+        return t && ["overview", "users", "deletion", "lobbies", "songs", "stats", "audit"].includes(t) ? (t as Tab) : "overview";
+    });
     const [overview, setOverview] = useState<AdminOverview | null>(null);
     const [error, setError] = useState("");
 
@@ -197,7 +201,7 @@ function Tile({ label, value, sub, warn, onClick }: { label: string; value: numb
 
 // ------------------------------------------------------------------ Nutzer
 function UsersTab({ api, role, meId, initialFilter, onChanged }: { api: AdminApi; role: AdminRole; meId: string | null; initialFilter: "all" | "deletion"; onChanged: () => void }) {
-    const [search, setSearch] = useState("");
+    const [search, setSearch] = useState(() => (typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("q") ?? ""));
     const [filter, setFilter] = useState<"all" | "deletion" | "suspended" | "staff">(initialFilter);
     const [rows, setRows] = useState<AdminUserRow[] | null>(null);
     const [error, setError] = useState("");
