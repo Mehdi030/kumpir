@@ -22,24 +22,14 @@ export function Spinner({ size = 22, label }: Props) {
         >
       <span
           aria-hidden
+          className="kmSpinner"
           style={{
               width: size,
               height: size,
-              borderRadius: "50%",
-              border: `${Math.max(2, Math.round(size / 9))}px solid rgba(255,255,255,0.16)`,
-              borderTopColor: "rgba(255,255,255,0.85)",
-              animation: "kumpirSpin 0.85s linear infinite",
-              display: "inline-block",
+              borderWidth: Math.max(2, Math.round(size / 9)),
           }}
       />
             {label ? <span>{label}</span> : null}
-
-            <style jsx global>{`
-        @keyframes kumpirSpin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-      `}</style>
     </span>
     );
 }

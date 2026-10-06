@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { useAchievements } from "@/hooks/useAchievements";
 import { Spinner } from "@/components/Spinner";
+import { CountUp } from "@/components/CountUp";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -90,7 +91,9 @@ function StatBox({ label, value }: { label: string; value: string }) {
             }}
         >
             <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.7, letterSpacing: 0.6, textTransform: "uppercase" }}>{label}</div>
-            <div style={{ fontSize: 18, fontWeight: 950 }}>{value}</div>
+            <div style={{ fontSize: 18, fontWeight: 950 }}>
+                <CountUp value={value} />
+            </div>
         </div>
     );
 }

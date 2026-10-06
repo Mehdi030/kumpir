@@ -1,4 +1,5 @@
 import "./globals.css";
+import "./motion.css";
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
@@ -9,6 +10,8 @@ import { LocaleSync } from "@/components/LocaleSync";
 import { PwaSetup } from "@/components/PwaSetup";
 import { AdminQuickPanel } from "@/components/admin/AdminQuickPanel";
 import { PresencePing } from "@/components/PresencePing";
+import { UiFx } from "@/components/UiFx";
+import { Embers } from "@/components/Embers";
 import { Analytics } from "@vercel/analytics/next"
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://kumpir-web.vercel.app";
@@ -62,12 +65,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <link rel="preload" href="/fonts/kumpir-emoji.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         </head>
         <body>
+        <Embers />
         <AuthProvider>
             <ProfileProvider>
                 {children}
                 <PreferencesSync />
                 <AdminQuickPanel />
                 <PresencePing />
+                <UiFx />
             </ProfileProvider>
         </AuthProvider>
         <Analytics />

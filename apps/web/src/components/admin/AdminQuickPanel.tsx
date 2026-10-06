@@ -384,9 +384,11 @@ export function AdminQuickPanel() {
 }
 
 const STYLES = `
-.aqFab{ position:fixed; left:12px; bottom:12px; z-index:3000; width:38px; height:38px; border-radius:999px; border:1px solid rgba(255,255,255,.3); background:rgba(20,8,4,.72); color:#fff; font-size:18px; cursor:pointer; opacity:.55; backdrop-filter: blur(6px); }
-.aqFab:hover{ opacity:1; }
-.aqPanel{ position:fixed; right:12px; top:12px; z-index:3000; width:min(390px, calc(100vw - 24px)); max-height:calc(100vh - 24px); display:flex; flex-direction:column; gap:8px; padding:12px; border-radius:20px; color:#fff;
+.aqFab{ animation: aqFab .4s cubic-bezier(.34,1.56,.64,1) .3s both; transition: transform .25s cubic-bezier(.34,1.56,.64,1), opacity .2s ease; position:fixed; left:12px; bottom:12px; z-index:3000; width:38px; height:38px; border-radius:999px; border:1px solid rgba(255,255,255,.3); background:rgba(20,8,4,.72); color:#fff; font-size:18px; cursor:pointer; opacity:.55; backdrop-filter: blur(6px); }
+.aqFab:hover{ opacity:1; transform: scale(1.12) rotate(-6deg); }
+@keyframes aqIn{ from{ opacity:0; transform: translateX(28px) scale(.97); } to{ opacity:1; transform:none; } }
+@keyframes aqFab{ from{ opacity:0; transform: scale(.4); } to{ opacity:.55; transform:none; } }
+.aqPanel{ animation: aqIn .34s cubic-bezier(.16,1,.3,1) both; position:fixed; right:12px; top:12px; z-index:3000; width:min(390px, calc(100vw - 24px)); max-height:calc(100vh - 24px); display:flex; flex-direction:column; gap:8px; padding:12px; border-radius:20px; color:#fff;
   background:rgba(24,10,6,.94); border:1px solid rgba(255,255,255,.22); box-shadow:0 24px 70px rgba(0,0,0,.5); backdrop-filter: blur(12px); font-size:13px; }
 .aqHead{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
 .aqKbd{ margin-left:8px; font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:6px; background:rgba(255,255,255,.14); }
@@ -413,8 +415,8 @@ const STYLES = `
 .aqTag{ margin-left:6px; font-size:10px; font-weight:900; padding:1px 6px; border-radius:999px; background:rgba(255,255,255,.18); }
 .aqTag.bad{ background:rgba(255,90,70,.4); }
 .aqActions{ display:flex; gap:4px; flex-shrink:0; }
-.aqBtn{ min-width:32px; height:30px; padding:0 8px; display:inline-grid; place-items:center; border-radius:10px; border:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.1); color:#fff; font:inherit; font-weight:800; font-size:13px; cursor:pointer; text-decoration:none; }
-.aqBtn:hover:not(:disabled){ background:rgba(255,255,255,.2); }
+.aqBtn{ transition: transform .2s cubic-bezier(.34,1.56,.64,1), background .15s ease; min-width:32px; height:30px; padding:0 8px; display:inline-grid; place-items:center; border-radius:10px; border:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.1); color:#fff; font:inherit; font-weight:800; font-size:13px; cursor:pointer; text-decoration:none; }
+.aqBtn:hover:not(:disabled){ background:rgba(255,255,255,.2); transform: translateY(-2px); }
 .aqBtn.danger{ border-color:rgba(255,120,100,.5); }
 .aqBtn.armed{ background:#ff5a46; border-color:#ff5a46; }
 .aqBtn:disabled{ opacity:.4; cursor:not-allowed; }

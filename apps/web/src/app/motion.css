@@ -1,0 +1,327 @@
+/* =====================================================================
+   MOTION & POLISH
+   Eine durchgängige Bewegungs-Schicht über allen Seiten:
+   Seiten-Einblendung, gestaffelte Karten, Knöpfe mit Glanz und Druckgefühl,
+   Lichtreflex unter dem Mauszeiger, Spinner/Toasts, kleine Details.
+   Steht in einer eigenen Datei NACH globals.css und überschreibt dort nur das Nötige.
+   Alle Animationen starten mit "from"-Keyframes (Grundzustand bleibt sichtbar),
+   "prefers-reduced-motion" schaltet alles ab (siehe globals.css).
+   ===================================================================== */
+
+:root{
+    --ease-out: cubic-bezier(.16, 1, .3, 1);
+    --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+    --ease-inout: cubic-bezier(.65, 0, .35, 1);
+}
+
+html{ scroll-behavior: smooth; }
+::selection{ background: #ffd23f; color: #2b0f04; }
+
+/* ---------- Scrollbalken ---------- */
+*{ scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .34) transparent; }
+::-webkit-scrollbar{ width: 12px; height: 12px; }
+::-webkit-scrollbar-track{ background: transparent; }
+::-webkit-scrollbar-thumb{ background: rgba(255, 255, 255, .3); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover{ background: rgba(255, 255, 255, .55); background-clip: content-box; }
+
+/* ---------- Hintergrund: langsam atmende Farbflecken (nur Transform = ruckelfrei) ---------- */
+body::before{
+    inset: -60px;
+    will-change: transform;
+    animation: kmDrift 42s var(--ease-inout) infinite alternate;
+}
+@keyframes kmDrift{
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    50%  { transform: translate3d(-16px, 12px, 0) scale(1.03); }
+    100% { transform: translate3d(14px, -10px, 0) scale(1.01); }
+}
+
+/* ---------- Seitenwechsel: neue Seite blendet weich ein ---------- */
+main{ animation: kmPageIn .45s ease backwards; }
+@keyframes kmPageIn{ from{ opacity: 0; } to{ opacity: 1; } }
+
+/* ---------- Gemeinsame Einblend-Bewegungen ---------- */
+@keyframes kmRise{
+    from{ opacity: 0; transform: translateY(18px) scale(.985); }
+    to  { opacity: 1; transform: none; }
+}
+@keyframes kmPop{
+    0%  { opacity: 0; transform: scale(.82); }
+    60% { opacity: 1; transform: scale(1.04); }
+    100%{ transform: none; }
+}
+@keyframes kmCardIn{
+    from{ opacity: 0; transform: translateY(28px) scale(.975); }
+    to  { opacity: 1; transform: none; }
+}
+
+/* Haupt-Karten kommen mit leichtem Federn herein */
+.card{ animation: kmCardIn .75s var(--ease-out) .05s backwards; }
+
+/* Listen/Raster: Kinder erscheinen nacheinander (Neuzugänge poppen einzeln auf) */
+.homeCta > *, .homeSteps > *, .statsGrid > *, .achievementsGrid > *, .hostGrid > *, .frGrid > *, .profLinks > *{
+    animation: kmRise .6s var(--ease-out) backwards;
+}
+.playerGrid > .playerChip{ animation: kmPop .5s var(--ease-spring) backwards; }
+.playerGrid > .playerChipReady{ animation: kmPop .5s var(--ease-spring) backwards, playerChipReadyGlow 2.4s ease-in-out .5s infinite; }
+
+.homeCta > *:nth-child(1), .homeSteps > *:nth-child(1), .statsGrid > *:nth-child(1), .achievementsGrid > *:nth-child(1), .frGrid > *:nth-child(1), .playerGrid > *:nth-child(1), .profLinks > *:nth-child(1){ animation-delay: .10s; }
+.homeCta > *:nth-child(2), .homeSteps > *:nth-child(2), .statsGrid > *:nth-child(2), .achievementsGrid > *:nth-child(2), .frGrid > *:nth-child(2), .playerGrid > *:nth-child(2), .profLinks > *:nth-child(2){ animation-delay: .17s; }
+.homeCta > *:nth-child(3), .homeSteps > *:nth-child(3), .statsGrid > *:nth-child(3), .achievementsGrid > *:nth-child(3), .frGrid > *:nth-child(3), .playerGrid > *:nth-child(3), .profLinks > *:nth-child(3){ animation-delay: .24s; }
+.statsGrid > *:nth-child(4), .achievementsGrid > *:nth-child(4), .frGrid > *:nth-child(4), .playerGrid > *:nth-child(4), .profLinks > *:nth-child(4){ animation-delay: .31s; }
+.achievementsGrid > *:nth-child(5), .frGrid > *:nth-child(5), .playerGrid > *:nth-child(5){ animation-delay: .38s; }
+.achievementsGrid > *:nth-child(6), .frGrid > *:nth-child(6), .playerGrid > *:nth-child(6){ animation-delay: .45s; }
+.achievementsGrid > *:nth-child(n+7), .frGrid > *:nth-child(n+7), .playerGrid > *:nth-child(n+7){ animation-delay: .5s; }
+
+/* Titel + Untertitel */
+.hostHeader, .homeHero .homeTagline{ animation: kmRise .7s var(--ease-out) .08s backwards; }
+.homeHero .homeTagline{ animation-delay: .22s; }
+.homeFree{ animation: kmRise .7s var(--ease-out) .4s backwards; }
+
+/* ---------- Startseite: Maskottchen schaukelt, Titel glänzt ---------- */
+.potatoBgImg{ animation: kmSway 7s var(--ease-inout) infinite; will-change: transform; }
+@keyframes kmSway{
+    0%, 100%{ transform: rotate(-.9deg) translateY(0); }
+    50%     { transform: rotate(.9deg) translateY(-6px); }
+}
+.homeTitle{
+    background: linear-gradient(100deg, #fff 0%, #fff 36%, #ffe08a 47%, #fff 58%, #fff 100%);
+    background-size: 260% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    text-shadow: none;
+    filter: drop-shadow(0 6px 20px rgba(60, 8, 0, .35));
+    animation: kmShine 7s var(--ease-inout) 1s infinite;
+}
+@keyframes kmShine{
+    0%, 55%{ background-position: 120% 0; }
+    100%   { background-position: -60% 0; }
+}
+.homeBadge{ transition: transform .25s var(--ease-spring), background .2s ease; }
+.homeBadge:hover{ transform: translateY(-2px) scale(1.04); background: rgba(255, 255, 255, .2); }
+
+/* ---------- Knöpfe ---------- */
+.btn{
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    transition: transform .28s var(--ease-spring), box-shadow .28s var(--ease-out), filter .2s ease, background .2s ease, border-color .2s ease;
+    will-change: transform;
+}
+/* Glanz, der beim Drüberfahren durchzieht */
+.btnPrimary::after{
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 60%;
+    background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, .6) 50%, transparent 100%);
+    transform: translateX(-130%) skewX(-18deg);
+    pointer-events: none;
+    z-index: 1;
+}
+@media (hover: hover){
+    .btnPrimary:not(:disabled):not(.btnDisabled):hover::after{ transform: translateX(260%) skewX(-18deg); transition: transform .8s var(--ease-out); }
+    .btn:not(:disabled):not(.btnDisabled):hover{ transform: translateY(-3px); }
+    .btnPrimary:not(:disabled):not(.btnDisabled):hover{
+        filter: brightness(1.05) saturate(1.05);
+        box-shadow: 0 8px 0 #b8620a, 0 22px 34px rgba(80, 20, 0, .4), 0 0 30px rgba(255, 210, 63, .38), inset 0 1px 0 rgba(255, 255, 255, .6);
+    }
+    .btnSecondary:not(:disabled):not(.btnDisabled):hover, .btnAccent:not(:disabled):not(.btnDisabled):hover{
+        box-shadow: 0 7px 0 rgba(0, 0, 0, .16), 0 18px 28px rgba(0, 0, 0, .22);
+        border-color: rgba(255, 255, 255, .5);
+    }
+}
+/* Druckgefühl: schlägt Hover (steht danach mit gleicher Gewichtung) */
+.btnPrimary:not(:disabled):not(.btnDisabled):active{
+    transform: translateY(4px) scale(.985);
+    box-shadow: 0 1px 0 #b8620a, 0 6px 14px rgba(80, 20, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .5);
+    transition-duration: .08s;
+}
+.btnSecondary:not(:disabled):not(.btnDisabled):active, .btnAccent:not(:disabled):not(.btnDisabled):active{
+    transform: translateY(3px) scale(.985);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, .18);
+    transition-duration: .08s;
+}
+.btn:focus-visible{ outline: 3px solid #fff; outline-offset: 3px; box-shadow: 0 0 0 6px rgba(255, 210, 63, .55); }
+
+/* Hauptknopf auf der Startseite "atmet" leicht, damit der Blick dort landet */
+.homeCta > .btnPrimary{
+    animation: kmRise .6s var(--ease-out) .1s backwards, kmBreathe 3.4s var(--ease-inout) 1.2s infinite;
+}
+@keyframes kmBreathe{
+    0%, 100%{ box-shadow: 0 5px 0 #b8620a, 0 14px 26px rgba(80, 20, 0, .35), 0 0 0 rgba(255, 210, 63, 0), inset 0 1px 0 rgba(255, 255, 255, .6); }
+    50%     { box-shadow: 0 5px 0 #b8620a, 0 14px 26px rgba(80, 20, 0, .35), 0 0 34px rgba(255, 210, 63, .55), inset 0 1px 0 rgba(255, 255, 255, .6); }
+}
+
+/* Klick-Welle (wird per Skript in .btn eingefügt) */
+.kmRipple{
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .5);
+    transform: scale(0);
+    animation: kmRipple .65s ease-out forwards;
+    pointer-events: none;
+    z-index: 2;
+}
+@keyframes kmRipple{
+    to{ transform: scale(1); opacity: 0; }
+}
+
+/* ---------- Lichtreflex unter dem Mauszeiger auf Karten ---------- */
+.card::after{
+    display: block;
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, .11), transparent 55%);
+    opacity: 0;
+    transition: opacity .4s ease;
+    filter: none;
+    z-index: 0;
+}
+.card:hover::after{ opacity: 1; }
+.pillCard, .homeStep, .panel, .frCard{ position: relative; }
+.pillCard::before, .homeStep::before, .panel::before, .frCard::before{
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .13), transparent 62%);
+    opacity: 0;
+    transition: opacity .3s ease;
+}
+.pillCard:hover::before, .homeStep:hover::before, .panel:hover::before, .frCard:hover::before{ opacity: 1; }
+.pillCard, .homeStep{ transition: transform .3s var(--ease-out), border-color .25s ease, background .25s ease; }
+@media (hover: hover){
+    .homeStep:hover{ transform: translateY(-4px); border-color: rgba(255, 255, 255, .34); }
+    .pillCard:hover{ border-color: rgba(255, 255, 255, .3); }
+}
+
+/* ---------- Eingabefelder ---------- */
+.input, .pillInputWrap, .frInput, .sideDockInput{
+    transition: border-color .2s ease, box-shadow .3s var(--ease-out), background .2s ease, transform .25s var(--ease-out);
+}
+.input:focus, .pillInputWrap:focus-within, .frInput:focus{ transform: translateY(-1px); }
+.input::placeholder, .pillInput::placeholder{ transition: opacity .2s ease, transform .2s ease; }
+.input:focus::placeholder, .pillInput:focus::placeholder{ opacity: .35; transform: translateX(4px); }
+.frInput:focus{ border-color: #ffd23f; box-shadow: 0 0 0 4px rgba(255, 210, 63, .25); outline: none; }
+
+/* Auswahl-Knöpfe (Segmente, Zähler) */
+.pillSegBtn, .pillStepBtn, .segBtn, .pillIconBtn{ transition: transform .22s var(--ease-spring), background .2s ease, border-color .2s ease, box-shadow .25s ease; }
+@media (hover: hover){
+    .pillSegBtn:hover, .pillStepBtn:hover, .pillIconBtn:hover, .segBtn:hover{ transform: translateY(-2px); background: rgba(255, 255, 255, .18); }
+}
+.pillSegBtn:active, .pillStepBtn:active, .pillIconBtn:active, .segBtn:active{ transform: scale(.94); }
+.segChoiceActive{ animation: kmSelect .45s var(--ease-spring); }
+@keyframes kmSelect{ 0%{ transform: scale(.94); } 60%{ transform: scale(1.04); } 100%{ transform: none; } }
+.pillStepValue{ transition: transform .2s var(--ease-spring); }
+
+/* ---------- Lobby: Code-Kasten ---------- */
+.codeBox{ transition: background .15s ease, border-color .2s ease, transform .25s var(--ease-spring), box-shadow .3s ease; }
+@media (hover: hover){ .codeBox:hover:not(:disabled){ transform: scale(1.015); box-shadow: 0 0 0 4px rgba(255, 210, 63, .18), 0 18px 40px rgba(0, 0, 0, .25); } }
+.codeValue{ animation: kmGlowText 3.2s var(--ease-inout) infinite; }
+@keyframes kmGlowText{
+    0%, 100%{ text-shadow: 0 4px 0 rgba(120, 50, 0, .55), 0 10px 26px rgba(0, 0, 0, .35); }
+    50%     { text-shadow: 0 4px 0 rgba(120, 50, 0, .55), 0 10px 26px rgba(0, 0, 0, .35), 0 0 26px rgba(255, 210, 63, .55); }
+}
+
+/* ---------- Freunde ---------- */
+.frCard{ transition: transform .3s var(--ease-spring), box-shadow .3s ease, border-color .25s ease, opacity .2s ease; }
+.frCard.online{ animation: kmRise .6s var(--ease-out) backwards, kmOnlineGlow 3.4s var(--ease-inout) 1s infinite; }
+@keyframes kmOnlineGlow{
+    0%, 100%{ box-shadow: 0 0 0 1px rgba(52, 211, 153, .3), 0 14px 36px rgba(16, 185, 129, .24); }
+    50%     { box-shadow: 0 0 0 1px rgba(52, 211, 153, .5), 0 14px 44px rgba(16, 185, 129, .46); }
+}
+.frAvatar{ transition: transform .35s var(--ease-spring); }
+.frCard:hover .frAvatar{ transform: scale(1.08) rotate(-4deg); }
+.frAvatarDot::after{
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid #34d399;
+    animation: kmPing 2.2s ease-out infinite;
+}
+@keyframes kmPing{ 0%{ transform: scale(.8); opacity: .9; } 100%{ transform: scale(2); opacity: 0; } }
+.frReqs{ animation: kmPop .5s var(--ease-spring) backwards; }
+.frAdd{ animation: kmRise .35s var(--ease-out) backwards; }
+
+/* ---------- Spinner & Lade-Platzhalter ---------- */
+@keyframes kumpirSpin{ from{ transform: rotate(0deg); } to{ transform: rotate(360deg); } }
+.kmSpinner{
+    display: inline-block;
+    border-radius: 50%;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, .14);
+    border-top-color: #ffd23f;
+    border-right-color: rgba(255, 210, 63, .45);
+    box-shadow: 0 0 16px rgba(255, 210, 63, .3);
+    animation: kumpirSpin .9s cubic-bezier(.5, .15, .5, .85) infinite;
+}
+.skeleton{
+    border-radius: 14px;
+    background: linear-gradient(100deg, rgba(255, 255, 255, .08) 20%, rgba(255, 255, 255, .22) 40%, rgba(255, 255, 255, .08) 60%);
+    background-size: 220% 100%;
+    animation: kmSkeleton 1.4s linear infinite;
+}
+@keyframes kmSkeleton{ to{ background-position: -120% 0; } }
+
+/* ---------- Zähler-Kacheln (Statistik) ---------- */
+.statsGrid > *{ transition: transform .25s var(--ease-spring), background .2s ease; }
+@media (hover: hover){ .statsGrid > *:hover{ transform: translateY(-3px) scale(1.03); background: rgba(255, 255, 255, .1); } }
+
+/* ---------- Erfolge ---------- */
+.achievementsGrid > *{ transition: transform .3s var(--ease-spring), box-shadow .3s ease, border-color .25s ease; }
+@media (hover: hover){ .achievementsGrid > *:hover{ transform: translateY(-4px); box-shadow: 0 16px 34px rgba(0, 0, 0, .3); } }
+.achievementIcon{ transition: transform .35s var(--ease-spring); display: inline-block; }
+.achievementsGrid > *:hover .achievementIcon{ transform: scale(1.18) rotate(-6deg); }
+
+/* ---------- Abstimmung / Ergebnis im Spiel ---------- */
+.cdNum{ animation: kmTick .9s var(--ease-out) backwards; display: inline-block; }
+@keyframes kmTick{
+    0%  { transform: scale(1.6); opacity: 0; }
+    35% { transform: scale(.94); opacity: 1; }
+    100%{ transform: scale(1); }
+}
+
+/* ---------- Admin ---------- */
+.admBox{ animation: kmRise .4s var(--ease-out) backwards; }
+.admTabs button{ transition: transform .2s var(--ease-spring), background .2s ease, color .2s ease, border-color .2s ease; }
+@media (hover: hover){ .admTabs button:hover:not(.on){ transform: translateY(-2px); background: rgba(255, 255, 255, .14); } }
+.admTabs button.on{ animation: kmSelect .4s var(--ease-spring); }
+.admUser, .admAudit li, .aqRow{ transition: background .2s ease, transform .2s var(--ease-out), border-color .2s ease; }
+@media (hover: hover){
+    .admUser:hover{ transform: translateX(3px); background: rgba(255, 255, 255, .13); }
+    .admAudit li:hover{ background: rgba(255, 255, 255, .11); }
+}
+.admDay{ animation: kmRise .5s var(--ease-out) backwards; }
+
+/* ---------- Kleine Verlinkungen ---------- */
+a{ transition: color .2s ease, opacity .2s ease; }
+.homeLink{ transition: background .2s ease, border-color .2s ease, transform .25s var(--ease-spring); }
+@media (hover: hover){ .homeLink:hover{ transform: translateY(-1px); } }
+
+/* ---------- Glutfunken im Hintergrund ---------- */
+.embers{ position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.embers span{
+    position: absolute;
+    bottom: -20px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff6c2 0%, #ffd23f 45%, rgba(255, 140, 30, 0) 72%);
+    box-shadow: 0 0 10px 2px rgba(255, 190, 60, .55);
+    opacity: 0;
+    animation: kmEmber 16s linear infinite;
+    will-change: transform, opacity;
+}
+@keyframes kmEmber{
+    0%  { transform: translate3d(0, 0, 0) scale(.6); opacity: 0; }
+    12% { opacity: .85; }
+    50% { transform: translate3d(26px, -52vh, 0) scale(1); opacity: .7; }
+    100%{ transform: translate3d(-18px, -108vh, 0) scale(.4); opacity: 0; }
+}
+@media (max-width: 620px){ .embers span:nth-child(n+7){ display: none; } }

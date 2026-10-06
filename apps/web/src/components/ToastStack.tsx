@@ -47,7 +47,7 @@ export function ToastStack({ toasts, inline = false }: Props) {
                         textAlign: "center",
                         boxShadow: "0 14px 40px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.10)",
                         border: "1px solid rgba(255,255,255,0.12)",
-                        animation: "kumpirToastIn 220ms cubic-bezier(.2,1,.2,1) both",
+                        animation: "kumpirToastIn 420ms cubic-bezier(.34,1.56,.64,1) both",
                         pointerEvents: "auto",
                     }}
                 >
@@ -57,8 +57,8 @@ export function ToastStack({ toasts, inline = false }: Props) {
 
             <style jsx global>{`
         @keyframes kumpirToastIn {
-          from { opacity: 0; transform: translateY(8px) scale(0.96); }
-          to   { opacity: 1; transform: translateY(0)   scale(1); }
+          0%   { opacity: 0; transform: translateY(14px) scale(0.9); }
+          100% { opacity: 1; transform: translateY(0)    scale(1); }
         }
       `}</style>
         </div>

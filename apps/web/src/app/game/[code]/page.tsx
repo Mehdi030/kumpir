@@ -1615,7 +1615,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
                     <div style={{ marginTop: 22, fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>START IN</div>
                     <div style={{ marginTop: 10, fontSize: "clamp(80px, 10vw, 140px)", fontWeight: 950, letterSpacing: 2, textShadow: "0 18px 70px rgba(0,0,0,0.35)" }}>
-                        {Math.max(0, countdownSecondsLeft ?? 5)}
+                        <span key={Math.max(0, countdownSecondsLeft ?? 5)} className="cdNum">
+                            {Math.max(0, countdownSecondsLeft ?? 5)}
+                        </span>
                     </div>
 
                     {/* Nur der Startspieler sieht diesen Hinweis -- alle anderen
