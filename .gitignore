@@ -96,3 +96,6 @@ Thumbs.db
 **/*.swp
 **/*.tmp
 **/*.orig
+
+# Testbericht von db/scripts/play-claude.mjs (wird bei jedem Lauf neu erzeugt)
+db/scripts/data/play-claude-report.json

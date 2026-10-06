@@ -3,6 +3,10 @@
 Reihenfolge = Priorität. Erledigtes wandert nach unten.
 
 ## Als Nächstes
+- [x] **Sicherheit (Migrationen 080–082, Okt. 2026)**: Angriffstest `node db/scripts/security-attack.mjs` (120 Angriffe: SQL-Injection, fremde Konten/Lobbys übernehmen, interne Funktionen aufrufen, Spam, eingeschleustes HTML …) → alle blockiert. Next.js 16.3.8 (0 bekannte Lücken), Sicherheits-Header (CSP, X-Frame-Options, HSTS), sichere Weiterleitung nach Login, Login verrät nicht mehr, ob ein Benutzername existiert
+  - Admins werden nie ausgesperrt: keine Rate-Limits für Admins, letzter Admin kann nicht entfernt/gesperrt werden. **Notfall vom Laptop:** `node db/scripts/restore-admin.mjs mehdi` (macht wieder zum aktiven Admin, hebt Sperren auf; `--reset-mail` schickt zusätzlich eine Passwort-Reset-Mail)
+  - Neue DB-Funktionen sind ab jetzt standardmäßig gesperrt → in der Migration ausdrücklich `GRANT EXECUTE … TO anon, authenticated` (Spiel) bzw. `TO authenticated` (Konto) setzen und den Angriffstest erneut laufen lassen
+- [x] **Statistik-Test mit Konto „Claude“**: `node db/scripts/play-claude.mjs --reset` spielt 5 Matches gegen Bots über die echten Schnittstellen (unterschiedliche Bots/Tempo/Playlist/Eingaben) und vergleicht danach die Profil-Statistik mit den Eingaben. Zugangsdaten in `db/.env.local`
 - [ ] **Konto-Verlauf & Analyse (Migration 076) mit echten Spielern prüfen**: 2 echte Konten ein Match spielen lassen, danach Profil (Verlauf, Musik, Gegner, Rückblick) und /admin/stats (Songs, Balance, Weg der Spieler) ansehen. DB-Test: `node db/scripts/test-account-history.mjs`
   - [x] A Match-Verlauf, B Musik-Statistik pro Playlist, C Gegner-Bilanz, D Musik-/Match-Achievements, E Monats-Rückblick (teilbar), F Matches/Runden getrennt, G Song-Bekanntheit, H Balance aus echten Zügen, I Weg der Spieler (anonym)
   - [ ] Nach 2–4 Wochen echter Spiele: Song-Liste (rot markierte Songs austauschen) und Balance-Punkte unten mit echten Zahlen entscheiden
