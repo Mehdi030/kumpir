@@ -4,9 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { Suspense, useEffect } from "react";
 import { AuthMini } from "@/components/AuthMini";
-import { HomeFriendsDock } from "@/components/HomeFriendsDock";
-import { HomeStatsDock } from "@/components/HomeStatsDock";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
+import { HomeFriends } from "@/components/HomeFriends";
+import { HomeStatsSection } from "@/components/HomeStatsSection";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { PwaSetup } from "@/components/PwaSetup";
 import { useI18n } from "@/lib/i18n";
@@ -26,7 +26,7 @@ export default function Home() {
     ];
     return (
         <main className="container">
-            <div className="landingWrap landingWrapDecor homeWrap">
+            <div className="landingWrap landingWrapDecor">
                 <div className="potatoBg" aria-hidden="true">
                     <Image src="/HGLogo.webp" alt="" width={900} height={600} priority quality={80} className="potatoBgImg" />
                 </div>
@@ -50,8 +50,11 @@ export default function Home() {
                     </header>
 
                     <div className="ctaRow homeCta">
-                        <Link href="/play" className="btn btnPrimary btnXL">
-                            {t("home.play")}
+                        <Link href="/solo" className="btn btnPrimary btnXL">
+                            {t("home.solo")}
+                        </Link>
+                        <Link href="/host" className="btn btnSecondary btnXL">
+                            {t("home.host")}
                         </Link>
                         <Link href="/join" className="btn btnSecondary btnXL">
                             {t("home.join")}
@@ -59,25 +62,25 @@ export default function Home() {
                     </div>
                     <p className="homeFree">{t("home.free")}</p>
 
+                    <div className="homeSteps">
+                        {STEPS.map((s, i) => (
+                            <div key={s.title} className="homeStep">
+                                <div className="homeStepIcon" aria-hidden>
+                                    {s.icon}
+                                </div>
+                                <div className="homeStepTitle">
+                                    {i + 1}. {s.title}
+                                </div>
+                                <div className="homeStepText">{s.text}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <HomeStatsSection />
                     <PwaSetup showHint />
                 </section>
 
-                <ol className="homeFlow" aria-label="So funktioniert Kumpir">
-                    {STEPS.map((s, i) => (
-                        <li key={s.title} className="homeFlowStep">
-                            <span className="homeFlowNum" aria-hidden>
-                                {i + 1}
-                            </span>
-                            <span className="homeFlowIcon" aria-hidden>
-                                {s.icon}
-                            </span>
-                            <span className="homeFlowText">
-                                <b>{s.title}</b>
-                                <small>{s.text}</small>
-                            </span>
-                        </li>
-                    ))}
-                </ol>
+                <HomeFriends />
 
                 <footer className="homeFooter">
                     v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"} ·{" "}
@@ -87,9 +90,6 @@ export default function Home() {
                     (CC BY-SA 4.0)
                 </footer>
             </div>
-
-            <HomeStatsDock />
-            <HomeFriendsDock />
         </main>
     );
 }

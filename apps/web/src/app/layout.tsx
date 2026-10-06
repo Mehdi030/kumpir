@@ -8,6 +8,7 @@ import { AudioUnlock } from "@/components/AudioUnlock";
 import { LocaleSync } from "@/components/LocaleSync";
 import { PwaSetup } from "@/components/PwaSetup";
 import { AdminQuickPanel } from "@/components/admin/AdminQuickPanel";
+import { PresencePing } from "@/components/PresencePing";
 import { Analytics } from "@vercel/analytics/next"
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://kumpir-web.vercel.app";
@@ -66,6 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 {children}
                 <PreferencesSync />
                 <AdminQuickPanel />
+                <PresencePing />
             </ProfileProvider>
         </AuthProvider>
         <Analytics />
