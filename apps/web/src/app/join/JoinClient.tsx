@@ -67,6 +67,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [spectateCode, setSpectateCode] = useState<string | null>(null);
 
     const [showNameModal] = useState<boolean>(hasFixedCode);
 
@@ -102,6 +103,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
         if (inFlightRef.current) return;
 
         setError(null);
+        setSpectateCode(null);
         setLoading(true);
         inFlightRef.current = true;
 
@@ -137,7 +139,8 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 return;
             }
             if (lobbyRow.locked) {
-                setError("Diese Lobby ist gerade gesperrt (🔒).");
+                setError("Das Spiel läuft schon – beitreten geht erst in der nächsten Runde. Du kannst aber zuschauen.");
+                setSpectateCode(lobbyCode);
                 return;
             }
 
@@ -258,9 +261,14 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                             </div>
 
                             {error ? (
-                                <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
+                                <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }} role="alert">
                                     {error}
                                 </div>
+                            ) : null}
+                            {spectateCode ? (
+                                <Link href={`/game/${spectateCode}`} className="btn btnSecondary btnSmall" style={{ marginTop: 10 }}>
+                                    👀 Zuschauen
+                                </Link>
                             ) : null}
 
                             <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
@@ -357,9 +365,14 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                 </div>
 
                                 {error ? (
-                                    <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
+                                    <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }} role="alert">
                                         {error}
                                     </div>
+                                ) : null}
+                                {spectateCode ? (
+                                    <Link href={`/game/${spectateCode}`} className="btn btnSecondary btnSmall" style={{ marginTop: 10 }}>
+                                        👀 Zuschauen
+                                    </Link>
                                 ) : null}
 
                                 <div style={{ display: "flex", gap: 10, marginTop: 14, justifyContent: "flex-end" }}>

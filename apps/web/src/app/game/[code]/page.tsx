@@ -189,7 +189,7 @@ function fmtHold(ms?: number) {
     return `${m}m ${r}s`;
 }
 
-export default function GamePage() {
+function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     const supabase = getSupabaseClient();
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
@@ -311,6 +311,12 @@ export default function GamePage() {
     }, [players, mePlayerId]);
 
     const iAmEliminated = !!meRow && !meRow.is_alive;
+
+    // Zuschauer: Lobby geladen, Spielerliste da, aber man ist nicht Teil davon (spät dazugekommen).
+    const isSpectator = !!lobby && players.length > 0 && !meRow;
+    useEffect(() => {
+        onSpectator(isSpectator);
+    }, [isSpectator, onSpectator]);
 
     const isMeHolder = useMemo(() => {
         if (!mePlayerId || !lobby?.holder_player_id) return false;
@@ -2071,7 +2077,7 @@ export default function GamePage() {
                     ) : (
                         <div className="statusCard">
                             <div className="statusTitle">{holderName} ist dran</div>
-                            <div className="statusSub">Warte ab – gleich kann es dich treffen.</div>
+                            <div className="statusSub">{isSpectator ? "Du schaust nur zu – in der nächsten Runde kannst du mitspielen." : "Warte ab – gleich kann es dich treffen."}</div>
                         </div>
                     )}
 
@@ -2571,5 +2577,20 @@ export default function GamePage() {
         }
       `}</style>
         </main>
+    );
+}
+
+/** Hülle: zeigt über allen Spielphasen ein Zuschauer-Schild, wenn man nicht mitspielt. */
+export default function GamePage() {
+    const [spectator, setSpectator] = useState(false);
+    return (
+        <>
+            {spectator ? (
+                <div className="spectatorBadge" role="status">
+                    👀 Du schaust zu
+                </div>
+            ) : null}
+            <GamePageInner onSpectator={setSpectator} />
+        </>
     );
 }

@@ -1813,3 +1813,21 @@ h1, h2, h3, .cardTitle, .resultTitle, .statusTitle, .finWinner, .headline{ font-
     .homeCard{ padding-top: 84px; }
     .homeTop{ justify-content: center; }
 }
+
+/* Zuschauer-Schild (spät dazugekommen, nur zuschauen) */
+.spectatorBadge {
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: 13px;
+    color: #fff;
+    background: rgba(20, 8, 4, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+}
