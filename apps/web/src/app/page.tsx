@@ -8,7 +8,6 @@ import { LobbyExitNotice } from "@/components/LobbyExitNotice";
 import { HomeStatsSection } from "@/components/HomeStatsSection";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { PwaSetup } from "@/components/PwaSetup";
-import { HomeAccountBar } from "@/components/HomeAccountBar";
 import { useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
 
@@ -64,7 +63,6 @@ export default function Home() {
                         </Link>
                     </div>
                     <p className="homeFree">{t("home.free")}</p>
-                    <HomeAccountBar />
 
                     <div className="homeSteps">
                         {STEPS.map((s, i) => (

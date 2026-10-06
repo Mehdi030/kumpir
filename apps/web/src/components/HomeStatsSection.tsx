@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useAchievements } from "@/hooks/useAchievements";
 import { Spinner } from "@/components/Spinner";
-import { useI18n } from "@/lib/i18n";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -15,76 +13,43 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
  * 005/006, wird serverseitig automatisch bei jedem Matchende aktualisiert)
  * -- keine Platzhalter-Daten, zeigt schon jetzt echte Werte für eingeloggte
  * Spieler. Für Gäste ein Login-Hinweis statt Zahlen, die es ohne Account
- * noch nicht geben kann.
+ * noch nicht geben kann. Gäste sehen die Karte nicht (Anmelden steht oben rechts).
  */
 export function HomeStatsSection() {
     const { user, loading: authLoading } = useAuth();
-    const { t } = useI18n();
     const { stats, unlocked, catalog, loading: statsLoading } = useAchievements(AUTH_DISABLED ? null : user?.id ?? null);
 
-    let body: ReactNode;
+    // Gäste (und der Gast-Modus) sehen hier nichts – Anmelden/Registrieren steht oben rechts.
+    // Auch während des Ladens nichts zeigen, sonst blitzt bei Gästen eine leere Karte auf.
+    if (AUTH_DISABLED || authLoading || !user) return null;
 
-    if (AUTH_DISABLED) {
-        body = (
-            <>
-                <div className="statsSectionHead">
-                    <div className="stepsTitle">📊 Statistik</div>
-                </div>
-                <p className="p hostSub" style={{ marginTop: 4 }}>
-                    Braucht einen Account — läuft hier gerade im Gast-Modus.
-                </p>
-            </>
-        );
-    } else if (authLoading) {
-        body = (
-            <div style={{ display: "grid", placeItems: "center", padding: 20 }}>
-                <Spinner size={18} label="Lade…" />
+    const body = (
+        <>
+            <div className="statsSectionHead">
+                <div className="stepsTitle">📊 Deine Statistik</div>
+                <Link href="/achievements" className="fieldHelp" style={{ fontWeight: 900 }}>
+                    Alle Achievements →
+                </Link>
             </div>
-        );
-    } else if (!user) {
-        body = (
-            <>
-                <div className="statsSectionHead">
-                    <div className="stepsTitle">{t("stats.title")}</div>
+            {statsLoading ? (
+                <div style={{ display: "grid", placeItems: "center", padding: 16 }}>
+                    <Spinner size={18} label="Lade…" />
                 </div>
-                <p className="p hostSub" style={{ marginTop: 4 }}>
-                    {t("stats.guest")}
-                </p>
-                <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-                    <Link href="/login?next=/" className="btn btnSecondary btnSmall">{t("stats.login")}</Link>
-                    <Link href="/leaderboard" className="btn btnSecondary btnSmall">{t("stats.board")}</Link>
+            ) : (
+                <div className="statsGrid" style={{ marginTop: 10 }}>
+                    <StatBox label="Runden" value={String(stats?.games_played ?? 0)} />
+                    <StatBox label="Rundensiege" value={String(stats?.wins ?? 0)} />
+                    <StatBox label="Beste Streak" value={String(stats?.best_survival_streak ?? 0)} />
+                    <StatBox label="Achievements" value={`${unlocked.length}/${catalog.length}`} />
                 </div>
-            </>
-        );
-    } else {
-        body = (
-            <>
-                <div className="statsSectionHead">
-                    <div className="stepsTitle">📊 Deine Statistik</div>
-                    <Link href="/achievements" className="fieldHelp" style={{ fontWeight: 900 }}>
-                        Alle Achievements →
-                    </Link>
-                </div>
-                {statsLoading ? (
-                    <div style={{ display: "grid", placeItems: "center", padding: 16 }}>
-                        <Spinner size={18} label="Lade…" />
-                    </div>
-                ) : (
-                    <div className="statsGrid" style={{ marginTop: 10 }}>
-                        <StatBox label="Runden" value={String(stats?.games_played ?? 0)} />
-                        <StatBox label="Rundensiege" value={String(stats?.wins ?? 0)} />
-                        <StatBox label="Beste Streak" value={String(stats?.best_survival_streak ?? 0)} />
-                        <StatBox label="Achievements" value={`${unlocked.length}/${catalog.length}`} />
-                    </div>
-                )}
-                <div style={{ marginTop: 10 }}>
-                    <Link href="/leaderboard" className="fieldHelp" style={{ fontWeight: 900 }}>
-                        🏆 Zur Bestenliste →
-                    </Link>
-                </div>
-            </>
-        );
-    }
+            )}
+            <div style={{ marginTop: 10 }}>
+                <Link href="/leaderboard" className="fieldHelp" style={{ fontWeight: 900 }}>
+                    🏆 Zur Bestenliste →
+                </Link>
+            </div>
+        </>
+    );
 
     return (
         <div className="statsSectionCard">

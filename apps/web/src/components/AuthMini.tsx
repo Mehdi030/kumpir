@@ -39,6 +39,11 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     return (
         <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
             <NotifyToggle className={variant === "header" ? "homeLink" : "btn btnSecondary btnSmall"} />
+            {profile?.isStaff ? (
+                <Link className={variant === "header" ? "homeLink" : "btn btnSecondary btnSmall"} href="/admin" title="Admin-Panel">
+                    🛡️<span className="srOnly"> Admin-Panel</span>
+                </Link>
+            ) : null}
             <Link className={variant === "header" ? "homeLink homeLinkStrong homeUser" : "btn btnSecondary"} href="/profile" title={t("auth.account")}>
                 {profile?.avatarEmoji || "👤"} {shownName}
             </Link>
