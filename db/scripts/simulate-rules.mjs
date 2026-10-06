@@ -14,9 +14,11 @@ function fuseSeconds(speed, alive, roundNo) {
 const bonusBase = (r) => (r <= 2 ? 4 : r <= 4 ? 3 : r <= 6 ? 2 : 1);
 const bonusCap = (n) => Math.max(12, Math.min(30, n * 3));
 const surv = (r) => (r <= 1 ? 0.9 : r === 2 ? 0.6 : r === 3 ? 0.4 : r === 4 ? 0.2 : Math.max(0.1, 0.2 - (r - 4) * 0.05));
+const P = JSON.parse(process.env.BOT_PARAMS || "{}");
+const pr = { a: 0.85, aFloor: 0.08, pStart: 0.92, pSlope: 0.14, pFloor: 0.3, ...P };
 function survival(r, skill) {
-  if (skill === 1) return Math.max(0.08, surv(r) * 0.7);
-  if (skill === 3) return Math.max(0.5, 0.97 - (Math.max(r, 1) - 1) * 0.11);
+  if (skill === 1) return Math.max(pr.aFloor, surv(r) * pr.a);
+  if (skill === 3) return Math.max(pr.pFloor, pr.pStart - (Math.max(r, 1) - 1) * pr.pSlope);
   return surv(r);
 }
 const delayOf = (skill) => (skill === 1 ? 2.4 + U() * 3.0 : skill === 3 ? 0.8 + U() * 1.2 : 1.2 + U() * 2.6);
@@ -94,6 +96,12 @@ function run(label, skills, speed, N = 4000) {
   console.log("Zuerst raus je Sitz:" + firstOut.map((w) => ((100 * w) / N).toFixed(1) + "%").join("  "));
 }
 
+if (process.env.BOT_ONLY) {
+  run("Gemischt 3 Stufen x2", [1, 2, 3, 1, 2, 3], "fast");
+  run("Duell Profi vs Anfänger", [3, 1], "fast");
+  run("Duell Profi vs Mittel", [3, 2], "fast");
+  run("Duell Mittel vs Anfänger", [2, 1], "fast");
+} else {
 run("Gleich starke Mittel-Bots (Fairness der Sitzplätze)", [2, 2, 2, 2, 2, 2], "fast");
 run("Gleich starke Profis", [3, 3, 3, 3, 3, 3], "fast");
 run("Gemischt", [1, 2, 3, 1, 2, 3], "fast");
@@ -101,3 +109,4 @@ run("8 Spieler Profis", [3, 3, 3, 3, 3, 3, 3, 3], "fast");
 run("Profis, normales Tempo", [3, 3, 3, 3, 3, 3], "normal");
 run("Duell 2 Profis", [3, 3], "fast");
 run("Duell Profi gegen Anfänger", [3, 1], "fast");
+}
