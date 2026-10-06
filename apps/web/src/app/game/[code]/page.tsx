@@ -1318,7 +1318,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     if (fatalError && isNotFoundError(fatalError)) return <LobbyNotFound code={code} />;
     if (fatalError) {
         return (
-            <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+            <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(720px, calc(100vw - 48px))", textAlign: "center" }}>
                     <div style={{ fontWeight: 950, fontSize: 22 }}>⚠️ Spiel konnte nicht geladen werden</div>
                     <div style={{ marginTop: 10, opacity: 0.8 }}>{fatalError}</div>
@@ -1329,7 +1329,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     if (!lobby)
         return (
-            <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, color: "white" }}>
+            <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24, color: "white" }}>
                 <Spinner size={28} label="Lade Spiel…" />
             </main>
         );
@@ -1352,7 +1352,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main
                 style={{
-                    minHeight: "100vh",
+                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1547,7 +1547,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main
                 style={{
-                    minHeight: "100vh",
+                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1681,7 +1681,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main
                 style={{
-                    minHeight: "100vh",
+                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "start center",
                     padding: "28px 16px",
@@ -1742,7 +1742,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main
                 style={{
-                    minHeight: "100vh",
+                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1775,7 +1775,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main
                 style={{
-                    minHeight: "100vh",
+                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1826,7 +1826,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main
                 style={{
-                    minHeight: "100vh",
+                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1889,7 +1889,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     return (
         <main
             className={selfShake ? "kumpirSelfShake" : ""}
-            style={{ minHeight: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}
+            style={{ minHeight: "100dvh", width: "100%", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}
         >
             {/* Feuerwellen am Bildschirmrand -- Intensität/Pulstempo skalieren
                 kontinuierlich mit heatRatio, statt in 3 groben Sprüngen, damit
@@ -1991,7 +1991,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     </div>
 
                     {iAmEliminated ? (
-                        <div className="statusCard">
+                        <div className="statusCard" role="status" aria-live="polite">
                             <div className="statusTitle">Du bist raus – schau zu 👀</div>
                             <div className="statusSub">Du siehst, wohin die Kumpir als Nächstes fliegt.</div>
                             {(lobby.game_mode ?? "original") === "original" && !meRow?.revenge_used && aliveNow > 2 ? (
@@ -2080,7 +2080,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             ) : null}
                         </div>
                     ) : (
-                        <div className="statusCard">
+                        <div className="statusCard" role="status" aria-live="polite">
                             <div className="statusTitle">{holderName} ist dran</div>
                             <div className="statusSub">{isSpectator ? "Du schaust nur zu – in der nächsten Runde kannst du mitspielen." : "Warte ab – gleich kann es dich treffen."}</div>
                         </div>
@@ -2109,7 +2109,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .hud{
           position: relative;
           z-index: 3;
-          min-height: 100vh;
+          min-height: 100dvh;
           display: grid;
           place-items: start center;
           align-content: start;

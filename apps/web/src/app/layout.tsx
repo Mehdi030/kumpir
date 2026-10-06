@@ -1,6 +1,6 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Inter } from "next/font/google";
+import { Bricolage_Grotesque } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import { Analytics } from "@vercel/analytics/next"
 
@@ -42,21 +42,15 @@ export const viewport: Viewport = {
     initialScale: 1,
 };
 
-// Variable Fonts (ohne weight-Liste): alle Stärken 100-800 stehen sauber zur Verfügung,
-// statt dass der Browser fette Schnitte künstlich nachbaut.
+// Nur die Überschriften-Schrift wird geladen (Variable Font); Fließtext nutzt die System-Schrift (spart ~45 KB und einen Request).
 const displayFont = Bricolage_Grotesque({
     subsets: ["latin"],
     variable: "--font-display",
 });
 
-const bodyFont = Inter({
-    subsets: ["latin"],
-    variable: "--font-body",
-});
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="de" className={`${displayFont.variable} ${bodyFont.variable}`}>
+        <html lang="de" className={`${displayFont.variable}`}>
         <body>
         <AuthProvider>{children}</AuthProvider>
         <Analytics />

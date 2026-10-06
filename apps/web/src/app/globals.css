@@ -11,7 +11,7 @@
 
     /* Text */
     --text: rgba(255,255,255,.94);
-    --muted: rgba(255,255,255,.72);
+    --muted: rgba(255,255,255,.84);
 
     /* Accents */
     --accent: #22D3EE;
@@ -109,7 +109,7 @@ body::after{
    =============================== */
 
 .container{
-    min-height: 100vh;
+    min-height: 100dvh;
     display: grid;
     place-items: center;
     padding: 32px 18px;
@@ -1651,7 +1651,7 @@ body::after{
 
 :root{
     --ink: #2b0f04;
-    --glass: rgba(38, 9, 6, .46);
+    --glass: rgba(38, 9, 6, .6);
     --glass-soft: rgba(255, 255, 255, .08);
     --glass-line: rgba(255, 255, 255, .17);
     --sun: #ffd23f;
@@ -1830,4 +1830,27 @@ h1, h2, h3, .cardTitle, .resultTitle, .statusTitle, .finWinner, .headline{ font-
     border: 1px solid rgba(255, 255, 255, 0.25);
     backdrop-filter: blur(6px);
     pointer-events: none;
+}
+
+/* ===============================
+   BARRIEREFREIHEIT
+   =============================== */
+
+/* Sichtbarer Tastatur-Fokus (auf jedem Hintergrund lesbar: heller Ring + dunkler Innenring) */
+:focus-visible{
+    outline: 3px solid #fff !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 2px #2b0f04 !important;
+}
+.input:focus-visible, .pillInput:focus-visible{ border-radius: 14px; }
+
+/* Nur für Screenreader */
+.srOnly{
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Handy: Tastatur + Safe-Area */
+@media (max-width: 720px){
+    .container{ padding-bottom: max(32px, env(safe-area-inset-bottom)); }
 }
