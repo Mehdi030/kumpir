@@ -3,6 +3,12 @@
 Reihenfolge = Priorität. Erledigtes wandert nach unten.
 
 ## Als Nächstes
+- [x] **Hauptmenü neu**: nur „Jetzt spielen“ (→ /play: Solo oder Freunde) + „Mit Code beitreten“; Schritte unter der Karte; Statistik-Dock links, Freunde-Dock rechts (am Rand ab 1300 px, sonst unter der Karte); Bestenliste und Browser-Benachrichtigungen entfernt
+- [x] **Admin-Schnellmenü** (Pop-up, **Alt + A**, Esc): Online-Spieler (Standard), Konten, Lobbys; kicken, sperren, Lobby schließen (Migration 085, Test `node db/scripts/test-admin-quick.mjs`)
+- [x] **Protokoll ohne Ausnahmen** (Migration 083) und **Abstimmung nach Playlist-Zahl** (Migration 084)
+- [x] **Eigene Emoji-Schrift** (OpenMoji, `apps/web/public/fonts/kumpir-emoji.woff2`): neues Emoji im Code/in der DB → Anleitung zum Neubauen in `apps/web/public/fonts/README.txt`
+  - [ ] Auf einem echten iPhone prüfen, ob die Emoji-Schrift angezeigt wird (Safari-Unterstützung für Farb-Schriften); sonst erscheinen dort die System-Emojis
+  - [ ] Supabase: eigenen Mailserver (SMTP) eintragen, sonst gilt das kleine Mail-Stundenlimit und Freunde bekommen evtl. keine Bestätigungsmail
 - [x] **Sicherheit (Migrationen 080–082, Okt. 2026)**: Angriffstest `node db/scripts/security-attack.mjs` (120 Angriffe: SQL-Injection, fremde Konten/Lobbys übernehmen, interne Funktionen aufrufen, Spam, eingeschleustes HTML …) → alle blockiert. Next.js 16.3.8 (0 bekannte Lücken), Sicherheits-Header (CSP, X-Frame-Options, HSTS), sichere Weiterleitung nach Login, Login verrät nicht mehr, ob ein Benutzername existiert
   - Admins werden nie ausgesperrt: keine Rate-Limits für Admins, letzter Admin kann nicht entfernt/gesperrt werden. **Notfall vom Laptop:** `node db/scripts/restore-admin.mjs mehdi` (macht wieder zum aktiven Admin, hebt Sperren auf; `--reset-mail` schickt zusätzlich eine Passwort-Reset-Mail)
   - Neue DB-Funktionen sind ab jetzt standardmäßig gesperrt → in der Migration ausdrücklich `GRANT EXECUTE … TO anon, authenticated` (Spiel) bzw. `TO authenticated` (Konto) setzen und den Angriffstest erneut laufen lassen
