@@ -99,3 +99,6 @@ Thumbs.db
 
 # Testbericht von db/scripts/play-claude.mjs (wird bei jedem Lauf neu erzeugt)
 db/scripts/data/play-claude-report.json
+
+# lokale Sicherungen (enthalten E-Mail-Adressen)
+db/backups/
