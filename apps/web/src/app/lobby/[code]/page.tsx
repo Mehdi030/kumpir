@@ -12,6 +12,7 @@ import { useSavedLobbies } from "@/hooks/useSavedLobbies";
 import { useAuth } from "@/components/AuthProvider";
 import { RulesCard } from "@/components/RulesCard";
 import { LobbyNotFound, isNotFoundError } from "@/components/LobbyNotFound";
+import { InviteActions } from "@/components/InviteActions";
 import { Spinner } from "@/components/Spinner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSessionToken } from "@/lib/playerSession";
@@ -379,8 +380,10 @@ export default function LobbyPage() {
                         >
                             <span className="codeLabel">Lobby-Code</span>
                             <span className="codeValue">{code}</span>
-                            <span className="codeHint">{toast ? toast : "Tippen kopiert den Einladungslink"}</span>
+                            <span className="codeHint">{toast ? toast : "Tippen teilt den Einladungslink"}</span>
                         </button>
+
+                        <InviteActions code={code} disabled={isRunning} />
 
                         <div className="lobbyChips">
                             <span className="pillChip">

@@ -1,0 +1,80 @@
+"use client";
+
+import { useCallback, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+
+type Props = { code: string; disabled?: boolean };
+
+/** Einladen mit einem Tipp: Teilen (System-Teilen / WhatsApp), Link kopieren, QR-Code zum Abscannen. */
+export function InviteActions({ code, disabled = false }: Props) {
+    const [showQr, setShowQr] = useState(false);
+    const [msg, setMsg] = useState("");
+
+    const link = () => `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
+    const text = () => `Komm in meine Kumpir-Lobby! Code: ${code}\n${link()}`;
+    const flash = (m: string) => {
+        setMsg(m);
+        window.setTimeout(() => setMsg(""), 1800);
+    };
+
+    const share = useCallback(async () => {
+        const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+        if (typeof nav.share === "function") {
+            try {
+                await nav.share({ title: "Kumpir-Lobby", text: text(), url: link() });
+                return;
+            } catch (e) {
+                if (e instanceof Error && e.name === "AbortError") return;
+            }
+        }
+        // Desktop ohne System-Teilen: WhatsApp-Link öffnen
+        window.open(`https://wa.me/?text=${encodeURIComponent(text())}`, "_blank", "noopener,noreferrer");
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [code]);
+
+    const copy = useCallback(async () => {
+        try {
+            await navigator.clipboard.writeText(link());
+            flash("✅ Link kopiert");
+        } catch {
+            flash("⚠️ Kopieren nicht möglich");
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [code]);
+
+    return (
+        <div className="inviteWrap">
+            <div className="inviteRow">
+                <button type="button" className="btn btnPrimary btnSmall" onClick={() => void share()} disabled={disabled}>
+                    📲 Einladung teilen
+                </button>
+                <button type="button" className="btn btnSecondary btnSmall" onClick={() => void copy()} disabled={disabled}>
+                    🔗 Link kopieren
+                </button>
+                <button type="button" className="btn btnSecondary btnSmall" onClick={() => setShowQr((v) => !v)} aria-expanded={showQr} disabled={disabled}>
+                    {showQr ? "QR ausblenden" : "📷 QR-Code"}
+                </button>
+            </div>
+            <div className="inviteMsg" aria-live="polite">
+                {msg || " "}
+            </div>
+            {showQr ? (
+                <div className="inviteQr">
+                    <div className="inviteQrBox">
+                        <QRCodeSVG value={typeof window !== "undefined" ? `${window.location.origin}/join?code=${code}` : ""} size={200} level="M" marginSize={2} bgColor="#ffffff" fgColor="#2b0f04" title={`QR-Code für Lobby ${code}`} />
+                    </div>
+                    <div className="inviteQrHint">Mit der Handy-Kamera scannen und direkt beitreten</div>
+                </div>
+            ) : null}
+            <style>{`
+        .inviteWrap{ display:grid; gap:6px; justify-items:center; }
+        .inviteRow{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+        .inviteMsg{ font-size:12px; font-weight:700; opacity:.85; min-height:16px; }
+        .inviteQr{ display:grid; gap:8px; justify-items:center; animation: inviteIn .25s ease both; }
+        .inviteQrBox{ background:#fff; padding:10px; border-radius:18px; box-shadow:0 12px 30px rgba(0,0,0,.35); line-height:0; }
+        .inviteQrHint{ font-size:13px; opacity:.8; }
+        @keyframes inviteIn{ from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none} }
+      `}</style>
+        </div>
+    );
+}
