@@ -14,6 +14,11 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
   - [ ] Optional: Login mit Google/Apple
 
 ## Spiel
+- [ ] **Balance Duell/Tempo:** In großen Lobbys ist die Duell-Zündschnur zu kurz (Blitz, 12 Spieler: Ø 4,4 s ohne Bonus; Überlebenschance eines normalen Spielers sinkt von 72 % auf 34 %). Vorschlag: Mindest-Zündschnur 6 s, Tempo-Boden 60 % statt 45 % (Simulation: db/scripts/simulate-humans.mjs)
+- [ ] Balance Rache-Pass: jeder Ausgeschiedene darf einmal drehen – mehrere Tote können die Kartoffel gezielt auf einen Spieler lenken. Vorschlag: höchstens 1 Drehung pro Zündschnur-Phase oder 10 s Abklingzeit
+- [ ] Balance Raten: Falschantwort kostet nur 1 s Sperre, unbegrenzt viele Versuche (Durchprobieren von Interpreten). Vorschlag: Sperre steigt (1 s, 2 s, 3 s) oder -0,5 s Zündschnur je Fehlversuch
+- [ ] Balance Fähigkeitsgefälle: bei 2 guten + 2 normalen + 2 schwachen Spielern gewinnt ein guter Spieler ~92 % der Matches, ein schwacher nie. Vorschlag: Aufholmechanik (z. B. +1 Joker für den Letzten der Zwischenwertung)
+- [ ] Balance Punkte: Clutch-Pässe machen nur 1–5 % der Punkte aus (praktisch egal) – Wert erhöhen (25) oder streichen
 - [ ] Vorzeitiges Match-Ende, wenn ein Spieler uneinholbar vorne liegt
 - [ ] Song-Bekanntheit prüfen (Ziel: ≥ 85 % kennen jeden Titel) – Vorschau-Audit ist erledigt (Migration 069), aber ob jeder Titel bekannt ist, kann nur ein Mensch beurteilen (v. a. Deutschrap/Shisha Club)
 - [ ] Teleport- und Reverse-Modus (derzeit „Kommt bald“)
