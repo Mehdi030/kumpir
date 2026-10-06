@@ -4,13 +4,13 @@ import type { NextRequest } from "next/server";
 /**
  * Auth-Modus (Etappe 3a, opt-in):
  *
- * - `NEXT_PUBLIC_AUTH_DISABLED=1` → strikter Gast-Modus: alle Auth-Routen
+ * - `NEXT_PUBLIC_GUEST_ONLY=1` → strikter Gast-Modus: alle Auth-Routen
  *   leiten auf "/" um. Sinnvoll für Demos/lokales Testen ohne Supabase-Auth.
  * - sonst (Default) → Auth-Routen sind erreichbar, aber NICHT Pflicht.
  *   Gast-Modus bleibt voll funktional, eingeloggte User bekommen zusätzlich
  *   ihre user_id an die DB gehängt (für Lifetime-Stats etc).
  */
-const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 const AUTH_ROUTES = ["/login", "/register", "/verified", "/auth"];
 

@@ -15,6 +15,7 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
   - [ ] Gast → Konto: Spielstand der laufenden Gast-Identität beim Registrieren übernehmen
   - [x] Konto-Einstellungen (Migration 077): Avatar (Emoji + Farbe), Spielername, Benutzername ändern, E-Mail ändern, Passwort ändern, Konto löschen; Sprache/Ton/Solo-Gegner/Host-Standards werden im Konto gespeichert und gelten auf allen Geräten. DB-Test: `node db/scripts/test-account-settings.mjs`
   - [x] Login robuster: Passwort-vergessen-Prüfung repariert (lehnte jede Adresse mit „s“ ab), fehlendes Profil (Konto „medo“) nachgetragen, Bestätigungsmail erneut senden, verständliche Meldungen bei abgelaufenem/auf anderem Gerät geöffnetem Link, Passwort einblenden
+  - [x] Login war in der Produktion komplett abgeschaltet (Vercel: veraltetes NEXT_PUBLIC_AUTH_DISABLED=1) – Schalter heißt jetzt NEXT_PUBLIC_GUEST_ONLY, Login ist überall an. Alte Variable kann in Vercel gelöscht werden
   - [x] Sicherheit: Profile nur noch über geprüfte Funktionen änderbar (vorher konnte sich jeder Eingeloggte selbst zum Admin machen)
   - [ ] Echter Login-Test mit eigenem Konto: anmelden (E-Mail + Benutzername), Einstellungen ändern, auf zweitem Gerät prüfen, ob Sprache/Ton/Name mitkommen
   - [ ] Supabase-Dashboard: Mail-Texte auf Deutsch, Weiterleitungs-Liste enthält https://kumpir-web.vercel.app/** (sonst landen Mail-Links auf der falschen Seite)

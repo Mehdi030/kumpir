@@ -12,7 +12,7 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true });
 
-const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Lazy-init: nur clientseitig den Supabase-Client erzeugen, sonst crashen

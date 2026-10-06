@@ -8,7 +8,7 @@ import { loginWithIdentifier, resendConfirmation } from "@/actions/login";
 import { PasswordInput } from "@/components/PasswordInput";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
-const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 function safeNextPath(v: string | null) {
     if (!v) return "/";

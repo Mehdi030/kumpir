@@ -7,7 +7,7 @@ import { useFriends } from "@/hooks/useFriends";
 import { useSavedLobbies } from "@/hooks/useSavedLobbies";
 import { Spinner } from "@/components/Spinner";
 
-const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 export default function FriendsPage() {
     const { user, loading: authLoading } = useAuth();

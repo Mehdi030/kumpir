@@ -7,7 +7,7 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { Spinner } from "@/components/Spinner";
 import { TIER_STYLE } from "@/lib/achievements";
 
-const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 function fmtHoldTotal(ms: number) {
     if (!ms) return "—";

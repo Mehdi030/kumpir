@@ -10,7 +10,7 @@ import { AccountStats } from "@/components/profile/AccountStats";
 import { seasonKey, type ProfileStats } from "@/lib/profileStats";
 import { AccountSettings, AvatarBadge, supabaseAccountApi } from "@/components/profile/AccountSettings";
 
-const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 
 export default function ProfilePage() {

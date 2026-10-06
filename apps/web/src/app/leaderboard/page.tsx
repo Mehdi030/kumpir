@@ -6,7 +6,7 @@ import { useLeaderboard, type LeaderboardCategory, type LeaderboardEntry } from 
 import { Spinner } from "@/components/Spinner";
 import { SeasonBoard } from "@/components/SeasonBoard";
 
-const AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED === "1";
+const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 const CATEGORIES: Array<{ key: LeaderboardCategory; label: string; icon: string; unit: string; render: (e: LeaderboardEntry) => string }> = [
     {

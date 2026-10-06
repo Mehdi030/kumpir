@@ -111,12 +111,11 @@ fix(setup): play-Script auf Windows fixen
 
 ## 🔐 Auth-Modus
 
-Aktuell läuft das Spiel im **Gast-Modus** (`NEXT_PUBLIC_AUTH_DISABLED=1` in `.env.local`).
+Login ist **aktiv** (Konto optional – spielen geht immer auch als Gast). Konto-Einstellungen unter `/profile` (Migration 077).
 
-- Spielen ohne Account — Identität liegt nur in `localStorage` (`kumpir_player_id`)
-- Login/Register/Verified-Routen werden vom Proxy (`src/proxy.ts`, Next.js 16 Middleware-Konvention) auf `/` umgeleitet
-- `/achievements`, `/leaderboard`, `/friends` sind Auth-only und daher im Gast-Modus bewusst unverlinkt (kein Nav-Eintrag zeigt hin) **und** werden vom Proxy ebenfalls auf `/` umgeleitet, falls jemand die URL direkt aufruft — die Seiten/DB-Objekte bleiben erhalten, nur unerreichbar
-- Für die spätere Etappe 3 (Achievements, Leaderboards, Freundeslisten) wird Auth wieder aktiviert
+- `NEXT_PUBLIC_GUEST_ONLY=1` schaltet einen reinen Gast-Modus ein: Login/Register/Profil/Bestenliste werden vom Proxy (`src/proxy.ts`) auf `/` umgeleitet. Standard (nicht gesetzt oder `0`): Login an.
+- Der Schalter hieß früher `NEXT_PUBLIC_AUTH_DISABLED`. Auf Vercel stand der alte Name noch auf `1` und hat den Login in der Produktion unbemerkt abgeschaltet – der alte Name wird nicht mehr beachtet und kann in Vercel gelöscht werden.
+- Status-Check: `/api/health` zeigt, ob Anmelden per Benutzername serverseitig eingerichtet ist (`usernameLogin: true`).
 
 ---
 

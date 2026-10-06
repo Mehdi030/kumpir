@@ -40,5 +40,5 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: build-time-placeholder
-          NEXT_PUBLIC_AUTH_DISABLED: "1"
+          NEXT_PUBLIC_GUEST_ONLY: "1"
         run: npm run build
