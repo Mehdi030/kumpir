@@ -18,14 +18,15 @@ Reihenfolge = Priorität. Erledigtes wandert nach unten.
 - [x] 2. Einladen: WhatsApp-/Teilen-Knopf (Web Share), QR-Code in der Lobby
 - [x] 3. Link-Vorschau (Open Graph, Vorschaubild, „Du wurdest eingeladen · Code …“), robots.txt, sitemap
 - [ ] 4. Kurzes Tutorial in der ersten Runde (3 Hinweise zum Einblenden) + Ton beim ersten Klick freischalten
-- [x] 5. Bild-Gewicht: HGLogo.png 2,4 MB (auch Icon!), logo.png 1,6 MB, LogoK.png 1 MB verkleinern; echte App-Icons 192/512 px
-- [x] 6. Schrift/JS: zwei Variable-Fonts (90 KB) auf Subset reduzieren, Supabase/Auth nicht auf jeder Seite laden (Startseite ~250 KB JS) – erledigt: nur noch eine Webschrift; JS der Startseite bleibt ~244 KB gzip (React/Next/Supabase), Auth-Lazy-Load offen
-- [x] 7. Zuschauen statt „Lobby gesperrt“ für Nachzügler, Wiedereinstieg nach Verbindungsabbruch
-- [x] 8. Ergebnis teilen (Bild-Karte mit Platz/Punkten) + Revanche-Anreiz
-- [x] 9. Handy-Feinschliff: 100vh → dvh, Tastatur-Verhalten, größere Tisch-Darstellung – erledigt (dvh, Safe-Area)
-- [x] 10. Barrierefreiheit: sichtbarer Tastatur-Fokus, Kontrast der Glas-Karten, Screenreader-Texte – erledigt (Fokus-Ring, dunklere Glas-Karten, Live-Regionen)
-- [x] 11. Englisch als zweite Sprache (i18n-Datei ist vorhanden, wird nirgends genutzt) – erledigt für Start, Solo, Beitreten, Einladen, Endbildschirm; Spielfeld, Host-/Lobby-Seiten noch deutsch
-- [x] 12. PWA „Zum Home-Bildschirm“ mit Hinweis + Offline-Seite – erledigt (Service Worker nur in der Produktion, im Handy-Browser noch nicht getestet)
+- [x] 5. Bild-Gewicht: HGLogo.png 2,4 MB → WebP 131 KB, echte App-Icons 192/512 px, eigenes favicon.ico statt Vercel-Dreieck
+- [ ] 6. Schrift/JS: Inter entfernt (erledigt). Offen: Supabase/Auth nicht auf jeder Seite laden (Startseite ~244 KB JS gzip)
+- [x] 7. Zuschauen statt „Lobby gesperrt“ für Nachzügler (mit „Jetzt mitspielen“ nach dem Match), Wiedereinstieg über den Einladungslink für eigene Mitspieler
+- [ ] 8. Ergebnis teilen (Bild-Karte) erledigt. Offen: Revanche-Anreiz
+- [ ] 9. Handy-Feinschliff: dvh mit vh-Rückfall erledigt. Offen: Tastatur-Verhalten, größere Tisch-Darstellung
+- [x] 10. Barrierefreiheit: Tastatur-Fokus (nur Knöpfe/Links, Textfelder behalten eigene Optik), dunklere Glas-Karten. Kontrast nur geschätzt, nicht gemessen
+- [ ] 11. Englisch: Schalter + Start, Solo, Beitreten, Einladen, Endbildschirm, Ergebnis-Bild. Offen: Host-, Lobby-, Spielseite, Fehlermeldungen. Standard bleibt Deutsch
+- [x] 12. PWA-Hinweis + Offline-Seite (Service Worker auf jeder Seite, nur Produktion). Auf echtem Handy noch nicht getestet
+- [ ] Wiedereinstieg, wenn der Server einen Spieler nach Verbindungsabbruch schon entfernt hat (Spiellogik – bewusst nicht angefasst)
 
 ## Spiel
 - [ ] **Balance Duell/Tempo:** In großen Lobbys ist die Duell-Zündschnur zu kurz (Blitz, 12 Spieler: Ø 4,4 s ohne Bonus; Überlebenschance eines normalen Spielers sinkt von 72 % auf 34 %). Vorschlag: Mindest-Zündschnur 6 s, Tempo-Boden 60 % statt 45 % (Simulation: db/scripts/simulate-humans.mjs)

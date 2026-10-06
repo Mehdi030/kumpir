@@ -109,6 +109,7 @@ body::after{
    =============================== */
 
 .container{
+    min-height: 100vh;
     min-height: 100dvh;
     display: grid;
     place-items: center;
@@ -1836,13 +1837,19 @@ h1, h2, h3, .cardTitle, .resultTitle, .statusTitle, .finWinner, .headline{ font-
    BARRIEREFREIHEIT
    =============================== */
 
-/* Sichtbarer Tastatur-Fokus (auf jedem Hintergrund lesbar: heller Ring + dunkler Innenring) */
+/* Sichtbarer Tastatur-Fokus für Knöpfe, Links usw. (heller Ring + dunkler Innenring).
+   Textfelder sind ausgenommen: Sie haben eigene Fokus-Optik (gelber Rahmen) und würden den Ring
+   sonst auch bei Maus/Touch bekommen, weil Browser Textfelder immer als "focus-visible" werten. */
 :focus-visible{
-    outline: 3px solid #fff !important;
-    outline-offset: 2px !important;
-    box-shadow: 0 0 0 2px #2b0f04 !important;
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px #2b0f04;
 }
-.input:focus-visible, .pillInput:focus-visible{ border-radius: 14px; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):focus-visible,
+textarea:focus-visible{
+    outline: none;
+    box-shadow: none;
+}
 
 /* Nur für Screenreader */
 .srOnly{
@@ -1850,7 +1857,8 @@ h1, h2, h3, .cardTitle, .resultTitle, .statusTitle, .finWinner, .headline{ font-
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* Handy: Tastatur + Safe-Area */
-@media (max-width: 720px){
-    .container{ padding-bottom: max(32px, env(safe-area-inset-bottom)); }
+/* Volle Bildschirmhöhe: 100vh als Rückfall für alte Browser, 100dvh berücksichtigt die Handy-Adressleiste */
+.fullH{
+    min-height: 100vh;
+    min-height: 100dvh;
 }

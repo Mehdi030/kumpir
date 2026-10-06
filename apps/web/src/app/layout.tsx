@@ -2,6 +2,8 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
+import { LocaleSync } from "@/components/LocaleSync";
+import { PwaSetup } from "@/components/PwaSetup";
 import { Analytics } from "@vercel/analytics/next"
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://kumpir-web.vercel.app";
@@ -54,6 +56,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <body>
         <AuthProvider>{children}</AuthProvider>
         <Analytics />
+        <LocaleSync />
+        <PwaSetup />
         </body>
         </html>
     );

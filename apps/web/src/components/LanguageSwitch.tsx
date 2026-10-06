@@ -1,15 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
 import { useI18n, type Locale } from "@/lib/i18n";
 
-/** Kleiner DE | EN-Schalter. Setzt auch das lang-Attribut der Seite (Screenreader, Übersetzer). */
+/** Kleiner DE | EN-Schalter (das lang-Attribut setzt LocaleSync im Layout). */
 export function LanguageSwitch() {
     const { locale, setLocale, t } = useI18n();
-
-    useEffect(() => {
-        document.documentElement.lang = locale;
-    }, [locale]);
 
     const opt = (l: Locale, label: string) => (
         <button type="button" className={`langOpt${locale === l ? " langOptOn" : ""}`} onClick={() => setLocale(l)} aria-pressed={locale === l} lang={l}>

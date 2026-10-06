@@ -19,6 +19,11 @@ const BOTS: { name: string; skill: 1 | 2 | 3 }[] = [
     { name: "Bot Cleo", skill: 1 },
 ];
 
+// Suchmaschinen-Crawler führen JavaScript aus – die sollen keine echten Lobbys anlegen.
+// Bewusst konkrete Namen statt nur "bot" (sonst träfe es z. B. Handys der Marke CUBOT).
+// Wird jemand fälschlich erkannt, sieht er einen Start-Knopf statt eines Auto-Starts.
+const CRAWLER_UA = /googlebot|bingbot|yandex|baiduspider|duckduckbot|applebot|petalbot|ahrefsbot|semrushbot|crawler|spider|slurp|lighthouse|headlesschrome/i;
+
 function storedName(): string {
     try {
         return (localStorage.getItem("kumpir_player_name") || "").trim();
@@ -38,6 +43,7 @@ export default function SoloPage() {
     const { profile, loading: profileLoading } = useProfile();
     const [step, setStep] = useState<"solo.creating" | "solo.bots" | "solo.go">("solo.creating");
     const [error, setError] = useState("");
+    const [needsTap, setNeedsTap] = useState(false);
     const startedRef = useRef(false);
 
     const run = useCallback(async () => {
@@ -95,6 +101,11 @@ export default function SoloPage() {
         if (startedRef.current) return;
         if (authLoading || profileLoading) return; // erst wissen, ob ein Konto da ist (Name, Statistik)
         startedRef.current = true;
+        if (CRAWLER_UA.test(navigator.userAgent)) {
+            // nach dem Rendern umschalten (kein setState direkt im Effekt)
+            window.setTimeout(() => setNeedsTap(true), 0);
+            return;
+        }
         void run();
     }, [authLoading, profileLoading, run]);
 
@@ -108,7 +119,20 @@ export default function SoloPage() {
                     <h1 className="h1" style={{ fontSize: 34, marginTop: 6 }}>
                         {t("solo.title")}
                     </h1>
-                    {error ? (
+                    {needsTap && !error ? (
+                        <div className="ctaRow" style={{ marginTop: 16 }}>
+                            <button
+                                type="button"
+                                className="btn btnPrimary btnXL"
+                                onClick={() => {
+                                    setNeedsTap(false);
+                                    void run();
+                                }}
+                            >
+                                {t("home.solo")}
+                            </button>
+                        </div>
+                    ) : error ? (
                         <>
                             <p className="p" style={{ marginTop: 12, color: "#ffd0c8" }}>
                                 {t("solo.failed")} {error}

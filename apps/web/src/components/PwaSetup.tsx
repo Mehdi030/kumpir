@@ -12,8 +12,9 @@ function isStandalone(): boolean {
 }
 
 /**
- * Registriert den Service Worker (nur in der Produktion) und zeigt – wenn `showHint` gesetzt ist –
- * einen kleinen Installationshinweis: Android/Chrome mit echtem Install-Knopf, iPhone mit Anleitung.
+ * Ohne `showHint` (im Layout, also auf jeder Seite): registriert den Service Worker (nur in der Produktion),
+ * damit auch Leute, die über einen Einladungslink kommen, die Offline-Seite bekommen.
+ * Mit `showHint` (Startseite): kleiner Installationshinweis – Android/Chrome mit echtem Install-Knopf, iPhone mit Anleitung.
  */
 export function PwaSetup({ showHint = false }: { showHint?: boolean }) {
     const { t } = useI18n();
@@ -22,10 +23,11 @@ export function PwaSetup({ showHint = false }: { showHint?: boolean }) {
     const [hidden, setHidden] = useState(true);
 
     useEffect(() => {
+        if (showHint) return; // registriert wird über die Instanz im Layout
         if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
             void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
         }
-    }, []);
+    }, [showHint]);
 
     useEffect(() => {
         if (!showHint) return;

@@ -7,6 +7,15 @@ export type ResultCardInput = {
     me: { place: number; score: number } | null;
     rows: ResultCardRow[];
     siteUrl: string;
+    /** Fertig übersetzte Texte (Deutsch/Englisch je nach gewählter Sprache). */
+    labels: {
+        tagline: string;
+        header: string;
+        wins: string;
+        me: string | null;
+        pts: string;
+        cta: string;
+    };
 };
 
 const MEDAL = ["🥇", "🥈", "🥉"];
@@ -59,12 +68,12 @@ export async function renderResultCard(input: ResultCardInput): Promise<Blob> {
 
     ctx.font = `800 40px ${font}`;
     ctx.globalAlpha = 0.85;
-    ctx.fillText("Kumpir · Die heiße Kartoffel mit Musik", W / 2, 100);
+    ctx.fillText(input.labels.tagline, W / 2, 100);
     ctx.globalAlpha = 1;
 
     ctx.font = `800 36px ${font}`;
     ctx.globalAlpha = 0.9;
-    ctx.fillText(input.isSeries ? `MATCH BEENDET · ${input.totalRounds} RUNDEN` : "RUNDE BEENDET", W / 2, 160);
+    ctx.fillText(input.labels.header.toUpperCase(), W / 2, 160);
     ctx.globalAlpha = 1;
 
     // Pokal
@@ -78,7 +87,7 @@ export async function renderResultCard(input: ResultCardInput): Promise<Blob> {
     ctx.shadowBlur = 0;
     ctx.font = `600 40px ${font}`;
     ctx.globalAlpha = 0.9;
-    ctx.fillText(input.isSeries ? "gewinnt das Match" : "gewinnt die Runde", W / 2, 520);
+    ctx.fillText(input.labels.wins, W / 2, 520);
     ctx.globalAlpha = 1;
 
     // Tabelle (Top 5, eigene Zeile immer dabei)
@@ -104,19 +113,19 @@ export async function renderResultCard(input: ResultCardInput): Promise<Blob> {
         ctx.fillText(fit(ctx, r.name, 520), 200, y + 56);
         ctx.textAlign = "right";
         ctx.fillStyle = "#ffe08a";
-        ctx.fillText(`${r.score} Pkt`, W - 112, y + 56);
+        ctx.fillText(`${r.score} ${input.labels.pts}`, W - 112, y + 56);
         y += rowH;
     }
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#fff";
-    if (input.me) {
+    if (input.labels.me) {
         ctx.font = `800 52px ${font}`;
-        ctx.fillText(`Ich: Platz ${input.me.place} · ${input.me.score} Punkte`, W / 2, Math.max(y + 70, 1130));
+        ctx.fillText(input.labels.me, W / 2, Math.max(y + 70, 1130));
     }
 
     ctx.font = `800 40px ${font}`;
-    ctx.fillText("Spiel mit – kostenlos im Browser", W / 2, 1240);
+    ctx.fillText(input.labels.cta, W / 2, 1240);
     ctx.font = `700 44px ${font}`;
     ctx.fillStyle = "#2b0f04";
     const url = input.siteUrl.replace(/^https?:\/\//, "");

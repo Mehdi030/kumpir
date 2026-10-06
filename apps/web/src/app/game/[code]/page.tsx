@@ -42,6 +42,8 @@ type LobbyState = {
     code: string;
 
     phase: LobbyPhase;
+    /** Host hat die Lobby gesperrt oder ein Match läuft (Beitritt nicht möglich). */
+    locked: boolean;
     host_player_id: string | null;
     holder_player_id: string | null;
 
@@ -191,6 +193,7 @@ function fmtHold(ms?: number) {
 }
 
 function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
+    const { t } = useI18n();
     const supabase = getSupabaseClient();
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
@@ -576,6 +579,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     id: String(raw.id ?? ""),
                     code: String(raw.code ?? code),
                     phase: (raw.phase as LobbyPhase) ?? "waiting",
+                    locked: raw.locked === true,
                     host_player_id: (raw.host_player_id as string | null) ?? null,
                     holder_player_id: (raw.holder_player_id as string | null) ?? null,
 
@@ -1057,6 +1061,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     const vote = useCallback(
         async (choice: 1 | 2 | 3) => {
             if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
+            if (isSpectator) return;
             if (!lobby) return;
             if (lobby.phase !== "topic_vote") return;
             if (voteBusy) return;
@@ -1085,7 +1090,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 setVoteBusy(false);
             }
         },
-        [mePlayerId, lobby, voteBusy, myVote, supabase, showToast]
+        [mePlayerId, isSpectator, lobby, voteBusy, myVote, supabase, showToast]
     );
 
     // Topic-Mechanik B: Halter sagt seine Antwort → triggert Validierungs-Voting.
@@ -1259,7 +1264,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // Rematch handler (also bound to "R" key)
     const handleRematch = useCallback(async () => {
         if (endActionBusy) return;
-        if (!mePlayerId) return;
+        if (!mePlayerId || isSpectator) return;
         setEndActionBusy("rematch");
         const { error } = await supabase.rpc("rpc_rematch", { p_code: code, p_player_id: mePlayerId });
         if (error) {
@@ -1268,7 +1273,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             return;
         }
         showToast("🔁 Rematch gestartet", 1200);
-    }, [endActionBusy, mePlayerId, supabase, code, showToast]);
+    }, [endActionBusy, mePlayerId, isSpectator, supabase, code, showToast]);
 
     // Keyboard shortcuts: Space (pass), 1/2/3 (vote), R (rematch), M (mute)
     useEffect(() => {
@@ -1319,7 +1324,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     if (fatalError && isNotFoundError(fatalError)) return <LobbyNotFound code={code} />;
     if (fatalError) {
         return (
-            <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24 }}>
+            <main className="fullH" style={{ display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(720px, calc(100vw - 48px))", textAlign: "center" }}>
                     <div style={{ fontWeight: 950, fontSize: 22 }}>⚠️ Spiel konnte nicht geladen werden</div>
                     <div style={{ marginTop: 10, opacity: 0.8 }}>{fatalError}</div>
@@ -1330,7 +1335,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     if (!lobby)
         return (
-            <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24, color: "white" }}>
+            <main className="fullH" style={{ display: "grid", placeItems: "center", padding: 24, color: "white" }}>
                 <Spinner size={28} label="Lade Spiel…" />
             </main>
         );
@@ -1352,8 +1357,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
         return (
             <main
+                className="fullH"
                 style={{
-                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1375,7 +1380,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <button
                                 type="button"
                                 onClick={() => void vote(1)}
-                                disabled={voteBusy || !mePlayerId}
+                                disabled={voteBusy || !mePlayerId || isSpectator}
                                 className={`glassCard ${myVote === 1 ? "active" : ""}`}
                             >
                                 <div className="glassShine" aria-hidden />
@@ -1390,7 +1395,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <button
                                 type="button"
                                 onClick={() => void vote(2)}
-                                disabled={voteBusy || !mePlayerId}
+                                disabled={voteBusy || !mePlayerId || isSpectator}
                                 className={`glassCard ${myVote === 2 ? "active" : ""}`}
                             >
                                 <div className="glassShine" aria-hidden />
@@ -1405,7 +1410,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <button
                                 type="button"
                                 onClick={() => void vote(3)}
-                                disabled={voteBusy || !mePlayerId}
+                                disabled={voteBusy || !mePlayerId || isSpectator}
                                 className={`glassCard ${myVote === 3 ? "active" : ""}`}
                             >
                                 <div className="glassShine" aria-hidden />
@@ -1547,8 +1552,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
         return (
             <main
+                className="fullH"
                 style={{
-                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1681,8 +1686,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
         return (
             <main
+                className="fullH"
                 style={{
-                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "start center",
                     padding: "28px 16px",
@@ -1717,6 +1722,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     mePlayerId={mePlayerId}
                     highlights={highlights}
                     loggedIn={!!user}
+                    ranked={players.filter((p) => !p.is_bot).length >= 2}
+                    spectator={isSpectator}
                     busy={endActionBusy}
                     onRematch={() => void doRematch()}
                     onLobby={() => void doLobby()}
@@ -1742,8 +1749,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
         return (
             <main
+                className="fullH"
                 style={{
-                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1775,8 +1782,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     if (lobby.phase === "rematch_wait") {
         return (
             <main
+                className="fullH"
                 style={{
-                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1826,8 +1833,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     if (lobby.phase !== "running") {
         return (
             <main
+                className="fullH"
                 style={{
-                    minHeight: "100dvh",
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
@@ -1835,7 +1842,22 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 }}
             >
                 <div style={{ width: "min(820px, calc(100vw - 48px))", textAlign: "center" }}>
-                    {players.length === 0 || (players.length === 1 && !!mePlayerId && players[0]?.player_id === mePlayerId) ? (
+                    {isSpectator && (lobby.phase === "waiting" || lobby.phase === "lobby") ? (
+                        <>
+                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>{t("spec.kicker")}</div>
+                            <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>
+                                {lobby.locked ? t("spec.lockedTitle") : t("spec.openTitle")}
+                            </div>
+                            <div style={{ marginTop: 10, opacity: 0.82, fontWeight: 700 }}>{lobby.locked ? t("spec.lockedSub") : t("spec.openSub")}</div>
+                            {!lobby.locked ? (
+                                <div style={{ marginTop: 18 }}>
+                                    <a className="btn btnPrimary" href={`/join?code=${encodeURIComponent(code)}`}>
+                                        {t("spec.joinBtn")}
+                                    </a>
+                                </div>
+                            ) : null}
+                        </>
+                    ) : players.length === 0 || (players.length === 1 && !!mePlayerId && players[0]?.player_id === mePlayerId) ? (
                         <>
                             <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>NIEMAND DA</div>
                             <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>👻 Lobby leer</div>
@@ -1889,8 +1911,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     return (
         <main
-            className={selfShake ? "kumpirSelfShake" : ""}
-            style={{ minHeight: "100dvh", width: "100%", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}
+            className={`fullH${selfShake ? " kumpirSelfShake" : ""}`}
+            style={{ width: "100%", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}
         >
             {/* Feuerwellen am Bildschirmrand -- Intensität/Pulstempo skalieren
                 kontinuierlich mit heatRatio, statt in 3 groben Sprüngen, damit
@@ -1992,7 +2014,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     </div>
 
                     {iAmEliminated ? (
-                        <div className="statusCard" role="status" aria-live="polite">
+                        <div className="statusCard">
                             <div className="statusTitle">Du bist raus – schau zu 👀</div>
                             <div className="statusSub">Du siehst, wohin die Kumpir als Nächstes fliegt.</div>
                             {(lobby.game_mode ?? "original") === "original" && !meRow?.revenge_used && aliveNow > 2 ? (
@@ -2081,7 +2103,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             ) : null}
                         </div>
                     ) : (
-                        <div className="statusCard" role="status" aria-live="polite">
+                        <div className="statusCard">
                             <div className="statusTitle">{holderName} ist dran</div>
                             <div className="statusSub">{isSpectator ? "Du schaust nur zu – in der nächsten Runde kannst du mitspielen." : "Warte ab – gleich kann es dich treffen."}</div>
                         </div>
@@ -2110,6 +2132,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .hud{
           position: relative;
           z-index: 3;
+          min-height: 100vh;
           min-height: 100dvh;
           display: grid;
           place-items: start center;

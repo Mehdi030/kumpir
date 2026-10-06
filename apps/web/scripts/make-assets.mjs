@@ -2,7 +2,7 @@
 //   node apps/web/scripts/make-assets.mjs
 // Originale liegen in apps/web/assets-src/ (nicht im Web-Bundle), Ergebnisse in apps/web/public/.
 import sharp from "sharp";
-import { mkdirSync, existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -51,6 +51,28 @@ await icon(512, "icon-maskable-512.png", 0.68); // Sicherheitsrand für runde/ab
     await sharp(gradientSvg(W, H)).composite([{ input: logoBuf, top: 40, left: Math.round((W - (await sharp(logoBuf).metadata()).width) / 2) }, { input: text }]).png({ compressionLevel: 9, palette: true, quality: 88 }).toFile(out("og.png"));
 }
 
-// 4) Benachrichtigungs-Icon klein
+// 4) favicon.ico (Browser-Tab) aus dem fertigen App-Icon: ICO-Container mit PNG-Bildern 16/32/48 px
+{
+    const sizes = [16, 32, 48];
+    const pngs = await Promise.all(sizes.map((n) => sharp(out("icon-192.png")).resize(n, n).ensureAlpha().png({ compressionLevel: 9, palette: false }).toBuffer()));
+    const header = Buffer.alloc(6 + 16 * sizes.length);
+    header.writeUInt16LE(0, 0);
+    header.writeUInt16LE(1, 2); // Typ: Icon
+    header.writeUInt16LE(sizes.length, 4);
+    let offset = header.length;
+    sizes.forEach((n, i) => {
+        const e = 6 + i * 16;
+        header.writeUInt8(n, e);
+        header.writeUInt8(n, e + 1);
+        header.writeUInt16LE(1, e + 4); // Farbebenen
+        header.writeUInt16LE(32, e + 6); // Bit pro Pixel
+        header.writeUInt32LE(pngs[i].length, e + 8);
+        header.writeUInt32LE(offset, e + 12);
+        offset += pngs[i].length;
+    });
+    writeFileSync(join(root, "src", "app", "favicon.ico"), Buffer.concat([header, ...pngs]));
+}
+
+// 5) Benachrichtigungs-Icon klein
 await sharp(logo).resize({ width: 192, height: 192, fit: "inside" }).png({ compressionLevel: 9, palette: true }).toFile(out("notify-icon.png"));
 console.log("fertig", lm.width + "x" + lm.height);

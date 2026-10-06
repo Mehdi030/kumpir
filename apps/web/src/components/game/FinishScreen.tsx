@@ -35,6 +35,10 @@ type Props = {
     mePlayerId: string | null;
     highlights: FinishHighlight[];
     loggedIn: boolean;
+    /** Mind. 2 Menschen -> zählt für Bestenliste/Statistik (Migration 075). */
+    ranked: boolean;
+    /** Nur zugeschaut (nicht mitgespielt): keine Rematch-/Lobby-Knöpfe. */
+    spectator: boolean;
     busy: "reset" | "rematch" | null;
     onRematch: () => void;
     onLobby: () => void;
@@ -48,7 +52,7 @@ const MEDAL = ["🥇", "🥈", "🥉"];
  * Bei mehreren Runden ist die Wertung die Match-Gesamtwertung (Punkte je Runde + Summe),
  * bei einer einzelnen Runde die Rundenwertung.
  */
-export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seriesRows, shareRows, mePlayerId, highlights, loggedIn, busy, onRematch, onLobby, toasts }: Props) {
+export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seriesRows, shareRows, mePlayerId, highlights, loggedIn, ranked, spectator, busy, onRematch, onLobby, toasts }: Props) {
     const { t } = useI18n();
     const [shareMsg, setShareMsg] = useState("");
     const [shareBusy, setShareBusy] = useState(false);
@@ -57,10 +61,27 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
         if (shareBusy) return;
         setShareBusy(true);
         try {
-            const blob = await renderResultCard({ winnerName, isSeries, totalRounds, me, rows: shareRows, siteUrl: window.location.origin });
+            const blob = await renderResultCard({
+                winnerName,
+                isSeries,
+                totalRounds,
+                me,
+                rows: shareRows,
+                siteUrl: window.location.origin,
+                labels: {
+                    tagline: t("card.tagline"),
+                    header: isSeries ? t("fin.match", { n: totalRounds }) : t("fin.round"),
+                    wins: isSeries ? t("fin.winsMatch") : t("fin.winsRound"),
+                    me: me ? t("card.me", { place: me.place, score: me.score }) : null,
+                    pts: t("card.pts"),
+                    cta: t("card.cta"),
+                },
+            });
             const file = new File([blob], "kumpir-ergebnis.png", { type: "image/png" });
             const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
-            const text = `${winnerName} gewinnt bei Kumpir${me ? ` – ich: Platz ${me.place}, ${me.score} Punkte` : ""}. Spiel mit: ${window.location.origin}`;
+            const text = me
+                ? t("card.shareTextMe", { winner: winnerName, place: me.place, score: me.score, url: window.location.origin })
+                : t("card.shareText", { winner: winnerName, url: window.location.origin });
             if (typeof nav.canShare === "function" && nav.canShare({ files: [file] })) {
                 try {
                     await navigator.share({ files: [file], text, title: "Kumpir-Ergebnis" });
@@ -143,7 +164,11 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
                 </section>
             ) : null}
 
-            {loggedIn ? (
+            {spectator ? (
+                <div className="finAccount">{t("fin.spectator")}</div>
+            ) : !ranked ? (
+                <div className="finAccount">{t("fin.unranked")}</div>
+            ) : loggedIn ? (
                 <div className="finAccount ok">{t("fin.saved2")}</div>
             ) : (
                 <div className="finAccount">
@@ -154,14 +179,24 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
                 </div>
             )}
 
-            <div className="finActions">
-                <button type="button" className="btn btnPrimary btnXL" onClick={onRematch} disabled={!!busy} title="Direkt nochmal (Taste R)">
-                    {busy === "rematch" ? <Spinner size={16} label="Starte…" /> : t("fin.again")}
-                </button>
-                <button type="button" className="btn btnSecondary btnXL" onClick={onLobby} disabled={!!busy}>
-                    {busy === "reset" ? <Spinner size={16} label="Lade…" /> : t("fin.lobby")}
-                </button>
-            </div>
+            {spectator ? (
+                // Zuschauer: Die Lobby ist noch gesperrt – sobald der Host zurück zur Lobby geht,
+                // zeigt die Spielseite automatisch "Jetzt mitspielen".
+                <div className="finActions">
+                    <Link href="/" className="btn btnSecondary btnXL">
+                        {t("solo.home")}
+                    </Link>
+                </div>
+            ) : (
+                <div className="finActions">
+                    <button type="button" className="btn btnPrimary btnXL" onClick={onRematch} disabled={!!busy} title="Direkt nochmal (Taste R)">
+                        {busy === "rematch" ? <Spinner size={16} label="Starte…" /> : t("fin.again")}
+                    </button>
+                    <button type="button" className="btn btnSecondary btnXL" onClick={onLobby} disabled={!!busy}>
+                        {busy === "reset" ? <Spinner size={16} label="Lade…" /> : t("fin.lobby")}
+                    </button>
+                </div>
+            )}
             <div className="finShare">
                 <button type="button" className="btn btnSecondary btnSmall" onClick={() => void shareResult()} disabled={shareBusy}>
                     {shareBusy ? <Spinner size={14} label={t("fin.shareBusy")} /> : t("fin.share")}
@@ -170,7 +205,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
                     {shareMsg}
                 </span>
             </div>
-            <div className="finHint">{t("fin.tip")}</div>
+            {spectator ? null : <div className="finHint">{t("fin.tip")}</div>}
 
             <ToastStack toasts={toasts} inline />
 

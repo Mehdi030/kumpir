@@ -25,10 +25,6 @@ const MODES: Record<ModeKey, { label: string; icon: string }> = {
     reverse: { label: "Reverse", icon: "🔁" },
 };
 
-function fmtJoinLink(origin: string, code: string) {
-    return `${origin}/join?code=${encodeURIComponent(code)}`;
-}
-
 function getErrorMessage(e: unknown): string {
     if (e instanceof Error) return e.message;
     if (typeof e === "string") return e;
@@ -146,26 +142,12 @@ export default function LobbyPage() {
         window.setTimeout(() => setToast(""), ms);
     }, []);
 
-    const copyInviteByClick = useCallback(async () => {
-        const origin = window.location.origin;
-        const link = fmtJoinLink(origin, code);
-        const shareText = `Komm in meine Kumpir-Lobby! Code: ${code}\n${link}`;
-
-        // Prefer Web Share API on mobile (System-Share-Sheet → WhatsApp/iMessage/etc.)
-        const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-        if (typeof nav.share === "function") {
-            try {
-                await nav.share({ title: "Kumpir-Lobby", text: shareText, url: link });
-                return;
-            } catch (e) {
-                // user cancelled — silently fall through to clipboard
-                if (e instanceof Error && e.name === "AbortError") return;
-            }
-        }
-
+    // Code antippen kopiert nur den 4-stelligen Code (z. B. zum Vorlesen/Abtippen).
+    // Teilen, Link und QR-Code liegen gesammelt in <InviteActions> darunter.
+    const copyCode = useCallback(async () => {
         try {
-            await navigator.clipboard.writeText(link);
-            showToast("✅ Link kopiert", 1200);
+            await navigator.clipboard.writeText(code);
+            showToast("✅ Code kopiert", 1200);
         } catch {
             showToast("⚠️ Kopieren nicht möglich", 1600);
         }
@@ -373,14 +355,14 @@ export default function LobbyPage() {
                         <button
                             type="button"
                             className="codeBox"
-                            onClick={copyInviteByClick}
-                            title="Klick → Einladungslink kopieren"
-                            aria-label="Einladungslink kopieren"
+                            onClick={() => void copyCode()}
+                            title="Klick → Code kopieren"
+                            aria-label={`Lobby-Code ${code} kopieren`}
                             disabled={isRunning}
                         >
                             <span className="codeLabel">Lobby-Code</span>
                             <span className="codeValue">{code}</span>
-                            <span className="codeHint">{toast ? toast : "Tippen teilt den Einladungslink"}</span>
+                            <span className="codeHint">{toast ? toast : "Tippen kopiert den Code"}</span>
                         </button>
 
                         <InviteActions code={code} disabled={isRunning} />

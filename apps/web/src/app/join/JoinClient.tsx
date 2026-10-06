@@ -128,7 +128,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             // ✅ Lobby-Status check (locked)
             const { data: lobbyRow, error: lobbyErr } = await supabase
                 .from("lobbies")
-                .select("locked")
+                .select("id,locked,phase")
                 .eq("code", lobbyCode)
                 .maybeSingle();
 
@@ -141,6 +141,30 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 return;
             }
             if (lobbyRow.locked) {
+                const inLobbyPhase = lobbyRow.phase === "waiting" || lobbyRow.phase === "lobby";
+
+                // Wiedereinstieg: Wer schon mitspielt (z. B. nach Absturz/Neustart den Einladungslink
+                // erneut öffnet), kommt direkt zurück an seinen Platz statt vor die Sperre.
+                const storedId = getStoredPlayerId();
+                if (storedId) {
+                    const { data: meRow } = await supabase
+                        .from("players")
+                        .select("player_id")
+                        .eq("lobby_id", lobbyRow.id)
+                        .eq("player_id", storedId)
+                        .eq("status", "active")
+                        .maybeSingle();
+                    if (meRow) {
+                        router.push(inLobbyPhase ? `/lobby/${lobbyCode}` : `/game/${lobbyCode}`);
+                        return;
+                    }
+                }
+
+                if (inLobbyPhase) {
+                    // Vom Host gesperrt, es läuft aber nichts -> Zuschauen ergibt keinen Sinn.
+                    setError(t("join.locked"));
+                    return;
+                }
                 setError(t("join.running"));
                 setSpectateCode(lobbyCode);
                 return;

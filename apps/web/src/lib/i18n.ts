@@ -8,8 +8,9 @@
  *   t("join.hint", { code: "AB12" })        // {code} wird ersetzt
  *
  * Neuer Text: Schlüssel in BEIDE Wörterbücher (`de` und `en`) eintragen. Fehlt ein englischer
- * Eintrag, fällt es auf Deutsch zurück. Die Sprache gilt sofort überall (kein Neuladen nötig),
- * wird in localStorage gemerkt und beim ersten Besuch aus der Browsersprache abgeleitet.
+ * Eintrag, fällt es auf Deutsch zurück. Die Sprache gilt sofort überall (kein Neuladen nötig) und
+ * wird in localStorage gemerkt. Standard ist Deutsch – Englisch nur, wenn jemand es im Schalter wählt
+ * (die App ist noch nicht vollständig übersetzt, und viele Deutsche nutzen einen englischen Browser).
  *
  * Stand: Startseite, Anmelde-Leiste, Solo, Beitreten, Einladen und Endbildschirm sind übersetzt;
  * das eigentliche Spielfeld ist noch deutsch.
@@ -68,7 +69,7 @@ const de = {
     "join.yourName": "Dein Name",
     "join.btn": "🚀 Beitreten",
     "join.joining": "Trete bei…",
-    "join.running": "Das Spiel läuft schon – beitreten geht erst in der nächsten Runde. Du kannst aber zuschauen.",
+    "join.running": "Hier läuft gerade ein Match. Du kannst zuschauen und nach dem Match mitspielen.",
     "join.spectate": "👀 Zuschauen",
     "join.notFound": "Lobby nicht gefunden.",
     "join.badCode": "Bitte einen gültigen 4-stelligen Code eingeben.",
@@ -108,6 +109,24 @@ const de = {
     "pwa.ios": "📲 Als App speichern: unten auf Teilen tippen, dann „Zum Home-Bildschirm“.",
     "pwa.btn": "Installieren",
     "pwa.dismiss": "Hinweis schließen",
+
+    "fin.unranked": "🤖 Spiele mit nur einem Menschen zählen nicht für Bestenliste und Statistik.",
+    "fin.spectator": "👀 Du hast zugeschaut. Sobald der Host zurück zur Lobby geht, kannst du mitspielen.",
+    "spec.kicker": "ZUSCHAUEN",
+    "spec.openTitle": "Jetzt kannst du mitspielen",
+    "spec.openSub": "Das Match ist vorbei – tritt der Lobby für das nächste Match bei.",
+    "spec.lockedTitle": "Lobby gesperrt 🔒",
+    "spec.lockedSub": "Der Host hat die Lobby gesperrt. Warte, bis sie wieder offen ist.",
+    "spec.joinBtn": "🚀 Mitspielen",
+    "join.locked": "Der Host hat diese Lobby gerade gesperrt (🔒). Versuch es gleich nochmal.",
+
+    // Ergebnis-Bild
+    "card.tagline": "Kumpir · Die heiße Kartoffel mit Musik",
+    "card.me": "Ich: Platz {place} · {score} Punkte",
+    "card.pts": "Pkt",
+    "card.cta": "Spiel mit – kostenlos im Browser",
+    "card.shareText": "{winner} gewinnt bei Kumpir. Spiel mit: {url}",
+    "card.shareTextMe": "{winner} gewinnt bei Kumpir – ich: Platz {place}, {score} Punkte. Spiel mit: {url}",
 } as const;
 
 export type TranslationKey = keyof typeof de;
@@ -158,7 +177,7 @@ const en: Partial<Record<TranslationKey, string>> = {
     "join.yourName": "Your name",
     "join.btn": "🚀 Join",
     "join.joining": "Joining…",
-    "join.running": "The game is already running – you can join in the next round. You can watch in the meantime.",
+    "join.running": "A match is in progress. You can watch and join once it's over.",
     "join.spectate": "👀 Watch",
     "join.notFound": "Lobby not found.",
     "join.badCode": "Please enter a valid 4-character code.",
@@ -196,6 +215,23 @@ const en: Partial<Record<TranslationKey, string>> = {
     "pwa.ios": "📲 Save as app: tap Share at the bottom, then “Add to Home Screen”.",
     "pwa.btn": "Install",
     "pwa.dismiss": "Dismiss",
+
+    "fin.unranked": "🤖 Games with only one human don't count towards the leaderboard or stats.",
+    "fin.spectator": "👀 You were watching. Once the host returns to the lobby, you can join.",
+    "spec.kicker": "WATCHING",
+    "spec.openTitle": "You can join now",
+    "spec.openSub": "The match is over – join the lobby for the next match.",
+    "spec.lockedTitle": "Lobby locked 🔒",
+    "spec.lockedSub": "The host has locked the lobby. Wait until it opens again.",
+    "spec.joinBtn": "🚀 Join",
+    "join.locked": "The host has locked this lobby (🔒). Try again in a moment.",
+
+    "card.tagline": "Kumpir · Hot potato with music",
+    "card.me": "Me: place {place} · {score} points",
+    "card.pts": "pts",
+    "card.cta": "Play along – free in your browser",
+    "card.shareText": "{winner} wins at Kumpir. Play along: {url}",
+    "card.shareTextMe": "{winner} wins at Kumpir – me: place {place}, {score} points. Play along: {url}",
 };
 
 const dictionaries: Record<Locale, Partial<Record<TranslationKey, string>>> = { de, en };
@@ -210,7 +246,7 @@ function detectLocale(): Locale {
     } catch {
         // ignore
     }
-    return (navigator.language || "de").toLowerCase().startsWith("en") ? "en" : "de";
+    return "de";
 }
 
 function subscribe(cb: () => void) {
