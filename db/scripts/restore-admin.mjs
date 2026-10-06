@@ -43,7 +43,7 @@ try {
     await db.query("update auth.users set banned_until = null where id = $1", [u.id]);
     await db.query("update public.profiles set role = 'admin', is_platform_admin = true, status = 'active', status_reason = null, deletion_requested_at = null, status_changed_at = now() where id = $1", [u.id]);
     await db.query("delete from public.rate_limits");
-    await db.query("insert into public.admin_audit (actor_name, action, target_id, target_label, details) values ('notfall-skript', 'role_changed', $1, $2, '{\"to\":\"admin\",\"via\":\"restore-admin.mjs\"}')", [u.id, u.username ?? u.email]);
+    // Das Protokoll schreibt der Datenbank-Trigger selbst (Migration 083: Rolle/Status per Skript → "Datenbank/Skript")
     await db.query("commit");
     console.log(`✅ ${u.username ?? u.email} ist wieder aktiver Admin, Login-Sperre aufgehoben, Rate-Limits zurückgesetzt.`);
 

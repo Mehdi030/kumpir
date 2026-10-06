@@ -10,6 +10,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { createTestUser } from "./_test-users.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = Object.fromEntries(
@@ -55,9 +56,9 @@ const denied = (r) => /not_authorized/.test(r.error ?? "");
 
 try {
     await q("begin");
-    const ids = Object.fromEntries((await q("select username, id from public.profiles")).map((r) => [r.username, r.id]));
-    const { mehdi: admin, claudetest: sup, medo: user } = ids;
-    if (!admin || !sup || !user) throw new Error("Testkonten fehlen");
+    const admin = await createTestUser(q, "tadmin", "admin");
+    const sup = await createTestUser(q, "tsupport", "supporter");
+    const user = await createTestUser(q, "tuser", "user");
 
     // --- normale Nutzer kommen nicht rein
     check("Normaler Nutzer: Admin-Panel gesperrt", denied(await as(user, "select public.admin_whoami()")));
@@ -67,8 +68,8 @@ try {
     await q("update public.profiles set role = 'supporter' where id = $1", [sup]);
     let r = await as(sup, "select public.admin_whoami() as w");
     check("Supporter: Panel offen, Rolle supporter", r.rows?.[0]?.w?.role === "supporter", JSON.stringify(r.rows?.[0]?.w?.counts ?? r.error));
-    r = await as(sup, "select public.admin_list_users('med') as u");
-    check("Supporter: Suche findet Nutzer inkl. E-Mail", r.rows?.[0]?.u?.some((x) => x.username === "medo" && x.email), r.error);
+    r = await as(sup, "select public.admin_list_users('tuser') as u");
+    check("Supporter: Suche findet Nutzer inkl. E-Mail", r.rows?.[0]?.u?.some((x) => x.username === "tuser" && x.email), r.error);
     r = await as(sup, "select public.admin_set_user_status($1, 'suspended', 'Test') ", [user]);
     const [b] = await q("select u.banned_until, p.status, (select count(*) from auth.sessions s where s.user_id = u.id)::int sessions from auth.users u join public.profiles p on p.id = u.id where u.id = $1", [user]);
     check("Supporter sperrt Nutzer: Status + Login-Sperre + Sitzungen weg", !r.error && b.status === "suspended" && b.banned_until && b.sessions === 0, r.error);
@@ -105,7 +106,7 @@ try {
 
     // --- Protokoll
     r = await as(admin, "select public.admin_list_audit(50) as a");
-    const actions = (r.rows?.[0]?.a ?? []).map((x) => x.action);
+    const actions = (r.rows?.[0]?.a?.rows ?? []).map((x) => x.action);
     check("Protokoll enthält alle Aktionen", ["suspended", "unsuspended", "profile_moderated", "role_changed", "deletion_requested", "deleted"].every((a) => actions.includes(a)), actions.join(","));
 
     // --- Playlists
@@ -146,8 +147,8 @@ try {
     check("Song zurückgeholt", !r.error && s1.text === "Rock-Klassiker" && s1.archived_from === null, r.error);
 
     // --- Freier Ersatz-Benutzername (Registrierung scheitert nie an vergebenem Namen)
-    const [un] = await q("select public._unique_username('mehdi') a, public._unique_username('A!') b, public._unique_username('neuername') c");
-    check("Ersatz-Benutzername bei vergebenem/ungültigem Namen", /^mehdi\d{4}$/.test(un.a) && /^spieler/.test(un.b) && un.c === "neuername", JSON.stringify(un));
+    const [un] = await q("select public._unique_username('tadmin') a, public._unique_username('A!') b, public._unique_username('neuername') c");
+    check("Ersatz-Benutzername bei vergebenem/ungültigem Namen", /^tadmin\d{4}$/.test(un.a) && /^spieler/.test(un.b) && un.c === "neuername", JSON.stringify(un));
 
     // --- Fehlendes Profil wird angelegt (get_my_settings ist jetzt VOLATILE)
     await q("delete from public.profiles where id = $1", [sup]);

@@ -16,6 +16,10 @@ import {
     type AdminUserDetail,
     type AdminUserRow,
     type AuditEntry,
+    type AuditPage,
+    AUDIT_CATEGORY_LABEL,
+    auditCategory,
+    type AuditCategory,
 } from "@/lib/adminApi";
 
 type Tab = "overview" | "users" | "deletion" | "lobbies" | "songs" | "stats" | "audit";
@@ -639,38 +643,127 @@ function SongsTab({ api }: { api: AdminApi }) {
 }
 
 // ------------------------------------------------------------------ Protokoll
+const DETAIL_LABEL: Record<string, string> = {
+    from: "vorher", to: "nachher", email: "E-Mail", role: "Rolle", status: "Status", via: "über", count: "Anzahl", playlists: "Playlists",
+    sample: "Beispiele", aktion: "Aktion", bereiche: "Bereiche", reason: "Grund", playlist: "Playlist", lobbyId: "Lobby-ID", nachgetragen: "nachträglich eingetragen",
+};
+function detailText(v: unknown): string {
+    if (v === null || v === undefined || v === "") return "–";
+    if (typeof v === "boolean") return v ? "ja" : "nein";
+    if (Array.isArray(v)) return v.map(detailText).join(", ");
+    if (typeof v === "object") return Object.entries(v as Record<string, unknown>).map(([k, x]) => `${k}: ${detailText(x)}`).join(" · ");
+    return String(v);
+}
+const dayKey = (iso: string) => new Date(iso).toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
 function AuditTab({ api }: { api: AdminApi }) {
-    const [rows, setRows] = useState<AuditEntry[] | null>(null);
+    const [page, setPage] = useState<AuditPage | null>(null);
+    const [limit, setLimit] = useState(300);
+    const [cat, setCat] = useState<AuditCategory>("all");
+    const [search, setSearch] = useState("");
     const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
     useEffect(() => {
         let alive = true;
-        void api.listAudit().then((r) => {
+        void api.listAudit(limit).then((r) => {
             if (!alive) return;
             if (r.error) setError(adminErrorText(r.error));
-            else setRows(r.data ?? []);
+            else {
+                setError("");
+                setPage(r.data ?? { total: 0, rows: [] });
+            }
+            setLoading(false);
         });
         return () => {
             alive = false;
         };
-    }, [api]);
+    }, [api, limit]);
+
+    const q = search.trim().toLowerCase();
+    const shown = (page?.rows ?? []).filter((a) => {
+        if (cat !== "all" && auditCategory(a.action) !== cat) return false;
+        if (!q) return true;
+        const hay = [ACTION_LABEL[a.action] ?? a.action, a.targetLabel, a.actorName, a.details ? JSON.stringify(a.details) : ""].join(" ").toLowerCase();
+        return hay.includes(q);
+    });
+    const days: { day: string; items: AuditEntry[] }[] = [];
+    for (const a of shown) {
+        const d = dayKey(a.createdAt);
+        const last = days[days.length - 1];
+        if (last && last.day === d) last.items.push(a);
+        else days.push({ day: d, items: [a] });
+    }
+    const hasMore = !!page && page.rows.length < page.total;
+
     return (
         <div className="admBox">
-            <p className="admHint">Jede Aktion im Admin-Panel und jeder Löschantrag wird hier festgehalten.</p>
+            <p className="admHint">
+                Hier steht jede Änderung an Konten, Profilen, Rollen, Sperren, Songs, Playlists und Lobbys – egal ob über das Admin-Panel, die Einstellungen eines Spielers oder ein Skript – mit Datum, Uhrzeit und Urheber. Einträge lassen sich nicht ändern oder löschen. Einzelne Spielzüge stehen nicht hier.
+            </p>
+            <div className="admRow">
+                {(Object.keys(AUDIT_CATEGORY_LABEL) as AuditCategory[]).map((k) => (
+                    <button key={k} type="button" className={`btn btnSmall ${cat === k ? "btnPrimary" : "btnSecondary"}`} onClick={() => setCat(k)}>
+                        {AUDIT_CATEGORY_LABEL[k]}
+                    </button>
+                ))}
+            </div>
+            <div className="admRow">
+                <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen: Name, Aktion, Person …" aria-label="Protokoll durchsuchen" />
+            </div>
             {error ? <div className="admNote err">{error}</div> : null}
-            {!rows ? (
+            {!page ? (
                 <Spinner size={18} label="Lade…" />
-            ) : rows.length === 0 ? (
-                <div className="admHint">Noch keine Einträge.</div>
             ) : (
-                <ul className="admAudit">
-                    {rows.map((a) => (
-                        <li key={a.id}>
-                            <span>{fmt(a.createdAt)}</span> <b>{ACTION_LABEL[a.action] ?? a.action}</b> {a.targetLabel ? <>· {a.targetLabel}</> : null}{" "}
-                            <small>von {a.actorName ?? "?"}</small>
-                            {a.details && typeof a.details === "object" && "reason" in a.details && a.details.reason ? <small> – „{String(a.details.reason)}“</small> : null}
-                        </li>
+                <>
+                    <div className="admSmall">
+                        {shown.length} {shown.length === 1 ? "Eintrag" : "Einträge"} angezeigt · {page.total} insgesamt im Protokoll
+                    </div>
+                    {shown.length === 0 ? <div className="admHint">Keine Einträge{cat !== "all" || q ? " zu diesem Filter" : ""}.</div> : null}
+                    {days.map((g) => (
+                        <div key={g.day} className="admDay">
+                            <h3 className="admDayHead">
+                                📅 {g.day} <small>({g.items.length})</small>
+                            </h3>
+                            <ul className="admAudit">
+                                {g.items.map((a) => {
+                                    const entries = a.details && typeof a.details === "object" ? Object.entries(a.details).filter(([, v]) => v !== undefined) : [];
+                                    return (
+                                        <li key={a.id}>
+                                            <span className="admTime" title={fmt(a.createdAt)}>
+                                                {timeOf(a.createdAt)}
+                                            </span>{" "}
+                                            <b>{ACTION_LABEL[a.action] ?? a.action}</b> {a.targetLabel ? <>· {a.targetLabel}</> : null}{" "}
+                                            <small>von {a.actorName ?? "System / Datenbank"}</small>
+                                            {entries.length ? (
+                                                <div className="admDetails">
+                                                    {entries.map(([k, v]) => (
+                                                        <span key={k} className="admChip">
+                                                            {DETAIL_LABEL[k] ?? k}: <b>{detailText(v)}</b>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : null}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </div>
                     ))}
-                </ul>
+                    {hasMore ? (
+                        <button
+                            type="button"
+                            className="btn btnSecondary btnSmall"
+                            disabled={loading}
+                            onClick={() => {
+                                setLoading(true);
+                                setLimit((l) => Math.min(l + 500, 2000));
+                            }}
+                        >
+                            {loading ? "Lade…" : `Mehr laden (${page.total - page.rows.length} weitere)`}
+                        </button>
+                    ) : null}
+                </>
             )}
         </div>
     );
@@ -722,6 +815,12 @@ button.admTile:hover{ background: rgba(255,255,255,.14); }
 .admH2 small{ font-size:14px; opacity:.7; font-weight:600; }
 .admAudit{ list-style:none; margin:0; padding:0; display:grid; gap:6px; font-size:13px; }
 .admAudit li{ padding:8px 10px; border-radius:10px; background: rgba(255,255,255,.06); }
+.admTime{ font-variant-numeric: tabular-nums; font-weight:800; opacity:.9 !important; }
+.admDay{ display:grid; gap:6px; }
+.admDayHead{ margin:8px 0 0; font-size:14px; font-weight:900; letter-spacing:.2px; }
+.admDayHead small{ opacity:.65; font-weight:700; }
+.admDetails{ display:flex; flex-wrap:wrap; gap:4px 6px; margin-top:5px; }
+.admChip{ font-size:11.5px; padding:2px 8px; border-radius:999px; background: rgba(255,255,255,.1); max-width:100%; overflow-wrap:anywhere; }
 .admAudit span{ opacity:.7; margin-right:4px; }
 .admAudit small{ opacity:.75; }
 .admLobby{ display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 12px; border-radius:14px; background: rgba(255,255,255,.07); }

@@ -14,6 +14,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { createTestUser } from "./_test-users.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = Object.fromEntries(
@@ -136,7 +137,7 @@ try {
     check("Solo-Match im Verlauf, aber nicht gewertet", solo.length === 1 && solo[0].ranked === false);
 
     // Admin-Funktionen: Nicht-Admin wird abgewiesen
-    const [nonAdmin] = await q("select id from public.profiles where not coalesce(is_platform_admin, false) limit 1");
+    const nonAdmin = { id: await createTestUser(q, "tnonadmin", "user") };
     await q("savepoint sp_admin");
     await q("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: nonAdmin.id, role: "authenticated" })]);
     let blocked = false;
@@ -148,7 +149,7 @@ try {
     await q("rollback to savepoint sp_admin");
     check("admin_song_stats für Nicht-Admin gesperrt", blocked);
 
-    const [admin] = await q("select id from public.profiles where coalesce(is_platform_admin, false) limit 1");
+    const admin = { id: await createTestUser(q, "tadmin", "admin") };
     if (admin) {
         await q("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: admin.id, role: "authenticated" })]);
         const [b] = await q("select public.admin_balance_stats(30) as b, public.admin_song_stats(90) as s, public.admin_funnel(30) as f");

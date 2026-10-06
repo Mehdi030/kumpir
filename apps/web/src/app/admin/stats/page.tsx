@@ -138,6 +138,9 @@ export default function AdminStatsPage() {
                         }}
                     >
                         <div>
+                            <Link href="/admin" className="btn btnSecondary btnSmall" style={{ marginBottom: 10 }}>
+                                ← Zurück zum Admin-Panel
+                            </Link>
                             <h1 className="h1" style={{ marginBottom: 6 }}>📊 Kumpir Stats</h1>
                             <p className="p hostSub" style={{ marginTop: 0 }}>
                                 {updatedAt ? `Zuletzt aktualisiert: ${updatedAt.toLocaleTimeString("de-DE")}` : "Lädt…"}

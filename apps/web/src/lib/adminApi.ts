@@ -63,6 +63,8 @@ export type AdminSong = {
     rate: number | null;
 };
 
+export type AuditPage = { total: number; rows: AuditEntry[] };
+
 export type AuditEntry = {
     id: number;
     createdAt: string;
@@ -88,7 +90,7 @@ export type AdminApi = {
     closeLobby: (id: string) => R<null>;
     listSongs: (playlist: string | null, search: string) => R<AdminSong[]>;
     setSongArchived: (id: string, archived: boolean) => R<null>;
-    listAudit: () => R<AuditEntry[]>;
+    listAudit: (limit?: number) => R<AuditPage>;
 };
 
 export function supabaseAdminApi(): AdminApi {
@@ -123,7 +125,7 @@ export function supabaseAdminApi(): AdminApi {
         closeLobby: (id) => call("admin_close_lobby", { p_lobby_id: id }),
         listSongs: (playlist, search) => call("admin_list_songs", { p_playlist: playlist, p_search: search || null }),
         setSongArchived: (id, archived) => call("admin_set_song_archived", { p_song_id: id, p_archived: archived }),
-        listAudit: () => call("admin_list_audit", { p_limit: 200 }),
+        listAudit: (limit = 300) => call("admin_list_audit", { p_limit: limit }),
     };
 }
 
@@ -153,4 +155,38 @@ export const ACTION_LABEL: Record<string, string> = {
     lobby_closed: "🚪 Lobby geschlossen",
     song_archived: "📦 Song archiviert",
     song_restored: "♻️ Song zurückgeholt",
+    account_created: "🆕 Konto angelegt",
+    account_deleted: "❌ Konto gelöscht (per Skript)",
+    username_changed: "✏️ Benutzername geändert",
+    display_name_changed: "✏️ Spielername geändert",
+    avatar_changed: "🙂 Avatar geändert",
+    preferences_changed: "⚙️ Einstellungen geändert",
+    email_changed: "📧 E-Mail geändert",
+    password_changed: "🔐 Passwort geändert",
+    status_changed: "🚦 Status geändert",
+    platform_admin_changed: "🛡️ Plattform-Admin geändert",
+    songs_added: "➕ Songs hinzugefügt",
+    songs_removed: "➖ Songs entfernt",
+    songs_changed: "🎵 Songs geändert",
+    playlist_changed: "📀 Playlist geändert",
+    lobbies_expired: "🧹 Lobbys automatisch geschlossen",
 };
+
+export type AuditCategory = "all" | "account" | "profile" | "access" | "songs" | "lobbies";
+export const AUDIT_CATEGORY_LABEL: Record<AuditCategory, string> = {
+    all: "Alle",
+    account: "Konten",
+    profile: "Profil & Einstellungen",
+    access: "Rollen & Sperren",
+    songs: "Songs & Playlists",
+    lobbies: "Lobbys",
+};
+const CATEGORY_OF: Record<string, AuditCategory> = {
+    account_created: "account", account_deleted: "account", deleted: "account", deletion_requested: "account", deletion_rejected: "account",
+    email_changed: "account", password_changed: "account", password_reset_sent: "account",
+    username_changed: "profile", display_name_changed: "profile", avatar_changed: "profile", preferences_changed: "profile", profile_moderated: "profile",
+    suspended: "access", unsuspended: "access", role_changed: "access", status_changed: "access", platform_admin_changed: "access",
+    song_archived: "songs", song_restored: "songs", songs_added: "songs", songs_removed: "songs", songs_changed: "songs", playlist_changed: "songs",
+    lobby_closed: "lobbies", lobbies_expired: "lobbies",
+};
+export const auditCategory = (action: string): AuditCategory => CATEGORY_OF[action] ?? "all";

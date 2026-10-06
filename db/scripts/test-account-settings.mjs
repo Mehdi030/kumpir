@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { createTestUser } from "./_test-users.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = Object.fromEntries(
@@ -55,9 +56,8 @@ async function asUser(uid, sql, params) {
 
 try {
     await q("begin");
-    const [user] = await q("select id from public.profiles where username = 'claudetest'");
-    const [admin] = await q("select id, username from public.profiles where coalesce(is_platform_admin, false) limit 1");
-    if (!user || !admin) throw new Error("Testkonten fehlen");
+    const user = { id: await createTestUser(q, "tuser", "user") };
+    const admin = { id: await createTestUser(q, "tadmin", "admin"), username: "tadmin" };
 
     // Sicherheit: direkte Änderung am Profil ist gesperrt
     let r = await asUser(user.id, "update public.profiles set is_platform_admin = true where id = $1", [user.id]);
