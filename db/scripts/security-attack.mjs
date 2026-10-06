@@ -70,7 +70,8 @@ async function makeUser(name) {
     const tok = await t.json();
     return { id: u.id, email, token: tok.access_token };
 }
-const created = { users: [], lobbies: [] };
+const created = { users: [], lobbies: [], codes: [] };
+const RUN_START = new Date().toISOString();
 
 try {
     const attacker = await makeUser("a");
@@ -257,10 +258,9 @@ try {
             const t0 = Date.now();
             r = await rpc(fn, mk(p), attacker.token);
             if (Date.now() - t0 > 4000) slow.push(`${fn}`);
+            if (fn === "rpc_create_lobby" && Array.isArray(r.json) && r.json[0]?.code) created.codes.push(r.json[0].code);
             if (/syntax error at or near|unterminated quoted|SQLSTATE 42601/i.test(r.text) && !/invalid input/i.test(r.text)) slow.push(`${fn}:SQL-Fehler`);
         }
-        // zerstörte Lobby der Nutzereingabe aufräumen
-        await sql("delete from lobbies where code in ($1) or code like '%OR%'", ["XXXX"]);
     }
     const tablesAfter = (await sql("select count(*)::int n from pg_tables where schemaname='public'"))[0].n;
     const profilesAfter = (await sql("select count(*)::int n from profiles"))[0].n;
@@ -302,6 +302,13 @@ try {
 } finally {
     // Aufräumen
     for (const l of created.lobbies) await sql("delete from lobbies where id=$1", [l]).catch(() => {});
+    // Lobbys, die der Fuzz-Test angelegt hat (nur genau diese Codes)
+    if (created.codes.length) await sql("delete from lobbies where code = any($1)", [created.codes]).catch(() => {});
+    // Lobbys aus dem Spam-/Flut-Test (Host "Spam…"/"AtkHost", nur aus diesem Lauf) ebenfalls entfernen
+    await sql(
+        "delete from lobbies where created_at >= $1 and id in (select lobby_id from players where name like 'Spam%' or name = 'AtkHost')",
+        [RUN_START]
+    ).catch(() => {});
     await sql("delete from lobbies where host_player_id in (select player_id from players where name like 'Spam%')").catch(() => {});
     for (const u of created.users) {
         await fetch(`${URL_}/auth/v1/admin/users/${u}`, { method: "DELETE", headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` } }).catch(() => {});
