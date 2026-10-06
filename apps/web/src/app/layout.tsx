@@ -51,12 +51,15 @@ export const viewport: Viewport = {
 // Nur die Überschriften-Schrift wird geladen (Variable Font); Fließtext nutzt die System-Schrift (spart ~45 KB und einen Request).
 const displayFont = Bricolage_Grotesque({
     subsets: ["latin"],
-    variable: "--font-display",
+    variable: "--font-display-nf",
 });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="de" className={`${displayFont.variable}`}>
+        <head>
+            <link rel="preload" href="/fonts/kumpir-emoji.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        </head>
         <body>
         <AuthProvider>
             <ProfileProvider>

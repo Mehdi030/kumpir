@@ -37,7 +37,7 @@ export function fit(ctx: CanvasRenderingContext2D, text: string, maxW: number): 
     return `${t}…`;
 }
 
-export const CARD_FONT = "'Bricolage Grotesque', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif";
+export const CARD_FONT = "'Kumpir Emoji', 'Bricolage Grotesque', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif";
 
 /** Marken-Verlauf (Rot -> Orange -> Gelb) mit hellem Schein – gemeinsam für alle Teilen-Bilder. */
 export function paintCardBackground(ctx: CanvasRenderingContext2D, W: number, H: number) {
@@ -87,6 +87,12 @@ export async function renderResultCard(input: ResultCardInput): Promise<Blob> {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas nicht verfügbar");
 
+    // Emoji-Schrift muss geladen sein, sonst zeichnet das Bild System-Emojis
+    try {
+        await document.fonts.load("100px 'Kumpir Emoji'", "🏆🥔🥇");
+    } catch {
+        /* ohne Schrift: System-Emoji */
+    }
     const font = CARD_FONT;
 
     paintCardBackground(ctx, W, H);

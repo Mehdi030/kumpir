@@ -79,7 +79,13 @@ export default function Home() {
                     ))}
                 </ol>
 
-                <footer className="homeFooter">v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"}</footer>
+                <footer className="homeFooter">
+                    v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"} ·{" "}
+                    <a href="https://openmoji.org" target="_blank" rel="noopener noreferrer">
+                        Emojis: OpenMoji
+                    </a>{" "}
+                    (CC BY-SA 4.0)
+                </footer>
             </div>
 
             <HomeStatsDock />
