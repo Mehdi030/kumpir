@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { track } from "@/lib/track";
 import { validateUsername } from "@/lib/accountSettings";
+import { safeNextPath } from "@/lib/safeNext";
 import { PasswordInput } from "@/components/PasswordInput";
 
 function isEmailLike(v: string) {
@@ -49,7 +50,7 @@ export default function RegisterPage() {
         if (typeof window === "undefined") return "/";
         const url = new URL(window.location.href);
         const next = url.searchParams.get("next");
-        return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+        return safeNextPath(next, "/");
     }, []);
 
     // ✅ Stable callback origin for email links + OAuth redirects

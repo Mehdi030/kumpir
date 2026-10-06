@@ -3,12 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { safeNextPath as safeNext } from "@/lib/safeNext";
 
 function safeNextPath(v: string | null) {
-    if (!v) return "/host";
-    if (!v.startsWith("/")) return "/host";
-    if (v.startsWith("//")) return "/host";
-    return v;
+    return safeNext(v, "/host");
 }
 
 export default function VerifiedPage() {

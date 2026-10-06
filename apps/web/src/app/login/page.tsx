@@ -7,14 +7,12 @@ import { useAuth } from "@/components/AuthProvider";
 import { loginWithIdentifier, resendConfirmation } from "@/actions/login";
 import { PasswordInput } from "@/components/PasswordInput";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { safeNextPath as safeNext } from "@/lib/safeNext";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 function safeNextPath(v: string | null) {
-    if (!v) return "/";
-    if (!v.startsWith("/")) return "/";
-    if (v.startsWith("//")) return "/";
-    return v;
+    return safeNext(v, "/");
 }
 
 /** Fehlercodes aus Supabase-Mail-Links in verständliche Hinweise übersetzen. */

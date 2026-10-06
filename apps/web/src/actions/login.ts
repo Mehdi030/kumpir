@@ -25,7 +25,8 @@ async function resolveEmail(identifier: string): Promise<{ ok: true; email: stri
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin.rpc("get_email_for_username", { p_username: idValue });
     if (error) return { ok: false, error: "Benutzername konnte nicht geprüft werden. Bitte erneut versuchen." };
-    if (!data) return { ok: false, error: "Diesen Benutzernamen gibt es nicht. Tipp: Du kannst dich auch mit deiner E-Mail anmelden." };
+    // Bewusst dieselbe Meldung wie bei falschem Passwort: verrät nicht, welche Benutzernamen existieren.
+    if (!data) return { ok: false, error: "Benutzername/E-Mail oder Passwort falsch." };
     return { ok: true, email: String(data) };
 }
 
@@ -61,7 +62,8 @@ export async function loginWithIdentifier(identifier: string, password: string):
 /** Bestätigungsmail erneut senden (E-Mail oder Benutzername). */
 export async function resendConfirmation(identifier: string, origin: string): Promise<{ ok: boolean; message: string }> {
     const resolved = await resolveEmail(identifier);
-    if (!resolved.ok) return { ok: false, message: resolved.error };
+    // Unbekannter Name: trotzdem neutrale Antwort (keine Auskunft, ob ein Konto existiert)
+    if (!resolved.ok) return { ok: true, message: "📨 Falls es dazu ein unbestätigtes Konto gibt, ist eine neue Bestätigungsmail unterwegs." };
 
     // Nur eigene Herkunft zulassen (Supabase prüft die Weiterleitungs-Liste zusätzlich)
     const base = /^https?:\/\/[^/]+$/.test(origin) ? origin : process.env.NEXT_PUBLIC_APP_URL || "";

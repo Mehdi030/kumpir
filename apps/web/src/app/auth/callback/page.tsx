@@ -4,12 +4,10 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/Spinner";
+import { safeNextPath as safeNext } from "@/lib/safeNext";
 
 function safeNextPath(v: string | null) {
-    if (!v) return "/verified";
-    if (!v.startsWith("/")) return "/verified";
-    if (v.startsWith("//")) return "/verified";
-    return v;
+    return safeNext(v, "/verified");
 }
 
 /**
