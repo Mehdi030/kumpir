@@ -4,6 +4,7 @@ import { Bricolage_Grotesque } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ProfileProvider } from "@/components/ProfileProvider";
 import { PreferencesSync } from "@/components/PreferencesSync";
+import { AudioUnlock } from "@/components/AudioUnlock";
 import { LocaleSync } from "@/components/LocaleSync";
 import { PwaSetup } from "@/components/PwaSetup";
 import { Analytics } from "@vercel/analytics/next"
@@ -64,6 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </AuthProvider>
         <Analytics />
         <LocaleSync />
+        <AudioUnlock />
         <PwaSetup />
         </body>
         </html>

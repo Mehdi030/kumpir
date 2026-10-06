@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getMuted, getVolume, onAudioSettingsChanged } from "@/lib/gameFx";
+import { getSongAudio, setPendingSongPlay } from "@/lib/songAudio";
 
 /**
  * Song-Raten (Musik-Modus): spielt den aktuellen, versteckten Song des
@@ -47,7 +48,9 @@ function targetOffsetSeconds(startedAt: string | null): number {
 export function SongRound({ songId, startedAt }: { songId: string | null; startedAt: string | null }) {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [blocked, setBlocked] = useState(false);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
+    // Aktuelle Start-Funktion/Sperr-Status für Intervalle und Gesten-Nachholen (ohne Neu-Abo)
+    const startPlaybackRef = useRef<(() => void) | null>(null);
+    const blockedRef = useRef(false);
     const requestedForRef = useRef<string | null>(null);
 
     // songId -> preview_url. Der Normalfall liest nur noch die von
@@ -112,101 +115,125 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
         };
     }, [songId]);
 
+    // Startet den Song an der Server-Position. "blocked" nur bei echter Autoplay-Sperre
+    // (NotAllowedError) -- dann holt der nächste Tipp/Tastendruck irgendwo den Start nach
+    // (lib/songAudio.ts), zusätzlich gibt es den Knopf. Andere Fehler (z. B. AbortError,
+    // weil schon der nächste Song kommt) sind harmlos und werden ignoriert.
+    const startPlayback = useCallback(() => {
+        const el = getSongAudio();
+        if (!el || !previewUrl || getMuted()) return;
+        if (el.src !== previewUrl) el.src = previewUrl;
+        el.volume = getVolume();
+        el.currentTime = targetOffsetSeconds(startedAt);
+        void el
+            .play()
+            .then(() => {
+                setBlocked(false);
+                setPendingSongPlay(null);
+            })
+            .catch((err: unknown) => {
+                if (err instanceof DOMException && err.name === "NotAllowedError") {
+                    setBlocked(true);
+                    setPendingSongPlay(() => startPlaybackRef.current?.());
+                }
+            });
+    }, [previewUrl, startedAt]);
     useEffect(() => {
-        const el = audioRef.current;
+        startPlaybackRef.current = startPlayback;
+    }, [startPlayback]);
+
+    useEffect(() => {
+        const el = getSongAudio();
         if (!el) return;
         if (!previewUrl || getMuted()) {
             el.pause();
+            setPendingSongPlay(null);
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setBlocked(false);
             return;
         }
-        el.src = previewUrl;
-        el.volume = getVolume();
-        // Synchrone Wiedergabe: alle Clients starten an derselben Stelle im
-        // Song, berechnet aus current_song_started_at statt "wann ist mein
-        // eigener Buffer fertig". currentTime lässt sich vor Metadaten schon
-        // setzen (wird beim Laden übernommen), zur Sicherheit zusätzlich
-        // nochmal auf "loadedmetadata".
-        const target = targetOffsetSeconds(startedAt);
-        el.currentTime = target;
+        // Synchrone Wiedergabe: alle Clients starten an derselben Stelle im Song (aus
+        // current_song_started_at), sobald Metadaten da sind zusätzlich nachjustieren.
         const onLoadedMeta = () => {
             el.currentTime = targetOffsetSeconds(startedAt);
         };
         el.addEventListener("loadedmetadata", onLoadedMeta);
-        el.play()
-            .then(() => setBlocked(false))
-            .catch(() => {
-                // Browser-Autoplay-Policy kann den ersten Play() ohne frische
-                // Nutzer-Geste ablehnen (z.B. direkt nach Rematch/Reload ohne
-                // Zwischenklick) -- statt dann einfach stumm zu bleiben (der
-                // gemeldete "läuft nicht von Anfang an"-Fall), zeigen wir einen
-                // Tippen-zum-Abspielen-Button, der garantiert funktioniert.
-                setBlocked(true);
-            });
+        startPlayback();
         return () => el.removeEventListener("loadedmetadata", onLoadedMeta);
-    }, [previewUrl, startedAt]);
+    }, [previewUrl, startedAt, startPlayback]);
 
+    // Song-Runde vorbei oder Spielseite verlassen -> Ton aus, kein Nachholen mehr
     useEffect(() => {
-        if (!songId) audioRef.current?.pause();
+        if (!songId) {
+            getSongAudio()?.pause();
+            setPendingSongPlay(null);
+        }
     }, [songId]);
+    useEffect(
+        () => () => {
+            getSongAudio()?.pause();
+            setPendingSongPlay(null);
+        },
+        []
+    );
 
-    // Drift-Korrektur: läuft ein Client (Buffering, gedrosselter Hintergrund-
-    // Tab, ...) spürbar aus dem Takt, wird alle paar Sekunden hart auf die
-    // Server-Zielposition zurückgesprungen statt langsam auseinanderzulaufen.
+    // Drift-Korrektur: läuft ein Client (Buffering, gedrosselter Hintergrund-Tab, ...)
+    // spürbar aus dem Takt, wird hart auf die Server-Zielposition zurückgesprungen.
+    // Bleibt der Song trotz allem stehen (z. B. kurz Netz weg), wird er neu gestartet.
     useEffect(() => {
         if (!previewUrl || !startedAt) return;
         const t = window.setInterval(() => {
-            const el = audioRef.current;
-            if (!el || el.paused) return;
-            const target = targetOffsetSeconds(startedAt);
-            if (Math.abs(el.currentTime - target) > 0.75) {
-                el.currentTime = target;
+            const el = getSongAudio();
+            if (!el || getMuted()) return;
+            if (el.paused) {
+                if (!blockedRef.current) startPlaybackRef.current?.();
+                return;
             }
-        }, 4000);
+            const target = targetOffsetSeconds(startedAt);
+            if (Math.abs(el.currentTime - target) > 0.75) el.currentTime = target;
+        }, 3000);
         return () => window.clearInterval(t);
     }, [previewUrl, startedAt]);
+    useEffect(() => {
+        blockedRef.current = blocked;
+    }, [blocked]);
 
-    // Live nachziehen, wenn Mute/Lautstärke ÜBER AudioControl geändert wird,
-    // während der Song schon läuft -- vorher wirkte der Regler erst beim
-    // nächsten Song-Wechsel (siehe Kommentar an gameFx.setMuted).
+    // Live nachziehen, wenn Mute/Lautstärke über AudioControl/Taste M geändert wird.
     useEffect(() => {
         const apply = () => {
-            const el = audioRef.current;
+            const el = getSongAudio();
             if (!el || !previewUrl) return;
             if (getMuted()) {
                 el.pause();
                 return;
             }
             el.volume = getVolume();
-            if (el.paused && !blocked) {
-                el.currentTime = targetOffsetSeconds(startedAt);
-                void el.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
-            }
+            if (el.paused) startPlaybackRef.current?.();
         };
         return onAudioSettingsChanged(apply);
-    }, [previewUrl, blocked, startedAt]);
+    }, [previewUrl]);
 
-    const retryPlay = useCallback(() => {
-        const el = audioRef.current;
-        if (!el) return;
-        el.currentTime = targetOffsetSeconds(startedAt);
-        void el.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
-    }, [startedAt]);
+    // Zurück in den Tab -> ggf. pausierten Song wieder anwerfen
+    useEffect(() => {
+        const onVis = () => {
+            if (document.visibilityState === "visible" && previewUrl && !getMuted() && getSongAudio()?.paused) startPlaybackRef.current?.();
+        };
+        document.addEventListener("visibilitychange", onVis);
+        return () => document.removeEventListener("visibilitychange", onVis);
+    }, [previewUrl]);
 
     if (!songId) return null;
 
-    // Kein Text-Hinweis mehr ("Song läuft … errate ihn!") -- die Dringlichkeit
-    // zeigt allein der pulsierende Feuer-Rand (.edgeFire in game/[code]/page.tsx).
-    // Nur der Autoplay-Fallback-Button bleibt, weil er funktional nötig ist.
-    return (
-        <>
-            {blocked ? (
-                <button type="button" onClick={retryPlay} className="btn btnPrimary" title="Wiedergabe starten">
-                    ▶️ Tippen, um den Song zu starten
-                </button>
-            ) : null}
-            <audio ref={audioRef} preload="none" />
-        </>
-    );
+    // Nur der Autoplay-Notfall-Knopf wird gerendert (der Player selbst ist unsichtbar und
+    // app-weit geteilt). Meist ist er gar nicht nötig, weil schon der nächste Tipp/Tastendruck
+    // den Song startet.
+    return blocked ? (
+        <button type="button" onClick={startPlayback} className="btn btnPrimary songUnblock" title="Wiedergabe starten">
+            🔊 Tippen für Musik
+            <style>{`
+        .songUnblock{ position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 70; box-shadow: 0 10px 30px rgba(0,0,0,.4); animation: songPulse 1.2s ease-in-out infinite; }
+        @keyframes songPulse { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.06); } }
+      `}</style>
+        </button>
+    ) : null;
 }
