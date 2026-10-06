@@ -20,7 +20,7 @@ export default function Home() {
         <main className="container">
             <div className="landingWrap landingWrapDecor">
                 <div className="potatoBg" aria-hidden="true">
-                    <Image src="/HGLogo.png" alt="" width={900} height={600} priority quality={100} className="potatoBgImg" />
+                    <Image src="/HGLogo.webp" alt="" width={900} height={600} priority quality={80} className="potatoBgImg" />
                 </div>
 
                 <section className="card homeCard" aria-label="Kumpir Startseite">
@@ -44,14 +44,17 @@ export default function Home() {
                     </header>
 
                     <div className="ctaRow homeCta">
-                        <Link href="/host" className="btn btnPrimary btnXL">
-                            🚀 Spiel hosten
+                        <Link href="/solo" className="btn btnPrimary btnXL">
+                            🤖 Solo ausprobieren
+                        </Link>
+                        <Link href="/host" className="btn btnSecondary btnXL">
+                            🚀 Mit Freunden spielen
                         </Link>
                         <Link href="/join" className="btn btnSecondary btnXL">
                             Mit Code beitreten
                         </Link>
                     </div>
-                    <p className="homeFree">Kein Download · Kein Account nötig · Startet in Sekunden</p>
+                    <p className="homeFree">Kein Download · Kein Konto nötig · „Solo ausprobieren“ startet in Sekunden</p>
 
                     <div className="homeSteps">
                         {STEPS.map((s, i) => (

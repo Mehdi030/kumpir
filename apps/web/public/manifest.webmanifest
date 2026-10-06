@@ -1,28 +1,24 @@
 {
-  "name": "Kumpir",
+  "name": "Kumpir – Heiße Kartoffel",
   "short_name": "Kumpir",
-  "description": "Kumpir – Browserbasiertes Partyspiel nach dem Prinzip der heißen Kartoffel.",
+  "description": "Die heiße Kartoffel mit Musik: Song erkennen, weitergeben, überleben.",
   "lang": "de",
   "dir": "ltr",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#8f0f0f",
-  "background_color": "#0a0a0a",
+  "background_color": "#8f0f0f",
   "categories": ["games", "social"],
   "icons": [
-    {
-      "src": "/HGLogo.png",
-      "type": "image/png",
-      "sizes": "1536x1024",
-      "purpose": "any"
-    },
-    {
-      "src": "/HGLogo.png",
-      "type": "image/png",
-      "sizes": "1536x1024",
-      "purpose": "maskable"
-    }
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Solo ausprobieren", "url": "/solo", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Mit Code beitreten", "url": "/join", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }

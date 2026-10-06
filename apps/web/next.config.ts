@@ -19,6 +19,14 @@ function resolveBuildSha(): string {
 
 const nextConfig: NextConfig = {
     reactCompiler: true,
+    // Statische Bilder/Icons lange cachen (Dateinamen ändern sich nur mit neuem Inhalt)
+    async headers() {
+        const long = [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=86400" }];
+        return [
+            { source: "/:file(.*\\.(?:png|webp|svg|ico|woff2))", headers: long },
+            { source: "/manifest.webmanifest", headers: long },
+        ];
+    },
     env: {
         NEXT_PUBLIC_BUILD_SHA: resolveBuildSha(),
         NEXT_PUBLIC_BUILD_DATE: new Date().toISOString().slice(0, 16).replace("T", " "),

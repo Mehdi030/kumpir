@@ -70,8 +70,8 @@ export function notify(title: string, body: string, options?: { tag?: string; si
     try {
         new Notification(title, {
             body,
-            icon: "/LogoK.png",
-            badge: "/LogoK.png",
+            icon: "/notify-icon.png",
+            badge: "/notify-icon.png",
             tag: options?.tag,
             silent: options?.silent,
         });
