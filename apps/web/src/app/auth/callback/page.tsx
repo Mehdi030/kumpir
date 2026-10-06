@@ -68,8 +68,17 @@ function AuthCallbackInner() {
                 }
             }
 
-            // Implicit-Flow: der Browser-Client hat #access_token beim Erzeugen
-            // schon automatisch verarbeitet -- hier nur noch prüfen, ob's saß.
+            // Anmeldedaten im Fragment (#access_token=…&refresh_token=…): so kommen Links an, die nicht
+            // vom Browser-Client selbst angefordert wurden (z. B. ein vom Admin erzeugter Anmeldelink).
+            // Der Browser-Client arbeitet im PKCE-Modus und ignoriert dieses Format -- daher hier selbst setzen.
+            const accessToken = hash.get("access_token");
+            const refreshToken = hash.get("refresh_token");
+            if (accessToken && refreshToken) {
+                await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+                window.history.replaceState(null, "", window.location.pathname + window.location.search);
+            }
+
+            // Hat der Browser-Client (PKCE/Code oder Fragment) eine Sitzung, geht es weiter.
             const { data } = await supabase.auth.getSession();
             if (!data.session) {
                 // Keine Sitzung: beim Passwort-Reset ist der Link unbrauchbar; bei der Registrierung
