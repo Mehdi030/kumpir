@@ -2,7 +2,7 @@ name: Discord – neuester Deploy
 
 # Bei jedem Push auf main: auf den fertigen Vercel-Deploy warten, im Discord-Preview-Kanal eine Karte
 # mit Link, Änderung und Commit posten und die vorherige Karte löschen (im Kanal steht immer nur der
-# neueste Stand). Schlägt der Deploy fehl, kommt eine rote Warnung.
+# neueste Stand). Die Karte richtet sich an Spieler (auch außerhalb des Teams); fehlgeschlagene Deploys werden nicht gepostet.
 # Benötigte Secrets: VERCEL_TOKEN, VERCEL_PROJECT_ID, DISCORD_WEBHOOK_URL (Webhook des Preview-Kanals).
 
 on:
@@ -54,47 +54,54 @@ jobs:
           key: discord-preview-msg-${{ github.run_id }}
           restore-keys: discord-preview-msg-
 
+      - name: Letzte Änderungen holen
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 25
+
       - name: Karte in Discord posten, alte löschen
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           STATE: ${{ steps.vercel.outputs.state }}
-          DEPLOY_URL: ${{ steps.vercel.outputs.url }}
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-          SHA: ${{ github.sha }}
-          REPO: ${{ github.repository }}
         run: |
           set -e
-          # Nur eine kurze Zeile zur Änderung: erste Commit-Zeile ohne Präfix wie "ui:" / "fix(home):", max. 70 Zeichen
-          short_change=$(printf '%s' "${COMMIT_MSG:-Neuer Stand}" | head -n 1 | sed -E 's/^[a-zA-Z]+(\([^)]*\))?!?: *//')
-          if [ ${#short_change} -gt 70 ]; then short_change="${short_change:0:68}…"; fi
-          if [ "$STATE" = "READY" ]; then
-            payload=$(jq -n --arg c "$short_change" --arg live "$LIVE_URL" '{
-              username: "Kumpir Deploy",
-              embeds: [{
-                title: "🎮 Neueste Version ist live",
-                description: ($live + "\n*" + $c + "*"),
-                color: 16750615,
-                timestamp: (now | todate)
-              }]
-            }')
-          else
-            payload=$(jq -n --arg c "$short_change" '{
-              username: "Kumpir Deploy",
-              embeds: [{
-                title: "⚠️ Deploy fehlgeschlagen",
-                description: ("Die Live-Seite zeigt weiter den letzten funktionierenden Stand.\n*" + $c + "*"),
-                color: 15548997,
-                timestamp: (now | todate)
-              }]
-            }')
-          fi
+          # Fehlgeschlagene Deploys nicht posten: der Kanal ist für Spieler, die Live-Seite zeigt weiter den letzten guten Stand
+          if [ "$STATE" != "READY" ]; then echo "Deploy-Status $STATE – keine Karte"; exit 0; fi
+
+          # Die letzten 3 Änderungen, die Spieler merken (ohne CI/Doku/Technik), kurz und ohne Präfix wie "ui:" / "fix(home):"
+          changes=$(git log -n 25 --format=%s \
+            | grep -viE '^(ci|chore|docs|test|tests|refactor|build|style)(\(|:|!)' \
+            | grep -viE 'discord|migration|skript|script' \
+            | sed -E 's/^[a-zA-Z]+(\([^)]*\))?!?: *//' \
+            | awk '!seen[$0]++' | head -n 3)
+          # Kürzen in jq (zählt Zeichen, nicht Bytes – Umlaute bleiben heil)
+          changes=$(jq -rn --arg ch "$changes" '$ch | split("\n") | map(select(length > 0) | (if length > 64 then .[0:62] + "…" else . end) | "• " + .) | join("\n")')
+
+          payload=$(jq -n --arg ch "$changes" --arg live "$LIVE_URL" '{
+            username: "Kumpir",
+            avatar_url: ($live + "/icon-512.png"),
+            embeds: [{
+              author: { name: "Neue Version ist da!" },
+              title: "🥔 Kumpir – die heiße Kartoffel mit Musik",
+              description: (
+                "Ein Song läuft, du hast die Kumpir: Titel erraten, weitergeben – "
+                + "und bloß nicht erwischen lassen, wenn sie hochgeht! 💥\n"
+                + "Kostenlos im Browser · kein Download · kein Konto nötig · 2–12 Spieler"
+                + (if $ch == "" then "" else "\n\n**🆕 Neu dabei**\n" + $ch end)
+                + "\n\n**▶️ Jetzt mitspielen:**\n" + $live
+              ),
+              color: 16750615,
+              thumbnail: { url: ($live + "/icon-512.png") },
+              timestamp: (now | todate)
+            }]
+          }')
 
           res=$(curl -sS -X POST -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL?wait=true")
           new_id=$(echo "$res" | jq -r '.id // empty')
           if [ -z "$new_id" ]; then echo "Discord-Antwort: $res"; exit 1; fi
 
-          # Nur bei Erfolg die alte Karte entfernen (Warnungen bleiben stehen, bis wieder ein Deploy klappt)
-          if [ "$STATE" = "READY" ] && [ -f .discord-last-message ]; then
+          # Alte Karte entfernen, damit im Kanal immer nur die neueste steht
+          if [ -f .discord-last-message ]; then
             for old in $(cat .discord-last-message); do
               curl -sS -o /dev/null -w "alte Nachricht $old gelöscht: %{http_code}\n" -X DELETE "$DISCORD_WEBHOOK_URL/messages/$old" || true
             done
