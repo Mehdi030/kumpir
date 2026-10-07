@@ -78,11 +78,82 @@ main{ animation: kmPageIn .45s ease backwards; }
 .homeHero .homeTagline{ animation-delay: .22s; }
 .homeFree{ animation: kmRise .7s var(--ease-out) .4s backwards; }
 
-/* ---------- Startseite: Maskottchen schaukelt, Titel glänzt ---------- */
-.potatoBgImg{ animation: kmSway 7s var(--ease-inout) infinite; will-change: transform; }
-@keyframes kmSway{
-    0%, 100%{ transform: rotate(-.9deg) translateY(0); }
-    50%     { transform: rotate(.9deg) translateY(-6px); }
+/* ---------- Startseite: Kumpir (components/HomePotato.tsx) ----------
+   Ruhig/statisch, lebt nur durch kleine Gesten: Zwinkern, Finger-Welle, Funke an der Zündschnur.
+   3D: Kante per gestapelten Schatten, Lichtreflex, leichte Neigung zur Maus (--rx/--ry aus JS). */
+.potatoBgImg.kpStage{ position: relative; aspect-ratio: 3 / 2; filter: none; transform: none; perspective: 1100px; }
+.kpTilt{
+    position: relative; width: 100%; height: 100%;
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transform-origin: 50% 62%;
+    will-change: transform;
+}
+.kpBase{
+    display: block; width: 100%; height: auto;
+    /* Kante nach unten (wie ausgestanzt) + weicher Bodenschatten */
+    filter: drop-shadow(0 1.5px 0 #8a4508) drop-shadow(0 1.5px 0 #6a3406) drop-shadow(0 1.5px 0 #4a2404) drop-shadow(0 30px 50px rgba(0, 0, 0, .45));
+}
+.kpLayer{ position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+
+/* Zwinkern: rechtes Auge zu, linkes kneift leicht mit (alle 8 s) */
+.kpLidUp{ transform: translateY(-125px); }
+.kpLidUp.kpWink{ animation: kpWinkUp 8s var(--ease-inout) 2.4s infinite; }
+.kpLidUp.kpSquint{ animation: kpSquint 8s var(--ease-inout) 2.4s infinite; }
+.kpLidLo{ transform: translateY(70px); animation: kpWinkLo 8s var(--ease-inout) 2.4s infinite; }
+@keyframes kpWinkUp{ 0%, 84%, 96%, 100%{ transform: translateY(-125px); } 87%, 93%{ transform: translateY(0); } }
+@keyframes kpWinkLo{ 0%, 84%, 96%, 100%{ transform: translateY(70px); } 87%, 93%{ transform: translateY(0); } }
+.kpLash{ opacity: 0; animation: kpLash 8s linear 2.4s infinite; }
+@keyframes kpLash{ 0%, 86%, 94%, 100%{ opacity: 0; } 87%, 93%{ opacity: 1; } }
+@keyframes kpSquint{ 0%, 84%, 96%, 100%{ transform: translateY(-125px); } 87%, 93%{ transform: translateY(-36px); } }
+
+/* Finger-Welle: nacheinander kurz anheben (vom Fingeransatz aus gestreckt, deckt das Original ab) */
+.kpFinger{
+    position: absolute; display: block; pointer-events: none; user-select: none;
+    transform-origin: 50% 100%;
+    filter: drop-shadow(0 1.5px 0 #8a4508) drop-shadow(0 1.5px 0 #6a3406) drop-shadow(0 1.5px 0 #4a2404);
+    animation: kpWaveL 6.5s var(--ease-inout) infinite;
+    animation-delay: calc(var(--i) * 110ms + 1.2s);
+}
+.kpHandR{ animation-name: kpWaveR; animation-delay: calc(var(--i) * 110ms + 1.8s); }
+@keyframes kpWaveL{
+    0%, 9%, 100%{ transform: none; }
+    3%  { transform: scale(1.05, 1.18) rotate(-3deg); }
+    6%  { transform: scale(1.01, 1.04) rotate(-.5deg); }
+}
+@keyframes kpWaveR{
+    0%, 9%, 100%{ transform: none; }
+    3%  { transform: scale(1.05, 1.18) rotate(3deg); }
+    6%  { transform: scale(1.01, 1.04) rotate(.5deg); }
+}
+
+/* Funke an der Zündschnur flackert */
+.kpSpark{
+    position: absolute; width: 7%; aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(255, 255, 240, .95) 0 10%, rgba(255, 214, 90, .6) 26%, rgba(255, 120, 20, .22) 48%, transparent 70%);
+    mix-blend-mode: screen;
+    animation: kpSpark 1.7s steps(1) infinite;
+}
+@keyframes kpSpark{
+    0%  { opacity: .75; transform: translate(-50%, -50%) scale(.9); }
+    23% { opacity: 1;   transform: translate(-50%, -50%) scale(1.08); }
+    41% { opacity: .6;  transform: translate(-50%, -50%) scale(.84); }
+    63% { opacity: .95; transform: translate(-50%, -50%) scale(1.02); }
+    82% { opacity: .7;  transform: translate(-50%, -50%) scale(.94); }
+}
+
+/* Lichtreflex (folgt der Maus) + Oberlicht, nur auf der Grafik selbst */
+.kpSheen{
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+        radial-gradient(38% 52% at var(--lx, 50%) var(--ly, 38%), rgba(255, 248, 215, .42), transparent 70%),
+        linear-gradient(180deg, rgba(255, 240, 200, .18), transparent 45%, rgba(60, 20, 0, .22) 75%);
+    mix-blend-mode: soft-light;
+    -webkit-mask: url(/HGLogo.webp) center / 100% 100% no-repeat;
+    mask: url(/HGLogo.webp) center / 100% 100% no-repeat;
+}
+@media (prefers-reduced-motion: reduce){
+    .kpFinger, .kpLidUp.kpWink, .kpLidUp.kpSquint, .kpLidLo, .kpLash, .kpSpark{ animation: none; }
 }
 .homeTitle{
     background: linear-gradient(100deg, #fff 0%, #fff 36%, #ffe08a 47%, #fff 58%, #fff 100%);

@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { Suspense, useEffect } from "react";
 import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
 import { HomeFriends } from "@/components/HomeFriends";
+import { HomePotato } from "@/components/HomePotato";
 import { HomeStatsSection } from "@/components/HomeStatsSection";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { PwaSetup } from "@/components/PwaSetup";
@@ -28,7 +28,7 @@ export default function Home() {
         <main className="container">
             <div className="landingWrap landingWrapDecor">
                 <div className="potatoBg" aria-hidden="true">
-                    <Image src="/HGLogo.webp" alt="" width={900} height={600} priority quality={80} className="potatoBgImg" />
+                    <HomePotato />
                 </div>
 
                 <section className="card homeCard" aria-label="Kumpir Startseite">
