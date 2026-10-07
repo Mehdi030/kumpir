@@ -1974,9 +1974,6 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 explodedPlayerId={explodedPlayerId}
                 disconnectedIds={disconnectedIds}
                 heat={heatRatio}
-                round={Math.max(1, lobby.round_number ?? 1)}
-                tempo={tempoFactor}
-                duel={aliveNow === 2}
                 direction={lobby.pass_direction ?? 1}
                 showNext={isMeHolder || iAmEliminated}
             />
@@ -1994,18 +1991,39 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 </div>
             ) : null}
 
-            {/* Top-right: Modus + Heat + Connection + Audio */}
-            <div className="topRight" aria-hidden={false}>
+            {/* Info-Leiste oben: alles zum Spielstand an einer Stelle, klar getrennt vom Tisch */}
+            <div className="matchBar" role="group" aria-label="Spielstand">
+                <div className="mbSeg mbTopic" title="Playlist">
+                    <span className="mbLabel">Playlist</span>
+                    <span className="mbValue">
+                        {playlistLook(selectedTopic).icon} {selectedTopic}
+                    </span>
+                </div>
                 {(lobby.series_total ?? 1) > 1 ? (
-                    <div className="modePill modePillBig" title="Runde des Matches">
-                        <span>🎯</span>
-                        <span>{lobby.series_index}/{lobby.series_total}</span>
+                    <div className="mbSeg" title="Runde des Matches">
+                        <span className="mbLabel">Runde</span>
+                        <span className="mbValue">
+                            {lobby.series_index}/{lobby.series_total}
+                        </span>
                     </div>
                 ) : null}
-                <div className="modePill modePillBig" title={`${aliveNow} von ${totalPlayers} Spielern noch am Leben`}>
-                    <span>👥</span>
-                    <span>{aliveNow}/{totalPlayers}</span>
+                <div className="mbSeg" title="Zug in dieser Runde (steigt mit jedem Ausscheiden)">
+                    <span className="mbLabel">Zug</span>
+                    <span className="mbValue">{Math.max(1, lobby.round_number ?? 1)}</span>
                 </div>
+                <div className={`mbSeg ${aliveNow === 2 ? "mbDuel" : ""}`} title={aliveNow === 2 ? "Nur noch zwei: Duell" : "Tempo der Zündschnur"}>
+                    <span className="mbLabel">{aliveNow === 2 ? "Finale" : "Tempo"}</span>
+                    <span className="mbValue">{aliveNow === 2 ? "⚔ Duell" : `×${tempoFactor.toFixed(1)}`}</span>
+                </div>
+                <div className="mbSeg" title={`${aliveNow} von ${totalPlayers} Spielern noch im Spiel`}>
+                    <span className="mbLabel">Im Spiel</span>
+                    <span className="mbValue">
+                        {aliveNow}/{totalPlayers}
+                    </span>
+                </div>
+            </div>
+
+            <div className="topRight">
                 <AudioControl />
             </div>
 
@@ -2045,12 +2063,6 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
             <div className="hud">
                 <div className="hudInner">
-                    <div className="topicRow">
-                        <span className="topicPill">🎵 {selectedTopic}</span>
-                        <span className="topicPill hudMeta">Zug {Math.max(1, lobby.round_number ?? 1)}</span>
-                        <span className="topicPill hudMeta">{aliveNow === 2 ? "⚔ Duell" : `⚡ ×${tempoFactor.toFixed(1)}`}</span>
-                    </div>
-
                     {MUSIC_PLAYLISTS[selectedTopic] ? (
                         <SongRound songId={lobby.current_song_id} startedAt={lobby.current_song_started_at} />
                     ) : null}
@@ -2176,7 +2188,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           padding: 22px;
           /* Platz für den Tisch (PlayerRing) darüber, damit Antwort-Box und
              Tisch nicht übereinander liegen. */
-          padding-top: calc(27vh + min(66vmin, 540px) * 0.31 + 128px);
+          padding-top: var(--ringBottom, calc(27vh + min(66vmin, 540px) * 0.31 + 128px));
         }
         .hudInner{
           width: min(920px, 94vw);
@@ -2189,7 +2201,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .hudMeta{ display: none; }
         @media (max-width: 520px){
           .hudMeta{ display: inline-block; }
-          .hud{ padding-top: calc(27vh + 70vmin * 0.31 + 76px); }
+          .hud{ padding-top: var(--ringBottom, calc(27vh + 70vmin * 0.31 + 76px)); }
           .topicRow .topicPill{ font-size: 12px; padding: 5px 10px; }
           .topicRow{ flex-wrap: nowrap; }
         }
@@ -2513,6 +2525,43 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         }
         @media (prefers-reduced-motion: reduce){
           .elimPopup{ animation: none; }
+        }
+        .matchBar{
+          position: fixed;
+          top: 16px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 55;
+          display: flex;
+          align-items: stretch;
+          max-width: calc(100vw - 260px);
+          border-radius: 18px;
+          background: linear-gradient(180deg, rgba(22,26,40,.82), rgba(12,14,24,.82));
+          border: 1px solid rgba(255,255,255,.14);
+          box-shadow: 0 14px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.08);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          overflow: hidden;
+        }
+        .mbSeg{
+          display: grid;
+          gap: 1px;
+          padding: 8px 16px;
+          text-align: center;
+          min-width: 0;
+        }
+        .mbSeg + .mbSeg{ border-left: 1px solid rgba(255,255,255,.10); }
+        .mbLabel{ font-size: 10px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; color: rgba(255,255,255,.5); white-space: nowrap; }
+        .mbValue{ font-size: 16px; font-weight: 900; color: #fff; white-space: nowrap; }
+        .mbTopic .mbValue{ max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+        .mbDuel{ background: linear-gradient(180deg, rgba(150,20,20,.55), rgba(90,10,10,.55)); }
+        .mbDuel .mbValue{ color: #ffc2b8; }
+        @media (max-width: 760px){
+          .matchBar{ top: 66px; max-width: calc(100vw - 24px); border-radius: 14px; }
+          .mbTopic{ display: none; }
+          .mbSeg{ padding: 6px 11px; }
+          .mbLabel{ font-size: 9px; letter-spacing: 1px; }
+          .mbValue{ font-size: 14px; }
         }
         .topRight{
           position: fixed;

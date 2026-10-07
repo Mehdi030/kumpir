@@ -153,6 +153,9 @@ function noiseBurst(durMs: number, opts?: { gain?: number; lowpass?: number }) {
 function vibrate(pattern: number | number[]) {
     if (typeof window === "undefined") return;
     if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    // Vor dem ersten Tippen auf die Seite blockiert der Browser das Vibrieren (und meldet einen Fehler) -> dann still auslassen
+    const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+    if (ua && !ua.hasBeenActive) return;
     try {
         navigator.vibrate(pattern);
     } catch {
