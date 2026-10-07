@@ -1917,18 +1917,28 @@ textarea:focus-visible{
 .playWrap{ width: min(760px, 100%); }
 
 /* ===============================
-   ZURÜCK-KNOPF (components/BackButton.tsx) – oben links über der Karte
+   HAUPTMENÜ-/ZURÜCK-KNOPF (components/BackButton.tsx) – groß, klar, oben rechts in der Karte
    =============================== */
-.backBtn{
-    justify-self: start; align-self: start;
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 9px 16px 9px 12px; border-radius: 999px;
-    font-size: 14px; font-weight: 800; color: #fff; text-decoration: none;
-    background: rgba(255, 255, 255, .12); border: 1px solid var(--glass-line);
-    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
-    transition: background .15s ease, transform .2s ease;
+.homeBackBtn{
+    display: inline-flex; align-items: center; gap: 8px; flex: none;
+    padding: 11px 20px; border-radius: 999px;
+    font-size: 16px; font-weight: 900; color: #2b0f04; text-decoration: none; white-space: nowrap;
+    background: linear-gradient(180deg, #ffffff, #ffe9b8);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 2px rgba(255, 255, 255, .35);
+    transition: transform .2s var(--ease-spring, ease), box-shadow .2s ease;
+    border: 0; cursor: pointer; font-family: inherit;
 }
-.backBtn:hover{ background: rgba(255, 255, 255, .2); }
-.backBtn:hover .backBtnArrow{ transform: translateX(-3px); }
-.backBtnArrow{ display: inline-block; transition: transform .2s ease; font-size: 16px; line-height: 1; }
+.homeBackBtn:hover{ transform: translateY(-2px); box-shadow: 0 14px 32px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 3px rgba(255, 210, 63, .6); }
+.homeBackBtn:disabled{ opacity: .6; cursor: default; transform: none; }
+.cardCorner{ position: absolute; top: 20px; right: 20px; z-index: 6; }
+/* Platz für den Knopf, damit die Überschrift nicht darunter läuft */
+.card:has(> .cardCorner) > header, .card:has(> .cardCorner) > .hostHeader, .card:has(> .cardCorner) > h1{ padding-right: 190px; }
+@media (max-width: 620px){
+    .cardCorner{ position: static; display: flex; width: max-content; margin: -4px -4px 12px auto; }
+    .card:has(> .cardCorner) > header, .card:has(> .cardCorner) > .hostHeader, .card:has(> .cardCorner) > h1{ padding-right: 0; }
+    .homeBackBtn{ padding: 9px 16px; font-size: 15px; }
+}
+/* Mit Freunde-Leiste daneben (Hauptmenü, Lobby): Karte schmaler, siehe --homeW */
+@media (min-width: 1300px){
+    .withSidePanel{ width: min(var(--homeW), 100%); }
+}

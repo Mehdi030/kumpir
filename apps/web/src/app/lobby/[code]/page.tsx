@@ -8,6 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
+import { HomeFriends } from "@/components/HomeFriends";
 import { RulesCard } from "@/components/RulesCard";
 import { LobbyNotFound, isNotFoundError } from "@/components/LobbyNotFound";
 import { InviteActions } from "@/components/InviteActions";
@@ -302,7 +303,7 @@ export default function LobbyPage() {
 
     return (
         <main className="container">
-            <div className="landingWrap">
+            <div className="landingWrap withSidePanel">
                 <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
                     <div className="lobbyHead">
                         {isRunning ? <div className="lobbyNotice">🚀 Spiel läuft – Lobby ist read-only</div> : null}
@@ -310,6 +311,9 @@ export default function LobbyPage() {
                         <div className="lobbyHeadTop">
                             <h1 className="h1 lobbyTitle">Lobby</h1>
                             <div className="lobbyActions">
+                                <button type="button" className="homeBackBtn" onClick={() => void leaveLobby()} disabled={starting}>
+                                    <span aria-hidden>🏠</span> Hauptmenü
+                                </button>
                                 {amIHost ? (
                                     <Link
                                         href={`/lobby/${encodeURIComponent(code)}/admin`}
@@ -377,7 +381,8 @@ export default function LobbyPage() {
                 .lobbyNotice{ padding: 8px 14px; border-radius: 14px; background: rgba(255,210,63,.18); border: 1px solid rgba(255,210,63,.45); font-weight: 700; }
                 .lobbyHeadTop{ display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
                 .lobbyTitle{ font-size: clamp(32px, 6vw, 44px) !important; }
-                .lobbyActions{ display: flex; gap: 8px; flex-wrap: wrap; }
+                .lobbyActions{ display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+                .lobbyBotBtn{ font-size: 16px !important; padding: 12px 20px !important; }
                 .codeBox{
                   display: grid; justify-items: center; gap: 2px; width: 100%; cursor: pointer; color: #fff;
                   padding: 14px 16px; border-radius: 22px; border: 2px dashed rgba(255,255,255,.38); background: rgba(255,255,255,.08);
@@ -456,24 +461,21 @@ export default function LobbyPage() {
 
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
                                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                    <button type="button" className="btn btnSecondary btnSmall" onClick={() => void leaveLobby()} disabled={starting}>
-                                        ← Hauptmenü
-                                    </button>
                                     {amIHost && !isRunning ? (
                                         <button
                                             type="button"
-                                            className="btn btnSecondary btnSmall"
+                                            className="btn btnPrimary lobbyBotBtn"
                                             onClick={() => void addBot()}
                                             disabled={botBusy || players.length >= (lobby?.max_players ?? 8)}
                                             title="Bot zur Lobby hinzufügen (Practice-Mode)"
                                         >
-                                            🤖 +Bot
+                                            🤖 Bot hinzufügen
                                         </button>
                                     ) : null}
                                     {amIHost && !isRunning ? (
                                         <select
                                             className="input"
-                                            style={{ height: 36, width: "auto", padding: "0 10px", fontSize: 13, fontWeight: 700 }}
+                                            style={{ height: 48, width: "auto", padding: "0 14px", fontSize: 15, fontWeight: 800 }}
                                             value={botSkill}
                                             onChange={(e) => setBotSkill(Number(e.target.value) as 0 | 1 | 2 | 3)}
                                             aria-label="Stärke des nächsten Bots"
@@ -516,6 +518,8 @@ export default function LobbyPage() {
 
                     <RulesCard defaultOpen />
                 </section>
+                {/* Freunde rechts daneben – online Freunde direkt in diese Lobby einladen */}
+                <HomeFriends inviteCode={code} />
             </div>
         </main>
     );

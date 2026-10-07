@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useFriends } from "@/hooks/useFriends";
 import { useFriendsStatus, type FriendStatus } from "@/hooks/useFriendsStatus";
+import { FRIENDS_CHANGED } from "@/components/Notifications";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { errorText } from "@/lib/errorText";
 
 const GUEST_ONLY = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 const FIRST = 5; // so viele Freunde stehen immer da, der Rest per "Alle anzeigen"
@@ -41,18 +44,49 @@ type Filter = "all" | "online";
  * die ersten 5 immer sichtbar, der Rest aufklappbar. Filter "Alle / Online", Freund hinzufügen,
  * Anfragen annehmen.
  */
-export function HomeFriends() {
+export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
     const { user, loading } = useAuth();
     const friendsApi = useFriends(user?.id ?? null);
     const status = useFriendsStatus(user?.id ?? null);
 
+    // Standard: nur wer online ist ("Alle" daneben); gemerkt wird die eigene Wahl
     const [filter, setFilter] = useState<Filter>(() => {
         try {
-            return window.localStorage.getItem("kumpir_friends_filter") === "online" ? "online" : "all";
+            return window.localStorage.getItem("kumpir_friends_filter2") === "all" ? "all" : "online";
         } catch {
-            return "all";
+            return "online";
         }
     });
+    // In der Lobby: Freunde einladen (Migration 092)
+    const [invited, setInvited] = useState<Record<string, "busy" | "ok" | string>>({});
+    const invite = useCallback(
+        async (friendId: string) => {
+            if (!inviteCode) return;
+            setInvited((m) => ({ ...m, [friendId]: "busy" }));
+            const { error } = await getSupabaseClient().rpc("rpc_invite_friend", { p_lobby_code: inviteCode, p_friend_user_id: friendId });
+            setInvited((m) => ({ ...m, [friendId]: error ? errorText(error.message) : "ok" }));
+            window.setTimeout(() => setInvited((m) => {
+                const n = { ...m };
+                delete n[friendId];
+                return n;
+            }), error ? 4000 : 15000);
+        },
+        [inviteCode]
+    );
+
+    // Nach Annehmen/Ablehnen in einer Benachrichtigung sofort neu laden
+    const refreshAll = useRef(() => {});
+    useEffect(() => {
+        refreshAll.current = () => {
+            void friendsApi.refresh();
+            void status.refresh();
+        };
+    }, [friendsApi, status]);
+    useEffect(() => {
+        const on = () => refreshAll.current();
+        window.addEventListener(FRIENDS_CHANGED, on);
+        return () => window.removeEventListener(FRIENDS_CHANGED, on);
+    }, []);
     const [adding, setAdding] = useState(false);
     const [name, setName] = useState("");
     const [busy, setBusy] = useState(false);
@@ -69,7 +103,7 @@ export function HomeFriends() {
     const pickFilter = useCallback((f: Filter) => {
         setFilter(f);
         try {
-            window.localStorage.setItem("kumpir_friends_filter", f);
+            window.localStorage.setItem("kumpir_friends_filter2", f);
         } catch {
             /* privater Modus */
         }
@@ -120,11 +154,11 @@ export function HomeFriends() {
                 </button>
             </div>
             <div className="frFilter" role="tablist" aria-label="Freunde filtern">
-                <button type="button" role="tab" aria-selected={filter === "all"} className={filter === "all" ? "on" : ""} onClick={() => pickFilter("all")}>
-                    Alle
-                </button>
                 <button type="button" role="tab" aria-selected={filter === "online"} className={filter === "online" ? "on" : ""} onClick={() => pickFilter("online")}>
                     <span className="frDot" aria-hidden /> Online <b>{onlineCount}</b>
+                </button>
+                <button type="button" role="tab" aria-selected={filter === "all"} className={filter === "all" ? "on" : ""} onClick={() => pickFilter("all")}>
+                    Alle <b>{status.friends.length}</b>
                 </button>
             </div>
 
@@ -160,11 +194,16 @@ export function HomeFriends() {
                             </span>
                             <b className="frReqName">{r.friend_username}</b>
                             <span className="frReqBtns">
-                                <button type="button" className="btn btnReadyOn btnSmall" onClick={() => void friendsApi.acceptRequest(r.user_id).then(() => status.refresh())} title="Annehmen">
-                                    ✅
+                                <button
+                                    type="button"
+                                    className="btn btnReadyOn btnSmall"
+                                    onClick={() => void friendsApi.acceptRequest(r.user_id).then(() => window.dispatchEvent(new Event(FRIENDS_CHANGED)))}
+                                    title="Annehmen"
+                                >
+                                    ✅ Annehmen
                                 </button>
-                                <button type="button" className="btn btnReadyOff btnSmall" onClick={() => void friendsApi.removeFriend(r.user_id)} title="Ablehnen">
-                                    ❌
+                                <button type="button" className="btn btnReadyOff btnSmall" onClick={() => void friendsApi.removeFriend(r.user_id).then(() => window.dispatchEvent(new Event(FRIENDS_CHANGED)))} title="Ablehnen">
+                                    ✕
                                 </button>
                             </span>
                         </div>
@@ -186,6 +225,9 @@ export function HomeFriends() {
                         key={f.userId}
                         f={f}
                         confirming={confirmRemove === f.userId}
+                        inviteState={inviteCode && f.online && f.lobbyCode !== inviteCode ? invited[f.userId] ?? "ready" : null}
+                        inLobby={inviteCode}
+                        onInvite={() => void invite(f.userId)}
                         onRemoveClick={() => {
                             if (confirmRemove === f.userId) {
                                 setConfirmRemove(null);
@@ -205,7 +247,23 @@ export function HomeFriends() {
     );
 }
 
-function FriendRow({ f, confirming, onRemoveClick }: { f: FriendStatus; confirming: boolean; onRemoveClick: () => void }) {
+function FriendRow({
+    f,
+    confirming,
+    onRemoveClick,
+    inviteState,
+    onInvite,
+    inLobby,
+}: {
+    f: FriendStatus;
+    confirming: boolean;
+    onRemoveClick: () => void;
+    /** null = kein Einladen-Knopf (nicht in einer Lobby / Freund offline / schon hier) */
+    inviteState: "ready" | "busy" | "ok" | string | null;
+    onInvite: () => void;
+    /** Code der Lobby, in der ich gerade bin (dort kein "Beitreten" anzeigen) */
+    inLobby?: string;
+}) {
     const shownName = f.displayName || f.username;
     return (
         <article className={`frRow ${f.online ? "online" : ""}`}>
@@ -220,7 +278,19 @@ function FriendRow({ f, confirming, onRemoveClick }: { f: FriendStatus; confirmi
                 <div className={`frStatus ${f.online ? "on" : ""}`}>{f.lobbyCode ? `🎮 In Lobby ${f.lobbyCode}` : f.online ? "Online" : lastSeenText(f.lastSeen)}</div>
             </div>
             <div className="frActions">
-                {f.joinable && f.lobbyCode ? (
+                {inviteState ? (
+                    inviteState === "ok" ? (
+                        <span className="frInvited">✓ Eingeladen</span>
+                    ) : inviteState === "ready" || inviteState === "busy" ? (
+                        <button type="button" className="btn btnPrimary btnSmall" disabled={inviteState === "busy"} onClick={onInvite} title="In diese Lobby einladen">
+                            {inviteState === "busy" ? "…" : "＋ Einladen"}
+                        </button>
+                    ) : (
+                        <span className="frInviteErr" title={inviteState}>
+                            ⚠️
+                        </span>
+                    )
+                ) : f.joinable && f.lobbyCode && f.lobbyCode !== inLobby ? (
                     <Link href={`/join?code=${encodeURIComponent(f.lobbyCode)}`} className="btn btnPrimary btnSmall">
                         Beitreten
                     </Link>
@@ -290,6 +360,8 @@ const STYLES = `
 .frRemove{ border:0; background:transparent; color:rgba(255,255,255,.45); font:inherit; font-size:13px; cursor:pointer; padding:6px 8px; border-radius:8px; }
 .frRemove:hover{ color:#fff; background:rgba(255,255,255,.1); }
 .frRemove.armed{ color:#fff; background:#ff5a46; font-weight:800; }
+.frInvited{ font-size:12.5px; font-weight:900; color:#a7f3d0; white-space:nowrap; }
+.frInviteErr{ font-size:16px; cursor:help; }
 .frMore{ align-self:center; border:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.08); color:#fff; font:inherit; font-weight:800; font-size:13.5px; padding:8px 16px; border-radius:999px; cursor:pointer; }
 .frMore:hover{ background:rgba(255,255,255,.16); }
 @container (max-width: 300px){ .frAddLabel{ display:none; } .frTitle{ font-size:19px; } }

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PasswordInput } from "@/components/PasswordInput";
 import { BackButton } from "@/components/BackButton";
+import { passwordProblem, PASSWORD_HINT } from "@/lib/accountSettings";
 
 export default function ResetPasswordPage() {
     const supabase = getSupabaseClient();
@@ -25,7 +26,8 @@ export default function ResetPasswordPage() {
     async function onSubmit() {
         setErr("");
         setMsg("");
-        if (pw1.length < 8) return setErr("Das Passwort braucht mindestens 8 Zeichen.");
+        const pwErr = passwordProblem(pw1);
+        if (pwErr) return setErr(pwErr);
         if (pw1 !== pw2) return setErr("Die beiden Passwörter sind nicht gleich.");
 
         setLoading(true);
@@ -45,8 +47,8 @@ export default function ResetPasswordPage() {
     return (
         <main className="container">
             <div className="landingWrap">
-                <BackButton href="/login" label="Zurück zum Login" />
                 <section className="card" aria-label="Passwort zurücksetzen">
+                    <BackButton href="/login" label="Zum Login" />
                     <header className="hostHeader">
                         <div className="hostTitleRow">
                             <h1 className="h1">Neues Passwort</h1>
@@ -74,7 +76,7 @@ export default function ResetPasswordPage() {
                                             Neues Passwort
                                         </label>
                                         <div className="fieldControl">
-                                            <PasswordInput id="pw1" value={pw1} onChange={(e) => setPw1(e.target.value)} placeholder="mind. 8 Zeichen" autoComplete="new-password" />
+                                            <PasswordInput id="pw1" value={pw1} onChange={(e) => setPw1(e.target.value)} placeholder={PASSWORD_HINT} autoComplete="new-password" />
                                         </div>
                                     </div>
 

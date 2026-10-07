@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { safeNextPath as safeNext } from "@/lib/safeNext";
-import { BackButton } from "@/components/BackButton";
+import { HomeButton } from "@/components/BackButton";
 
 function safeNextPath(v: string | null) {
     return safeNext(v, "/host");
@@ -60,8 +60,8 @@ export default function VerifiedPage() {
     return (
         <main className="container">
             <div className="landingWrap">
-                <BackButton href="/" label="Startseite" />
                 <section className="card" aria-label="Bestätigt">
+                    <HomeButton corner />
                     <header className="hostHeader">
                         <div className="hostTitleRow">
                             <h1 className="h1">✅ Bestätigt</h1>

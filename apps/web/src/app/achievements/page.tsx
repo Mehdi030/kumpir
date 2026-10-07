@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useAchievements } from "@/hooks/useAchievements";
 import { Spinner } from "@/components/Spinner";
 import { TIER_STYLE } from "@/lib/achievements";
+import { HomeButton } from "@/components/BackButton";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -35,6 +36,7 @@ export default function AchievementsPage() {
         return (
             <main className="container">
                 <section className="card" aria-label="Achievements" style={{ maxWidth: 620, margin: "0 auto" }}>
+                    <HomeButton corner />
                     <h1 className="h1">Achievements</h1>
                     <p className="p hostSub">
                         Achievements gibt&apos;s nur mit Account. Aktuell läuft das Spiel im Gast-Modus.
@@ -59,13 +61,13 @@ export default function AchievementsPage() {
         return (
             <main className="container">
                 <section className="card" aria-label="Achievements" style={{ maxWidth: 620, margin: "0 auto" }}>
+                    <HomeButton corner />
                     <h1 className="h1">Achievements</h1>
                     <p className="p hostSub">
                         Du musst eingeloggt sein, um deine Achievements zu sehen.
                     </p>
                     <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
                         <Link href="/login?next=/achievements" className="btn btnPrimary">🔓 Einloggen</Link>
-                        <Link href="/" className="btn btnSecondary">← Startseite</Link>
                     </div>
                 </section>
             </main>
@@ -82,7 +84,7 @@ export default function AchievementsPage() {
                             {unlocked.length} von {catalog.length} freigeschaltet
                         </p>
                     </div>
-                    <Link href="/" className="btn btnSecondary btnSmall">← Startseite</Link>
+                    <HomeButton />
                 </header>
 
                 {error ? <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>{error}</div> : null}

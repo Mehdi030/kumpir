@@ -10,6 +10,7 @@ import { LocaleSync } from "@/components/LocaleSync";
 import { PwaSetup } from "@/components/PwaSetup";
 import { AdminQuickPanel } from "@/components/admin/AdminQuickPanel";
 import { PresencePing } from "@/components/PresencePing";
+import { Notifications } from "@/components/Notifications";
 import { UiFx } from "@/components/UiFx";
 import { Embers } from "@/components/Embers";
 import { Analytics } from "@vercel/analytics/next"
@@ -74,6 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <PreferencesSync />
                 <AdminQuickPanel />
                 <PresencePing />
+                <Notifications />
                 <UiFx />
             </ProfileProvider>
         </AuthProvider>

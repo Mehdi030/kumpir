@@ -1,15 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useProfile } from "@/hooks/useProfile";
-import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/Spinner";
-import { AccountStats } from "@/components/profile/AccountStats";
-import { seasonKey, type ProfileStats } from "@/lib/profileStats";
 import { AccountSettings, AvatarBadge, supabaseAccountApi } from "@/components/profile/AccountSettings";
 import { isPlaceholderEmail } from "@/lib/accountSettings";
+import { HomeButton } from "@/components/BackButton";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -18,42 +16,14 @@ export default function ProfilePage() {
     const { profile, user, loading, refresh, savePreferences } = useProfile();
     const accountApi = useMemo(() => supabaseAccountApi(), []);
     const { unlocked, catalog } = useAchievements(user?.id ?? null);
-    const supabase = getSupabaseClient();
-
-    const [season, setSeason] = useState(() => seasonKey(0));
-    const [accStats, setAccStats] = useState<ProfileStats | null>(null);
-    const [accLoading, setAccLoading] = useState(false);
-    const [accError, setAccError] = useState("");
-
-    // Verlauf, Musik-Werte, Gegner und Monats-Rückblick kommen gesammelt aus EINER Funktion (Migration 076).
-    useEffect(() => {
-        if (!user?.id) return;
-        let cancel = false;
-        void (async () => {
-            setAccLoading(true);
-            const { data, error } = await supabase.rpc("get_my_profile_stats", { p_season: season });
-            if (cancel) return;
-            setAccLoading(false);
-            if (error) {
-                setAccError(error.message);
-                return;
-            }
-            setAccError("");
-            setAccStats(data as ProfileStats);
-        })();
-        return () => {
-            cancel = true;
-        };
-    }, [supabase, user?.id, season]);
-
 
     if (AUTH_DISABLED) {
         return (
             <main className="container">
                 <section className="card">
+                    <HomeButton corner />
                     <h1 className="h1">Konto</h1>
                     <p className="p hostSub">Accounts sind hier gerade deaktiviert – du spielst als Gast.</p>
-                    <Link href="/" className="btn btnSecondary" style={{ marginTop: 14 }}>← Startseite</Link>
                 </section>
             </main>
         );
@@ -72,6 +42,7 @@ export default function ProfilePage() {
             <main className="container">
                 <div className="landingWrap">
                     <section className="card" style={{ textAlign: "center" }}>
+                        <HomeButton corner />
                         <div style={{ fontSize: 44 }}>👤</div>
                         <h1 className="h1" style={{ fontSize: 40 }}>Dein Konto</h1>
                         <p className="p hostSub" style={{ margin: "10px auto 0", maxWidth: 420 }}>
@@ -104,24 +75,15 @@ export default function ProfilePage() {
                                 </div>
                             ) : null}
                         </div>
-                        <Link href="/" className="btn btnSecondary btnSmall profBack">
-                            ← Start
-                        </Link>
+                        <HomeButton className="profBack" />
                     </div>
 
-                    {accStats ? (
-                        <AccountStats data={accStats} username={name} season={season} onSeasonChange={setSeason} seasonLoading={accLoading} />
-                    ) : accError ? (
-                        <div className="fieldHelp fieldHelpError" style={{ marginTop: 18 }}>
-                            Statistik konnte nicht geladen werden: {accError}
-                        </div>
-                    ) : (
-                        <div style={{ marginTop: 22, display: "grid", placeItems: "center" }}>
-                            <Spinner size={20} label="Lade Statistik…" />
-                        </div>
-                    )}
-
                     <div className="profLinks">
+                        <Link href="/stats" className="profLink">
+                            <span>📊</span>
+                            <b>Statistik</b>
+                            <small>Verlauf, Musik-Werte, Gegner, Monats-Rückblick</small>
+                        </Link>
                         {profile.isStaff ? (
                             <Link href="/admin" className="profLink">
                                 <span>🛡️</span>

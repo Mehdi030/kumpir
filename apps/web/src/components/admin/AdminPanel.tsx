@@ -23,6 +23,7 @@ import {
 } from "@/lib/adminApi";
 import { emailLabel, isPlaceholderEmail } from "@/lib/accountSettings";
 import { adminSetPassword } from "@/actions/register";
+import { HomeButton } from "@/components/BackButton";
 
 type Tab = "overview" | "users" | "deletion" | "lobbies" | "songs" | "stats" | "audit";
 type Msg = { ok: boolean; text: string } | null;
@@ -123,9 +124,7 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
                     <h1 className="h1 admTitle">🛡️ Admin-Panel</h1>
                     <div className="admRole">Angemeldet als {ROLE_LABEL[role]}</div>
                 </div>
-                <Link href="/" className="btn btnSecondary btnSmall">
-                    ← Start
-                </Link>
+                <HomeButton />
             </div>
 
             <div className="admTabs" role="tablist" aria-label="Bereiche">
@@ -444,7 +443,7 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
                                 type="text"
                                 value={newPw}
                                 onChange={(e) => setNewPw(e.target.value)}
-                                placeholder="Neues Passwort (mind. 8 Zeichen)"
+                                placeholder="Neues Passwort (z.B. Kartoffel7)"
                                 autoComplete="off"
                                 aria-label="Neues Passwort für dieses Konto"
                             />

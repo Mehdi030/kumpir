@@ -18,6 +18,8 @@ import {
     validateUsername,
     type Preferences,
     isPlaceholderEmail,
+    passwordProblem,
+    PASSWORD_HINT,
 } from "@/lib/accountSettings";
 
 /** Alles, was die Einstellungen am Server ändern – austauschbar für Tests/Vorschau. */
@@ -518,7 +520,8 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
     };
 
     const changePassword = async () => {
-        if (pw.length < 8) return setPMsg({ ok: false, text: "Das Passwort braucht mindestens 8 Zeichen." });
+        const pwErr = passwordProblem(pw);
+        if (pwErr) return setPMsg({ ok: false, text: pwErr });
         if (pw !== pw2) return setPMsg({ ok: false, text: "Die beiden Passwörter sind nicht gleich." });
         setPBusy(true);
         setPMsg(null);
@@ -563,7 +566,7 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
 
             <div className="setGroup">
                 <h3>Passwort ändern</h3>
-                <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Neues Passwort (mind. 8 Zeichen)" autoComplete="new-password" aria-label="Neues Passwort" />
+                <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} placeholder={`Neues Passwort (${PASSWORD_HINT})`} autoComplete="new-password" aria-label="Neues Passwort" />
                 <PasswordInput
                     value={pw2}
                     onChange={(e) => setPw2(e.target.value)}

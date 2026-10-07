@@ -6,7 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useFriends } from "@/hooks/useFriends";
 import { useSavedLobbies } from "@/hooks/useSavedLobbies";
 import { Spinner } from "@/components/Spinner";
-import { BackButton } from "@/components/BackButton";
+import { HomeButton } from "@/components/BackButton";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -42,9 +42,9 @@ export default function FriendsPage() {
         return (
             <main className="container">
                 <section className="card">
+                    <HomeButton corner />
                     <h1 className="h1">Freunde</h1>
                     <p className="p hostSub">Im Gast-Modus gibt&apos;s keine Freundeslisten.</p>
-                    <Link href="/" className="btn btnSecondary">← Startseite</Link>
                 </section>
             </main>
         );
@@ -64,8 +64,8 @@ export default function FriendsPage() {
         return (
             <main className="container">
                 <div className="landingWrap">
-                    <BackButton href="/" label="Startseite" />
                     <section className="card">
+                        <HomeButton corner />
                         <h1 className="h1">Freunde</h1>
                         <p className="p hostSub">Du musst eingeloggt sein.</p>
                         <Link href="/login?next=/friends" className="btn btnPrimary">🔓 Einloggen</Link>
@@ -80,7 +80,7 @@ export default function FriendsPage() {
             <section className="card" style={{ maxWidth: 820, margin: "0 auto" }}>
                 <header className="hostHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                     <h1 className="h1">👥 Freunde</h1>
-                    <Link href="/" className="btn btnSecondary btnSmall">← Startseite</Link>
+                    <HomeButton />
                 </header>
 
                 {/* Eingehende Anfragen — ganz oben weil action required */}

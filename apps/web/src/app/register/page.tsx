@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { track } from "@/lib/track";
-import { validateUsername } from "@/lib/accountSettings";
+import { validateUsername, passwordProblem, PASSWORD_HINT } from "@/lib/accountSettings";
 import { safeNextPath } from "@/lib/safeNext";
 import { PasswordInput } from "@/components/PasswordInput";
 import { registerAccount } from "@/actions/register";
-import { BackButton } from "@/components/BackButton";
+import { HomeButton } from "@/components/BackButton";
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "error";
 
@@ -57,7 +57,8 @@ export default function RegisterPage() {
         setInfo("");
         if (!uCheck.ok) return setError(`Benutzername: ${uCheck.message}`);
         if (usernameStatus === "taken") return setError("Benutzername ist bereits vergeben.");
-        if (password.length < 8) return setError("Passwort muss mindestens 8 Zeichen haben.");
+        const pwErr = passwordProblem(password);
+        if (pwErr) return setError(pwErr);
         if (password !== confirmPassword) return setError("Passwörter stimmen nicht überein.");
 
         setLoading(true);
@@ -96,8 +97,8 @@ export default function RegisterPage() {
     return (
         <main className="container">
             <div className="landingWrap">
-                <BackButton href={`/login?next=${encodeURIComponent(nextPath)}`} label="Zurück zum Login" />
                 <section className="card" aria-label="Registrieren">
+                    <HomeButton corner />
                     <header className="hostHeader">
                         <div className="hostTitleRow">
                             <h1 className="h1">Registrieren</h1>
@@ -144,7 +145,10 @@ export default function RegisterPage() {
                                         Passwort
                                     </label>
                                     <div className="fieldControl">
-                                        <PasswordInput id="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="mind. 8 Zeichen" autoComplete="new-password" />
+                                        <PasswordInput id="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="z.B. Kartoffel7" autoComplete="new-password" />
+                                    </div>
+                                    <div className={`fieldHelp ${password && passwordProblem(password) ? "fieldHelpError" : ""}`} style={{ marginTop: 6, fontSize: 12.5 }}>
+                                        {password && !passwordProblem(password) ? "✅ Passt" : `Passwort: ${PASSWORD_HINT}`}
                                     </div>
                                 </div>
 

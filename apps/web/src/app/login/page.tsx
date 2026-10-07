@@ -8,7 +8,7 @@ import { loginWithIdentifier, resendConfirmation } from "@/actions/login";
 import { PasswordInput } from "@/components/PasswordInput";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { safeNextPath as safeNext } from "@/lib/safeNext";
-import { BackButton } from "@/components/BackButton";
+import { HomeButton } from "@/components/BackButton";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -193,8 +193,8 @@ function LoginInner() {
     return (
         <main className="container">
             <div className="landingWrap">
-                <BackButton href="/" label="Startseite" />
                 <section className="card" aria-label="Anmelden">
+                    <HomeButton corner />
                     <header className="hostHeader">
                         <div className="hostTitleRow">
                             <h1 className="h1">Anmelden</h1>
@@ -268,9 +268,6 @@ function LoginInner() {
                                         Konto erstellen
                                     </Link>
 
-                                    <Link href="/" className="btn btnSecondary">
-                                        ← Als Gast spielen
-                                    </Link>
                                 </div>
 
                                 <div style={{ marginTop: 14 }}>

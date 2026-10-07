@@ -11,6 +11,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
 import { useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
+import { HomeButton } from "@/components/BackButton";
 
 function normalizeCode(input: string) {
     return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
@@ -203,6 +204,16 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
         }
     }
 
+    // Aus einer Einladung (?go=1): mit dem Namen aus dem Konto direkt beitreten, ohne extra Klick
+    const autoGoRef = useRef<boolean | null>(null);
+    useEffect(() => {
+        if (autoGoRef.current === null) autoGoRef.current = new URLSearchParams(window.location.search).get("go") === "1";
+        if (!autoGoRef.current || !canJoin || loading) return;
+        autoGoRef.current = false;
+        void joinLobby();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [canJoin, loading]);
+
     function onModalKeyDown(e: React.KeyboardEvent) {
         if (e.key === "Enter") {
             e.preventDefault();
@@ -234,6 +245,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                     aria-label={t("join.title")}
                     style={{ maxWidth: 760, margin: "0 auto" }}
                 >
+                    <HomeButton corner />
                     <header className="hostHeader" style={{ paddingBottom: 10 }}>
                         <h1 className="h1" style={{ lineHeight: 1.05 }}>
                             {t("join.title")}
@@ -312,15 +324,6 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                     {loading ? "Trete bei…" : "Start"}
                                 </button>
 
-                                <button
-                                    type="button"
-                                    className="btn btnSecondary btnSmall"
-                                    onClick={() => router.push("/")}
-                                    disabled={loading}
-                                    style={{ width: "100%", maxWidth: 360, margin: "0 auto" }}
-                                >
-                                    ← Zurück
-                                </button>
                             </div>
                         </div>
                     ) : (

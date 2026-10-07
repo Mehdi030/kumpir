@@ -1716,10 +1716,12 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const isSeries = (lobby.series_total ?? 1) > 1;
         const winnerName = (isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? "Unbekannt";
 
+        // Auszeichnungen und Treffer-Statistik nur für Menschen – Bots zählen hier nicht mit
+        const humans = ranking.filter((r) => !r.is_bot);
         const fastestOverall =
-            [...ranking].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] ?? null;
-        const longestHold = [...ranking].sort((a, b) => b.holdMs - a.holdMs)[0] ?? null;
-        const bestSong = [...ranking].filter((r) => r.songPoints > 0).sort((a, b) => b.songPoints - a.songPoints)[0] ?? null;
+            [...humans].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] ?? null;
+        const longestHold = [...humans].sort((a, b) => b.holdMs - a.holdMs)[0] ?? null;
+        const bestSong = [...humans].filter((r) => r.songPoints > 0).sort((a, b) => b.songPoints - a.songPoints)[0] ?? null;
 
         const highlights: FinishHighlight[] = [];
         if (bestSong) highlights.push({ icon: "🎵", label: "Song-Profi", name: bestSong.name, value: `${String(Math.round(bestSong.songPoints * 2) / 2).replace(".", ",")} Treffer` });
@@ -1780,7 +1782,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         name: r.name,
                         place: r.place,
                         score: r.score,
-                        songPoints: r.songPoints,
+                        songPoints: r.is_bot ? 0 : r.songPoints,
                         moves: r.roundsSurvived,
                         isMe: r.player_id === mePlayerId,
                     }))}
@@ -2168,15 +2170,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         zeigt die letzten 10, für lebende wie eliminierte Spieler
                         gleichermaßen sichtbar (dieser Block hängt nicht an
                         iAmEliminated). */}
+                    {/* Erratene Songs dieser Runde: der richtige Song ("Titel – Künstler", Migration 092), neuester zuerst */}
                     {lobby.used_answers && lobby.used_answers.length > 0 ? (
-                        <div className="usedAnswers" aria-label="Bisher genannte Antworten">
-                            <span className="usedAnswersLabel">Schon gesagt</span>
-                            {lobby.used_answers.slice(-10).map((a, i) => (
-                                <span key={`${a}-${i}`} className="usedAnswerChip">{a}</span>
-                            ))}
-                            {lobby.used_answers.length > 10 ? (
-                                <span className="usedAnswerChip more">+{lobby.used_answers.length - 10}</span>
-                            ) : null}
+                        <div className="usedAnswers" aria-label="Erratene Songs">
+                            <span className="usedAnswersLabel">🎵 Erratene Songs</span>
+                            <div className="usedAnswerList">
+                                {lobby.used_answers
+                                    .slice(-8)
+                                    .reverse()
+                                    .map((a, i) => (
+                                        <span key={`${a}-${i}`} className={`usedAnswerChip ${i === 0 ? "newest" : ""}`}>
+                                            {a}
+                                        </span>
+                                    ))}
+                                {lobby.used_answers.length > 8 ? <span className="usedAnswerChip more">+{lobby.used_answers.length - 8} weitere</span> : null}
+                            </div>
                         </div>
                     ) : null}
                 </div>
@@ -2460,12 +2468,12 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
         .usedAnswers{
           margin-top: 10px;
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: center;
-          gap: 6px;
-          opacity: .78;
+          display: grid;
+          justify-items: center;
+          gap: 8px;
+          width: min(620px, 94vw);
         }
+        .usedAnswerList{ display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
         .usedAnswersLabel{
           font-size: 12px;
           font-weight: 800;
@@ -2475,13 +2483,17 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           align-self: center;
         }
         .usedAnswerChip{
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 800;
-          padding: 4px 10px;
+          padding: 5px 12px;
           border-radius: 999px;
-          background: rgba(255,255,255,0.10);
+          background: rgba(255,255,255,0.08);
           border: 1px solid rgba(255,255,255,0.14);
+          opacity: .8;
+          max-width: 100%;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
+        .usedAnswerChip.newest{ opacity: 1; background: rgba(255,210,63,0.16); border-color: rgba(255,210,63,0.5); color: #fff3c4; }
         .usedAnswerChip.more{
           opacity: .7;
         }

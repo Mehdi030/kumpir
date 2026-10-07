@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
                 userAgent: "*",
                 allow: ["/", "/join"],
                 // /solo legt beim Öffnen sofort eine echte Lobby mit Bots an -> für Crawler tabu
-                disallow: ["/solo", "/game/", "/lobby/", "/admin/", "/auth/", "/profile", "/friends"],
+                disallow: ["/solo", "/game/", "/lobby/", "/admin/", "/auth/", "/profile", "/friends", "/stats"],
             },
         ],
         sitemap: `${BASE}/sitemap.xml`,

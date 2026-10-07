@@ -1,34 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 /**
- * Einheitlicher Zurück-Knopf oben links über der Karte.
- * Kam man von einer Kumpir-Seite, geht es genau dorthin zurück; sonst (direkt geöffnet, Link von außen) zu `href`.
+ * Einheitlicher, gut sichtbarer Knopf zurück zum Hauptmenü – immer oben rechts in der Karte.
+ * corner = als erstes Kind direkt in die Karte setzen (absolut oben rechts; am Handy oben rechts im Fluss).
+ * Ohne corner steht er dort, wo er eingesetzt wird (z. B. rechts in einer Kopfzeile).
  */
-export function BackButton({ href = "/", label = "Zurück" }: { href?: string; label?: string }) {
-    const router = useRouter();
+export function HomeButton({ corner = false, label = "Hauptmenü", className = "" }: { corner?: boolean; label?: string; className?: string }) {
     return (
-        <Link
-            href={href}
-            className="backBtn"
-            onClick={(e) => {
-                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-                let sameSite = false;
-                try {
-                    sameSite = !!document.referrer && new URL(document.referrer).origin === window.location.origin;
-                } catch {}
-                if (sameSite && window.history.length > 1) {
-                    e.preventDefault();
-                    router.back();
-                }
-            }}
-        >
-            <span aria-hidden className="backBtnArrow">
-                ←
-            </span>
-            {label}
+        <Link href="/" className={`homeBackBtn ${corner ? "cardCorner" : ""} ${className}`}>
+            <span aria-hidden>🏠</span> {label}
+        </Link>
+    );
+}
+
+/** Zurück zu einer bestimmten Seite (z. B. zum Login) – gleicher Look, oben rechts in der Karte. */
+export function BackButton({ href = "/", label = "Hauptmenü", corner = true }: { href?: string; label?: string; corner?: boolean }) {
+    if (href === "/") return <HomeButton corner={corner} label={label} />;
+    return (
+        <Link href={href} className={`homeBackBtn ${corner ? "cardCorner" : ""}`}>
+            <span aria-hidden>←</span> {label}
         </Link>
     );
 }

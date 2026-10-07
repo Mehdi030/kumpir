@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
-import { validateUsername, PLACEHOLDER_EMAIL_DOMAIN } from "@/lib/accountSettings";
+import { validateUsername, passwordProblem, PLACEHOLDER_EMAIL_DOMAIN } from "@/lib/accountSettings";
 
 export type RegisterResult = { ok: true } | { ok: false; error: string; field?: "username" | "password" };
 
@@ -22,8 +22,8 @@ export async function registerAccount(usernameRaw: string, password: string): Pr
     const v = validateUsername(usernameRaw ?? "");
     if (!v.ok) return { ok: false, field: "username", error: `Benutzername: ${v.message}` };
     const username = v.value;
-    if (!password || password.length < 8) return { ok: false, field: "password", error: "Passwort muss mindestens 8 Zeichen haben." };
-    if (password.length > 72) return { ok: false, field: "password", error: "Passwort ist zu lang (höchstens 72 Zeichen)." };
+    const pwErr = passwordProblem(password);
+    if (pwErr) return { ok: false, field: "password", error: pwErr };
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { ok: false, error: "Registrieren ist gerade nicht verfügbar." };
 
     const admin = createSupabaseAdminClient();
@@ -62,8 +62,8 @@ export async function registerAccount(usernameRaw: string, password: string): Pr
 
 /** Admin setzt ein neues Passwort für ein Konto (für Konten ohne E-Mail der einzige Weg, ein vergessenes Passwort zu ersetzen). */
 export async function adminSetPassword(userId: string, password: string): Promise<{ ok: true } | { ok: false; error: string }> {
-    if (!password || password.length < 8) return { ok: false, error: "Passwort muss mindestens 8 Zeichen haben." };
-    if (password.length > 72) return { ok: false, error: "Passwort ist zu lang (höchstens 72 Zeichen)." };
+    const pwErr = passwordProblem(password);
+    if (pwErr) return { ok: false, error: pwErr };
     const supabase = await createSupabaseServerClient();
     const { data: me } = await supabase.auth.getUser();
     if (!me.user) return { ok: false, error: "Bitte erst anmelden." };

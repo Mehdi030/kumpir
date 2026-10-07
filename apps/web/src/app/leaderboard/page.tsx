@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useLeaderboard, type LeaderboardCategory, type LeaderboardEntry } from "@/hooks/useLeaderboard";
 import { Spinner } from "@/components/Spinner";
 import { SeasonBoard } from "@/components/SeasonBoard";
+import { HomeButton } from "@/components/BackButton";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -56,11 +56,11 @@ export default function LeaderboardPage() {
         return (
             <main className="container">
                 <section className="card" aria-label="Bestenliste">
+                    <HomeButton corner />
                     <h1 className="h1">Bestenliste</h1>
                     <p className="p hostSub">
                         Bestenlisten gibt&apos;s nur mit Konto. Aktuell läuft das Spiel im Gast-Modus.
                     </p>
-                    <Link href="/" className="btn btnSecondary">← Zur Startseite</Link>
                 </section>
             </main>
         );
@@ -76,7 +76,7 @@ export default function LeaderboardPage() {
                             Top {rows.length} weltweit · sortiert nach {cfg.label}
                         </p>
                     </div>
-                    <Link href="/" className="btn btnSecondary btnSmall">← Startseite</Link>
+                    <HomeButton />
                 </header>
 
                 <SeasonBoard />

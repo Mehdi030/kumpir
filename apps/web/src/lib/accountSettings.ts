@@ -48,6 +48,18 @@ export function emailLabel(email: string | null | undefined): string {
     return isPlaceholderEmail(email) ? "ohne E-Mail" : email;
 }
 
+/**
+ * Passwort-Regel von Supabase (Projekt-Einstellung): mind. 8 Zeichen, Klein- und Großbuchstaben und eine Zahl.
+ * Gibt null zurück, wenn alles passt, sonst einen verständlichen Satz.
+ */
+export const PASSWORD_HINT = "mind. 8 Zeichen, mit Groß- und Kleinbuchstaben und einer Zahl";
+export function passwordProblem(pw: string): string | null {
+    if (!pw || pw.length < 8) return "Das Passwort braucht mindestens 8 Zeichen.";
+    if (pw.length > 72) return "Das Passwort ist zu lang (höchstens 72 Zeichen).";
+    if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw)) return "Das Passwort braucht Groß- und Kleinbuchstaben und mindestens eine Zahl.";
+    return null;
+}
+
 export function validateUsername(raw: string): { ok: true; value: string } | { ok: false; message: string } {
     const v = raw.trim().toLowerCase();
     if (v.length < 3) return { ok: false, message: "Mindestens 3 Zeichen." };

@@ -16,6 +16,7 @@ import { getSessionToken } from "@/lib/playerSession";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { errorText } from "@/lib/errorText";
 import { PlaylistPicker, usePlaylists } from "@/components/PlaylistPicker";
+import { HomeButton } from "@/components/BackButton";
 
 const GAME_PHASES = new Set(["topic_vote", "countdown", "running"]);
 
@@ -239,9 +240,7 @@ export default function LobbyAdminPage() {
             <main className="container">
                 <div style={{ display: "grid", placeItems: "center", padding: 32, color: "white" }}>
                     <div style={{ fontWeight: 950 }}>{error || "Lobby nicht gefunden."}</div>
-                    <Link href="/" className="btn btnSecondary btnSmall" style={{ marginTop: 12 }}>
-                        ← Hauptmenü
-                    </Link>
+                    <HomeButton className="" />
                 </div>
             </main>
         );

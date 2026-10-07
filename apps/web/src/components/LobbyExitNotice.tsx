@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createPortal } from "react-dom";
 
 /**
  * Zeigt "Du hast die Lobby verlassen" / "Du wurdest gekickt" auf der
@@ -30,50 +31,37 @@ export function LobbyExitNotice() {
         }
     }, [initialReason, router]);
 
-    // Soll kurz stehen und von selbst wieder verschwinden, statt bis zum
-    // manuellen Wegklicken hängen zu bleiben.
+    // Erst nach dem Laden im Browser zeigen (Portal gibt es auf dem Server nicht)
+    const [mounted, setMounted] = useState(false);
     useEffect(() => {
-        if (!initialReason) return;
-        const t = window.setTimeout(() => setReason(null), 4000);
+        const t = window.setTimeout(() => setMounted(true), 0);
         return () => window.clearTimeout(t);
-    }, [initialReason]);
+    }, []);
 
-    const topToast =
-        reason === "kicked"
-            ? "⛔ Du wurdest gekickt."
-            : reason === "left"
-                ? "ℹ️ Du hast die Lobby verlassen."
-                : "";
+    // Kurzes Pop-up oben in der Mitte, verschwindet nach 2,5 s von selbst
+    // (hängt an "reason", nicht an der Adresse – die wird gleich auf "/" gekürzt)
+    useEffect(() => {
+        if (!reason) return;
+        const t = window.setTimeout(() => setReason(null), 2500);
+        return () => window.clearTimeout(t);
+    }, [reason]);
 
-    if (!topToast) return null;
+    const topToast = reason === "kicked" ? "⛔ Du wurdest aus der Lobby entfernt." : reason === "left" ? "👋 Du hast die Lobby verlassen." : "";
 
-    return (
-        <div
-            className="pillChip"
-            style={{
-                marginBottom: 12,
-                fontWeight: 950,
-                opacity: 0.96,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                padding: "10px 12px",
-            }}
-            role="status"
-            aria-live="polite"
-        >
-            <span>{topToast}</span>
-            <button
-                type="button"
-                onClick={dismissTopToast}
-                className="btn btnSecondary btnSmall"
-                style={{ padding: "6px 10px" }}
-                aria-label="Hinweis schließen"
-                title="Schließen"
-            >
-                ✕
-            </button>
-        </div>
+    if (!topToast || !mounted) return null;
+
+    // Direkt an <body>: die Startseiten-Karte ist animiert, darin würde "position: fixed" festhängen
+    return createPortal(
+        <div className="exitToast" role="status" aria-live="polite" onClick={dismissTopToast}>
+            {topToast}
+            <style>{`
+                .exitToast{ position: fixed; top: 22px; left: 50%; transform: translateX(-50%); z-index: 4700; cursor: pointer;
+                  padding: 12px 22px; border-radius: 999px; font-weight: 900; font-size: 15px; color: #fff; white-space: nowrap;
+                  background: rgba(30,10,6,.92); border: 1px solid rgba(255,255,255,.25); box-shadow: 0 16px 50px rgba(0,0,0,.45);
+                  animation: exitToast 2.5s cubic-bezier(.16,1,.3,1) both; }
+                @keyframes exitToast{ 0%{ opacity: 0; transform: translate(-50%, -14px); } 12%, 82%{ opacity: 1; transform: translate(-50%, 0); } 100%{ opacity: 0; transform: translate(-50%, -8px); } }
+            `}</style>
+        </div>,
+        document.body
     );
 }

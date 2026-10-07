@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { HomeButton } from "@/components/BackButton";
 
 /** Freundliche Fehlerseite, wenn ein Lobby-Code nicht (mehr) existiert. */
 export function LobbyNotFound({ code }: { code?: string }) {
@@ -8,6 +9,7 @@ export function LobbyNotFound({ code }: { code?: string }) {
         <main className="container">
             <div className="landingWrap">
                 <section className="card" style={{ textAlign: "center" }} aria-label="Lobby nicht gefunden">
+                    <HomeButton corner />
                     <div style={{ fontSize: 44 }} aria-hidden>
                         🔍
                     </div>
@@ -29,11 +31,6 @@ export function LobbyNotFound({ code }: { code?: string }) {
                         </Link>
                         <Link href="/host" className="btn btnSecondary btnXL">
                             Neue Lobby erstellen
-                        </Link>
-                    </div>
-                    <div style={{ marginTop: 14 }}>
-                        <Link href="/" className="homeLink">
-                            ← Startseite
                         </Link>
                     </div>
                 </section>

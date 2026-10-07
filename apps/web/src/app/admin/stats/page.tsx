@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "@/components/AuthProvider";
 import { Spinner } from "@/components/Spinner";
 import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
+import { HomeButton } from "@/components/BackButton";
 
 type Stats = {
     lobbies: {
@@ -115,9 +116,9 @@ export default function AdminStatsPage() {
         return (
             <main className="container">
                 <section className="card" aria-label="Kumpir Stats">
+                    <HomeButton corner />
                     <h1 className="h1">⛔ Kein Zugriff</h1>
                     <p className="p hostSub">Dieser Account hat keine Admin-Berechtigung für Kumpir Stats.</p>
-                    <Link href="/" className="btn btnSecondary">← Startseite</Link>
                 </section>
             </main>
         );

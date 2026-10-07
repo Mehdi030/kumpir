@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -13,6 +12,7 @@ import { RulesCard } from "@/components/RulesCard";
 import { track } from "@/lib/track";
 import { startBotGame, type BotSkill } from "@/lib/botGame";
 import { SOLO_SKILL_LABEL } from "@/lib/accountSettings";
+import { HomeButton } from "@/components/BackButton";
 
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
@@ -328,6 +328,7 @@ export default function HostPage() {
         <main className="container">
             <div className="landingWrap">
                 <section className="card" aria-label="Spiel erstellen">
+                    <HomeButton corner />
                     <header className="hostHeader">
                         <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                             <h1 className="h1">{category === "bots" ? "Gegen Bots" : "Lobby hosten"}</h1>
@@ -535,9 +536,6 @@ export default function HostPage() {
                                     {creating ? "⏳ Lobby wird erstellt…" : "🚀 Lobby erstellen"}
                                 </button>
 
-                                <Link href="/" className="btn btnSecondary btnSmall">
-                                    ← Zurück
-                                </Link>
                             </div>
                             </>
                             ) : (
@@ -622,9 +620,6 @@ export default function HostPage() {
                                     >
                                         {botBusy ? "⏳ Bots machen sich bereit…" : `🤖 Gegen ${botCount} ${botCount === 1 ? "Bot" : "Bots"} spielen`}
                                     </button>
-                                    <Link href="/" className="btn btnSecondary btnSmall">
-                                        ← Zurück
-                                    </Link>
                                 </div>
                             </>
                             )}

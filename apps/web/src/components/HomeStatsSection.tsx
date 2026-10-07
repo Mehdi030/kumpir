@@ -147,8 +147,8 @@ function StatsModal({ onClose, quick }: { onClose: () => void; quick: [string, s
                         <Spinner size={24} label="Lade Statistik…" />
                     </div>
                 ) : null}
-                <Link href="/profile" className="stProfileLink" onClick={onClose}>
-                    Zum Profil →
+                <Link href="/stats" className="stProfileLink" onClick={onClose}>
+                    Als eigene Seite öffnen →
                 </Link>
             </div>
             <style>{`
