@@ -72,8 +72,7 @@ jobs:
               username: "Kumpir Deploy",
               embeds: [{
                 title: "🎮 Neueste Version ist live",
-                url: $live,
-                description: ("👉 **[Jetzt spielen](" + $live + ")**\n*" + $c + "*"),
+                description: ($live + "\n*" + $c + "*"),
                 color: 16750615,
                 timestamp: (now | todate)
               }]
