@@ -14,6 +14,7 @@ import { Spinner } from "@/components/Spinner";
 import { kickPlayerAction, setLobbyLockAction, transferHostAction } from "@/actions/hostActions";
 import { getSessionToken } from "@/lib/playerSession";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { errorText } from "@/lib/errorText";
 import { PlaylistPicker, usePlaylists } from "@/components/PlaylistPicker";
 
 const GAME_PHASES = new Set(["topic_vote", "countdown", "running"]);
@@ -26,7 +27,7 @@ const MODES: Record<ModeKey, { label: string; icon: string }> = {
 };
 
 function getErrorMessage(e: unknown): string {
-    if (e instanceof Error) return e.message;
+    if (e instanceof Error) return errorText(e.message);
     if (typeof e === "string") return e;
     try {
         return JSON.stringify(e);
@@ -169,7 +170,7 @@ export default function LobbyAdminPage() {
                 try {
                     const { error: rpcErr } = await fn();
                     if (rpcErr) {
-                        showToast(`❌ ${rpcErr.message}`, 2400);
+                        showToast(`❌ ${errorText(rpcErr.message)}`, 2400);
                         return;
                     }
                     showToast(okMsg);

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { errorText } from "@/lib/errorText";
 import { getSessionToken } from "@/lib/playerSession";
 import { loadPlaylists, selectedFromExcluded } from "@/components/PlaylistPicker";
 import { startGame } from "@/actions/startGame";
@@ -113,7 +114,7 @@ export default function SoloPage() {
             track("solo_game_started");
             router.replace(`/game/${code}`);
         } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : "Unbekannter Fehler.");
+            setError(errorText(e instanceof Error ? e.message : ""));
         }
     }, [profile?.playerName, profile?.preferences, router, user?.id]);
 

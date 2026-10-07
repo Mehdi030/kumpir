@@ -54,7 +54,12 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
+    // Gibt es die Lobby nicht (mehr), wird nicht weiter abgefragt -- vorher fragte ein offener Tab
+    // mit "Lobby nicht gefunden" ~1,5x pro Sekunde endlos beim Server nach.
+    const goneRef = useRef(false);
+
     const load = useCallback(async () => {
+        if (goneRef.current) return;
         setError("");
 
         const lobbyRes = await supabase
@@ -63,6 +68,7 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
             .eq("code", code)
             .single();
 
+        if (lobbyRes.error?.code === "PGRST116") goneRef.current = true; // 0 Zeilen = Lobby existiert nicht
         if (lobbyRes.error || !lobbyRes.data) {
             // Transient fetch error: keep last known-good lobby/players so callers
             // (e.g. the "removed from lobby" detection) don't misread a network

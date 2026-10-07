@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { errorText } from "@/lib/errorText";
 import { serverNow, syncServerClock } from "@/lib/serverClock";
 
 import { PlayerRing } from "@/components/game/PlayerRing";
@@ -133,7 +134,7 @@ type PassEvent = {
 };
 
 function getErrorMessage(e: unknown): string {
-    if (e instanceof Error) return e.message;
+    if (e instanceof Error) return errorText(e.message);
     if (typeof e === "string") return e;
     try {
         return JSON.stringify(e);
@@ -246,6 +247,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     const loadNowRef = useRef<(() => void) | null>(null);
     const reloadPendingRef = useRef(false);
     const inFlightSinceRef = useRef(0);
+    // Lobby existiert nicht (mehr): nicht endlos weiter beim Server nachfragen.
+    const lobbyGoneRef = useRef(false);
     const prevHolderRef = useRef<string | null>(null);
     const passNonceRef = useRef(0);
     const prevAliveRef = useRef<Set<string>>(new Set());
@@ -423,7 +426,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         async (lobbyId: string) => {
             const { error } = await supabase.rpc("rpc_finalize_topic_vote", { p_lobby_id: lobbyId });
             if (error) {
-                showToast(`❌ Finalize: ${error.message}`, 2400);
+                showToast(`❌ ${errorText(error.message)}`, 2400);
                 return { ok: false as const, error: error.message };
             }
             return { ok: true as const };
@@ -435,7 +438,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         async (lobbyId: string) => {
             const { error } = await supabase.rpc("rpc_advance_from_countdown", { p_lobby_id: lobbyId });
             if (error) {
-                showToast(`❌ Advance: ${error.message}`, 2400);
+                showToast(`❌ ${errorText(error.message)}`, 2400);
                 return { ok: false as const, error: error.message };
             }
             return { ok: true as const };
@@ -555,7 +558,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         let alive = true;
 
         const load = async () => {
-            if (inFlightRef.current) return;
+            if (inFlightRef.current || lobbyGoneRef.current) return;
             inFlightRef.current = true;
             inFlightSinceRef.current = Date.now();
 
@@ -572,6 +575,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
                 if (!alive) return;
 
+                if (lobbyRes.error?.code === "PGRST116") lobbyGoneRef.current = true; // 0 Zeilen = Lobby existiert nicht
                 if (lobbyRes.error || !lobbyRes.data) {
                     setFatalError(lobbyRes.error?.message ?? "Lobby konnte nicht geladen werden.");
                     return;
@@ -719,7 +723,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     if (!alive) return;
 
                     if (votesRes.error) {
-                        showToast(`❌ Votes laden: ${votesRes.error.message}`, 2400);
+                        showToast(`❌ ${errorText(votesRes.error.message)}`, 2400);
                     } else if (votesRes.data) {
                         let a = 0,
                             b = 0,
@@ -862,7 +866,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     void (async () => {
                         try {
                             const { error } = await supabase.rpc("rpc_start_rematch_if_ready", { p_code: code });
-                            if (error) showToast(`❌ ${error.message}`, 2400);
+                            if (error) showToast(`❌ ${errorText(error.message)}`, 2400);
                         } finally {
                             startRematchInFlightRef.current = false;
                         }
@@ -1088,7 +1092,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
                 if (error) {
                     setMyVote(prevVote);
-                    showToast(`❌ ${error.message}`, 2600);
+                    showToast(`❌ ${errorText(error.message)}`, 2600);
                     return;
                 }
             } catch (e: unknown) {
@@ -1139,7 +1143,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 }
                 if (err.message?.includes("too_fast")) return showToast("⏳ Kurz warten …", 900);
                 if (err.message?.includes("time_up")) return showToast("⏰ Zu spät", 1400);
-                return showToast(`❌ ${err.message}`, 2400);
+                return showToast(`❌ ${errorText(err.message)}`, 2400);
             }
             setAnswerDraft("");
             showToast("✅ Angenommen", 900);
@@ -1167,7 +1171,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             setKickBusyId(targetPlayerId);
             try {
                 const err = await rpcHostKickDuringRound(code, mePlayerId, targetPlayerId);
-                if (err) return showToast(`❌ ${err.message}`, 2400);
+                if (err) return showToast(`❌ ${errorText(err.message)}`, 2400);
             } catch (e: unknown) {
                 showToast(`❌ ${getErrorMessage(e)}`, 2400);
             } finally {
@@ -1260,7 +1264,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             if (error) {
                 if (error.message.includes("too_late")) showToast("⏳ Zu spät zum Tauschen", 1500);
                 else if (error.message.includes("no_skips_left")) showToast("Kein Joker mehr übrig", 1500);
-                else showToast(`❌ ${error.message}`, 2200);
+                else showToast(`❌ ${errorText(error.message)}`, 2200);
             } else {
                 showToast("🔀 Neuer Song (−2s)", 1400);
             }
@@ -1277,7 +1281,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const { error } = await supabase.rpc("rpc_rematch", { p_code: code, p_player_id: mePlayerId });
         if (error) {
             setEndActionBusy(null);
-            showToast(`❌ Rematch: ${error.message}`, 2400);
+            showToast(`❌ ${errorText(error.message)}`, 2400);
             return;
         }
         showToast("🔁 Rematch gestartet", 1200);
@@ -1711,7 +1715,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             const { error } = await supabase.rpc("rpc_rematch", { p_code: code, p_player_id: mePlayerId });
             if (error) {
                 setEndActionBusy(null);
-                return showToast(`❌ Rematch: ${error.message}`, 2400);
+                return showToast(`❌ ${errorText(error.message)}`, 2400);
             }
             // Realtime / Polling wechselt gleich in die Themenwahl.
         };
@@ -1721,7 +1725,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             const { error } = await supabase.rpc("rpc_reset_lobby", { p_code: code, p_player_id: mePlayerId });
             if (error) {
                 setEndActionBusy(null);
-                return showToast(`❌ Reset: ${error.message}`, 2400);
+                return showToast(`❌ ${errorText(error.message)}`, 2400);
             }
             window.location.href = `/lobby/${encodeURIComponent(code)}`;
         };

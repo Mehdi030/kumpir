@@ -15,6 +15,7 @@ import { LobbyNotFound, isNotFoundError } from "@/components/LobbyNotFound";
 import { InviteActions } from "@/components/InviteActions";
 import { Spinner } from "@/components/Spinner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { errorText } from "@/lib/errorText";
 import { getSessionToken } from "@/lib/playerSession";
 
 type ModeKey = "original" | "teleport" | "reverse";
@@ -26,7 +27,7 @@ const MODES: Record<ModeKey, { label: string; icon: string }> = {
 };
 
 function getErrorMessage(e: unknown): string {
-    if (e instanceof Error) return e.message;
+    if (e instanceof Error) return errorText(e.message);
     if (typeof e === "string") return e;
     try {
         return JSON.stringify(e);
@@ -183,7 +184,7 @@ export default function LobbyPage() {
                 p_player_id: mePlayerId,
             });
 
-            if (rpcErr) showToast(`❌ ${rpcErr.message}`, 2500);
+            if (rpcErr) showToast(`❌ ${errorText(rpcErr.message)}`, 2500);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2500);
         } finally {
@@ -243,7 +244,7 @@ export default function LobbyPage() {
             });
             if (rpcErr) {
                 dispatchedBotNamesRef.current.delete(free);
-                showToast(`❌ ${rpcErr.message}`, 2400);
+                showToast(`❌ ${errorText(rpcErr.message)}`, 2400);
             }
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
@@ -263,7 +264,7 @@ export default function LobbyPage() {
                 p_me_player_id: mePlayerId,
                 p_bot_player_id: botPlayerId,
             });
-            if (rpcErr) showToast(`❌ ${rpcErr.message}`, 2400);
+            if (rpcErr) showToast(`❌ ${errorText(rpcErr.message)}`, 2400);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {

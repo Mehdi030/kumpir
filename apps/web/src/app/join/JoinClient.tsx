@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { errorText } from "@/lib/errorText";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
@@ -46,10 +47,10 @@ function getStoredPlayerId(): string | null {
 }
 
 function getErrorMessage(err: unknown): string {
-    if (err instanceof Error) return err.message;
+    if (err instanceof Error) return errorText(err.message);
     if (typeof err === "object" && err !== null && "message" in err) {
         const m = (err as { message?: unknown }).message;
-        if (typeof m === "string") return m;
+        if (typeof m === "string") return errorText(m);
     }
     return "Unbekannter Fehler.";
 }
@@ -134,7 +135,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 .maybeSingle();
 
             if (lobbyErr) {
-                setError(lobbyErr.message || "Lobby konnte nicht geprüft werden.");
+                setError(errorText(lobbyErr.message, "Lobby konnte nicht geprüft werden."));
                 return;
             }
             if (!lobbyRow) {
@@ -186,7 +187,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             });
 
             if (rpcErr) {
-                setError(rpcErr.message || "Konnte der Lobby nicht beitreten.");
+                setError(errorText(rpcErr.message, "Konnte der Lobby nicht beitreten."));
                 return;
             }
 

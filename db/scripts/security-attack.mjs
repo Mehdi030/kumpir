@@ -73,6 +73,9 @@ async function makeUser(name) {
 const created = { users: [], lobbies: [], codes: [] };
 const RUN_START = new Date().toISOString();
 
+// Spam-Bremse vom letzten Testlauf zurücksetzen (sonst scheitert ein zweiter Lauf direkt danach an "rate_limited")
+await sql("delete from rate_limits");
+
 try {
     const attacker = await makeUser("a");
     const victim = await makeUser("v");
@@ -81,7 +84,7 @@ try {
     // Eigene Wegwerf-Lobby (Angreifer ist Host) + Opfer-Spieler
     const hostPid = randomUUID();
     let r = await rpc("rpc_create_lobby", { p_host_name: "AtkHost", p_privacy: "private", p_max_players: 6, p_round_seconds: 25, p_user_id: null, p_round_speed: "normal" });
-    const lob = Array.isArray(r.json) ? r.json[0] : r.json;
+    const lob = r.status < 300 ? (Array.isArray(r.json) ? r.json[0] : r.json) : null; // Fehlerantworten haben auch ein Feld "code"
     const code = lob?.code;
     const hostPidReal = lob?.host_player_id;
     if (!code) throw new Error("Lobby nicht erstellt: " + r.text);
@@ -314,6 +317,8 @@ try {
         await fetch(`${URL_}/auth/v1/admin/users/${u}`, { method: "DELETE", headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` } }).catch(() => {});
     }
     await sql("delete from friendships where user_id = any($1) or friend_user_id = any($1)", [created.users]).catch(() => {});
+    // Spam-Bremse wieder lösen, sonst kann man vom selben Anschluss eine Weile keine Lobby erstellen
+    await sql("delete from rate_limits").catch(() => {});
     await db.end();
 }
 

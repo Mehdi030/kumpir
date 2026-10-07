@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { errorText } from "@/lib/errorText";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
@@ -81,10 +82,10 @@ function setStoredPlayerId(id: string) {
 }
 
 function getErrorMessage(err: unknown): string {
-    if (err instanceof Error) return err.message;
+    if (err instanceof Error) return errorText(err.message);
     if (typeof err === "object" && err !== null && "message" in err) {
         const m = (err as { message?: unknown }).message;
-        if (typeof m === "string") return m;
+        if (typeof m === "string") return errorText(m);
     }
     return "Unbekannter Fehler.";
 }
@@ -187,7 +188,7 @@ export default function HostPage() {
             });
 
             if (error) {
-                setCreateError(error.message || "Lobby konnte nicht erstellt werden.");
+                setCreateError(errorText(error.message, "Lobby konnte nicht erstellt werden."));
                 return;
             }
 
@@ -214,7 +215,7 @@ export default function HostPage() {
             });
 
             if (ensure.error) {
-                setCreateError(ensure.error.message || "Host konnte nicht als Spieler eingetragen werden.");
+                setCreateError(errorText(ensure.error.message, "Host konnte nicht als Spieler eingetragen werden."));
                 return;
             }
 
