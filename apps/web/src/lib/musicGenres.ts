@@ -49,3 +49,19 @@ export const MUSIC_PLAYLISTS: Record<string, { title: string; id: string; icon: 
 };
 
 export const MUSIC_GENRE_KEYS = Object.keys(MUSIC_PLAYLISTS);
+
+/** Akzentfarbe je Playlist (Abstimmung, Countdown). Unbekannte Playlists bekommen Sonnengelb. */
+const PLAYLIST_COLORS: Record<string, string> = {
+    "Deutschrap aktuell": "#ef4444",
+    "Deutschrap-Songs": "#f59e0b",
+    "2000er Old School": "#8b5cf6",
+    "Shisha Club": "#06b6d4",
+    "80er Hits": "#ec4899",
+    "Deutsch-Pop": "#22c55e",
+    "Rock-Klassiker": "#3b82f6",
+};
+
+export function playlistLook(name: string | null | undefined): { icon: string; color: string } {
+    const n = name ?? "";
+    return { icon: MUSIC_PLAYLISTS[n]?.icon ?? "🎵", color: PLAYLIST_COLORS[n] ?? "#ffd23f" };
+}

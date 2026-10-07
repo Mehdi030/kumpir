@@ -125,6 +125,8 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
                 ) : null}
             </header>
 
+            {shareRows.length >= 2 ? <Podium rows={shareRows} pts={t("card.pts")} /> : null}
+
             {isSeries ? (
                 <SeriesTable rows={seriesRows} totalSets={totalRounds} playedSets={totalRounds} mePlayerId={mePlayerId} title={t("fin.final")} />
             ) : (
@@ -256,6 +258,39 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
         @keyframes finBob{ 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-5px); } }
         @media (max-width: 520px){ .finRow{ grid-template-columns: 30px 1fr 56px 56px; padding: 9px 10px; font-size: 14px; } .finRow > :nth-child(5){ display: none; } .finName{ white-space: normal; } }
       `}</style>
+        </div>
+    );
+}
+
+const PODIUM_COLORS = ["#f59e0b", "#94a3b8", "#c2733a"];
+
+/** Siegertreppchen für die ersten drei: Mitte = Platz 1 (am höchsten), links 2, rechts 3. */
+function Podium({ rows, pts }: { rows: { place: number; name: string; score: number; isMe?: boolean }[]; pts: string }) {
+    const top = [...rows].sort((a, b) => a.place - b.place).slice(0, 3);
+    const order = top.length === 3 ? [top[1], top[0], top[2]] : top.length === 2 ? [top[1], top[0]] : top;
+    return (
+        <div className="finPodium" aria-label="Siegertreppchen">
+            {order.map((r) => {
+                const i = r!.place - 1;
+                return (
+                    <div key={r!.name + r!.place} className={`finPod finPod${r!.place} ${r!.isMe ? "me" : ""}`}>
+                        <div className="finPodAvatar" style={{ background: PODIUM_COLORS[i] ?? "#64748b" }} aria-hidden>
+                            {r!.name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="finPodName" title={r!.name}>
+                            {r!.name}
+                        </div>
+                        <div className="finPodScore">
+                            {r!.score} {pts}
+                        </div>
+                        <div className="finPodBlock">
+                            <span className="finPodMedal" aria-hidden>
+                                {MEDAL[i] ?? r!.place}
+                            </span>
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     );
 }

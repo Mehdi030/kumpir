@@ -252,10 +252,11 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                     <div className="fieldControl">
                                         <input
                                             id="code"
-                                            className="input"
+                                            className={`input joinCode ${code.length === 4 ? "joinCodeFull" : ""}`}
                                             value={code}
                                             onChange={(e) => setCode(normalizeCode(e.target.value))}
-                                            placeholder="z.B. 5KJ1"
+                                            placeholder="ABCD"
+                                            aria-label="Lobby-Code (4 Zeichen)"
                                             maxLength={4}
                                             spellCheck={false}
                                             autoCorrect="off"

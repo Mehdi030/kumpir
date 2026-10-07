@@ -103,7 +103,7 @@ export default function HostPage() {
     }, [profile?.playerName]);
     const [maxPlayers, setMaxPlayers] = useState(8);
 
-    const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>(null);
+    const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>("normal");
     // Original ist aktuell der einzige spielbare Modus (Teleport/Reverse
     // sind mit "SOON" gesperrt) -- direkt vorausgewählt, damit man nicht
     // erst klicken muss.

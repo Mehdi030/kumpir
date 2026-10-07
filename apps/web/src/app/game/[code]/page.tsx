@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 import { PlayerRing } from "@/components/game/PlayerRing";
-import { VoiceInput } from "@/components/game/VoiceInput";
 import { SongRound } from "@/components/game/SongRound";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
@@ -15,7 +14,8 @@ import { useNewAchievements } from "@/hooks/useNewAchievements";
 import { useAuth } from "@/components/AuthProvider";
 import { AchievementToastPortal } from "@/components/AchievementToastPortal";
 import { BackdropFx } from "@/components/game/BackdropFx";
-import { MUSIC_PLAYLISTS } from "@/lib/musicGenres";
+import { MUSIC_PLAYLISTS, playlistLook } from "@/lib/musicGenres";
+import type { CSSProperties } from "react";
 import { useToastStack } from "@/hooks/useToastStack";
 import { ToastStack } from "@/components/ToastStack";
 import { LobbyNotFound, isNotFoundError } from "@/components/LobbyNotFound";
@@ -1360,6 +1360,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     const cLabel = lobby.topic_c ?? "Zufall";
     // Anzahl Karten: 1 Playlist = keine Abstimmung, 2 Playlists = nur A und B, ab 3 = A, B und Zufall
     const voteCards = Math.min(3, Math.max(1, lobby.topic_vote_cards ?? 3));
+    // Jede Playlist hat ihr Symbol und ihre Akzentfarbe (Karte 3 ohne echtes Thema = Zufall)
+    const lookA = playlistLook(aLabel);
+    const lookB = playlistLook(bLabel);
+    const lookC = lobby.topic_c ? playlistLook(cLabel) : { icon: "🎲", color: "#a78bfa" };
+    const plStyle = (color: string) => ({ "--pl": color }) as CSSProperties;
 
     // =========================================================
     // PHASE: TOPIC VOTE  (NO blinking)
@@ -1396,7 +1401,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 onClick={() => void vote(1)}
                                 disabled={voteBusy || !mePlayerId || isSpectator || voteCards === 1}
                                 className={`glassCard ${myVote === 1 ? "active" : ""}`}
+                                style={plStyle(lookA.color)}
                             >
+                                <div className="cardEmoji" aria-hidden>
+                                    {lookA.icon}
+                                </div>
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">①</span>
@@ -1412,7 +1421,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 onClick={() => void vote(2)}
                                 disabled={voteBusy || !mePlayerId || isSpectator}
                                 className={`glassCard ${myVote === 2 ? "active" : ""}`}
+                                style={plStyle(lookB.color)}
                             >
+                                <div className="cardEmoji" aria-hidden>
+                                    {lookB.icon}
+                                </div>
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">②</span>
@@ -1429,7 +1442,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 onClick={() => void vote(3)}
                                 disabled={voteBusy || !mePlayerId || isSpectator}
                                 className={`glassCard ${myVote === 3 ? "active" : ""}`}
+                                style={plStyle(lookC.color)}
                             >
+                                <div className="cardEmoji" aria-hidden>
+                                    {lookC.icon}
+                                </div>
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">{lobby.topic_c ? "③" : "🎲"}</span>
@@ -1582,25 +1599,30 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>PLAYLIST GEWÄHLT</div>
 
                     <div className="resultTriGrid">
-                        <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`}>
+                        <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`} style={plStyle(lookA.color)}>
                             <div className="resultBadge">①</div>
                             <div className="resultTitle">{aLabel}</div>
                         </div>
                         {voteCards >= 2 ? (
-<div className={`resultTile ${isWinner(2) ? "win" : "lose"}`}>
+<div className={`resultTile ${isWinner(2) ? "win" : "lose"}`} style={plStyle(lookB.color)}>
                             <div className="resultBadge">②</div>
                             <div className="resultTitle">{bLabel}</div>
                         </div>
                         ) : null}
                         {voteCards >= 3 ? (
-<div className={`resultTile ${isWinner(3) ? "win" : "lose"}`}>
+<div className={`resultTile ${isWinner(3) ? "win" : "lose"}`} style={plStyle(lookC.color)}>
                             <div className="resultBadge">{lobby.topic_c ? "③" : "🎲"}</div>
                             <div className="resultTitle">{isWinner(3) && !lobby.topic_c ? `Zufall: ${selectedTopic}` : cLabel}</div>
                         </div>
                         ) : null}
                     </div>
 
-                    <div style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>{selectedTopic}</div>
+                    <div className="cdTopic" style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>
+                        <span className="cdTopicIcon" aria-hidden>
+                            {playlistLook(selectedTopic).icon}
+                        </span>{" "}
+                        {selectedTopic}
+                    </div>
 
                     {tie ? (
                         <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 850 }}>
@@ -2067,13 +2089,6 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <div className="statusSub">
                                 {lobby.current_song_id ? "Welcher Song läuft? Tippe den Titel (oder den Interpreten) und drücke Enter." : "Tippe deine Antwort und drücke Enter."}
                             </div>
-                            {lobby?.answer_mode === "voice" ? (
-                                <VoiceInput
-                                    variant="primary"
-                                    disabled={!!passDisabledReason}
-                                    onResult={(text) => setAnswerDraft(text.slice(0, 60))}
-                                />
-                            ) : null}
                             <div className="answerInputRow">
                                 <input
                                     ref={answerInputRef}
@@ -2098,9 +2113,6 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                     enterKeyHint="send"
                                     aria-label="Antwort"
                                 />
-                                {lobby?.answer_mode !== "voice" ? (
-                                    <VoiceInput disabled={!!passDisabledReason} onResult={(text) => setAnswerDraft(text.slice(0, 60))} />
-                                ) : null}
                             </div>
                             <div className={`answerFeedback ${answerWrong ? "show" : ""}`} aria-live="polite">
                                 {answerWrong ? "Nicht richtig – versuch es nochmal!" : "\u00A0"}

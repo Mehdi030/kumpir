@@ -459,7 +459,7 @@ export default function LobbyPage() {
                             </div>
 
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
-                                <div style={{ display: "flex", gap: 8 }}>
+                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                                     <button type="button" className="btn btnSecondary btnSmall" onClick={() => void leaveLobby()} disabled={starting}>
                                         ← Hauptmenü
                                     </button>

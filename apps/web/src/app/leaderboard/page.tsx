@@ -55,10 +55,10 @@ export default function LeaderboardPage() {
     if (AUTH_DISABLED) {
         return (
             <main className="container">
-                <section className="card" aria-label="Leaderboard">
-                    <h1 className="h1">Leaderboard</h1>
+                <section className="card" aria-label="Bestenliste">
+                    <h1 className="h1">Bestenliste</h1>
                     <p className="p hostSub">
-                        Leaderboards gibt&apos;s nur mit Account. Aktuell läuft das Spiel im Gast-Modus.
+                        Bestenlisten gibt&apos;s nur mit Konto. Aktuell läuft das Spiel im Gast-Modus.
                     </p>
                     <Link href="/" className="btn btnSecondary">← Zur Startseite</Link>
                 </section>
@@ -68,10 +68,10 @@ export default function LeaderboardPage() {
 
     return (
         <main className="container">
-            <section className="card" aria-label="Leaderboard" style={{ maxWidth: 880, margin: "0 auto" }}>
+            <section className="card" aria-label="Bestenliste" style={{ maxWidth: 880, margin: "0 auto" }}>
                 <header className="hostHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                     <div>
-                        <h1 className="h1">🏆 Leaderboard</h1>
+                        <h1 className="h1">🏆 Bestenliste</h1>
                         <p className="p hostSub" style={{ marginTop: 4 }}>
                             Top {rows.length} weltweit · sortiert nach {cfg.label}
                         </p>

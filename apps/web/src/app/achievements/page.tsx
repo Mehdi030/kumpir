@@ -34,7 +34,7 @@ export default function AchievementsPage() {
     if (AUTH_DISABLED) {
         return (
             <main className="container">
-                <section className="card" aria-label="Achievements">
+                <section className="card" aria-label="Achievements" style={{ maxWidth: 620, margin: "0 auto" }}>
                     <h1 className="h1">Achievements</h1>
                     <p className="p hostSub">
                         Achievements gibt&apos;s nur mit Account. Aktuell läuft das Spiel im Gast-Modus.
@@ -58,7 +58,7 @@ export default function AchievementsPage() {
     if (!user) {
         return (
             <main className="container">
-                <section className="card" aria-label="Achievements">
+                <section className="card" aria-label="Achievements" style={{ maxWidth: 620, margin: "0 auto" }}>
                     <h1 className="h1">Achievements</h1>
                     <p className="p hostSub">
                         Du musst eingeloggt sein, um deine Achievements zu sehen.

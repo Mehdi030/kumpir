@@ -342,3 +342,91 @@ a{ transition: color .2s ease, opacity .2s ease; }
     100%{ transform: translate3d(-18px, -108vh, 0) scale(.4); opacity: 0; }
 }
 @media (max-width: 620px){ .embers span:nth-child(n+7){ display: none; } }
+
+/* ---------- Knöpfe und Felder übernehmen die Seitenschrift (sonst System-Emojis/Flaggen als Text) ---------- */
+button, input, select, textarea{ font-family: inherit; }
+
+/* ---------- 404 ---------- */
+.nfCard{ text-align: center; }
+.nfPotato{ font-size: 84px; line-height: 1; display: inline-block; animation: kmFloat 3.2s var(--ease-inout) infinite; filter: drop-shadow(0 14px 22px rgba(0, 0, 0, .35)); }
+.nfCode{ margin-top: 8px; font-family: var(--font-display); font-size: 14px; font-weight: 900; letter-spacing: .35em; color: #ffd23f; }
+.nfTitle{ font-size: clamp(32px, 6vw, 46px) !important; margin-top: 4px !important; }
+.nfText{ margin: 10px auto 0 !important; max-width: 40ch; }
+.nfActions{ justify-content: center; margin-top: 20px; }
+
+/* ---------- Abstimmung: Playlist-Identität (Symbol + Akzentfarbe) ---------- */
+.topicGrid .glassCard{
+    --pl: #ffd23f;
+    background:
+        radial-gradient(120% 90% at 100% 100%, color-mix(in srgb, var(--pl) 34%, transparent), transparent 60%),
+        linear-gradient(160deg, color-mix(in srgb, var(--pl) 16%, rgba(38, 9, 6, .55)), rgba(38, 9, 6, .55));
+    border-color: color-mix(in srgb, var(--pl) 45%, rgba(255, 255, 255, .18));
+}
+.topicGrid .glassCard:hover{ border-color: color-mix(in srgb, var(--pl) 80%, white); box-shadow: 0 26px 80px rgba(0, 0, 0, .34), 0 0 40px color-mix(in srgb, var(--pl) 40%, transparent); }
+.topicGrid .glassCard.active{ border-color: var(--pl) !important; box-shadow: 0 0 0 4px color-mix(in srgb, var(--pl) 40%, transparent), 0 26px 80px rgba(0, 0, 0, .34) !important; }
+.topicGrid .glassCard .cardTitle, .topicGrid .glassCard .cardTop, .topicGrid .glassCard .cardHint{ position: relative; z-index: 1; }
+.topicGrid .glassCard .cardTitle{ padding-right: 54px; text-shadow: 0 2px 12px rgba(0, 0, 0, .35); }
+.cardEmoji{
+    position: absolute;
+    right: 10px;
+    bottom: -8px;
+    font-size: clamp(56px, 6vw, 80px);
+    line-height: 1;
+    transform: rotate(-10deg);
+    opacity: .92;
+    filter: drop-shadow(0 12px 18px rgba(0, 0, 0, .35));
+    transition: transform .45s var(--ease-spring);
+    pointer-events: none;
+    z-index: 0;
+}
+.topicGrid .glassCard:hover .cardEmoji{ transform: rotate(4deg) scale(1.12); }
+.topicGrid .glassCard.active .cardEmoji{ animation: kmFloat 2.4s var(--ease-inout) infinite; }
+.resultTriGrid .resultTile.win{ border-color: var(--pl, #ffd23f) !important; background: color-mix(in srgb, var(--pl, #ffd23f) 26%, rgba(38, 9, 6, .46)) !important; box-shadow: 0 0 0 4px color-mix(in srgb, var(--pl, #ffd23f) 30%, transparent), 0 18px 60px rgba(60, 8, 0, .35) !important; }
+.cdTopicIcon{ display: inline-block; animation: kmPop .7s var(--ease-spring) backwards; }
+
+/* ---------- Beitreten: Code-Eingabe wie ein Ticket-Code ---------- */
+.input.joinCode{
+    height: 78px !important;
+    text-align: center;
+    font-family: var(--font-display);
+    font-size: 40px !important;
+    font-weight: 800;
+    letter-spacing: .5em;
+    padding-left: .5em;
+    text-transform: uppercase;
+    color: #ffd23f;
+    border: 2px dashed rgba(255, 255, 255, .35) !important;
+    background: rgba(0, 0, 0, .3) !important;
+    text-shadow: 0 3px 0 rgba(120, 50, 0, .5);
+}
+.input.joinCode::placeholder{ color: rgba(255, 255, 255, .22); letter-spacing: .5em; }
+.input.joinCode:focus{ border-color: #ffd23f !important; border-style: solid !important; box-shadow: 0 0 0 5px rgba(255, 210, 63, .22) !important; }
+.input.joinCode.joinCodeFull, .input.joinCode.joinCodeFull:focus{ border-style: solid !important; border-color: #34d399 !important; animation: kmSelect .45s var(--ease-spring); box-shadow: 0 0 0 5px rgba(52, 211, 153, .22) !important; }
+
+/* ---------- Endbildschirm: Siegertreppchen ---------- */
+.finPodium{ display: flex; justify-content: center; align-items: flex-end; gap: 12px; margin: 6px auto 18px; max-width: 560px; padding: 0 8px; }
+.finPod{ flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 4px; animation: kmRise .7s var(--ease-out) backwards; }
+.finPod1{ animation-delay: .55s; }
+.finPod2{ animation-delay: .3s; }
+.finPod3{ animation-delay: .8s; }
+.finPodAvatar{ width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-display); font-size: 24px; font-weight: 800; color: #fff; border: 3px solid rgba(255, 255, 255, .7); box-shadow: 0 10px 22px rgba(0, 0, 0, .3); }
+.finPod1 .finPodAvatar{ width: 68px; height: 68px; font-size: 30px; box-shadow: 0 0 0 4px rgba(255, 210, 63, .35), 0 12px 28px rgba(0, 0, 0, .35); animation: kmFloat 3s var(--ease-inout) 1.4s infinite; }
+.finPodName{ font-weight: 900; font-size: 15px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finPod1 .finPodName{ font-size: 17px; }
+.finPodScore{ font-size: 12.5px; font-weight: 800; opacity: .85; }
+.finPodBlock{
+    width: 100%; display: grid; place-items: start center; padding-top: 10px;
+    border-radius: 16px 16px 6px 6px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .06));
+    border: 1px solid rgba(255, 255, 255, .25);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+    transform-origin: bottom;
+    animation: kmGrow .8s var(--ease-spring) backwards;
+}
+.finPod1 .finPodBlock{ height: 104px; background: linear-gradient(180deg, rgba(255, 210, 63, .55), rgba(255, 159, 28, .18)); border-color: rgba(255, 210, 63, .7); animation-delay: .5s; }
+.finPod2 .finPodBlock{ height: 74px; animation-delay: .25s; }
+.finPod3 .finPodBlock{ height: 54px; animation-delay: .75s; }
+.finPodMedal{ font-size: 30px; line-height: 1; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .3)); }
+.finPod.me .finPodName::after{ content: " (du)"; opacity: .7; font-weight: 700; }
+@keyframes kmGrow{ from{ transform: scaleY(0); opacity: 0; } to{ transform: none; opacity: 1; } }
+@media (max-width: 480px){ .finPodAvatar{ width: 44px; height: 44px; font-size: 20px; } .finPod1 .finPodAvatar{ width: 54px; height: 54px; } .finPod1 .finPodBlock{ height: 84px; } .finPod2 .finPodBlock{ height: 60px; } .finPod3 .finPodBlock{ height: 44px; } }
