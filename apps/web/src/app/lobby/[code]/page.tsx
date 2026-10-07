@@ -8,8 +8,6 @@ import { useParams, useRouter } from "next/navigation";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyState } from "@/hooks/useLobbyState";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
-import { useSavedLobbies } from "@/hooks/useSavedLobbies";
-import { useAuth } from "@/components/AuthProvider";
 import { RulesCard } from "@/components/RulesCard";
 import { LobbyNotFound, isNotFoundError } from "@/components/LobbyNotFound";
 import { InviteActions } from "@/components/InviteActions";
@@ -53,9 +51,6 @@ export default function LobbyPage() {
 
     const code = String(params.code ?? "").toUpperCase();
     const { mePlayerId } = usePlayerIdentity();
-    const { user } = useAuth();
-    const savedLobbies = useSavedLobbies(user?.id ?? null);
-    const isSaved = useMemo(() => savedLobbies.rows.some((s) => s.lobby_code === code), [savedLobbies.rows, code]);
 
     const suppressRedirectRef = useRef(false);
 
@@ -315,27 +310,6 @@ export default function LobbyPage() {
                         <div className="lobbyHeadTop">
                             <h1 className="h1 lobbyTitle">Lobby</h1>
                             <div className="lobbyActions">
-                                {user ? (
-                                    <button
-                                        type="button"
-                                        className="btn btnSecondary btnSmall"
-                                        onClick={async () => {
-                                            if (isSaved) {
-                                                await savedLobbies.unsave(code);
-                                                showToast("🗑️ Aus gespeicherten Lobbies entfernt", 1500);
-                                            } else {
-                                                const nick = window.prompt("Spitzname für diese Lobby?", `Lobby ${code}`);
-                                                if (!nick) return;
-                                                await savedLobbies.save(code, nick);
-                                                showToast("💾 Lobby gespeichert", 1500);
-                                            }
-                                        }}
-                                        title={isSaved ? "Lobby ist gespeichert" : "Diese Lobby speichern"}
-                                    >
-                                        {isSaved ? "💾 Gespeichert" : "🔖 Merken"}
-                                    </button>
-                                ) : null}
-
                                 {amIHost ? (
                                     <Link
                                         href={`/lobby/${encodeURIComponent(code)}/admin`}
@@ -350,6 +324,28 @@ export default function LobbyPage() {
                                         ⚙️ Einstellungen
                                     </Link>
                                 ) : null}
+                            </div>
+                        </div>
+
+                        {/* Spielerzahl, Modus und Runden groß nebeneinander über dem Code */}
+                        <div className="lobbyStats">
+                            <div className="lobbyStat">
+                                <span className="lobbyStatIcon" aria-hidden>👥</span>
+                                <span className="lobbyStatValue">
+                                    {players.length}
+                                    <small> / {maxPlayers}</small>
+                                </span>
+                                <span className="lobbyStatLabel">Spieler</span>
+                            </div>
+                            <div className="lobbyStat">
+                                <span className="lobbyStatIcon" aria-hidden>{MODES[mode]?.icon ?? "🥔"}</span>
+                                <span className="lobbyStatValue">{MODES[mode]?.label ?? mode}</span>
+                                <span className="lobbyStatLabel">Modus</span>
+                            </div>
+                            <div className="lobbyStat">
+                                <span className="lobbyStatIcon" aria-hidden>🎯</span>
+                                <span className="lobbyStatValue">{lobby?.series_total ?? 1}</span>
+                                <span className="lobbyStatLabel">{(lobby?.series_total ?? 1) > 1 ? "Runden" : "Runde"}</span>
                             </div>
                         </div>
 
@@ -368,20 +364,13 @@ export default function LobbyPage() {
 
                         <InviteActions code={code} disabled={isRunning} />
 
-                        <div className="lobbyChips">
-                            <span className="pillChip">
-                                👥 {players.length} / {maxPlayers}
-                            </span>
-                            <span className="pillChip">
-                                {MODES[mode]?.icon ?? "🥔"} {MODES[mode]?.label ?? mode}
-                            </span>
-                            {(lobby?.series_total ?? 1) > 1 ? <span className="pillChip">🎯 {lobby?.series_total} Runden</span> : <span className="pillChip">🎯 1 Runde</span>}
-                            {lobby?.topic ? (
+                        {lobby?.topic ? (
+                            <div className="lobbyChips">
                                 <span className="pillChip" title={lobby.topic ?? undefined}>
                                     🏷️ {lobby.topic}
                                 </span>
-                            ) : null}
-                        </div>
+                            </div>
+                        ) : null}
 
                         <style>{`
                 .lobbyHead{ display: grid; gap: 14px; }
@@ -400,6 +389,12 @@ export default function LobbyPage() {
                 .codeLabel{ font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .7; }
                 .codeValue{ font-family: var(--font-display); font-size: clamp(44px, 12vw, 64px); font-weight: 800; letter-spacing: .18em; padding-left: .18em; line-height: 1.05; color: #ffd23f; text-shadow: 0 4px 0 rgba(120,50,0,.55), 0 10px 26px rgba(0,0,0,.35); }
                 .codeHint{ font-size: 12px; opacity: .72; min-height: 16px; }
+                .lobbyStats{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+                .lobbyStat{ display: grid; justify-items: center; gap: 2px; padding: 12px 8px; border-radius: 20px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); text-align: center; min-width: 0; }
+                .lobbyStatIcon{ font-size: 26px; line-height: 1.1; }
+                .lobbyStatValue{ font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 28px); font-weight: 800; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .lobbyStatValue small{ font-size: .62em; opacity: .7; }
+                .lobbyStatLabel{ font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; opacity: .7; }
                 .lobbyChips{ display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
                 .lobbyChips .pillChip{ font-size: 13px; padding: 7px 12px; opacity: 1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
               `}</style>

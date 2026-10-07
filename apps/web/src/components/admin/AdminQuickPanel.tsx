@@ -21,7 +21,6 @@ import { emailLabel } from "@/lib/accountSettings";
 
 type View = "online" | "accounts" | "lobbies";
 const VIEW_KEY = "kumpir_quick_view";
-const BTN_KEY = "kumpir_quick_btn";
 const REFRESH_MS = 8000;
 
 const PHASE_LABEL: Record<string, string> = {
@@ -83,7 +82,6 @@ export function AdminQuickPanel() {
 
     const [open, setOpen] = useState(false);
     // Beides aus dem Browser-Speicher; gerendert wird erst, wenn das Konto geladen ist (also nie vor der Hydration)
-    const [showBtn, setShowBtn] = useState(() => (typeof window === "undefined" ? true : readLS(BTN_KEY) !== "hidden"));
     const [view, setViewState] = useState<View>(() => {
         const v = typeof window === "undefined" ? null : readLS(VIEW_KEY);
         return v === "accounts" || v === "lobbies" ? v : "online";
@@ -177,12 +175,6 @@ export function AdminQuickPanel() {
 
     return (
         <>
-            {!open && showBtn ? (
-                <button type="button" className="aqFab" onClick={() => setOpen(true)} title="Admin-Schnellmenü (Alt + A)" aria-label="Admin-Schnellmenü öffnen">
-                    🛡️
-                </button>
-            ) : null}
-
             {open ? (
                 <div className="aqPanel" role="dialog" aria-label="Admin-Schnellmenü">
                     <div className="aqHead">
@@ -362,19 +354,6 @@ export function AdminQuickPanel() {
                                 Statistik
                             </Link>
                         ) : null}
-                        <button
-                            type="button"
-                            className="aqLinkBtn"
-                            onClick={() => {
-                                setShowBtn((v) => {
-                                    writeLS(BTN_KEY, v ? "hidden" : "shown");
-                                    return !v;
-                                });
-                            }}
-                            title="Der Knopf unten links ist nur eine Abkürzung – Alt + A funktioniert immer"
-                        >
-                            {showBtn ? "Knopf ausblenden" : "Knopf einblenden"}
-                        </button>
                     </div>
                 </div>
             ) : null}

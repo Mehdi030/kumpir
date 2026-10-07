@@ -37,11 +37,6 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     const shownName = profile?.displayName || profile?.username || user.email.split("@")[0];
     return (
         <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
-            {profile?.isStaff ? (
-                <Link className={variant === "header" ? "homeLink" : "btn btnSecondary btnSmall"} href="/admin" title="Admin-Panel">
-                    🛡️<span className="srOnly"> Admin-Panel</span>
-                </Link>
-            ) : null}
             <Link className={variant === "header" ? "homeLink homeLinkStrong homeUser" : "btn btnSecondary"} href="/profile" title={t("auth.account")}>
                 {profile?.avatarEmoji || "👤"} {shownName}
             </Link>

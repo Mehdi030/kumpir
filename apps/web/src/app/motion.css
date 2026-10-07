@@ -412,7 +412,7 @@ a{ transition: color .2s ease, opacity .2s ease; }
     50% { transform: translate3d(26px, -52vh, 0) scale(1); opacity: .7; }
     100%{ transform: translate3d(-18px, -108vh, 0) scale(.4); opacity: 0; }
 }
-@media (max-width: 620px){ .embers span:nth-child(n+7){ display: none; } }
+@media (max-width: 620px){ .embers span:nth-child(n+13){ display: none; } }
 
 /* ---------- Knöpfe und Felder übernehmen die Seitenschrift (sonst System-Emojis/Flaggen als Text) ---------- */
 button, input, select, textarea{ font-family: inherit; }
@@ -550,3 +550,18 @@ main.gameStage{
     box-shadow: 0 0 0 2px rgba(255, 255, 255, .7);
 }
 @media (prefers-reduced-motion: reduce){ .cdRingNum, .stagePlCard, .stageChip{ animation: none; } .cdProg{ transition: none; } }
+
+/* ---------- Lobby hosten: zwei Kategorien (Mit Freunden / Gegen Bots) ---------- */
+.hostCats{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 4px 0 16px; }
+.hostCat{
+    display: grid; justify-items: start; gap: 2px; text-align: left; cursor: pointer;
+    padding: 14px 16px; border-radius: 20px; color: #fff; font: inherit;
+    background: rgba(255, 255, 255, .07); border: 2px solid rgba(255, 255, 255, .16);
+    transition: transform .2s var(--ease-spring), border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.hostCat:hover{ transform: translateY(-2px); border-color: rgba(255, 255, 255, .32); }
+.hostCat.on{ border-color: #ffd23f; background: rgba(255, 210, 63, .16); box-shadow: 0 0 0 4px rgba(255, 210, 63, .18), 0 14px 40px rgba(0, 0, 0, .25); }
+.hostCatIcon{ font-size: 30px; line-height: 1.1; }
+.hostCatTitle{ font-family: var(--font-display); font-weight: 800; font-size: 19px; }
+.hostCatText{ font-size: 13px; font-weight: 700; opacity: .75; }
+@media (max-width: 420px){ .hostCatText{ display: none; } .hostCatTitle{ font-size: 16px; } }

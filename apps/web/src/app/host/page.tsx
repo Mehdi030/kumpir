@@ -11,6 +11,8 @@ import { useProfile } from "@/hooks/useProfile";
 import { PlaylistPicker, loadPlaylists, selectedFromExcluded } from "@/components/PlaylistPicker";
 import { RulesCard } from "@/components/RulesCard";
 import { track } from "@/lib/track";
+import { startBotGame, type BotSkill } from "@/lib/botGame";
+import { SOLO_SKILL_LABEL } from "@/lib/accountSettings";
 
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
@@ -152,6 +154,24 @@ export default function HostPage() {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState("");
 
+    // Kategorie: mit Freunden (Lobby + Code) oder direkt gegen Bots (ein Klick, sofort Spiel)
+    const [category, setCategory] = useState<"friends" | "bots">("friends");
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get("modus") === "bots") setCategory("bots");
+    }, []);
+    const [botCount, setBotCount] = useState(3);
+    const [botSkill, setBotSkill] = useState<BotSkill>("mixed");
+    const appliedSoloPrefs = useRef(false);
+    useEffect(() => {
+        const s = profile?.preferences?.solo;
+        if (!s || appliedSoloPrefs.current) return;
+        appliedSoloPrefs.current = true;
+        if (s.bots) setBotCount(Math.max(1, Math.min(5, s.bots)));
+        if (s.skill) setBotSkill(s.skill);
+    }, [profile?.preferences?.solo]);
+    const [botBusy, setBotBusy] = useState(false);
+    const [botError, setBotError] = useState("");
+
     const inFlightRef = useRef(false);
 
     const nameValidation = useMemo(() => validatePlayerName(hostName), [hostName]);
@@ -272,16 +292,63 @@ export default function HostPage() {
         }
     }, [canCreate, hostName, roundSpeed, mode, seriesTotal, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, profile?.preferences?.host?.excludedPlaylists, savePreferences]);
 
+    const onStartBots = async () => {
+        setBotError("");
+        if (!isNameValid || botBusy || !roundSpeed) return;
+        setBotBusy(true);
+        try {
+            const cleanName = hostName.trim();
+            setStoredName(cleanName);
+            const allSelected = !allPlaylists.length || allPlaylists.every((n) => playlists.includes(n));
+            track("solo_start");
+            const code = await startBotGame({
+                name: cleanName,
+                userId: user?.id ?? null,
+                bots: botCount,
+                skill: botSkill,
+                speed: roundSpeed,
+                roundSeconds: ROUND_SPEEDS[roundSpeed].seconds,
+                seriesTotal,
+                topicFilter: allSelected ? [] : playlists,
+            });
+            // Auswahl fürs nächste Mal im Konto merken
+            if (user?.id) {
+                const s = profile?.preferences?.solo;
+                if (s?.bots !== botCount || s?.skill !== botSkill) void savePreferences({ solo: { bots: botCount, skill: botSkill } });
+            }
+            track("solo_game_started");
+            router.push(`/game/${code}`);
+        } catch (e: unknown) {
+            setBotError(errorText(e instanceof Error ? e.message : ""));
+            setBotBusy(false);
+        }
+    };
+
     return (
         <main className="container">
             <div className="landingWrap">
-                <section className="card" aria-label="Lobby hosten">
+                <section className="card" aria-label="Spiel erstellen">
                     <header className="hostHeader">
                         <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                            <h1 className="h1">Lobby hosten</h1>
+                            <h1 className="h1">{category === "bots" ? "Gegen Bots" : "Lobby hosten"}</h1>
                         </div>
-                        <p className="p hostSub">Erstelle eine Lobby, teile den Code und spiel mit deinen Freunden!</p>
+                        <p className="p hostSub">
+                            {category === "bots" ? "Bots aussuchen, Stärke wählen, los – das Spiel startet sofort." : "Erstelle eine Lobby, teile den Code und spiel mit deinen Freunden!"}
+                        </p>
                     </header>
+
+                    <div className="hostCats" role="tablist" aria-label="Art des Spiels">
+                        <button type="button" role="tab" aria-selected={category === "friends"} className={`hostCat ${category === "friends" ? "on" : ""}`} onClick={() => setCategory("friends")}>
+                            <span className="hostCatIcon" aria-hidden>👥</span>
+                            <span className="hostCatTitle">Mit Freunden</span>
+                            <span className="hostCatText">Lobby + Code zum Teilen</span>
+                        </button>
+                        <button type="button" role="tab" aria-selected={category === "bots"} className={`hostCat ${category === "bots" ? "on" : ""}`} onClick={() => setCategory("bots")}>
+                            <span className="hostCatIcon" aria-hidden>🤖</span>
+                            <span className="hostCatTitle">Gegen Bots</span>
+                            <span className="hostCatText">Allein spielen, sofort los</span>
+                        </button>
+                    </div>
 
                     <div className="hostGrid" style={{ gridTemplateColumns: "1fr" }}>
                         <div className="panel">
@@ -325,6 +392,8 @@ export default function HostPage() {
 
                             <div className="divider" />
 
+                            {category === "friends" ? (
+                            <>
                             <div className="pillCard">
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">Max. Spieler</div>
@@ -470,6 +539,95 @@ export default function HostPage() {
                                     ← Zurück
                                 </Link>
                             </div>
+                            </>
+                            ) : (
+                            <>
+                                <div className="pillCard">
+                                    <div className="pillCardTop">
+                                        <div className="pillCardTitle">Wie viele Bots?</div>
+                                        <div className="pillCardHint">1 bis 5 Gegner</div>
+                                    </div>
+                                    <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                        {[1, 2, 3, 4, 5].map((n) => (
+                                            <button
+                                                key={n}
+                                                type="button"
+                                                className={`pillSegBtn segChoice ${botCount === n ? "segChoiceActive" : ""}`}
+                                                onClick={() => setBotCount(n)}
+                                                aria-pressed={botCount === n}
+                                            >
+                                                <span className="segLabel">{"🤖".repeat(Math.min(n, 3))}{n > 3 ? "+" : ""} {n}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="pillCard" style={{ marginTop: 14 }}>
+                                    <div className="pillCardTop">
+                                        <div className="pillCardTitle">Stärke</div>
+                                        <div className="pillCardHint">
+                                            {botSkill === "1" ? "Raten oft daneben, lassen sich Zeit" : botSkill === "2" ? "Kennen viele Songs" : botSkill === "3" ? "Schnell und treffsicher" : "Bunt gemischt – vom Anfänger bis zum Profi"}
+                                        </div>
+                                    </div>
+                                    <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                        {(["1", "2", "3", "mixed"] as BotSkill[]).map((k) => (
+                                            <button
+                                                key={k}
+                                                type="button"
+                                                className={`pillSegBtn segChoice ${botSkill === k ? "segChoiceActive" : ""}`}
+                                                onClick={() => setBotSkill(k)}
+                                                aria-pressed={botSkill === k}
+                                            >
+                                                <span className="segLabel">
+                                                    {k === "1" ? "🌱" : k === "2" ? "🎧" : k === "3" ? "🔥" : "🎲"} {SOLO_SKILL_LABEL[k]}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="pillCard" style={{ marginTop: 14 }}>
+                                    <div className="pillCardTop">
+                                        <div className="pillCardTitle">Tempo</div>
+                                        <div className="pillCardHint">{activeSpeed ? activeSpeed.hint : "Bitte auswählen."}</div>
+                                    </div>
+                                    <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                        {(Object.keys(ROUND_SPEEDS) as RoundSpeed[]).map((key) => (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                className={`pillSegBtn segChoice ${roundSpeed === key ? "segChoiceActive" : ""}`}
+                                                data-variant={ROUND_SPEEDS[key].variant}
+                                                onClick={() => setRoundSpeed(key)}
+                                                aria-pressed={roundSpeed === key}
+                                            >
+                                                <span className="segLabel">{ROUND_SPEEDS[key].label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {botError ? (
+                                    <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
+                                        {botError}
+                                    </div>
+                                ) : null}
+
+                                <div className="actionsRow" style={{ alignItems: "center", marginTop: 14 }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => void onStartBots()}
+                                        disabled={!isNameValid || botBusy || !roundSpeed}
+                                        className={`btn btnPrimary btnXL ${isNameValid && !botBusy ? "btnGlow" : "btnDisabled"}`}
+                                    >
+                                        {botBusy ? "⏳ Bots machen sich bereit…" : `🤖 Gegen ${botCount} ${botCount === 1 ? "Bot" : "Bots"} spielen`}
+                                    </button>
+                                    <Link href="/" className="btn btnSecondary btnSmall">
+                                        ← Zurück
+                                    </Link>
+                                </div>
+                            </>
+                            )}
                         </div>
                     </div>
                 </section>

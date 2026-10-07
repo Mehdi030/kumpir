@@ -136,6 +136,14 @@ body::after{
 }
 
 /* Wrapper = Layering Context */
+/* Breite Bildschirme: Hauptkarte schmaler, rechts daneben die Freunde-Leiste (components/HomeFriends.tsx) */
+@media (min-width: 1300px){
+    :root{ --homeW: 760px; }
+    .landingWrapDecor{ width: min(var(--homeW), 100%); }
+}
+@media (min-width: 1480px){
+    :root{ --homeW: 860px; }
+}
 .landingWrapDecor{
     position: relative;
     isolation: isolate;
@@ -1699,7 +1707,8 @@ body::before{
         radial-gradient(560px 560px at 6% 8%, rgba(255, 224, 110, .30), transparent 70%),
         radial-gradient(680px 680px at 98% 34%, rgba(255, 84, 52, .30), transparent 70%),
         radial-gradient(760px 760px at 16% 100%, rgba(255, 255, 255, .20), transparent 70%),
-        radial-gradient(rgba(255, 255, 255, .13) 1.3px, transparent 1.7px) 0 0 / 28px 28px;
+        radial-gradient(rgba(255, 255, 255, .15) 1.3px, transparent 1.7px) 0 0 / 20px 20px,
+        radial-gradient(rgba(255, 255, 255, .08) 1px, transparent 1.4px) 10px 10px / 20px 20px;
     opacity: 1;
 }
 body::after{

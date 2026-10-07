@@ -50,7 +50,7 @@ export default function Home() {
                     </header>
 
                     <div className="ctaRow homeCta">
-                        <Link href="/play" className="btn btnPrimary btnXL">
+                        <Link href="/host" className="btn btnPrimary btnXL">
                             {t("home.play")}
                         </Link>
                         <Link href="/join" className="btn btnSecondary btnXL">
