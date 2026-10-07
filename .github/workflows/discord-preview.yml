@@ -64,36 +64,27 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -e
-          title_line=$(printf '%s' "${COMMIT_MSG:-manuell gestartet}" | head -n 1 | cut -c1-200)
-          body_lines=$(printf '%s' "$COMMIT_MSG" | sed '1d' | grep -v '^Co-Authored-By' | sed '/^\s*$/d' | head -n 8 | cut -c1-180)
-          short=${SHA:0:7}
+          # Nur eine kurze Zeile zur Änderung: erste Commit-Zeile ohne Präfix wie "ui:" / "fix(home):", max. 70 Zeichen
+          short_change=$(printf '%s' "${COMMIT_MSG:-Neuer Stand}" | head -n 1 | sed -E 's/^[a-zA-Z]+(\([^)]*\))?!?: *//')
+          if [ ${#short_change} -gt 70 ]; then short_change="${short_change:0:68}…"; fi
           if [ "$STATE" = "READY" ]; then
-            payload=$(jq -n --arg t "$title_line" --arg b "$body_lines" --arg live "$LIVE_URL" --arg dep "$DEPLOY_URL" \
-              --arg sha "$short" --arg link "https://github.com/$REPO/commit/$SHA" '{
+            payload=$(jq -n --arg c "$short_change" --arg live "$LIVE_URL" '{
               username: "Kumpir Deploy",
               embeds: [{
                 title: "🎮 Neueste Version ist live",
                 url: $live,
-                description: ("**" + $t + "**" + (if $b == "" then "" else "\n" + $b end)),
+                description: ("👉 **[Jetzt spielen](" + $live + ")**\n*" + $c + "*"),
                 color: 16750615,
-                fields: [
-                  { name: "🔗 Spielen", value: $live, inline: true },
-                  { name: "🧪 Genau dieser Stand", value: $dep, inline: true },
-                  { name: "📝 Commit", value: ("[" + $sha + "](" + $link + ")"), inline: true }
-                ],
-                timestamp: (now | todate),
-                footer: { text: "Kumpir · automatisch nach jedem Deploy" }
+                timestamp: (now | todate)
               }]
             }')
           else
-            payload=$(jq -n --arg t "$title_line" --arg s "$STATE" --arg dep "$DEPLOY_URL" --arg sha "$short" \
-              --arg link "https://github.com/$REPO/commit/$SHA" '{
+            payload=$(jq -n --arg c "$short_change" '{
               username: "Kumpir Deploy",
               embeds: [{
                 title: "⚠️ Deploy fehlgeschlagen",
-                description: ("**" + $t + "**\nStatus: " + $s + "\nDie Live-Seite zeigt weiter den letzten funktionierenden Stand."),
+                description: ("Die Live-Seite zeigt weiter den letzten funktionierenden Stand.\n*" + $c + "*"),
                 color: 15548997,
-                fields: [ { name: "📝 Commit", value: ("[" + $sha + "](" + $link + ")"), inline: true } ],
                 timestamp: (now | todate)
               }]
             }')
