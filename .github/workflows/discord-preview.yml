@@ -4,6 +4,7 @@ name: Discord – neuester Deploy
 # mit Link, Änderung und Commit posten und die vorherige Karte löschen (im Kanal steht immer nur der
 # neueste Stand). Die Karte richtet sich an Spieler (auch außerhalb des Teams); fehlgeschlagene Deploys werden nicht gepostet.
 # Benötigte Secrets: VERCEL_TOKEN, VERCEL_PROJECT_ID, DISCORD_WEBHOOK_URL (Webhook des Preview-Kanals).
+# Optional: DISCORD_BOT_TOKEN – dann wird der Kanal bei jedem Deploy komplett geleert (nur die neueste Karte bleibt).
 
 on:
   push:
@@ -108,6 +109,41 @@ jobs:
             : > .discord-last-message
           fi
           echo "$new_id" >> .discord-last-message
+          echo "$new_id" > .discord-new-message
+
+      # Gründlich aufräumen: mit Bot-Token ALLE übrigen Nachrichten im Preview-Kanal löschen (auch alte Karten
+      # aus früheren Versionen, die sich der Cache nicht gemerkt hat). Ohne Secret DISCORD_BOT_TOKEN wird der
+      # Schritt übersprungen. Der Bot braucht im Kanal "Nachrichtenverlauf lesen" + "Nachrichten verwalten".
+      - name: Preview-Kanal leeren (nur neueste Karte bleibt)
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          STATE: ${{ steps.vercel.outputs.state }}
+        run: |
+          if [ "$STATE" != "READY" ] || [ ! -f .discord-new-message ]; then exit 0; fi
+          if [ -z "$DISCORD_BOT_TOKEN" ]; then echo "Kein DISCORD_BOT_TOKEN – nur die gemerkte alte Karte wurde gelöscht"; exit 0; fi
+          keep=$(cat .discord-new-message)
+          channel=$(curl -sS "$DISCORD_WEBHOOK_URL" | jq -r '.channel_id // empty')
+          if [ -z "$channel" ]; then echo "Kanal des Webhooks nicht gefunden"; exit 0; fi
+          api=https://discord.com/api/v10
+          deleted=0
+          for page in $(seq 1 20); do
+            msgs=$(curl -sS -H "Authorization: Bot $DISCORD_BOT_TOKEN" "$api/channels/$channel/messages?limit=100")
+            if ! echo "$msgs" | jq -e 'type == "array"' > /dev/null; then echo "Discord: $msgs"; break; fi
+            ids=$(echo "$msgs" | jq -r --arg keep "$keep" '.[] | select(.id != $keep) | .id')
+            [ -z "$ids" ] && break
+            for id in $ids; do
+              for try in 1 2 3; do
+                code=$(curl -sS -o /tmp/del.json -w "%{http_code}" -X DELETE -H "Authorization: Bot $DISCORD_BOT_TOKEN" "$api/channels/$channel/messages/$id")
+                if [ "$code" = "429" ]; then sleep "$(jq -r '.retry_after // 2' /tmp/del.json)"; continue; fi
+                break
+              done
+              if [ "$code" = "204" ] || [ "$code" = "404" ]; then deleted=$((deleted + 1)); else echo "Nachricht $id: HTTP $code $(cat /tmp/del.json)"; fi
+            done
+            # Konnte nichts gelöscht werden (z. B. fehlende Rechte), nicht endlos dieselbe Seite abfragen
+            [ "$deleted" = "0" ] && break
+          done
+          echo "Alte Nachrichten im Preview-Kanal gelöscht: $deleted"
 
       - name: Nachricht für das nächste Mal merken
         uses: actions/cache/save@v4
