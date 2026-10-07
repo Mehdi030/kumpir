@@ -120,6 +120,25 @@ for (const rapper of cfg.rapper) {
         t._date = albumDates.get(albumId);
     }
     const recentTracks = tracks.filter((t) => t._date && t._date >= sinceIso).sort((a, b) => b.rank - a.rank);
+
+    // Reichen die Top-Songs nicht (viele Rapper haben vor allem alte Hits), zusätzlich alle
+    // Alben/Singles der letzten Jahre durchsuchen – deren Titel tragen ebenfalls Deezers Beliebtheit (rank).
+    if (recentTracks.length < cfg.maxPerArtist + 4) {
+        const seen = new Set(recentTracks.map((t) => norm(cleanTitle(t.title))));
+        const albums = (await getJson(`https://api.deezer.com/artist/${artist.id}/albums?limit=100`))?.data ?? [];
+        for (const alb of albums.filter((a) => a.release_date && a.release_date >= sinceIso)) {
+            const tr = (await getJson(`https://api.deezer.com/album/${alb.id}/tracks?limit=100`))?.data ?? [];
+            await sleep(150);
+            for (const t of tr) {
+                const k = norm(cleanTitle(t.title));
+                if (seen.has(k)) continue;
+                seen.add(k);
+                t._date = alb.release_date;
+                recentTracks.push(t);
+            }
+        }
+        recentTracks.sort((a, b) => b.rank - a.rank);
+    }
     rep.recent = recentTracks.length;
 
     // 2) iTunes: alle Songs des Rappers (eine Anfrage), fehlende danach gezielt einzeln
@@ -138,6 +157,8 @@ for (const rapper of cfg.rapper) {
     let picked = 0;
     for (const t of recentTracks) {
         if (picked >= cfg.maxPerArtist + 4) break; // genug Kandidaten für diesen Rapper
+        if (rep.tries > 40) break; // nicht endlos einzeln nachsuchen
+        rep.tries = (rep.tries ?? 0) + 1;
         const title0 = cleanTitle(t.title);
         const key = norm(title0);
         if (!titleOk(title0) || existing.has(key)) continue;
@@ -202,6 +223,18 @@ writeFileSync(
 let sql = `-- Generiert von db/scripts/build-deutschrap.mjs (${new Date().toISOString().slice(0, 10)})\n`;
 sql += `-- Playlist "${cfg.playlist}": ${final.length} Songs seit ${sinceIso}, Beliebtheit laut Deezer, Vorschau/Datum laut iTunes\n`;
 sql += `BEGIN;\n\nINSERT INTO public.topic_pool (text, active, is_song_category)\nSELECT ${q(cfg.playlist)}, true, true\nWHERE NOT EXISTS (SELECT 1 FROM public.topic_pool WHERE text = ${q(cfg.playlist)});\n\n`;
+// Songs, die nicht mehr in der Auswahl sind, ins Archiv (nicht löschen: Spielprotokoll/Statistik bleiben gültig)
+sql += `INSERT INTO public.topic_pool (text, active, is_song_category)
+SELECT 'Archiv (deaktivierte Songs)', false, false
+WHERE NOT EXISTS (SELECT 1 FROM public.topic_pool WHERE text = 'Archiv (deaktivierte Songs)');
+
+`;
+sql += `UPDATE public.song_pool s
+SET archived_from = ${q(cfg.playlist)}, topic_pool_id = (SELECT id FROM public.topic_pool WHERE text = 'Archiv (deaktivierte Songs)')
+WHERE s.topic_pool_id = (SELECT id FROM public.topic_pool WHERE text = ${q(cfg.playlist)})
+  AND lower(s.title) NOT IN (${final.map((c) => q(c.title.toLowerCase())).join(", ")});
+
+`;
 sql += `INSERT INTO public.song_pool (topic_pool_id, title, artist, preview_url, preview_checked_at)\nSELECT tp.id, v.title, v.artist, v.url, now()\nFROM (VALUES\n`;
 sql += final.map((c) => `    (${q(c.title)}, ${q(c.artist)}, ${q(c.preview)})`).join(",\n");
 sql += `\n) AS v(title, artist, url)\nJOIN public.topic_pool tp ON tp.text = ${q(cfg.playlist)}\nWHERE NOT EXISTS (\n  SELECT 1 FROM public.song_pool s WHERE s.topic_pool_id = tp.id AND lower(s.title) = lower(v.title)\n);\n\nCOMMIT;\n`;
