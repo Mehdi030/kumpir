@@ -109,22 +109,26 @@ try {
     const actions = (r.rows?.[0]?.a?.rows ?? []).map((x) => x.action);
     check("Protokoll enthält alle Aktionen", ["suspended", "unsuspended", "profile_moderated", "role_changed", "deletion_requested", "deleted"].every((a) => actions.includes(a)), actions.join(","));
 
-    // --- Playlists
+    // --- Playlists (eigene Test-Playlists, werden mit der Transaktion verworfen)
+    for (const name of ["Testliste Rock", "Testliste 80er"]) {
+        const [tp] = await q("insert into public.topic_pool (text, active, is_song_category) values ($1, true, true) returning id", [name]);
+        await q("insert into public.song_pool (topic_pool_id, title, artist, preview_url) values ($1, $2, 'Testband', 'https://example.invalid/x.m4a')", [tp.id, name + " Song"]);
+    }
     const [pool] = await q("select public._vote_topic_pool(null) p");
     const [nonSong] = await q("select count(*)::int n from public.topic_pool where text = any($1) and not coalesce(is_song_category, false)", [pool.p]);
-    check("Abstimmung ohne Filter: nur Musik-Playlists", nonSong.n === 0 && pool.p.length >= 6, pool.p.join(", "));
+    check("Abstimmung ohne Filter: nur Musik-Playlists", nonSong.n === 0 && pool.p.length >= 3, pool.p.join(", "));
     const [pl] = await q("select public.get_song_playlists() as p");
-    check("Playlist-Liste mit Songanzahl", pl.p.length >= 6 && pl.p.every((x) => x.songs > 0), pl.p.map((x) => `${x.name}:${x.songs}`).join(", "));
-    r = await as(sup, `select public.set_my_preferences('{"host":{"excludedPlaylists":["Rock-Klassiker","80er Hits","gibtsnicht"]}}'::jsonb) as p`);
+    check("Playlist-Liste mit Songanzahl", pl.p.length >= 3 && pl.p.every((x) => x.songs > 0), pl.p.map((x) => `${x.name}:${x.songs}`).join(", "));
+    r = await as(sup, `select public.set_my_preferences('{"host":{"excludedPlaylists":["Testliste Rock","Testliste 80er","gibtsnicht"]}}'::jsonb) as p`);
     const ex = r.rows?.[0]?.p?.host?.excludedPlaylists ?? [];
-    check("Rausgenommene Playlists gespeichert (nur echte)", ex.length === 2 && ex.includes("Rock-Klassiker") && !ex.includes("gibtsnicht"), JSON.stringify(ex));
+    check("Rausgenommene Playlists gespeichert (nur echte)", ex.length === 2 && ex.includes("Testliste Rock") && !ex.includes("gibtsnicht"), JSON.stringify(ex));
 
     const host = randomUUID();
     const [lob] = await q("insert into public.lobbies (code, host_player_id, phase) values ('ZZA1', $1, 'waiting') returning id", [host]);
     await q("insert into public.players (lobby_id, player_id, name, status) values ($1, $2, 'Host', 'active')", [lob.id, host]);
-    await q("select public.set_lobby_topic_filter($1, $2, $3)", [lob.id, host, ["Rock-Klassiker", "Gibts nicht", "Bauberufe"]]);
+    await q("select public.set_lobby_topic_filter($1, $2, $3)", [lob.id, host, ["Testliste Rock", "Gibts nicht", "Bauberufe"]]);
     let [f] = await q("select topic_filter from public.lobbies where id = $1", [lob.id]);
-    check("Lobby-Filter: nur echte Musik-Playlists", JSON.stringify(f.topic_filter) === JSON.stringify(["Rock-Klassiker"]), JSON.stringify(f.topic_filter));
+    check("Lobby-Filter: nur echte Musik-Playlists", JSON.stringify(f.topic_filter) === JSON.stringify(["Testliste Rock"]), JSON.stringify(f.topic_filter));
     await q("select public.set_lobby_topic_filter($1, $2, $3)", [lob.id, host, []]);
     [f] = await q("select topic_filter from public.lobbies where id = $1", [lob.id]);
     check("Lobby-Filter leer = alle (NULL)", f.topic_filter === null);
@@ -138,13 +142,13 @@ try {
     check("Supporter schließt Lobby", !r.error && lg.n === 0, r.error);
 
     // --- Songs archivieren / zurückholen
-    const [song] = await q("select sp.id, tp.text from public.song_pool sp join public.topic_pool tp on tp.id = sp.topic_pool_id where tp.text = 'Rock-Klassiker' limit 1");
+    const [song] = await q("select sp.id, tp.text from public.song_pool sp join public.topic_pool tp on tp.id = sp.topic_pool_id where tp.text = 'Testliste Rock' limit 1");
     r = await as(admin, "select public.admin_set_song_archived($1, true)", [song.id]);
     let [s1] = await q("select tp.text, sp.archived_from from public.song_pool sp join public.topic_pool tp on tp.id = sp.topic_pool_id where sp.id = $1", [song.id]);
-    check("Song archiviert (wird nicht mehr gezogen)", !r.error && s1.text.startsWith("Archiv") && s1.archived_from === "Rock-Klassiker", r.error);
+    check("Song archiviert (wird nicht mehr gezogen)", !r.error && s1.text.startsWith("Archiv") && s1.archived_from === "Testliste Rock", r.error);
     r = await as(admin, "select public.admin_set_song_archived($1, false)", [song.id]);
     [s1] = await q("select tp.text, sp.archived_from from public.song_pool sp join public.topic_pool tp on tp.id = sp.topic_pool_id where sp.id = $1", [song.id]);
-    check("Song zurückgeholt", !r.error && s1.text === "Rock-Klassiker" && s1.archived_from === null, r.error);
+    check("Song zurückgeholt", !r.error && s1.text === "Testliste Rock" && s1.archived_from === null, r.error);
 
     // --- Freier Ersatz-Benutzername (Registrierung scheitert nie an vergebenem Namen)
     const [un] = await q("select public._unique_username('tadmin') a, public._unique_username('A!') b, public._unique_username('neuername') c");

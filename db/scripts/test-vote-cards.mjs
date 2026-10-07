@@ -19,6 +19,12 @@ let failed = 0;
 const check = (n, ok, d = "") => { console.log(`${ok ? "✅" : "❌"} ${n}${d ? "  – " + d : ""}`); if (!ok) failed++; };
 await q("delete from rate_limits");
 const created = [];
+const TEST_PL = ["Test-Playlist A", "Test-Playlist B", "Test-Playlist C"];
+for (const name of TEST_PL) {
+    await q("delete from topic_pool where text = $1", [name]);
+    const [tp] = await q("insert into topic_pool (text, active, is_song_category) values ($1, true, true) returning id", [name]);
+    await q("insert into song_pool (topic_pool_id, title, artist, preview_url) values ($1, $2, 'Testband', 'https://example.invalid/x.m4a')", [tp.id, name + " Song"]);
+}
 
 async function newLobby(playlists) {
     const session = randomUUID();
@@ -35,20 +41,20 @@ async function newLobby(playlists) {
 
 try {
     // ---- 1 Playlist: Abstimmung entfällt
-    let L = await newLobby(["80er Hits"]);
+    let L = await newLobby(["Test-Playlist A"]);
     let r = await L.sb.rpc("rpc_begin_topic_vote", { p_lobby_id: L.id, p_player_id: L.me });
     check("1 Playlist: Start ohne Fehler", !r.error, r.error?.message);
     let [row] = await q("select phase, topic_vote_cards, topic_a, topic_b from lobbies where id = $1", [L.id]);
-    check("1 Playlist: genau eine Karte", row.topic_vote_cards === 1 && row.topic_a === "80er Hits", JSON.stringify(row));
+    check("1 Playlist: genau eine Karte", row.topic_vote_cards === 1 && row.topic_a === "Test-Playlist A", JSON.stringify(row));
     await sleep(3500); // Server-Takt (alle 2 s) wertet aus
     [row] = await q("select phase, topic_selected, topic_tie_choices from lobbies where id = $1", [L.id]);
-    check("1 Playlist: Abstimmung übersprungen, direkt im Countdown", row.phase === "countdown" && row.topic_selected === "80er Hits" && row.topic_tie_choices === null, JSON.stringify(row));
+    check("1 Playlist: Abstimmung übersprungen, direkt im Countdown", row.phase === "countdown" && row.topic_selected === "Test-Playlist A" && row.topic_tie_choices === null, JSON.stringify(row));
 
     // ---- 2 Playlists: nur A und B, nie eine dritte Karte
     const picks = new Set();
     let thirdRejected = true;
     for (let i = 0; i < 4; i++) {
-        L = await newLobby(["80er Hits", "Rock-Klassiker"]);
+        L = await newLobby(["Test-Playlist A", "Test-Playlist B"]);
         await L.sb.rpc("rpc_begin_topic_vote", { p_lobby_id: L.id, p_player_id: L.me });
         [row] = await q("select topic_vote_cards, topic_a, topic_b from lobbies where id = $1", [L.id]);
         if (i === 0) check("2 Playlists: zwei Karten, beide Playlists verschieden", row.topic_vote_cards === 2 && row.topic_a !== row.topic_b, JSON.stringify(row));
@@ -62,13 +68,13 @@ try {
         await L.sb.rpc("rpc_finalize_topic_vote", { p_lobby_id: L.id });
         [row] = await q("select phase, topic_selected from lobbies where id = $1", [L.id]);
         picks.add(row.topic_selected);
-        if (!["80er Hits", "Rock-Klassiker"].includes(row.topic_selected)) thirdRejected = false;
+        if (!["Test-Playlist A", "Test-Playlist B"].includes(row.topic_selected)) thirdRejected = false;
     }
     check("2 Playlists: Stimme für Zufall-Karte (3) wird abgelehnt", thirdRejected);
-    check("2 Playlists: gewählt wird immer eine der beiden", [...picks].every((p) => ["80er Hits", "Rock-Klassiker"].includes(p)), [...picks].join(", "));
+    check("2 Playlists: gewählt wird immer eine der beiden", [...picks].every((p) => ["Test-Playlist A", "Test-Playlist B"].includes(p)), [...picks].join(", "));
 
     // ---- 3 Playlists: wie bisher (A, B, Zufall)
-    L = await newLobby(["80er Hits", "Rock-Klassiker", "Deutsch-Pop"]);
+    L = await newLobby(["Test-Playlist A", "Test-Playlist B", "Test-Playlist C"]);
     await L.sb.rpc("rpc_begin_topic_vote", { p_lobby_id: L.id, p_player_id: L.me });
     [row] = await q("select phase, topic_vote_cards from lobbies where id = $1", [L.id]);
     check("3 Playlists: drei Karten, Abstimmung läuft", row.topic_vote_cards === 3 && row.phase === "topic_vote", JSON.stringify(row));
@@ -89,6 +95,7 @@ try {
 } finally {
     for (const id of created) await q("delete from lobbies where id = $1", [id]).catch(() => {});
     await q("delete from rate_limits").catch(() => {});
+    await q("delete from topic_pool where text = any($1)", [TEST_PL]).catch(() => {});
     await db.end();
 }
 console.log(failed ? `\n${failed} Prüfung(en) fehlgeschlagen` : "\nAlle Prüfungen bestanden (Test-Lobbys gelöscht).");

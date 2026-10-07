@@ -34,7 +34,8 @@ async function as(uid, sql, params) {
         return { error: e.message };
     }
 }
-const log = async (where, p = []) => q(`select action, actor_name, target_label, details from admin_audit where ${where} order by id`, p);
+// nur Einträge dieser Test-Transaktion (created_at = Transaktionsbeginn), echte Einträge stören nicht
+const log = async (where, p = []) => q(`select action, actor_name, target_label, details from admin_audit where (${where}) and created_at = now() order by id`, p);
 const blockedBy = async (name, sql) => {
     await q(`savepoint ${name}`);
     let blocked = false;
@@ -91,12 +92,12 @@ try {
     );
 
     // Songs: viele in einer Transaktion = ein Sammel-Eintrag
-    const [pl] = await q("select id from topic_pool where text = '80er Hits'");
+    const [pl] = await q("select id from topic_pool where text = 'Deutschrap aktuell'");
     for (let i = 0; i < 7; i++) {
         await q("insert into song_pool (topic_pool_id, title, artist, preview_url) values ($1, $2, 'AudTest', 'https://example.invalid/x.m4a')", [pl.id, `Audit Song ${i}`]);
     }
     rows = await log("action = 'songs_added'");
-    check("7 neue Songs = ein Sammel-Eintrag mit Anzahl", rows.length === 1 && rows[0].details?.count === 7 && rows[0].details?.playlists?.["80er Hits"] === 7, JSON.stringify(rows[0]?.details));
+    check("7 neue Songs = ein Sammel-Eintrag mit Anzahl", rows.length === 1 && rows[0].details?.count === 7 && rows[0].details?.playlists?.["Deutschrap aktuell"] === 7, JSON.stringify(rows[0]?.details));
     await q("update song_pool set plays = plays + 1 where artist = 'AudTest'");
     rows = await log("action = 'songs_changed'");
     check("Spielzähler (plays/hits) erzeugen KEINE Einträge", rows.length === 0);
