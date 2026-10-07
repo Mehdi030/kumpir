@@ -8,6 +8,7 @@ import { serverNow, syncServerClock } from "@/lib/serverClock";
 
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { SongRound } from "@/components/game/SongRound";
+import { CountdownRing } from "@/components/game/CountdownRing";
 import { usePlayerIdentity } from "@/hooks/usePlayerIdentity";
 import { useLobbyRealtime } from "@/hooks/useLobbyRealtime";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
@@ -148,6 +149,13 @@ function clamp(n: number, min: number, max: number) {
 }
 
 // Server-Uhr statt Geräte-Uhr (lib/serverClock.ts)
+/** Gleiche Spielerfarbe wie am Tisch (PlayerRing). */
+function hueOf(id: string): number {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return h % 360;
+}
+
 function msUntil(ts: string | null): number | null {
     if (!ts) return null;
     const ms = Date.parse(ts);
@@ -1369,6 +1377,43 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // =========================================================
     // PHASE: TOPIC VOTE  (NO blinking)
     // =========================================================
+    // Nur eine Playlist zur Auswahl: keine Abstimmung zeigen, sondern die Playlist direkt enthüllen.
+    // (Der Server beendet die Abstimmung in dem Fall sofort; ab 2 Playlists läuft sie ganz normal.)
+    if (lobby.phase === "topic_vote" && voteCards === 1) {
+        return (
+            <main className="fullH gameStage plReveal" style={plStyle(lookA.color)}>
+                <div className="plRevealInner">
+                    <div className="plKicker">Playlist dieser Runde</div>
+                    <div className="plCard">
+                        <span className="plIcon" aria-hidden>
+                            {lookA.icon}
+                        </span>
+                        <span className="plName">{aLabel}</span>
+                    </div>
+                    <div className="plSub">Gleich geht&apos;s los …</div>
+                </div>
+                <style>{`
+          .plReveal{ display:grid; place-items:center; padding:24px; color:#fff; text-align:center; }
+          .plRevealInner{ display:grid; justify-items:center; gap:18px; }
+          .plKicker{ font-size:13px; font-weight:950; letter-spacing:2.4px; text-transform:uppercase; opacity:.78; }
+          .plCard{
+            display:flex; align-items:center; gap:18px; padding:22px 34px; border-radius:30px;
+            background: linear-gradient(160deg, color-mix(in srgb, var(--pl) 30%, rgba(30,10,6,.6)), rgba(20,8,6,.55));
+            border: 2px solid color-mix(in srgb, var(--pl) 70%, white);
+            box-shadow: 0 0 0 6px color-mix(in srgb, var(--pl) 22%, transparent), 0 30px 90px rgba(0,0,0,.4), 0 0 80px color-mix(in srgb, var(--pl) 35%, transparent);
+            animation: plIn .7s cubic-bezier(.16,1,.3,1) both;
+          }
+          .plIcon{ font-size: clamp(54px, 8vw, 84px); line-height:1; animation: plPop .8s cubic-bezier(.34,1.56,.64,1) .15s both; }
+          .plName{ font-family: var(--font-display); font-size: clamp(30px, 5vw, 58px); font-weight:800; letter-spacing:-.4px; }
+          .plSub{ font-size:15px; font-weight:850; opacity:.8; }
+          @keyframes plIn{ from{ opacity:0; transform: translateY(16px) scale(.96); } to{ opacity:1; transform:none; } }
+          @keyframes plPop{ from{ opacity:0; transform: scale(.4) rotate(-20deg); } to{ opacity:1; transform:none; } }
+          @media (prefers-reduced-motion: reduce){ .plCard, .plIcon{ animation:none; } }
+        `}</style>
+            </main>
+        );
+    }
+
     if (lobby.phase === "topic_vote") {
         const timeLeft = voteSecondsLeft ?? 15;
         const duration = 15;
@@ -1376,14 +1421,13 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
         return (
             <main
-                className="fullH"
+                className="fullH gameStage"
                 style={{
                     display: "grid",
                     placeItems: "center",
                     padding: 24,
                     position: "relative",
                     overflow: "hidden",
-                    color: "white",
                 }}
             >
                 <div style={{ width: "min(1160px, calc(100vw - 48px))", position: "relative", zIndex: 2 }}>
@@ -1585,81 +1629,59 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
         const isWinner = (c: 1 | 2 | 3) => winnerChoice === c;
 
+        const cdLeft = Math.max(0, countdownSecondsLeft ?? 5);
+        const cdTotal = Math.max(1, Math.round(((Date.parse(lobby.countdown_ends_at ?? "") || 0) - (Date.parse(lobby.countdown_started_at ?? "") || 0)) / 1000) || 5);
         return (
-            <main
-                className="fullH"
-                style={{
-                    display: "grid",
-                    placeItems: "center",
-                    padding: 24,
-                    color: "white",
-                }}
-            >
-                <div style={{ width: "min(1100px, calc(100vw - 48px))", textAlign: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>PLAYLIST GEWÄHLT</div>
+            <main className="fullH gameStage" style={{ display: "grid", placeItems: "center", padding: 24 }}>
+                <div style={{ width: "min(1100px, calc(100vw - 48px))", textAlign: "center", display: "grid", justifyItems: "center", gap: 14 }}>
+                    <div className="stageKicker">{voteCards === 1 ? "Playlist dieser Runde" : "Playlist gewählt"}</div>
 
-                    <div className="resultTriGrid">
-                        <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`} style={plStyle(lookA.color)}>
-                            <div className="resultBadge">①</div>
-                            <div className="resultTitle">{aLabel}</div>
+                    {/* Abstimmungs-Ergebnis nur, wenn es wirklich eine Abstimmung gab (ab 2 Playlists) */}
+                    {voteCards >= 2 ? (
+                        <div className="resultTriGrid" style={{ width: "100%" }}>
+                            <div className={`resultTile ${isWinner(1) ? "win" : "lose"}`} style={plStyle(lookA.color)}>
+                                <div className="resultBadge">①</div>
+                                <div className="resultTitle">{aLabel}</div>
+                            </div>
+                            <div className={`resultTile ${isWinner(2) ? "win" : "lose"}`} style={plStyle(lookB.color)}>
+                                <div className="resultBadge">②</div>
+                                <div className="resultTitle">{bLabel}</div>
+                            </div>
+                            {voteCards >= 3 ? (
+                                <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`} style={plStyle(lookC.color)}>
+                                    <div className="resultBadge">{lobby.topic_c ? "③" : "🎲"}</div>
+                                    <div className="resultTitle">{isWinner(3) && !lobby.topic_c ? `Zufall: ${selectedTopic}` : cLabel}</div>
+                                </div>
+                            ) : null}
                         </div>
-                        {voteCards >= 2 ? (
-<div className={`resultTile ${isWinner(2) ? "win" : "lose"}`} style={plStyle(lookB.color)}>
-                            <div className="resultBadge">②</div>
-                            <div className="resultTitle">{bLabel}</div>
-                        </div>
-                        ) : null}
-                        {voteCards >= 3 ? (
-<div className={`resultTile ${isWinner(3) ? "win" : "lose"}`} style={plStyle(lookC.color)}>
-                            <div className="resultBadge">{lobby.topic_c ? "③" : "🎲"}</div>
-                            <div className="resultTitle">{isWinner(3) && !lobby.topic_c ? `Zufall: ${selectedTopic}` : cLabel}</div>
-                        </div>
-                        ) : null}
-                    </div>
+                    ) : null}
 
-                    <div className="cdTopic" style={{ fontSize: "clamp(28px, 4.2vw, 52px)", fontWeight: 950, marginTop: 18 }}>
-                        <span className="cdTopicIcon" aria-hidden>
+                    <div className="stagePlCard" style={plStyle(playlistLook(selectedTopic).color)}>
+                        <span className="stagePlIcon" aria-hidden>
                             {playlistLook(selectedTopic).icon}
-                        </span>{" "}
+                        </span>
                         {selectedTopic}
                     </div>
 
                     {tie ? (
-                        <div style={{ marginTop: 10, opacity: 0.9, fontWeight: 850 }}>
+                        <div style={{ opacity: 0.9, fontWeight: 850 }}>
                             Gleichstand zwischen: <span style={{ opacity: 0.98 }}>{tieChoices.map((c) => labelForChoice(c)).join(" · ")}</span>
                             <div style={{ marginTop: 6, opacity: 0.92 }}>
                                 Das Los entscheidet: <b>{pick ? labelForChoice(pick) : "…"}</b>
                             </div>
                         </div>
-                    ) : (
-                        <div style={{ marginTop: 10, opacity: 0.85, fontWeight: 800 }}>Gleich läuft der erste Song.</div>
-                    )}
+                    ) : null}
 
-                    <div style={{ marginTop: 22, fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>START IN</div>
-                    <div style={{ marginTop: 10, fontSize: "clamp(80px, 10vw, 140px)", fontWeight: 950, letterSpacing: 2, textShadow: "0 18px 70px rgba(0,0,0,0.35)" }}>
-                        <span key={Math.max(0, countdownSecondsLeft ?? 5)} className="cdNum">
-                            {Math.max(0, countdownSecondsLeft ?? 5)}
-                        </span>
+                    <div style={{ marginTop: 10 }}>
+                        <CountdownRing seconds={cdLeft} total={cdTotal} size={200} />
                     </div>
+                    <div style={{ fontWeight: 850, opacity: 0.8 }}>Gleich läuft der erste Song – Ohren auf! 🎧</div>
 
                     {/* Nur der Startspieler sieht diesen Hinweis -- alle anderen
                         erfahren es erst, wenn die Runde wirklich losgeht. */}
                     {mePlayerId && lobby.countdown_starter_player_id === mePlayerId ? (
-                        <div
-                            style={{
-                                marginTop: 12,
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 8,
-                                padding: "8px 16px",
-                                borderRadius: 999,
-                                background: "rgba(255,214,10,0.16)",
-                                border: "1px solid rgba(255,214,10,0.4)",
-                                fontWeight: 900,
-                                fontSize: 14,
-                            }}
-                        >
-                            🥔 Du startest gleich!
+                        <div className="stageChip" style={{ paddingLeft: 14, background: "rgba(255,214,10,0.16)", borderColor: "rgba(255,214,10,0.45)" }}>
+                            🥔 Du startest mit der Kumpir!
                         </div>
                     ) : null}
 
@@ -1827,40 +1849,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     if (lobby.phase === "rematch_wait") {
         return (
-            <main
-                className="fullH"
-                style={{
-                    display: "grid",
-                    placeItems: "center",
-                    padding: 24,
-                    color: "white",
-                }}
-            >
-                <div style={{ width: "min(680px, calc(100vw - 48px))", textAlign: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>REMATCH</div>
-                    <div style={{ fontSize: "clamp(26px, 4vw, 42px)", fontWeight: 950, marginTop: 12 }}>🔁 Nächstes Match startet gleich</div>
-                    <div style={{ marginTop: 8, opacity: 0.82, fontWeight: 700 }}>
-                        Alle Anwesenden gehen automatisch weiter zur Themenwahl.
+            <main className="fullH gameStage" style={{ display: "grid", placeItems: "center", padding: 24 }}>
+                <div style={{ width: "min(680px, calc(100vw - 48px))", textAlign: "center", display: "grid", justifyItems: "center", gap: 12 }}>
+                    <div className="stageKicker">Revanche</div>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px, 4.4vw, 46px)", fontWeight: 800 }}>🔁 Nächstes Match startet gleich</div>
+                    <div style={{ opacity: 0.8, fontWeight: 700 }}>Alle Anwesenden gehen automatisch weiter.</div>
+
+                    <div style={{ marginTop: 6 }}>
+                        <CountdownRing seconds={Math.max(0, countdownSecondsLeft ?? 10)} total={10} size={170} />
                     </div>
 
-                    <div style={{ marginTop: 18, fontSize: "clamp(56px, 8vw, 96px)", fontWeight: 950, textShadow: "0 14px 50px rgba(0,0,0,0.35)" }}>
-                        {Math.max(0, countdownSecondsLeft ?? 10)}
-                    </div>
-
-                    <div style={{ marginTop: 22, display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-                        {players.map((p) => (
-                            <span
-                                key={p.player_id}
-                                style={{
-                                    padding: "8px 14px",
-                                    borderRadius: 999,
-                                    background: "rgba(38,9,6,0.46)",
-                                    border: "1px solid rgba(255,255,255,0.18)",
-                                    fontWeight: 800,
-                                    fontSize: 14,
-                                }}
-                            >
-                                ✅ {p.name}
+                    <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                        {players.map((p, i) => (
+                            <span key={p.player_id} className="stageChip" style={{ animationDelay: `${i * 60}ms`, ["--h" as string]: hueOf(p.player_id) }}>
+                                <span className="stageChipDot">{p.name.slice(0, 1).toUpperCase()}</span>
+                                {p.name}
                                 {mePlayerId === p.player_id ? " (du)" : ""}
                             </span>
                         ))}

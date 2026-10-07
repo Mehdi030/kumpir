@@ -2,11 +2,12 @@
    GLOBAL VARIABLES (Premium)
    =============================== */
 
-/* Eigene Emoji-Schrift (OpenMoji, CC BY-SA 4.0 – gebaut mit db/scripts/emoji-*.mjs). Greift nur für Emoji-Zeichen;
-   fehlt ein Emoji in der Schrift, nimmt der Browser wie bisher das System-Emoji. */
+/* Eigene Emoji-Schrift (Microsoft Fluent Emoji, MIT – gebaut mit db/scripts/emoji-*.mjs). Greift nur für Emoji-Zeichen;
+   fehlt ein Emoji in der Schrift, nimmt der Browser wie bisher das System-Emoji. Farbverläufe brauchen COLRv1:
+   Chrome/Edge/Firefox zeigen Fluent, Safari (iPhone/Mac) kann das nicht und nimmt die Apple-Emojis. */
 @font-face{
     font-family: "Kumpir Emoji";
-    src: url("/fonts/kumpir-emoji.woff2") format("woff2") tech(color-COLRv0);
+    src: url("/fonts/kumpir-emoji-fluent.woff2") format("woff2") tech(color-COLRv1);
     font-display: swap;
     unicode-range: U+00A9, U+00AE, U+200D, U+203C, U+2049, U+20E3, U+2122, U+2139, U+2194-21AA, U+231A-23FF, U+24C2, U+25AA-25FE, U+2600-27BF, U+2934-2935, U+2B05-2B55, U+3030, U+303D, U+3297, U+3299, U+FE0F, U+1F000-1FAFF;
 }

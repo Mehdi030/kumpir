@@ -81,10 +81,10 @@ export default function Home() {
 
                 <footer className="homeFooter">
                     v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"} ·{" "}
-                    <a href="https://openmoji.org" target="_blank" rel="noopener noreferrer">
-                        Emojis: OpenMoji
+                    <a href="https://github.com/microsoft/fluentui-emoji" target="_blank" rel="noopener noreferrer">
+                        Emojis: Microsoft Fluent Emoji
                     </a>{" "}
-                    (CC BY-SA 4.0)
+                    (MIT)
                 </footer>
             </div>
         </main>

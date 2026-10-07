@@ -4,7 +4,7 @@
   "cps": [
    "2705"
   ],
-  "uses": 47,
+  "uses": 42,
   "where": [
    "code"
   ]
@@ -20,12 +20,11 @@
   ]
  },
  {
-  "emoji": "⚠️",
+  "emoji": "🥔",
   "cps": [
-   "26A0",
-   "FE0F"
+   "1F954"
   ],
-  "uses": 17,
+  "uses": 16,
   "where": [
    "code"
   ]
@@ -35,26 +34,27 @@
   "cps": [
    "1F3C6"
   ],
-  "uses": 14,
+  "uses": 15,
   "where": [
    "code",
    "db:achievements.icon"
   ]
  },
  {
-  "emoji": "⛔",
+  "emoji": "⚠️",
   "cps": [
-   "26D4"
+   "26A0",
+   "FE0F"
   ],
-  "uses": 13,
+  "uses": 15,
   "where": [
    "code"
   ]
  },
  {
-  "emoji": "🥔",
+  "emoji": "⛔",
   "cps": [
-   "1F954"
+   "26D4"
   ],
   "uses": 13,
   "where": [
@@ -94,22 +94,11 @@
   ]
  },
  {
-  "emoji": "⚡",
-  "cps": [
-   "26A1"
-  ],
-  "uses": 11,
-  "where": [
-   "code",
-   "db:achievements.icon"
-  ]
- },
- {
   "emoji": "👥",
   "cps": [
    "1F465"
   ],
-  "uses": 11,
+  "uses": 10,
   "where": [
    "code"
   ]
@@ -134,6 +123,17 @@
   "uses": 9,
   "where": [
    "code"
+  ]
+ },
+ {
+  "emoji": "⚡",
+  "cps": [
+   "26A1"
+  ],
+  "uses": 9,
+  "where": [
+   "code",
+   "db:achievements.icon"
   ]
  },
  {
@@ -189,9 +189,20 @@
   ]
  },
  {
-  "emoji": "🎯",
+  "emoji": "🔥",
   "cps": [
-   "1F3AF"
+   "1F525"
+  ],
+  "uses": 7,
+  "where": [
+   "code",
+   "db:achievements.icon"
+  ]
+ },
+ {
+  "emoji": "🎲",
+  "cps": [
+   "1F3B2"
   ],
   "uses": 7,
   "where": [
@@ -199,9 +210,9 @@
   ]
  },
  {
-  "emoji": "🔥",
+  "emoji": "🥇",
   "cps": [
-   "1F525"
+   "1F947"
   ],
   "uses": 7,
   "where": [
@@ -230,6 +241,16 @@
   ]
  },
  {
+  "emoji": "🎯",
+  "cps": [
+   "1F3AF"
+  ],
+  "uses": 6,
+  "where": [
+   "code"
+  ]
+ },
+ {
   "emoji": "⏳",
   "cps": [
    "23F3"
@@ -240,30 +261,9 @@
   ]
  },
  {
-  "emoji": "🎲",
+  "emoji": "🎮",
   "cps": [
-   "1F3B2"
-  ],
-  "uses": 6,
-  "where": [
-   "code"
-  ]
- },
- {
-  "emoji": "🥇",
-  "cps": [
-   "1F947"
-  ],
-  "uses": 6,
-  "where": [
-   "code",
-   "db:achievements.icon"
-  ]
- },
- {
-  "emoji": "🎤",
-  "cps": [
-   "1F3A4"
+   "1F3AE"
   ],
   "uses": 6,
   "where": [
@@ -363,16 +363,6 @@
   ]
  },
  {
-  "emoji": "🎮",
-  "cps": [
-   "1F3AE"
-  ],
-  "uses": 5,
-  "where": [
-   "code"
-  ]
- },
- {
   "emoji": "📤",
   "cps": [
    "1F4E4"
@@ -426,19 +416,19 @@
   ]
  },
  {
-  "emoji": "💥",
+  "emoji": "🔐",
   "cps": [
-   "1F4A5"
+   "1F510"
   ],
-  "uses": 3,
+  "uses": 4,
   "where": [
    "code"
   ]
  },
  {
-  "emoji": "🔐",
+  "emoji": "💥",
   "cps": [
-   "1F510"
+   "1F4A5"
   ],
   "uses": 3,
   "where": [
@@ -476,6 +466,16 @@
   ]
  },
  {
+  "emoji": "🎤",
+  "cps": [
+   "1F3A4"
+  ],
+  "uses": 3,
+  "where": [
+   "code"
+  ]
+ },
+ {
   "emoji": "✏️",
   "cps": [
    "270F",
@@ -495,6 +495,16 @@
   "where": [
    "code",
    "db:achievements.icon"
+  ]
+ },
+ {
+  "emoji": "📥",
+  "cps": [
+   "1F4E5"
+  ],
+  "uses": 2,
+  "where": [
+   "code"
   ]
  },
  {
@@ -521,16 +531,6 @@
   "emoji": "👻",
   "cps": [
    "1F47B"
-  ],
-  "uses": 2,
-  "where": [
-   "code"
-  ]
- },
- {
-  "emoji": "⚔",
-  "cps": [
-   "2694"
   ],
   "uses": 2,
   "where": [
@@ -601,6 +601,16 @@
   ]
  },
  {
+  "emoji": "🟢",
+  "cps": [
+   "1F7E2"
+  ],
+  "uses": 2,
+  "where": [
+   "code"
+  ]
+ },
+ {
   "emoji": "↗",
   "cps": [
    "2197"
@@ -624,16 +634,6 @@
   "emoji": "♪",
   "cps": [
    "266A"
-  ],
-  "uses": 2,
-  "where": [
-   "code"
-  ]
- },
- {
-  "emoji": "🔴",
-  "cps": [
-   "1F534"
   ],
   "uses": 2,
   "where": [
@@ -694,16 +694,6 @@
   ]
  },
  {
-  "emoji": "🔗",
-  "cps": [
-   "1F517"
-  ],
-  "uses": 2,
-  "where": [
-   "code"
-  ]
- },
- {
   "emoji": "📷",
   "cps": [
    "1F4F7"
@@ -754,16 +744,6 @@
   ]
  },
  {
-  "emoji": "📥",
-  "cps": [
-   "1F4E5"
-  ],
-  "uses": 1,
-  "where": [
-   "code"
-  ]
- },
- {
   "emoji": "✍️",
   "cps": [
    "270D",
@@ -788,6 +768,16 @@
   "emoji": "🧱",
   "cps": [
    "1F9F1"
+  ],
+  "uses": 1,
+  "where": [
+   "code"
+  ]
+ },
+ {
+  "emoji": "⚔",
+  "cps": [
+   "2694"
   ],
   "uses": 1,
   "where": [
@@ -829,6 +819,16 @@
   "emoji": "👋",
   "cps": [
    "1F44B"
+  ],
+  "uses": 1,
+  "where": [
+   "code"
+  ]
+ },
+ {
+  "emoji": "🏠",
+  "cps": [
+   "1F3E0"
   ],
   "uses": 1,
   "where": [
@@ -890,16 +890,6 @@
   "emoji": "📅",
   "cps": [
    "1F4C5"
-  ],
-  "uses": 1,
-  "where": [
-   "code"
-  ]
- },
- {
-  "emoji": "🟢",
-  "cps": [
-   "1F7E2"
   ],
   "uses": 1,
   "where": [
