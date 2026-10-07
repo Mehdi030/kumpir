@@ -3,9 +3,11 @@
  * Baut die Playlist "Deutschrap aktuell" aus data/deutschrap-rapper.json:
  *  1. Beliebtheit: Deezer "Top-Songs" pro Rapper (öffentliche API, Feld rank)
  *  2. Vorschau + Erscheinungsdatum: iTunes-Suche (wie alle anderen Playlists)
- *  3. nur Songs der letzten N Jahre (erste Veröffentlichung), keine Remixe/Live/Intros,
+ *  3. optional nur Songs der letzten N Jahre (sinceYears; null = Alter egal), keine Remixe/Live/Intros,
  *     "feat."-Anhängsel aus dem Titel entfernt, keine Dubletten (auch nicht zu bestehenden Playlists)
- *  4. Auswahl: global nach Beliebtheit, höchstens maxPerArtist pro Rapper, bis target erreicht
+ *  4. Auswahl: global nach Beliebtheit, höchstens maxPerArtist pro Rapper, bis target erreicht.
+ *     Fehlen einem Rapper danach noch Songs: erst seine bisherigen Songs aus der Playlist, dann weitere
+ *     Songs von ihm aus der iTunes-Suche (manche Klassiker fehlen bei iTunes ganz, z. B. Kollegah).
  *  5. jede Vorschau-Datei wird abgerufen (HTTP 200)
  *
  * Aufruf: node db/scripts/build-deutschrap.mjs <ausgabe.sql>
@@ -84,13 +86,21 @@ await client.connect();
 const existing = new Set(
     (await client.query("select sp.title from song_pool sp join topic_pool tp on tp.id = sp.topic_pool_id where tp.text <> $1", [cfg.playlist])).rows.map((r) => norm(r.title))
 );
+// Bisherige Songs der Playlist: Reserve, falls ein Rapper sonst zu wenige hätte (sie fliegen dann nicht raus)
+const current = (
+    await client.query("select sp.title, sp.artist, sp.preview_url from song_pool sp join topic_pool tp on tp.id = sp.topic_pool_id where tp.text = $1 and sp.preview_url is not null", [cfg.playlist])
+).rows;
 await client.end();
+const artistsOf = (a) => (a ?? "").split(/\s*,\s*|\s*&\s*|\s+feat\.?\s+|\s+x\s+/i).map(norm);
 
+// sinceYears leer/0 -> kein Zeitfilter (Klassiker erlaubt, nur Beliebtheit zählt)
+const dateLimit = Number(cfg.sinceYears) > 0;
 const since = new Date();
-since.setFullYear(since.getFullYear() - cfg.sinceYears);
-const sinceIso = since.toISOString().slice(0, 10);
+if (dateLimit) since.setFullYear(since.getFullYear() - cfg.sinceYears);
+const sinceIso = dateLimit ? since.toISOString().slice(0, 10) : "0000-01-01";
 
 const candidates = [];
+const reserve = {}; // Rapper -> Ersatz-Songs (bisherige Playlist, dann iTunes-Suche)
 const albumDates = new Map();
 const perArtistReport = {};
 
@@ -109,7 +119,7 @@ for (const rapper of cfg.rapper) {
     rep.deezerTop = tracks.length;
 
     // Erscheinungsdatum laut Deezer (Album/Single), mit Cache
-    for (const t of tracks) {
+    for (const t of dateLimit ? tracks : []) {
         const albumId = t.album?.id;
         if (!albumId) continue;
         if (!albumDates.has(albumId)) {
@@ -119,7 +129,7 @@ for (const rapper of cfg.rapper) {
         }
         t._date = albumDates.get(albumId);
     }
-    const recentTracks = tracks.filter((t) => t._date && t._date >= sinceIso).sort((a, b) => b.rank - a.rank);
+    const recentTracks = (dateLimit ? tracks.filter((t) => t._date && t._date >= sinceIso) : [...tracks]).sort((a, b) => b.rank - a.rank);
 
     // Reichen die Top-Songs nicht (viele Rapper haben vor allem alte Hits), zusätzlich alle
     // Alben/Singles der letzten Jahre durchsuchen – deren Titel tragen ebenfalls Deezers Beliebtheit (rank).
@@ -154,6 +164,14 @@ for (const rapper of cfg.rapper) {
     };
     for (const r of it?.results ?? []) if (norm(r.artistName ?? "").includes(norm(rapper))) addResult(r);
 
+    // Reserve: bisherige Playlist-Songs des Rappers, dann seine iTunes-Songs (Reihenfolge der Suche ~ Beliebtheit)
+    reserve[rapper] = [
+        ...current.filter((c) => artistsOf(c.artist).includes(norm(rapper))).map((c) => ({ title: c.title, artist: c.artist, preview: c.preview_url, from: "Playlist" })),
+        ...(it?.results ?? [])
+            .filter((r) => r.previewUrl && artistsOf(r.artistName).includes(norm(rapper)))
+            .map((r) => ({ title: cleanTitle(r.trackName ?? ""), artist: r.artistName, preview: r.previewUrl, released: r.releaseDate?.slice(0, 10) ?? null, from: "iTunes" })),
+    ];
+
     let picked = 0;
     for (const t of recentTracks) {
         if (picked >= cfg.maxPerArtist + 4) break; // genug Kandidaten für diesen Rapper
@@ -174,7 +192,7 @@ for (const rapper of cfg.rapper) {
         if (!hit) continue;
         rep.matched++;
         const itDate = hit.releaseDate ? hit.releaseDate.slice(0, 10) : null;
-        if (itDate && itDate < sinceIso) continue; // alter Song, nur neu veröffentlicht
+        if (dateLimit && itDate && itDate < sinceIso) continue; // alter Song, nur neu veröffentlicht
         const title = cleanTitle(hit.trackName);
         if (!titleOk(title)) continue;
         picked++;
@@ -197,6 +215,18 @@ for (const c of candidates) {
     chosen.push(c);
 }
 
+// 3b) Auffüllen: Rapper mit weniger als maxPerArtist Songs aus der Reserve
+for (const rapper of cfg.rapper) {
+    for (const r of reserve[rapper] ?? []) {
+        if ((count[rapper] ?? 0) >= cfg.maxPerArtist) break;
+        const key = norm(r.title);
+        if (!titleOk(r.title) || used.has(key)) continue;
+        used.add(key);
+        count[rapper] = (count[rapper] ?? 0) + 1;
+        chosen.push({ rapper, title: r.title, artist: r.artist, rank: 0, released: r.released ?? null, preview: r.preview, key, from: r.from });
+    }
+}
+
 // 4) Vorschau-Dateien prüfen
 const final = [];
 for (const c of chosen) {
@@ -217,11 +247,11 @@ for (const c of chosen) {
 for (const r of Object.keys(perArtistReport)) perArtistReport[r].chosen = count[r] ?? 0;
 writeFileSync(
     resolve(__dirname, "data/deutschrap-report.json"),
-    JSON.stringify({ since: sinceIso, total: final.length, perRapper: perArtistReport, songs: final.map(({ key, preview, ...rest }) => rest) }, null, 2)
+    JSON.stringify({ since: dateLimit ? sinceIso : null, total: final.length, perRapper: perArtistReport, songs: final.map(({ key, preview, ...rest }) => rest) }, null, 2)
 );
 
 let sql = `-- Generiert von db/scripts/build-deutschrap.mjs (${new Date().toISOString().slice(0, 10)})\n`;
-sql += `-- Playlist "${cfg.playlist}": ${final.length} Songs seit ${sinceIso}, Beliebtheit laut Deezer, Vorschau/Datum laut iTunes\n`;
+sql += `-- Playlist "${cfg.playlist}": ${final.length} Songs ${dateLimit ? `seit ${sinceIso}` : "(Alter egal)"}, max. ${cfg.maxPerArtist} pro Rapper, Beliebtheit laut Deezer, Vorschau laut iTunes\n`;
 sql += `BEGIN;\n\nINSERT INTO public.topic_pool (text, active, is_song_category)\nSELECT ${q(cfg.playlist)}, true, true\nWHERE NOT EXISTS (SELECT 1 FROM public.topic_pool WHERE text = ${q(cfg.playlist)});\n\n`;
 // Songs, die nicht mehr in der Auswahl sind, ins Archiv (nicht löschen: Spielprotokoll/Statistik bleiben gültig)
 sql += `INSERT INTO public.topic_pool (text, active, is_song_category)

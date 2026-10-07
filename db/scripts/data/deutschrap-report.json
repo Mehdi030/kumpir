@@ -1,207 +1,236 @@
 {
-  "since": "2022-10-07",
-  "total": 164,
+  "since": null,
+  "total": 363,
   "perRapper": {
     "Apache 207": {
       "deezerTop": 50,
-      "matched": 14,
-      "recent": 28,
+      "matched": 13,
+      "recent": 50,
       "note": "",
-      "tries": 28,
-      "chosen": 12
+      "tries": 41,
+      "chosen": 15
     },
     "Luciano": {
       "deezerTop": 50,
-      "matched": 13,
-      "recent": 36,
+      "matched": 16,
+      "recent": 50,
       "note": "",
-      "tries": 36,
-      "chosen": 10
+      "tries": 41,
+      "chosen": 15
     },
     "RAF Camora": {
       "deezerTop": 50,
-      "matched": 7,
-      "recent": 16,
+      "matched": 22,
+      "recent": 50,
       "note": "",
-      "tries": 16,
-      "chosen": 4
+      "tries": 41,
+      "chosen": 15
     },
     "Gzuz": {
       "deezerTop": 50,
-      "matched": 6,
-      "recent": 27,
+      "matched": 14,
+      "recent": 50,
       "note": "",
-      "tries": 27,
-      "chosen": 5
+      "tries": 41,
+      "chosen": 15
     },
     "Samra": {
       "deezerTop": 50,
-      "matched": 7,
-      "recent": 16,
+      "matched": 11,
+      "recent": 50,
       "note": "",
-      "tries": 16,
-      "chosen": 6
+      "tries": 41,
+      "chosen": 15
     },
     "KC Rebell": {
       "deezerTop": 50,
-      "matched": 6,
-      "recent": 16,
+      "matched": 26,
+      "recent": 50,
       "note": "",
-      "tries": 16,
-      "chosen": 5
+      "tries": 41,
+      "chosen": 15
     },
     "Summer Cem": {
       "deezerTop": 50,
-      "matched": 6,
-      "recent": 29,
+      "matched": 12,
+      "recent": 50,
       "note": "",
-      "tries": 29,
-      "chosen": 6
+      "tries": 41,
+      "chosen": 15
     },
     "Azet": {
       "deezerTop": 50,
       "matched": 9,
-      "recent": 32,
-      "note": "",
-      "tries": 32,
-      "chosen": 9
-    },
-    "Zuna": {
-      "deezerTop": 50,
-      "matched": 11,
-      "recent": 30,
-      "note": "",
-      "tries": 30,
-      "chosen": 10
-    },
-    "Nimo": {
-      "deezerTop": 50,
-      "matched": 2,
-      "recent": 25,
-      "note": "",
-      "tries": 25,
-      "chosen": 1
-    },
-    "Miami Yacine": {
-      "deezerTop": 50,
-      "matched": 10,
-      "recent": 22,
-      "note": "",
-      "tries": 22,
-      "chosen": 10
-    },
-    "Jamule": {
-      "deezerTop": 50,
-      "matched": 15,
-      "recent": 26,
-      "note": "",
-      "tries": 26,
-      "chosen": 12
-    },
-    "Dardan": {
-      "deezerTop": 50,
-      "matched": 14,
-      "recent": 35,
-      "note": "",
-      "tries": 35,
-      "chosen": 9
-    },
-    "Majoe": {
-      "deezerTop": 50,
-      "matched": 9,
-      "recent": 19,
-      "note": "",
-      "tries": 19,
-      "chosen": 9
-    },
-    "AK Ausserkontrolle": {
-      "deezerTop": 50,
-      "matched": 6,
-      "recent": 27,
-      "note": "",
-      "tries": 27,
-      "chosen": 6
-    },
-    "Capital Bra": {
-      "deezerTop": 50,
-      "matched": 9,
-      "recent": 64,
-      "note": "",
-      "tries": 41,
-      "chosen": 9
-    },
-    "Haftbefehl": {
-      "deezerTop": 50,
-      "matched": 1,
-      "recent": 16,
-      "note": "",
-      "tries": 16,
-      "chosen": 1
-    },
-    "Farid Bang": {
-      "deezerTop": 50,
-      "matched": 0,
-      "recent": 17,
-      "note": "",
-      "tries": 17,
-      "chosen": 0
-    },
-    "Kollegah": {
-      "deezerTop": 50,
-      "matched": 0,
-      "recent": 101,
-      "note": "",
-      "tries": 41,
-      "chosen": 0
-    },
-    "Jazeek": {
-      "deezerTop": 50,
-      "matched": 17,
-      "recent": 49,
-      "note": "",
-      "tries": 31,
-      "chosen": 12
-    },
-    "Aymen": {
-      "deezerTop": 50,
-      "matched": 4,
       "recent": 50,
       "note": "",
       "tries": 41,
-      "chosen": 4
+      "chosen": 15
+    },
+    "Zuna": {
+      "deezerTop": 50,
+      "matched": 7,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "Nimo": {
+      "deezerTop": 50,
+      "matched": 17,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "Miami Yacine": {
+      "deezerTop": 50,
+      "matched": 5,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 9
+    },
+    "Jamule": {
+      "deezerTop": 50,
+      "matched": 19,
+      "recent": 50,
+      "note": "",
+      "tries": 40,
+      "chosen": 15
+    },
+    "Dardan": {
+      "deezerTop": 50,
+      "matched": 16,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "Majoe": {
+      "deezerTop": 50,
+      "matched": 7,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "AK Ausserkontrolle": {
+      "deezerTop": 50,
+      "matched": 15,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "Capital Bra": {
+      "deezerTop": 50,
+      "matched": 24,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "Haftbefehl": {
+      "deezerTop": 50,
+      "matched": 11,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "Jazeek": {
+      "deezerTop": 50,
+      "matched": 18,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "Aymen": {
+      "deezerTop": 50,
+      "matched": 3,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
     },
     "Mero": {
       "deezerTop": 50,
-      "matched": 16,
-      "recent": 31,
+      "matched": 19,
+      "recent": 50,
       "note": "",
-      "tries": 19,
-      "chosen": 12
-    },
-    "Celo & Abdi": {
-      "deezerTop": 50,
-      "matched": 0,
-      "recent": 19,
-      "note": "",
-      "tries": 19,
-      "chosen": 0
+      "tries": 40,
+      "chosen": 15
     },
     "Eno": {
       "deezerTop": 50,
-      "matched": 15,
-      "recent": 33,
+      "matched": 14,
+      "recent": 50,
       "note": "",
-      "tries": 33,
-      "chosen": 12
+      "tries": 41,
+      "chosen": 15
+    },
+    "Kollegah": {
+      "deezerTop": 50,
+      "matched": 1,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "Farid Bang": {
+      "deezerTop": 50,
+      "matched": 3,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "Kurdo": {
+      "deezerTop": 50,
+      "matched": 28,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 15
+    },
+    "AMO": {
+      "deezerTop": 50,
+      "matched": 8,
+      "recent": 50,
+      "note": "",
+      "tries": 41,
+      "chosen": 9
     }
   },
   "songs": [
+    {
+      "rapper": "Summer Cem",
+      "title": "KILLY MANJARO",
+      "artist": "Summer Cem & BILLA JOE",
+      "rank": 673557,
+      "released": "2026-05-22"
+    },
+    {
+      "rapper": "AMO",
+      "title": "STRASSE",
+      "artist": "Cave, AMO & Soufian",
+      "rank": 619287,
+      "released": "2026-09-11"
+    },
     {
       "rapper": "Apache 207",
       "title": "Chaos",
       "artist": "Apache 207",
       "rank": 600918,
       "released": "2026-08-26"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "RADW",
+      "artist": "Haftbefehl",
+      "rank": 594760,
+      "released": "2020-06-04"
     },
     {
       "rapper": "Jazeek",
@@ -211,11 +240,18 @@
       "released": "2024-11-08"
     },
     {
+      "rapper": "AK Ausserkontrolle",
+      "title": "Prada Sport",
+      "artist": "Pashanim, AK AUSSERKONTROLLE & Selim61",
+      "rank": 593138,
+      "released": "2026-05-14"
+    },
+    {
       "rapper": "Apache 207",
-      "title": "Miami",
-      "artist": "Apache 207",
-      "rank": 578410,
-      "released": "2024-08-02"
+      "title": "Madonna",
+      "artist": "Bausa & Apache 207",
+      "rank": 576411,
+      "released": "2021-02-19"
     },
     {
       "rapper": "Apache 207",
@@ -225,18 +261,18 @@
       "released": "2023-03-31"
     },
     {
-      "rapper": "Apache 207",
-      "title": "Morgen",
-      "artist": "Apache 207",
-      "rank": 574183,
-      "released": "2025-05-22"
-    },
-    {
       "rapper": "Miami Yacine",
       "title": "Heb ab",
       "artist": "Miami Yacine & Nash",
       "rank": 572246,
       "released": "2026-10-02"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "KOMM NÄHER",
+      "artist": "Juju & RAF Camora",
+      "rank": 570148,
+      "released": "2026-06-25"
     },
     {
       "rapper": "Dardan",
@@ -246,32 +282,39 @@
       "released": "2026-09-25"
     },
     {
-      "rapper": "Gzuz",
-      "title": "Seite an Seite",
-      "artist": "Gzuz, Sido & JBS",
-      "rank": 553887,
-      "released": "2026-07-23"
+      "rapper": "Haftbefehl",
+      "title": "1999, Pt. III",
+      "artist": "Haftbefehl",
+      "rank": 564542,
+      "released": "2014-11-28"
     },
     {
       "rapper": "Apache 207",
-      "title": "Was weißt du schon",
+      "title": "Fame",
       "artist": "Apache 207",
-      "rank": 537810,
-      "released": "2023-06-09"
+      "rank": 559230,
+      "released": "2020-05-08"
     },
     {
       "rapper": "Apache 207",
-      "title": "Loser",
+      "title": "Sport",
       "artist": "Apache 207",
-      "rank": 535964,
-      "released": "2024-03-01"
+      "rank": 542241,
+      "released": "2021-11-26"
+    },
+    {
+      "rapper": "Dardan",
+      "title": "APARTMENT",
+      "artist": "Dardan & Monet192",
+      "rank": 538925,
+      "released": "2022-07-28"
     },
     {
       "rapper": "Apache 207",
-      "title": "Mann muss",
+      "title": "Kein Problem",
       "artist": "Apache 207",
-      "rank": 534921,
-      "released": "2025-07-24"
+      "rank": 538758,
+      "released": "2019-04-05"
     },
     {
       "rapper": "Aymen",
@@ -279,6 +322,13 @@
       "artist": "SIRA, Aymen & NiklasWilson",
       "rank": 533884,
       "released": "2026-06-17"
+    },
+    {
+      "rapper": "AMO",
+      "title": "CASA CUBA",
+      "artist": "Cave & AMO",
+      "rank": 529103,
+      "released": "2025-07-25"
     },
     {
       "rapper": "Jazeek",
@@ -295,25 +345,25 @@
       "released": "2026-09-11"
     },
     {
-      "rapper": "Gzuz",
-      "title": "Deutsche & Kanaken",
-      "artist": "Lupo Kadafi, Gzuz & Don Alfonso",
-      "rank": 519812,
-      "released": "2026-10-02"
+      "rapper": "Capital Bra",
+      "title": "7 Stunden",
+      "artist": "LEA & Capital Bra",
+      "rank": 517540,
+      "released": "2020-05-29"
     },
     {
-      "rapper": "Jazeek",
-      "title": "CRAZYYY",
-      "artist": "Jazeek & SAMIRA",
-      "rank": 515337,
-      "released": "2025-03-28"
+      "rapper": "Luciano",
+      "title": "Beautiful Girl",
+      "artist": "Luciano",
+      "rank": 507609,
+      "released": "2022-04-22"
     },
     {
-      "rapper": "Apache 207",
-      "title": "Cold as Ice",
-      "artist": "Apache 207 & Luciano",
-      "rank": 505010,
-      "released": "2025-01-17"
+      "rapper": "Kurdo",
+      "title": "Alors",
+      "artist": "Kurdo & CAPO",
+      "rank": 504883,
+      "released": "2024-01-11"
     },
     {
       "rapper": "Luciano",
@@ -321,6 +371,13 @@
       "artist": "Luciano & Jazeek",
       "rank": 503318,
       "released": "2024-09-27"
+    },
+    {
+      "rapper": "Dardan",
+      "title": "Erinnerung",
+      "artist": "Dardan",
+      "rank": 501634,
+      "released": "2026-08-21"
     },
     {
       "rapper": "Apache 207",
@@ -344,18 +401,25 @@
       "released": "2025-05-15"
     },
     {
+      "rapper": "Apache 207",
+      "title": "Brot nach Hause",
+      "artist": "Apache 207",
+      "rank": 491236,
+      "released": "2019-05-10"
+    },
+    {
+      "rapper": "Samra",
+      "title": "Leere Hände",
+      "artist": "SANTOS, Sido & Samra",
+      "rank": 490193,
+      "released": "2021-04-08"
+    },
+    {
       "rapper": "Jazeek",
       "title": "Lüg mich an",
       "artist": "Jazeek",
       "rank": 490182,
       "released": "2023-11-24"
-    },
-    {
-      "rapper": "Mero",
-      "title": "Uçurum",
-      "artist": "MERO",
-      "rank": 485161,
-      "released": "2025-07-24"
     },
     {
       "rapper": "Gzuz",
@@ -372,18 +436,32 @@
       "released": "2025-08-07"
     },
     {
+      "rapper": "Apache 207",
+      "title": "Bläulich",
+      "artist": "Apache 207",
+      "rank": 482722,
+      "released": "2020-07-31"
+    },
+    {
+      "rapper": "Luciano",
+      "title": "LET ME LOVE YOU",
+      "artist": "Jazeek & Luciano",
+      "rank": 480997,
+      "released": "2026-09-10"
+    },
+    {
+      "rapper": "Luciano",
+      "title": "SUVs",
+      "artist": "Luciano",
+      "rank": 476641,
+      "released": "2021-12-02"
+    },
+    {
       "rapper": "Jazeek",
       "title": "Superstars",
       "artist": "Jazeek",
       "rank": 476038,
       "released": "2023-06-30"
-    },
-    {
-      "rapper": "Mero",
-      "title": "Uykusuz Geceler",
-      "artist": "MERO & Ati242",
-      "rank": 474444,
-      "released": "2025-08-21"
     },
     {
       "rapper": "Jazeek",
@@ -407,6 +485,13 @@
       "released": "2024-04-26"
     },
     {
+      "rapper": "Capital Bra",
+      "title": "Frühstück in Paris",
+      "artist": "Capital Bra",
+      "rank": 469571,
+      "released": "2020-08-22"
+    },
+    {
       "rapper": "Aymen",
       "title": "Rücken an Rücken",
       "artist": "Aymo, Aymen & AMO",
@@ -421,18 +506,25 @@
       "released": "2026-04-09"
     },
     {
+      "rapper": "Jamule",
+      "title": "Unterwegs",
+      "artist": "KITSCHKRIEG & Jamule",
+      "rank": 466775,
+      "released": "2020-08-07"
+    },
+    {
+      "rapper": "KC Rebell",
+      "title": "DNA",
+      "artist": "KC Rebell",
+      "rank": 465573,
+      "released": "2019-04-19"
+    },
+    {
       "rapper": "Luciano",
       "title": "All Night",
       "artist": "Luciano & RAF Camora",
       "rank": 459938,
       "released": "2023-03-31"
-    },
-    {
-      "rapper": "AK Ausserkontrolle",
-      "title": "QUALITÄT",
-      "artist": "Sonus030 & AK AUSSERKONTROLLE",
-      "rank": 458648,
-      "released": "2025-01-17"
     },
     {
       "rapper": "Dardan",
@@ -449,6 +541,13 @@
       "released": "2024-02-08"
     },
     {
+      "rapper": "Samra",
+      "title": "Marlboro Rot",
+      "artist": "Samra",
+      "rank": 455524,
+      "released": "2019-05-24"
+    },
+    {
       "rapper": "Azet",
       "title": "Pa Mu",
       "artist": "Dardan & Azet",
@@ -456,46 +555,11 @@
       "released": "2024-05-03"
     },
     {
-      "rapper": "Luciano",
-      "title": "Blue Porsche",
-      "artist": "Luciano & Niska",
-      "rank": 454943,
-      "released": "2024-01-25"
-    },
-    {
-      "rapper": "Jazeek",
-      "title": "Diamond Ring",
-      "artist": "Jazeek",
-      "rank": 453364,
-      "released": "2023-03-23"
-    },
-    {
-      "rapper": "Jazeek",
-      "title": "Wenn der Himmel weint",
-      "artist": "Bausa & Jazeek",
-      "rank": 453285,
-      "released": "2025-02-21"
-    },
-    {
-      "rapper": "Apache 207",
-      "title": "Porsche 911",
-      "artist": "Apache 207",
-      "rank": 452158,
-      "released": "2025-08-29"
-    },
-    {
-      "rapper": "Jamule",
-      "title": "MOUNT OLYMPUS",
-      "artist": "Jamule",
-      "rank": 451224,
-      "released": "2026-09-17"
-    },
-    {
-      "rapper": "Gzuz",
-      "title": "APRES SKI",
-      "artist": "Tream & Gzuz",
-      "rank": 449730,
-      "released": "2025-11-13"
+      "rapper": "Nimo",
+      "title": "Nur wegen dir",
+      "artist": "Nimo",
+      "rank": 454270,
+      "released": "2020-02-12"
     },
     {
       "rapper": "Luciano",
@@ -512,6 +576,20 @@
       "released": "2025-09-12"
     },
     {
+      "rapper": "Dardan",
+      "title": "mailbox",
+      "artist": "Dardan & Hava",
+      "rank": 445726,
+      "released": "2020-10-02"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Cherry Lady",
+      "artist": "Capital Bra",
+      "rank": 445134,
+      "released": "2019-03-22"
+    },
+    {
       "rapper": "Apache 207",
       "title": "Wenn das so bleibt",
       "artist": "Apache 207",
@@ -526,6 +604,13 @@
       "released": "2025-01-17"
     },
     {
+      "rapper": "Dardan",
+      "title": "HIGH",
+      "artist": "Hava & Dardan",
+      "rank": 441572,
+      "released": "2021-11-12"
+    },
+    {
       "rapper": "Luciano",
       "title": "HOLD ME DOWN",
       "artist": "Jazeek & Luciano",
@@ -533,11 +618,18 @@
       "released": "2026-09-10"
     },
     {
-      "rapper": "Samra",
-      "title": "Ich Liebe Dich",
-      "artist": "Samra & Sido",
-      "rank": 438973,
-      "released": "2023-02-24"
+      "rapper": "AMO",
+      "title": "Mala Fama",
+      "artist": "Damon Paul & MEYSTA",
+      "rank": 439404,
+      "released": "2023-07-14"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "1999, Pt. I",
+      "artist": "Haftbefehl",
+      "rank": 439131,
+      "released": "2014-11-28"
     },
     {
       "rapper": "Jazeek",
@@ -547,11 +639,25 @@
       "released": "2026-04-09"
     },
     {
-      "rapper": "Luciano",
-      "title": "2 Germans",
-      "artist": "Luciano & Gzuz",
-      "rank": 430581,
-      "released": "2023-10-26"
+      "rapper": "Jazeek",
+      "title": "Himmel leer",
+      "artist": "SANTOS & Jazeek",
+      "rank": 436601,
+      "released": "2024-04-04"
+    },
+    {
+      "rapper": "Mero",
+      "title": "Konum Gizli",
+      "artist": "MERO & Murda",
+      "rank": 435400,
+      "released": "2022-05-12"
+    },
+    {
+      "rapper": "Kurdo",
+      "title": "Halbmond",
+      "artist": "Kurdo",
+      "rank": 434168,
+      "released": "2015-01-23"
     },
     {
       "rapper": "Aymen",
@@ -561,11 +667,32 @@
       "released": "2024-07-19"
     },
     {
-      "rapper": "Mero",
-      "title": "Dur gitme",
-      "artist": "MERO",
-      "rank": 427159,
-      "released": "2025-10-16"
+      "rapper": "Jazeek",
+      "title": "Marbella",
+      "artist": "Jazeek",
+      "rank": 426648,
+      "released": "2025-11-14"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "Risiko",
+      "artist": "RAF Camora",
+      "rank": 426456,
+      "released": "2009-11-13"
+    },
+    {
+      "rapper": "AMO",
+      "title": "Dünya",
+      "artist": "Amo988",
+      "rank": 425544,
+      "released": "2022-05-13"
+    },
+    {
+      "rapper": "Samra",
+      "title": "Weiss",
+      "artist": "Samra",
+      "rank": 424423,
+      "released": "2020-02-07"
     },
     {
       "rapper": "Azet",
@@ -575,11 +702,74 @@
       "released": "2023-07-07"
     },
     {
+      "rapper": "Luciano",
+      "title": "SCHMETTERLING",
+      "artist": "Luciano",
+      "rank": 422558,
+      "released": "2021-06-17"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "9mm",
+      "artist": "Gzuz & Bonez",
+      "rank": 421375,
+      "released": "2015-10-09"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "Wenn du mich siehst",
+      "artist": "Juju & RAF Camora",
+      "rank": 421324,
+      "released": "2021-10-01"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "Adriana",
+      "artist": "RAF Camora",
+      "rank": 420807,
+      "released": "2019-09-20"
+    },
+    {
+      "rapper": "Samra",
+      "title": "BaeBae",
+      "artist": "Samra",
+      "rank": 419831,
+      "released": "2020-03-27"
+    },
+    {
       "rapper": "Dardan",
-      "title": "Gib uns niemals auf",
-      "artist": "Hava & Dardan",
-      "rank": 414671,
-      "released": "2025-09-04"
+      "title": "H <3 T E L",
+      "artist": "Dardan & Monet192",
+      "rank": 419288,
+      "released": "2020-03-20"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Allein",
+      "artist": "Capital Bra",
+      "rank": 418000,
+      "released": "2018-10-26"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Nicht verdient",
+      "artist": "Capital Bra & Loredana",
+      "rank": 417542,
+      "released": "2020-04-28"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "187 Gang",
+      "artist": "Bonez MC, Gzuz, Maxwell, LX & Sa4",
+      "rank": 416339,
+      "released": "2020-09-10"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Melodien",
+      "artist": "Capital Bra",
+      "rank": 414327,
+      "released": "2018-08-03"
     },
     {
       "rapper": "Mero",
@@ -596,6 +786,34 @@
       "released": "2025-08-28"
     },
     {
+      "rapper": "Jazeek",
+      "title": "Blunt für dich",
+      "artist": "Jazeek",
+      "rank": 407658,
+      "released": "2021-12-17"
+    },
+    {
+      "rapper": "KC Rebell",
+      "title": "FLY",
+      "artist": "KC Rebell & Summer Cem",
+      "rank": 407099,
+      "released": "2020-05-22"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "Neptun",
+      "artist": "KC Rebell & RAF Camora",
+      "rank": 406425,
+      "released": "2019-04-19"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "KARMA",
+      "artist": "Nimo",
+      "rank": 405682,
+      "released": "2019-12-19"
+    },
+    {
       "rapper": "Eno",
       "title": "GUNSHOT",
       "artist": "Eno & Olexesh",
@@ -603,11 +821,25 @@
       "released": "2024-06-14"
     },
     {
-      "rapper": "Luciano",
-      "title": "Time",
-      "artist": "Luciano",
-      "rank": 404943,
-      "released": "2024-01-04"
+      "rapper": "Jazeek",
+      "title": "CC",
+      "artist": "Jazeek",
+      "rank": 402470,
+      "released": "2022-11-18"
+    },
+    {
+      "rapper": "Samra",
+      "title": "Berlin lebt wie nie zuvor",
+      "artist": "Capital Bra & Samra",
+      "rank": 400830,
+      "released": "2019-10-03"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "Echte Berliner",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 400748,
+      "released": "2016-05-01"
     },
     {
       "rapper": "Luciano",
@@ -631,6 +863,20 @@
       "released": "2023-09-08"
     },
     {
+      "rapper": "Capital Bra",
+      "title": "Sommer",
+      "artist": "Beatzarre & Djorkaeff, Lea & Capital Bra",
+      "rank": 396659,
+      "released": "2021-06-03"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Ich liebe es",
+      "artist": "Capital Bra",
+      "rank": 395956,
+      "released": "2018-10-26"
+    },
+    {
       "rapper": "Dardan",
       "title": "Blanco",
       "artist": "Dardan",
@@ -638,11 +884,25 @@
       "released": "2024-10-18"
     },
     {
-      "rapper": "Mero",
-      "title": "ICE",
-      "artist": "MERO & AMO",
-      "rank": 392526,
-      "released": "2025-11-13"
+      "rapper": "Luciano",
+      "title": "To The Sky",
+      "artist": "Luciano & Tayc",
+      "rank": 395679,
+      "released": "2025-10-30"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "Ruhe nach dem Sturm",
+      "artist": "RAF Camora & Bonez MC",
+      "rank": 395357,
+      "released": "2016-07-22"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Rolex",
+      "artist": "Capital Bra",
+      "rank": 392483,
+      "released": "2019-04-12"
     },
     {
       "rapper": "Luciano",
@@ -652,6 +912,27 @@
       "released": "2026-09-10"
     },
     {
+      "rapper": "Nimo",
+      "title": "KEIN SCHLAF",
+      "artist": "Nimo & Hava",
+      "rank": 392020,
+      "released": "2019-12-19"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "Meine Couch",
+      "artist": "Gzuz & Bonez MC",
+      "rank": 389882,
+      "released": "2016-05-27"
+    },
+    {
+      "rapper": "Luciano",
+      "title": "Adrenalina",
+      "artist": "Dhurata Dora & Luciano",
+      "rank": 389362,
+      "released": "2022-07-22"
+    },
+    {
       "rapper": "Summer Cem",
       "title": "EL FENOMENO",
       "artist": "Summer Cem",
@@ -659,11 +940,18 @@
       "released": "2026-04-10"
     },
     {
-      "rapper": "Jamule",
-      "title": "LOVEBOMB",
-      "artist": "Jamule, Sido & Miksu / Macloud",
-      "rank": 384198,
-      "released": "2024-08-09"
+      "rapper": "Gzuz",
+      "title": "Wenn ich will",
+      "artist": "Gzuz & Bonez MC",
+      "rank": 385108,
+      "released": "2016-09-09"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "Flouz kommt Flouz geht",
+      "artist": "Nimo",
+      "rank": 384632,
+      "released": "2016-02-26"
     },
     {
       "rapper": "Gzuz",
@@ -673,6 +961,13 @@
       "released": "2025-09-18"
     },
     {
+      "rapper": "Samra",
+      "title": "Lieber Gott",
+      "artist": "Capital Bra & Samra",
+      "rank": 381668,
+      "released": "2019-10-03"
+    },
+    {
       "rapper": "Mero",
       "title": "Mira",
       "artist": "MERO",
@@ -680,11 +975,32 @@
       "released": "2026-04-23"
     },
     {
-      "rapper": "RAF Camora",
-      "title": "Vorbei",
-      "artist": "Robin Schulz, RAF Camora, Montez & Dario Rodriguez",
-      "rank": 378764,
-      "released": "2023-09-22"
+      "rapper": "Azet",
+      "title": "Sommernacht",
+      "artist": "Lucry & Suena & Azet",
+      "rank": 378074,
+      "released": "2026-03-20"
+    },
+    {
+      "rapper": "AMO",
+      "title": "Coração",
+      "artist": "Haaland936 & AMO",
+      "rank": 373952,
+      "released": "2025-06-12"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "Azzlackz sterben jung 2",
+      "artist": "Haftbefehl",
+      "rank": 373737,
+      "released": "2014-11-28"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "Ebbe & Flut",
+      "artist": "Gzuz, XATAR & Hanybal",
+      "rank": 372356,
+      "released": "2015-10-09"
     },
     {
       "rapper": "Mero",
@@ -694,6 +1010,20 @@
       "released": "2023-12-07"
     },
     {
+      "rapper": "Samra",
+      "title": "365 Tage",
+      "artist": "Samra & Capital Bra",
+      "rank": 370219,
+      "released": "2020-04-16"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "CopKKKilla",
+      "artist": "Haftbefehl",
+      "rank": 370098,
+      "released": "2015-12-15"
+    },
+    {
       "rapper": "Summer Cem",
       "title": "Let's Go",
       "artist": "Summer Cem",
@@ -701,11 +1031,39 @@
       "released": "2026-08-26"
     },
     {
+      "rapper": "Kurdo",
+      "title": "Hayati",
+      "artist": "Kurdo",
+      "rank": 369381,
+      "released": "2022-01-06"
+    },
+    {
       "rapper": "Azet",
       "title": "Mungu",
       "artist": "Dardan & Azet",
       "rank": 369333,
       "released": "2026-07-17"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "Blue Lagoon",
+      "artist": "GRiNGO & Nimo",
+      "rank": 368844,
+      "released": "2019-05-03"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "Panzaknacka",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 368448,
+      "released": "2016-04-15"
+    },
+    {
+      "rapper": "Azet",
+      "title": "Fajet",
+      "artist": "Dhurata Dora & Azet",
+      "rank": 366474,
+      "released": "2020-07-17"
     },
     {
       "rapper": "Summer Cem",
@@ -716,17 +1074,17 @@
     },
     {
       "rapper": "Mero",
-      "title": "Rauch",
-      "artist": "MERO",
-      "rank": 363710,
-      "released": "2024-10-10"
+      "title": "ICE",
+      "artist": "MERO & AMO",
+      "rank": 358683,
+      "released": "2025-11-13"
     },
     {
-      "rapper": "Aymen",
-      "title": "Damals",
-      "artist": "Aymen",
-      "rank": 362552,
-      "released": "2025-07-25"
+      "rapper": "Samra",
+      "title": "Zombie",
+      "artist": "Samra & Capital Bra",
+      "rank": 358537,
+      "released": "2019-07-11"
     },
     {
       "rapper": "KC Rebell",
@@ -743,18 +1101,18 @@
       "released": "2024-11-27"
     },
     {
+      "rapper": "Nimo",
+      "title": "SOMMER 19",
+      "artist": "Nimo & Jenny Marsala",
+      "rank": 353576,
+      "released": "2019-12-19"
+    },
+    {
       "rapper": "AK Ausserkontrolle",
       "title": "HEUTE NACHT",
       "artist": "AK AUSSERKONTROLLE",
       "rank": 353416,
       "released": "2023-03-30"
-    },
-    {
-      "rapper": "Mero",
-      "title": "Sor Bize",
-      "artist": "MERO",
-      "rank": 353412,
-      "released": "2023-06-22"
     },
     {
       "rapper": "AK Ausserkontrolle",
@@ -764,11 +1122,39 @@
       "released": "2024-02-15"
     },
     {
-      "rapper": "KC Rebell",
-      "title": "Happy Birthday",
-      "artist": "SANNA & KC Rebell",
-      "rank": 348763,
-      "released": "2023-02-02"
+      "rapper": "Gzuz",
+      "title": "Wolke 7",
+      "artist": "Gzuz & Bonez MC",
+      "rank": 352424,
+      "released": "2016-05-27"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "Nympho",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 352422,
+      "released": "2018-11-09"
+    },
+    {
+      "rapper": "Azet",
+      "title": "Bebe",
+      "artist": "Dardan & Azet",
+      "rank": 350853,
+      "released": "2024-05-24"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "Ich will alles",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 349721,
+      "released": "2016-05-01"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Virus",
+      "artist": "Capital Bra & SDP",
+      "rank": 349186,
+      "released": "2020-09-18"
     },
     {
       "rapper": "Summer Cem",
@@ -785,6 +1171,13 @@
       "released": "2024-11-07"
     },
     {
+      "rapper": "Haftbefehl",
+      "title": "Odyssee",
+      "artist": "Haftbefehl",
+      "rank": 346324,
+      "released": "2015-12-18"
+    },
+    {
       "rapper": "Mero",
       "title": "Ararım Yarın",
       "artist": "Murda & MERO",
@@ -799,6 +1192,13 @@
       "released": "2023-12-19"
     },
     {
+      "rapper": "Mero",
+      "title": "Leben lang",
+      "artist": "MERO",
+      "rank": 345120,
+      "released": "2024-04-11"
+    },
+    {
       "rapper": "Jamule",
       "title": "Bei dir",
       "artist": "Jamule & RAF Camora",
@@ -806,11 +1206,11 @@
       "released": "2025-07-17"
     },
     {
-      "rapper": "Samra",
-      "title": "Herz aus Stein",
-      "artist": "Estikay, Samra & SANTOS",
-      "rank": 344291,
-      "released": "2026-03-13"
+      "rapper": "Mero",
+      "title": "Ohne Dich",
+      "artist": "MERO",
+      "rank": 344014,
+      "released": "2020-08-21"
     },
     {
       "rapper": "Dardan",
@@ -820,6 +1220,20 @@
       "released": "2025-08-20"
     },
     {
+      "rapper": "Mero",
+      "title": "Island Chick",
+      "artist": "MERO & Jazeek",
+      "rank": 340101,
+      "released": "2024-08-29"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "Augen Husky",
+      "artist": "Olexesh & Nimo",
+      "rank": 338614,
+      "released": "2019-09-12"
+    },
+    {
       "rapper": "Eno",
       "title": "Millieu 26",
       "artist": "Kolja Goldstein & Eno",
@@ -827,18 +1241,67 @@
       "released": "2026-02-12"
     },
     {
-      "rapper": "Dardan",
-      "title": "Ti Amo",
-      "artist": "Dardan",
-      "rank": 328174,
-      "released": "2023-09-29"
+      "rapper": "KC Rebell",
+      "title": "iPhone 17",
+      "artist": "KC Rebell",
+      "rank": 337685,
+      "released": "2016-11-25"
     },
     {
-      "rapper": "Jamule",
-      "title": "Normal zu lieben",
-      "artist": "Jamule",
-      "rank": 328144,
-      "released": "2023-01-19"
+      "rapper": "Mero",
+      "title": "Solo",
+      "artist": "Haaland936 & MERO",
+      "rank": 337250,
+      "released": "2026-06-11"
+    },
+    {
+      "rapper": "Dardan",
+      "title": "D A YYY T O N A",
+      "artist": "Dardan",
+      "rank": 333713,
+      "released": "2020-02-28"
+    },
+    {
+      "rapper": "Mero",
+      "title": "So wie du",
+      "artist": "Milano & MERO",
+      "rank": 333684,
+      "released": "2024-05-23"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "Kokaretten",
+      "artist": "Haftbefehl",
+      "rank": 331321,
+      "released": "2021-04-29"
+    },
+    {
+      "rapper": "KC Rebell",
+      "title": "VALLA NEIN",
+      "artist": "KC Rebell & Summer Cem",
+      "rank": 330299,
+      "released": "2020-06-05"
+    },
+    {
+      "rapper": "Mero",
+      "title": "Baile Funk im Blut",
+      "artist": "Jazeek & MERO",
+      "rank": 329854,
+      "released": "2023-08-25"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "Seele",
+      "artist": "Haftbefehl",
+      "rank": 329031,
+      "released": "2014-11-28"
+    },
+    {
+      "rapper": "Samra",
+      "title": "Kiss Me",
+      "artist": "Samra & TOPIC42",
+      "rank": 328284,
+      "released": "2022-08-26"
     },
     {
       "rapper": "Azet",
@@ -848,11 +1311,11 @@
       "released": "2024-07-19"
     },
     {
-      "rapper": "Samra",
-      "title": "Weiße Orchideen",
-      "artist": "Samra",
-      "rank": 326806,
-      "released": "2023-01-20"
+      "rapper": "Haftbefehl",
+      "title": "Saudi Arabi Money Rich",
+      "artist": "Haftbefehl",
+      "rank": 326218,
+      "released": "2014-11-28"
     },
     {
       "rapper": "Azet",
@@ -862,11 +1325,11 @@
       "released": "2026-07-17"
     },
     {
-      "rapper": "Miami Yacine",
-      "title": "Strassenmelodie",
-      "artist": "Miami Yacine & SRNO",
-      "rank": 325021,
-      "released": "2026-07-01"
+      "rapper": "Zuna",
+      "title": "Baby 2.0",
+      "artist": "Zuna & Lune",
+      "rank": 324552,
+      "released": "2021-09-24"
     },
     {
       "rapper": "Jamule",
@@ -884,24 +1347,31 @@
     },
     {
       "rapper": "Samra",
-      "title": "Valium",
-      "artist": "1986zig & Samra",
-      "rank": 322606,
-      "released": "2022-10-14"
-    },
-    {
-      "rapper": "Samra",
       "title": "Asozialer Araber",
       "artist": "Samra",
       "rank": 322108,
       "released": "2025-04-03"
     },
     {
-      "rapper": "Azet",
-      "title": "Dale",
-      "artist": "Dardan & Azet",
-      "rank": 321677,
-      "released": "2024-06-28"
+      "rapper": "AK Ausserkontrolle",
+      "title": "Flexscheibe",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 321761,
+      "released": "2016-05-01"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "Immer mehr",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 319391,
+      "released": "2018-11-09"
+    },
+    {
+      "rapper": "Summer Cem",
+      "title": "KINGINMEIMDING",
+      "artist": "Jan Delay & Summer Cem",
+      "rank": 317879,
+      "released": "2021-05-21"
     },
     {
       "rapper": "Jamule",
@@ -918,11 +1388,18 @@
       "released": "2023-03-30"
     },
     {
-      "rapper": "Dardan",
-      "title": "Highlight",
-      "artist": "Dardan & Jamin",
-      "rank": 314251,
-      "released": "2025-08-07"
+      "rapper": "Mero",
+      "title": "FEFE",
+      "artist": "MERO",
+      "rank": 314710,
+      "released": "2025-09-04"
+    },
+    {
+      "rapper": "KC Rebell",
+      "title": "Ich brauch Dich",
+      "artist": "KC Rebell",
+      "rank": 314461,
+      "released": "2016-11-25"
     },
     {
       "rapper": "Azet",
@@ -939,39 +1416,46 @@
       "released": "2024-01-12"
     },
     {
-      "rapper": "Samra",
-      "title": "Irgendwann",
-      "artist": "Samra",
-      "rank": 308488,
-      "released": "2025-07-14"
+      "rapper": "Nimo",
+      "title": "Vollautomatik",
+      "artist": "Nimo",
+      "rank": 312142,
+      "released": "2016-02-26"
     },
     {
-      "rapper": "Eno",
-      "title": "Schlechter Empfang",
-      "artist": "Eno, Nizi19 & Bawer",
-      "rank": 308336,
-      "released": "2023-10-12"
+      "rapper": "Kurdo",
+      "title": "Muskat",
+      "artist": "Kurdo",
+      "rank": 309814,
+      "released": "2023-10-26"
     },
     {
-      "rapper": "Azet",
-      "title": "Tagebuch",
-      "artist": "Azet",
-      "rank": 307920,
-      "released": "2024-11-08"
+      "rapper": "Farid Bang",
+      "title": "Mbappé",
+      "artist": "Capital Bra, Farid Bang & Kontra K",
+      "rank": 308316,
+      "released": "2021-07-14"
     },
     {
-      "rapper": "AK Ausserkontrolle",
-      "title": "IMMER UNTERWEGS",
-      "artist": "AK AUSSERKONTROLLE & Haftbefehl",
-      "rank": 304933,
-      "released": "2023-03-30"
+      "rapper": "Kurdo",
+      "title": "Shakal",
+      "artist": "Kurdo",
+      "rank": 306295,
+      "released": "2024-01-11"
     },
     {
-      "rapper": "Azet",
-      "title": "Odyssee",
-      "artist": "Dardan & Azet",
-      "rank": 302532,
-      "released": "2026-07-17"
+      "rapper": "Jamule",
+      "title": "fastlane",
+      "artist": "Jamule & SANTOS",
+      "rank": 303489,
+      "released": "2020-07-30"
+    },
+    {
+      "rapper": "KC Rebell",
+      "title": "AMCAOGLE",
+      "artist": "KC Rebell & Summer Cem",
+      "rank": 302885,
+      "released": "2020-10-30"
     },
     {
       "rapper": "Zuna",
@@ -988,11 +1472,25 @@
       "released": "2026-07-17"
     },
     {
+      "rapper": "KC Rebell",
+      "title": "Bounce",
+      "artist": "KC Rebell",
+      "rank": 298116,
+      "released": "2012-06-01"
+    },
+    {
       "rapper": "Zuna",
       "title": "Bang",
       "artist": "Avie, Delil & Zuna",
       "rank": 297720,
       "released": "2024-09-06"
+    },
+    {
+      "rapper": "Jamule",
+      "title": "Ich hol dich ab",
+      "artist": "Jamule",
+      "rank": 296151,
+      "released": "2020-02-13"
     },
     {
       "rapper": "Jamule",
@@ -1002,46 +1500,109 @@
       "released": "2025-12-19"
     },
     {
-      "rapper": "Eno",
-      "title": "PLUS EINS",
-      "artist": "Eno",
-      "rank": 289217,
-      "released": "2025-06-20"
-    },
-    {
-      "rapper": "Capital Bra",
-      "title": "FLÜGEL",
-      "artist": "Capital Bra & Samo104",
-      "rank": 288642,
-      "released": "2024-04-11"
-    },
-    {
-      "rapper": "AK Ausserkontrolle",
-      "title": "HABIBI",
-      "artist": "AK AUSSERKONTROLLE",
-      "rank": 282304,
-      "released": "2024-03-14"
+      "rapper": "KC Rebell",
+      "title": "GEH DEIN WEG",
+      "artist": "KC Rebell & Summer Cem",
+      "rank": 294796,
+      "released": "2020-07-10"
     },
     {
       "rapper": "Jamule",
-      "title": "Alemania",
-      "artist": "Jamule & SRNO",
-      "rank": 281887,
-      "released": "2023-06-15"
+      "title": "Rapstars",
+      "artist": "MERO & Jamule",
+      "rank": 292954,
+      "released": "2022-03-03"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "Scarface",
+      "artist": "Farid Bang",
+      "rank": 292841,
+      "released": "2020-05-29"
+    },
+    {
+      "rapper": "Kurdo",
+      "title": "Hasta La Vista",
+      "artist": "Kurdo",
+      "rank": 290713,
+      "released": "2024-01-11"
     },
     {
       "rapper": "Summer Cem",
-      "title": "BIELEFELD",
-      "artist": "Summer Cem",
-      "rank": 279901,
-      "released": "2022-12-02"
+      "title": "Früher pleite heute Benz",
+      "artist": "Capital Bra, Nimo & Summer Cem",
+      "rank": 289905,
+      "released": "2020-09-18"
     },
     {
-      "rapper": "Nimo",
+      "rapper": "Eno",
+      "title": "Vollmond",
+      "artist": "Eno & Luciano",
+      "rank": 287326,
+      "released": "2021-08-27"
+    },
+    {
+      "rapper": "Kurdo",
+      "title": "Magie",
+      "artist": "Kurdo",
+      "rank": 281504,
+      "released": "2015-01-23"
+    },
+    {
+      "rapper": "Jamule",
+      "title": "MedMen",
+      "artist": "Jamule",
+      "rank": 281057,
+      "released": "2020-06-18"
+    },
+    {
+      "rapper": "Jamule",
+      "title": "Wenn ich geh",
+      "artist": "Jamule",
+      "rank": 277679,
+      "released": "2021-07-16"
+    },
+    {
+      "rapper": "Kurdo",
       "title": "DU FEHLST",
       "artist": "Kurdo & Nimo",
       "rank": 275715,
       "released": "2025-11-20"
+    },
+    {
+      "rapper": "KC Rebell",
+      "title": "Leer",
+      "artist": "KC Rebell",
+      "rank": 274660,
+      "released": "2016-11-25"
+    },
+    {
+      "rapper": "KC Rebell",
+      "title": "DOWN",
+      "artist": "KC Rebell & Summer Cem",
+      "rank": 272618,
+      "released": "2020-11-20"
+    },
+    {
+      "rapper": "Kurdo",
+      "title": "Jaloux",
+      "artist": "CAPO & Kurdo",
+      "rank": 270823,
+      "released": "2024-02-29"
+    },
+    {
+      "rapper": "KC Rebell",
+      "title": "Paper",
+      "artist": "KC Rebell",
+      "rank": 269670,
+      "released": "2016-11-25"
+    },
+    {
+      "rapper": "KC Rebell",
+      "title": "WOW",
+      "artist": "KC Rebell & Summer Cem",
+      "rank": 269540,
+      "released": "2020-09-23"
     },
     {
       "rapper": "Jamule",
@@ -1065,11 +1626,18 @@
       "released": "2026-03-27"
     },
     {
-      "rapper": "Capital Bra",
-      "title": "VIJA VIJA",
-      "artist": "DJ Gimi-O & Capital Bra",
-      "rank": 264072,
-      "released": "2022-12-30"
+      "rapper": "Kurdo",
+      "title": "Nala",
+      "artist": "Kurdo",
+      "rank": 263817,
+      "released": "2019-08-23"
+    },
+    {
+      "rapper": "Kurdo",
+      "title": "SOMMERNÄCHTE.mp3",
+      "artist": "Kurdo",
+      "rank": 259123,
+      "released": "2025-11-07"
     },
     {
       "rapper": "Miami Yacine",
@@ -1079,18 +1647,11 @@
       "released": "2025-09-19"
     },
     {
-      "rapper": "Miami Yacine",
-      "title": "Sommerregen",
-      "artist": "SRNO & Miami Yacine",
-      "rank": 259062,
-      "released": "2024-02-15"
-    },
-    {
-      "rapper": "KC Rebell",
-      "title": "Ozean",
-      "artist": "KC Rebell",
-      "rank": 258107,
-      "released": "2026-01-09"
+      "rapper": "Kurdo",
+      "title": "Weisse TN Sneakers",
+      "artist": "Kurdo",
+      "rank": 257647,
+      "released": "2021-12-17"
     },
     {
       "rapper": "Jamule",
@@ -1100,32 +1661,18 @@
       "released": "2023-03-30"
     },
     {
-      "rapper": "Capital Bra",
-      "title": "UUU",
-      "artist": "NOAH & Capital Bra",
-      "rank": 248698,
-      "released": "2022-12-02"
+      "rapper": "Jamule",
+      "title": "Junimond",
+      "artist": "Jamule",
+      "rank": 245455,
+      "released": "2025-06-20"
     },
     {
-      "rapper": "Capital Bra",
-      "title": "Discokugel",
-      "artist": "Gustav, NOAH & Capital Bra",
-      "rank": 246761,
-      "released": "2023-03-17"
-    },
-    {
-      "rapper": "Eno",
-      "title": "Planet",
-      "artist": "Berky & Eno",
-      "rank": 242753,
-      "released": "2026-06-11"
-    },
-    {
-      "rapper": "Capital Bra",
-      "title": "0Uhr26",
-      "artist": "Capital Bra & Lucry & Suena",
-      "rank": 242714,
-      "released": "2022-10-13"
+      "rapper": "Kurdo",
+      "title": "LAYLA WA LAYLA",
+      "artist": "Kurdo",
+      "rank": 244211,
+      "released": "2025-11-20"
     },
     {
       "rapper": "Eno",
@@ -1135,11 +1682,25 @@
       "released": "2025-11-20"
     },
     {
+      "rapper": "Kurdo",
+      "title": "Rendezvous II",
+      "artist": "Kurdo",
+      "rank": 232428,
+      "released": "2023-02-16"
+    },
+    {
       "rapper": "Eno",
       "title": "DRÜCK",
       "artist": "Eno",
       "rank": 231762,
       "released": "2024-09-27"
+    },
+    {
+      "rapper": "Kurdo",
+      "title": "Mannschaft",
+      "artist": "Delil & Kurdo",
+      "rank": 229987,
+      "released": "2026-01-30"
     },
     {
       "rapper": "Zuna",
@@ -1156,39 +1717,18 @@
       "released": "2024-09-27"
     },
     {
-      "rapper": "Majoe",
-      "title": "STRESS OHNE GRUND",
-      "artist": "Majoe, Zombic & District Red",
-      "rank": 210250,
-      "released": "2026-04-24"
-    },
-    {
-      "rapper": "Eno",
-      "title": "Kein Geld der Welt",
-      "artist": "Eno",
-      "rank": 209439,
-      "released": "2023-07-06"
-    },
-    {
       "rapper": "Zuna",
-      "title": "Caliente",
-      "artist": "Zuna & Shabab",
-      "rank": 204780,
-      "released": "2024-06-14"
-    },
-    {
-      "rapper": "Zuna",
-      "title": "Hol mir deine Cousine",
-      "artist": "Zuna",
-      "rank": 204697,
-      "released": "2023-07-07"
+      "title": "Biturbo",
+      "artist": "Bausa & Zuna",
+      "rank": 216878,
+      "released": "2019-10-04"
     },
     {
       "rapper": "Miami Yacine",
-      "title": "Mailand",
+      "title": "Ghetto Karibik",
       "artist": "Miami Yacine",
-      "rank": 203766,
-      "released": "2025-05-30"
+      "rank": 212431,
+      "released": "2020-06-26"
     },
     {
       "rapper": "Miami Yacine",
@@ -1198,53 +1738,18 @@
       "released": "2024-10-25"
     },
     {
-      "rapper": "Capital Bra",
-      "title": "BEEF",
-      "artist": "OZAN BRA & Capital Bra",
-      "rank": 188612,
-      "released": "2024-10-25"
-    },
-    {
-      "rapper": "Capital Bra",
-      "title": "El Naseeni",
-      "artist": "Capital Bra & Ilatch",
-      "rank": 174539,
-      "released": "2023-07-13"
-    },
-    {
-      "rapper": "Eno",
-      "title": "DILEMIN",
-      "artist": "Eno & Nimo",
-      "rank": 172455,
-      "released": "2024-08-23"
-    },
-    {
-      "rapper": "Eno",
-      "title": "LAMBADA",
-      "artist": "Eno & Ataypapi",
-      "rank": 170808,
-      "released": "2024-09-26"
+      "rapper": "Majoe",
+      "title": "SORRY",
+      "artist": "Majoe",
+      "rank": 189310,
+      "released": "2022-06-03"
     },
     {
       "rapper": "Miami Yacine",
-      "title": "La La La",
-      "artist": "Remoe & Miami Yacine",
-      "rank": 166399,
-      "released": "2024-01-19"
-    },
-    {
-      "rapper": "Majoe",
-      "title": "Primetime",
-      "artist": "Majoe",
-      "rank": 165720,
-      "released": "2025-11-21"
-    },
-    {
-      "rapper": "Majoe",
-      "title": "JEMAND WIE DICH",
-      "artist": "Majoe",
-      "rank": 154485,
-      "released": "2023-06-23"
+      "title": "Nador",
+      "artist": "Miami Yacine",
+      "rank": 162061,
+      "released": "2023-04-28"
     },
     {
       "rapper": "Majoe",
@@ -1254,13 +1759,6 @@
       "released": "2023-02-26"
     },
     {
-      "rapper": "Capital Bra",
-      "title": "Dum Dum",
-      "artist": "Capital Bra",
-      "rank": 143134,
-      "released": "2024-06-13"
-    },
-    {
       "rapper": "Majoe",
       "title": "Hautfarbe Cappuccino",
       "artist": "Majoe",
@@ -1268,81 +1766,1124 @@
       "released": "2024-01-19"
     },
     {
-      "rapper": "Miami Yacine",
-      "title": "Bon Voyage II",
-      "artist": "Miami Yacine",
-      "rank": 142031,
-      "released": "2024-09-20"
+      "rapper": "Apache 207",
+      "title": "Komet",
+      "artist": "Udo Lindenberg & Apache 207",
+      "rank": 0,
+      "released": "2023-01-19",
+      "from": "iTunes"
     },
     {
-      "rapper": "Majoe",
-      "title": "BLOCKBANDEN",
-      "artist": "Majoe",
-      "rank": 140350,
-      "released": "2023-01-13"
+      "rapper": "Apache 207",
+      "title": "Ferrari Testarossa",
+      "artist": "Apache 207",
+      "rank": 0,
+      "released": "2018-08-15",
+      "from": "iTunes"
     },
     {
-      "rapper": "Majoe",
-      "title": "EINBAHNSTRASSE",
-      "artist": "Majoe & Madlin",
-      "rank": 139622,
-      "released": "2025-01-17"
+      "rapper": "Apache 207",
+      "title": "Sie ruft",
+      "artist": "Apache 207",
+      "rank": 0,
+      "released": "2020-07-31",
+      "from": "iTunes"
     },
     {
-      "rapper": "Miami Yacine",
-      "title": "CLASSIC",
-      "artist": "Miami Yacine",
-      "rank": 139025,
-      "released": "2024-05-10"
+      "rapper": "Apache 207",
+      "title": "2 Minuten",
+      "artist": "Apache 207",
+      "rank": 0,
+      "released": "2019-07-12",
+      "from": "iTunes"
     },
     {
-      "rapper": "Capital Bra",
-      "title": "REGEN AUF DER FAHRBAHN",
-      "artist": "Capital Bra, Sido & GRiNGO",
-      "rank": 138338,
-      "released": "2024-03-14"
+      "rapper": "Luciano",
+      "title": "Blue Porsche",
+      "artist": "Luciano & Niska",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
     },
     {
-      "rapper": "Miami Yacine",
-      "title": "Für die Kamera",
-      "artist": "Miami Yacine & Nash",
-      "rank": 136142,
-      "released": "2024-03-08"
+      "rapper": "Luciano",
+      "title": "PEPPERMINT",
+      "artist": "Luciano",
+      "rank": 0,
+      "released": "2021-03-04",
+      "from": "iTunes"
     },
     {
-      "rapper": "Majoe",
-      "title": "UNGLAUBLICH",
-      "artist": "Majoe",
-      "rank": 113301,
-      "released": "2024-04-12"
+      "rapper": "RAF Camora",
+      "title": "Perfekt",
+      "artist": "RAF Camora & AriBeatz",
+      "rank": 0,
+      "released": "2018-11-16",
+      "from": "iTunes"
     },
     {
-      "rapper": "Majoe",
-      "title": "LIEBE & HASS",
-      "artist": "Majoe",
-      "rank": 109666,
-      "released": "2023-12-22"
+      "rapper": "RAF Camora",
+      "title": "So lala",
+      "artist": "RAF Camora",
+      "rank": 0,
+      "released": "2016-04-15",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "Tattoos",
+      "artist": "Luciano & RAF Camora",
+      "rank": 0,
+      "released": "2022-09-29",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "Strada",
+      "artist": "RAF Camora & Ahmad Amin",
+      "rank": 0,
+      "released": "2023-06-16",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "Verändert",
+      "artist": "Bonez MC & RAF Camora",
+      "rank": 0,
+      "released": "2019-11-01",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "RAF Camora",
+      "title": "Maschine",
+      "artist": "RAF Camora & The Cratez",
+      "rank": 0,
+      "released": "2020-01-03",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "Schnapp!",
+      "artist": "Gzuz",
+      "rank": 0,
+      "released": "2015-01-30",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "Haifisch Nikez",
+      "artist": "LX, Maxwell & Gzuz",
+      "rank": 0,
+      "released": "2015-06-12",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "Prollz",
+      "artist": "Gzuz & Maxwell",
+      "rank": 0,
+      "released": "2015-10-09",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "Komm zu 187",
+      "artist": "Gzuz",
+      "rank": 0,
+      "released": "2015-10-09",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "Blättchen und Ganja",
+      "artist": "Gzuz & Bonez MC",
+      "rank": 0,
+      "released": "2016-05-27",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "Grabstein",
+      "artist": "Bonez MC & Gzuz",
+      "rank": 0,
+      "released": "2020-09-10",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Gzuz",
+      "title": "Gefährlich",
+      "artist": "Gzuz & Bonez MC",
+      "rank": 0,
+      "released": "2015-01-30",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Samra",
+      "title": "Irgendwann",
+      "artist": "Samra",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Samra",
+      "title": "Rohdiamant ٢٠٢٠",
+      "artist": "Samra",
+      "rank": 0,
+      "released": "2020-10-01",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Samra",
+      "title": "So alleine",
+      "artist": "Capital Bra & Samra",
+      "rank": 0,
+      "released": "2019-10-03",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Samra",
+      "title": "Tranquillo",
+      "artist": "Capital Bra & Samra",
+      "rank": 0,
+      "released": "2019-10-03",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Samra",
+      "title": "Tief in die Nacht",
+      "artist": "Samra & Capital Bra",
+      "rank": 0,
+      "released": "2020-04-16",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Summer Cem",
+      "title": "BIELEFELD",
+      "artist": "Summer Cem",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Summer Cem",
+      "title": "PHANTOM",
+      "artist": "reezy & Summer Cem",
+      "rank": 0,
+      "released": "2019-10-25",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Summer Cem",
+      "title": "GEHT NICH GIBS NICH",
+      "artist": "KC Rebell & Summer Cem",
+      "rank": 0,
+      "released": "2020-05-15",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Summer Cem",
+      "title": "FLEX SO HARD",
+      "artist": "Summer Cem & Miksu / Macloud",
+      "rank": 0,
+      "released": "2022-07-22",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Summer Cem",
+      "title": "RATCHET",
+      "artist": "Summer Cem",
+      "rank": 0,
+      "released": "2024-09-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Summer Cem",
+      "title": "WARNER CASH",
+      "artist": "Summer Cem",
+      "rank": 0,
+      "released": "2024-06-28",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Summer Cem",
+      "title": "IRON MAN",
+      "artist": "KC Rebell & Summer Cem",
+      "rank": 0,
+      "released": "2020-10-16",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Azet",
+      "title": "Tagebuch",
+      "artist": "Azet",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Azet",
+      "title": "Dale",
+      "artist": "Dardan & Azet",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Azet",
+      "title": "Mango",
+      "artist": "Azet",
+      "rank": 0,
+      "released": "2019-11-06",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Azet",
+      "title": "Family",
+      "artist": "Azet",
+      "rank": 0,
+      "released": "2024-08-30",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Azet",
+      "title": "Handy brennt…",
+      "artist": "Azet",
+      "rank": 0,
+      "released": "2023-11-17",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Azet",
+      "title": "Nicht da",
+      "artist": "Azet",
+      "rank": 0,
+      "released": "2021-04-01",
+      "from": "iTunes"
     },
     {
       "rapper": "Zuna",
-      "title": "E Jemja",
-      "artist": "Zuna & Majk",
-      "rank": 97304,
-      "released": "2024-04-27"
+      "title": "Caliente",
+      "artist": "Zuna & Shabab",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
     },
     {
       "rapper": "Zuna",
-      "title": "I Love You",
+      "title": "Hol mir deine Cousine",
       "artist": "Zuna",
-      "rank": 92585,
-      "released": "2023-12-19"
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
     },
     {
       "rapper": "Zuna",
       "title": "7 Sitzer",
       "artist": "Zuna",
-      "rank": 42201,
-      "released": "2023-11-24"
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Zuna",
+      "title": "I Love You",
+      "artist": "Zuna",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Zuna",
+      "title": "Neapel",
+      "artist": "Zuna",
+      "rank": 0,
+      "released": "2022-05-27",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Zuna",
+      "title": "DRECKIGE DOLLARS",
+      "artist": "Kurdo & Zuna",
+      "rank": 0,
+      "released": "2025-11-20",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Zuna",
+      "title": "Wo du warst",
+      "artist": "Zuna",
+      "rank": 0,
+      "released": "2022-06-10",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Zuna",
+      "title": "Fefe Italia",
+      "artist": "Delil & Zuna",
+      "rank": 0,
+      "released": "2024-08-30",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "DILEMIN",
+      "artist": "Eno & Nimo",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "Nie wieder",
+      "artist": "Nimo",
+      "rank": 0,
+      "released": "2016-02-26",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "Trendsetter",
+      "artist": "Nimo & Rina",
+      "rank": 0,
+      "released": "2020-04-29",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "Bitter",
+      "artist": "Nimo",
+      "rank": 0,
+      "released": "2016-02-26",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "Para Drill",
+      "artist": "Dardan & Nimo",
+      "rank": 0,
+      "released": "2021-09-22",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "STAR",
+      "artist": "Nimo & Luciano",
+      "rank": 0,
+      "released": "2019-12-19",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Nimo",
+      "title": "CASH DA",
+      "artist": "Nimo, reezy & KALIM",
+      "rank": 0,
+      "released": "2019-12-19",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Miami Yacine",
+      "title": "CLASSIC",
+      "artist": "Miami Yacine",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Miami Yacine",
+      "title": "Bon Voyage II",
+      "artist": "Miami Yacine",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Miami Yacine",
+      "title": "AKRAPOVIC",
+      "artist": "Miami Yacine",
+      "rank": 0,
+      "released": "2022-10-14",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Miami Yacine",
+      "title": "Désolé",
+      "artist": "Stef Becker, Kofs, Miami Yacine & Bendo",
+      "rank": 0,
+      "released": "2024-02-16",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Dardan",
+      "title": "Ti Amo",
+      "artist": "Dardan",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Dardan",
+      "title": "Highlight",
+      "artist": "Dardan & Jamin",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Dardan",
+      "title": "6AM.........",
+      "artist": "Dardan",
+      "rank": 0,
+      "released": "2020-01-10",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "SALTBAE",
+      "artist": "Majoe & Silva",
+      "rank": 0,
+      "released": "2020-01-29",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "MIDDLE OF THE DAY",
+      "artist": "Majoe & Silva",
+      "rank": 0,
+      "released": "2020-11-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "STERNENHIMMELDACH",
+      "artist": "Majoe & Silva",
+      "rank": 0,
+      "released": "2020-10-23",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "LICHTER DER STADT",
+      "artist": "Majoe & Silva",
+      "rank": 0,
+      "released": "2021-04-02",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "KOMM MIT MIR",
+      "artist": "Majoe & Silva",
+      "rank": 0,
+      "released": "2020-12-04",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "LETZTE NACHT",
+      "artist": "Majoe",
+      "rank": 0,
+      "released": "2022-09-23",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "HOCHHAUS",
+      "artist": "Majoe & Silva",
+      "rank": 0,
+      "released": "2021-02-12",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "TRÄNEN",
+      "artist": "Majoe",
+      "rank": 0,
+      "released": "2021-04-30",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "8 MILE",
+      "artist": "Majoe & Silva",
+      "rank": 0,
+      "released": "2021-04-02",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "VON UNTEN",
+      "artist": "Majoe",
+      "rank": 0,
+      "released": "2023-04-28",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "KEINE",
+      "artist": "Majoe & Silva",
+      "rank": 0,
+      "released": "2021-04-02",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Majoe",
+      "title": "CONDOR",
+      "artist": "Majoe & Silva",
+      "rank": 0,
+      "released": "2021-04-02",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "IMMER UNTERWEGS",
+      "artist": "AK AUSSERKONTROLLE & Haftbefehl",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "HABIBI",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "Prominenz",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 0,
+      "released": "2018-11-09",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "Bang Bang",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 0,
+      "released": "2018-11-09",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "AK Ausserkontrolle",
+      "title": "BIG MONEY",
+      "artist": "AK AUSSERKONTROLLE",
+      "rank": 0,
+      "released": "2023-03-30",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Discokugel",
+      "artist": "Gustav, NOAH & Capital Bra",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "FLÜGEL",
+      "artist": "Capital Bra & Samo104",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "VIJA VIJA",
+      "artist": "DJ Gimi-O & Capital Bra",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Roli Glitzer Glitzer",
+      "artist": "Capital Bra",
+      "rank": 0,
+      "released": "2018-10-19",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Capital Bra",
+      "title": "Bye Bye",
+      "artist": "Capital Bra",
+      "rank": 0,
+      "released": "2019-04-12",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "Leuchtreklame",
+      "artist": "Haftbefehl, Schmyt & Bausa",
+      "rank": 0,
+      "released": "2021-04-15",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "1999, Pt. II",
+      "artist": "Haftbefehl",
+      "rank": 0,
+      "released": "2014-11-28",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "OZEAN",
+      "artist": "KALIM & Haftbefehl",
+      "rank": 0,
+      "released": "2021-09-15",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "Frisch aus der Küche",
+      "artist": "Haftbefehl",
+      "rank": 0,
+      "released": "2015-12-18",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Haftbefehl",
+      "title": "Bolon",
+      "artist": "Haftbefehl",
+      "rank": 0,
+      "released": "2020-06-04",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Jazeek",
+      "title": "Bend Over",
+      "artist": "Jazeek",
+      "rank": 0,
+      "released": "2022-12-09",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Jazeek",
+      "title": "Ma Baby 2",
+      "artist": "Jazeek & Lune",
+      "rank": 0,
+      "released": "2025-03-28",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Damals",
+      "artist": "Aymen",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Far Away",
+      "artist": "Aymen",
+      "rank": 0,
+      "released": "2016-11-25",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Alles ist geschrieben",
+      "artist": "Aymo, Aymen & AMO",
+      "rank": 0,
+      "released": "2026-01-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Tiki Taka",
+      "artist": "Haaland936, Aymen & AMO",
+      "rank": 0,
+      "released": "2025-09-25",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "24 Karat",
+      "artist": "Aymo, Aymen & AMO",
+      "rank": 0,
+      "released": "2026-01-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Dinero",
+      "artist": "AYMEN & PIO",
+      "rank": 0,
+      "released": "2023-09-15",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Justizia",
+      "artist": "Shafo & AYMEN",
+      "rank": 0,
+      "released": "2023-06-22",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Hood Bandolero",
+      "artist": "Lio, Aymen & Ché Salah",
+      "rank": 0,
+      "released": "2024-11-15",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Trance",
+      "artist": "Aymo, Aymen & AMO",
+      "rank": 0,
+      "released": "2026-01-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Rot oder schwarz",
+      "artist": "Aymo, Aymen & AMO",
+      "rank": 0,
+      "released": "2026-01-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Happy Tears",
+      "artist": "Miles Away, Aymen & RUNN",
+      "rank": 0,
+      "released": "2022-09-14",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Aymen",
+      "title": "Beautiful People",
+      "artist": "Miles Away, Aymen & braev",
+      "rank": 0,
+      "released": "2020-05-26",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Eno",
+      "title": "LAMBADA",
+      "artist": "Eno & Ataypapi",
+      "rank": 0,
+      "released": null,
+      "from": "Playlist"
+    },
+    {
+      "rapper": "Eno",
+      "title": "Aladdin",
+      "artist": "Ardian Bujupi & Eno",
+      "rank": 0,
+      "released": "2017-12-01",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Eno",
+      "title": "Wo bist du",
+      "artist": "Jamule & Eno",
+      "rank": 0,
+      "released": "2020-02-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Eno",
+      "title": "Yanee",
+      "artist": "Eno",
+      "rank": 0,
+      "released": "2016-07-29",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Eno",
+      "title": "Talentiert",
+      "artist": "Eno & Pronto",
+      "rank": 0,
+      "released": "2021-07-23",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Eno",
+      "title": "Vertrauen",
+      "artist": "Nimo & Eno",
+      "rank": 0,
+      "released": "2020-08-27",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Eno",
+      "title": "DTEC",
+      "artist": "Eno",
+      "rank": 0,
+      "released": "2023-11-23",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Eno",
+      "title": "Safe",
+      "artist": "Eno & Doria",
+      "rank": 0,
+      "released": "2021-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Makarova",
+      "artist": "Asche & Kollegah",
+      "rank": 0,
+      "released": "2020-08-28",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Der Rettungsschwimmer",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Der Maurermeister",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Der Lastwagenfahrer",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Der Fahrradkurier",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Der Sicherheitsbeamte",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Der Lehrer",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Der Indianer",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Der Putin",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Der Rooz",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Von Salat schrumpft der Bizeps",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2018-02-02",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Nwo",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2018-02-02",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "FREE SPIRIT",
+      "artist": "Kollegah",
+      "rank": 0,
+      "released": "2022-04-15",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "EINE BRUDERSCHAFT BLEIBT",
+      "artist": "Farid Bang & Kollegah",
+      "rank": 0,
+      "released": "2021-07-23",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Kollegah",
+      "title": "Lyrik Lounge Theme",
+      "artist": "Kollegah & Bosshafte Beats",
+      "rank": 0,
+      "released": "2017-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "NADOR CITY GANG",
+      "artist": "Farid Bang",
+      "rank": 0,
+      "released": "2020-04-17",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "KAMPFSPORT",
+      "artist": "Farid Bang & Capital Bra",
+      "rank": 0,
+      "released": "2021-07-02",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "TESTOSTERON",
+      "artist": "Farid Bang",
+      "rank": 0,
+      "released": "2021-11-26",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "MONEY II",
+      "artist": "Farid Bang & ELIF",
+      "rank": 0,
+      "released": "2021-08-13",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "Guerilla",
+      "artist": "Farid Bang",
+      "rank": 0,
+      "released": "2020-05-29",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "BITTE SPITTE X",
+      "artist": "Farid Bang",
+      "rank": 0,
+      "released": "2021-11-26",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "GET RICH DIE TRYIN'",
+      "artist": "Farid Bang",
+      "rank": 0,
+      "released": "2021-11-26",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "CITY GANGSTER",
+      "artist": "Farid Bang, CAPO & Veysel",
+      "rank": 0,
+      "released": "2021-07-23",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "KRONE",
+      "artist": "Farid Bang",
+      "rank": 0,
+      "released": "2021-11-26",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "Casanova",
+      "artist": "Farid Bang",
+      "rank": 0,
+      "released": "2020-05-29",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "Bitcoins",
+      "artist": "Capital Bra & Farid Bang",
+      "rank": 0,
+      "released": "2022-03-10",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "quavo",
+      "artist": "Farid Bang",
+      "rank": 0,
+      "released": "2020-03-27",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "Farid Bang",
+      "title": "BERGHAINCLUB",
+      "artist": "Farid Bang",
+      "rank": 0,
+      "released": "2021-11-26",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "AMO",
+      "title": "Alles",
+      "artist": "Schubi AKpella & AMO",
+      "rank": 0,
+      "released": "2026-01-09",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "AMO",
+      "title": "Endlos Verliebt",
+      "artist": "Amo",
+      "rank": 0,
+      "released": "2023-09-14",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "AMO",
+      "title": "Inkognito",
+      "artist": "Delil & AMO",
+      "rank": 0,
+      "released": "2026-02-06",
+      "from": "iTunes"
+    },
+    {
+      "rapper": "AMO",
+      "title": "HOTS 4 U",
+      "artist": "Chris Lorenzo & aMo (um)",
+      "rank": 0,
+      "released": "2026-05-01",
+      "from": "iTunes"
     }
   ]
 }

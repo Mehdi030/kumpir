@@ -1,9 +1,9 @@
 {
-  "_info": "Rapper für die Playlist 'Deutschrap aktuell' (Auswahl Mehdi, 07.10.2026). Liste ändern und danach `node db/scripts/build-deutschrap.mjs <ausgabe.sql>` ausführen; abgewählte Rapper wandern ins Archiv.",
+  "_info": "Rapper für die Playlist 'Deutschrap aktuell' (Auswahl Mehdi, 07.10.2026; Klassiker erlaubt). Liste ändern und danach `node db/scripts/build-deutschrap.mjs <ausgabe.sql>` ausführen; abgewählte Rapper wandern ins Archiv. sinceYears: null = beliebtestes unabhängig vom Alter, Zahl = nur Songs der letzten N Jahre.",
   "playlist": "Deutschrap aktuell",
-  "sinceYears": 4,
-  "maxPerArtist": 12,
-  "target": 240,
+  "sinceYears": null,
+  "maxPerArtist": 15,
+  "target": 375,
   "rapper": [
     "Apache 207",
     "Luciano",
@@ -25,6 +25,10 @@
     "Jazeek",
     "Aymen",
     "Mero",
-    "Eno"
+    "Eno",
+    "Kollegah",
+    "Farid Bang",
+    "Kurdo",
+    "AMO"
   ]
 }
