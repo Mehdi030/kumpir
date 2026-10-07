@@ -219,7 +219,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
         <main className="container">
             <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
                 <Image
-                    src="/HGLogo.webp"
+                    src="/HGLogo-v2.webp"
                     alt="Kumpir Maskottchen"
                     width={400}
                     height={267}

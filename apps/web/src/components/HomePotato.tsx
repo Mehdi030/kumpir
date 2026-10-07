@@ -11,7 +11,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
  *    gleiche Position wie im Logo) und hebt sich nacheinander kurz an. Gestreckt wird nur vom
  *    Fingeransatz aus, so deckt der angehobene Finger das Original im Logo immer ganz ab.
  *  - 3D: Kante/Tiefe per Schatten, Lichtreflex und leichte Neigung zur Maus (nur Maus, nicht Touch).
- * Alle Koordinaten beziehen sich auf das Originalbild HGLogo.webp (1200 x 800).
+ * Alle Koordinaten beziehen sich auf HGLogo-v2.webp (1200 x 800; rechte Hand gespiegelt, damit beide Hände 4 Finger haben).
  */
 const W = 1200;
 const H = 800;
@@ -22,11 +22,11 @@ const FINGERS = [
     { n: "l2", x: 248, y: 425, w: 61, h: 78 },
     { n: "l3", x: 291, y: 419, w: 80, h: 84 },
     { n: "l4", x: 344, y: 436, w: 85, h: 63 },
-    { n: "r1", x: 777, y: 436, w: 81, h: 62 },
-    { n: "r2", x: 831, y: 414, w: 85, h: 88 },
-    { n: "r3", x: 894, y: 417, w: 72, h: 85 },
-    { n: "r4", x: 949, y: 426, w: 60, h: 74 },
-    { n: "r5", x: 994, y: 438, w: 50, h: 61 },
+    // rechte Hand = Spiegelbild der linken (Original hatte rechts 5 Finger, links 4)
+    { n: "hr1", x: 778, y: 436, w: 85, h: 63 },
+    { n: "hr2", x: 836, y: 419, w: 80, h: 84 },
+    { n: "hr3", x: 898, y: 425, w: 61, h: 78 },
+    { n: "hr4", x: 946, y: 439, w: 50, h: 62 },
 ];
 
 // Augen (Innenfläche ohne den schwarzen Rand)
@@ -110,7 +110,7 @@ export function HomePotato() {
     return (
         <div className="potatoBgImg kpStage">
             <div className="kpTilt" ref={tiltRef}>
-                <Image src="/HGLogo.webp" alt="" width={900} height={600} priority quality={80} className="kpBase" />
+                <Image src="/HGLogo-v2.webp" alt="" width={900} height={600} priority quality={80} className="kpBase" />
 
                 {/* Augenlider */}
                 <svg className="kpLayer" viewBox={`0 0 ${W} ${H}`} aria-hidden>

@@ -149,8 +149,8 @@ main{ animation: kmPageIn .45s ease backwards; }
         radial-gradient(38% 52% at var(--lx, 50%) var(--ly, 38%), rgba(255, 248, 215, .42), transparent 70%),
         linear-gradient(180deg, rgba(255, 240, 200, .18), transparent 45%, rgba(60, 20, 0, .22) 75%);
     mix-blend-mode: soft-light;
-    -webkit-mask: url(/HGLogo.webp) center / 100% 100% no-repeat;
-    mask: url(/HGLogo.webp) center / 100% 100% no-repeat;
+    -webkit-mask: url(/HGLogo-v2.webp) center / 100% 100% no-repeat;
+    mask: url(/HGLogo-v2.webp) center / 100% 100% no-repeat;
 }
 @media (prefers-reduced-motion: reduce){
     .kpFinger, .kpLidUp.kpWink, .kpLidUp.kpSquint, .kpLidLo, .kpLash, .kpSpark{ animation: none; }
