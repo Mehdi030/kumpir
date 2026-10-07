@@ -226,6 +226,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     // “Your turn” overlay
     const [turnOverlay, setTurnOverlay] = useState(false);
+    const [turnGrace, setTurnGrace] = useState(0);
     const lastShownTurnNonceRef = useRef<number>(0);
 
     // Pass animation event
@@ -666,8 +667,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     const nonce = Date.now();
                     if (nonce - lastShownTurnNonceRef.current > 700) {
                         lastShownTurnNonceRef.current = nonce;
+                        // Schutzzeit (Migration 091): kam die Kumpir in letzter Sekunde, hat man trotzdem mind. ein paar Sekunden
+                        setTurnGrace(Number(raw.last_grace_sec ?? 0) || 0);
                         setTurnOverlay(true);
-                        window.setTimeout(() => setTurnOverlay(false), 1700);
+                        window.setTimeout(() => setTurnOverlay(false), 2200);
 
                     }
                 }
@@ -1984,6 +1987,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             {turnOverlay ? (
                 <div className="turnOverlay" role="status" aria-live="polite">
                     ✅ Du bist dran
+                    {turnGrace > 0 ? <div className="turnGrace">🛡️ Schutzzeit: mindestens {turnGrace} Sekunden</div> : null}
                 </div>
             ) : null}
 
@@ -2496,7 +2500,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           letter-spacing: 0.3px;
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
+          text-align: center;
         }
+        .turnGrace{ margin-top: 4px; font-size: 13px; font-weight: 800; color: #a7f3d0; letter-spacing: 0; }
         .elimPopup{
           position: fixed;
           left: 50%;
