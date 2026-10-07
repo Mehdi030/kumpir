@@ -1,23 +1,28 @@
-name: Post Vercel Preview Link to Discord
+name: Discord – neuester Deploy
+
+# Bei jedem Push auf main: auf den fertigen Vercel-Deploy warten, im Discord-Preview-Kanal eine Karte
+# mit Link, Änderung und Commit posten und die vorherige Karte löschen (im Kanal steht immer nur der
+# neueste Stand). Schlägt der Deploy fehl, kommt eine rote Warnung.
+# Benötigte Secrets: VERCEL_TOKEN, VERCEL_PROJECT_ID, DISCORD_WEBHOOK_URL (Webhook des Preview-Kanals).
 
 on:
   push:
     branches:
-      - web
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: discord-preview
+  cancel-in-progress: false
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+    env:
+      LIVE_URL: https://kumpir-web.vercel.app
 
     steps:
-      # jq wird für die Vercel-API-Auswertung benötigt
-      - name: Ensure jq is installed
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-
-      # 1) Vercel Preview-URL für DIESEN Commit holen (wartet bis READY)
-      - name: Get Vercel preview deployment URL (wait until READY)
+      - name: Auf den Vercel-Deploy dieses Commits warten
         id: vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -25,57 +30,90 @@ jobs:
           GIT_SHA: ${{ github.sha }}
         run: |
           set -e
-
-          for i in {1..30}; do
-            echo "Attempt $i/30: checking Vercel deployments..."
-
-            response=$(curl -sS \
-              -H "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=50")
-
-            url=$(echo "$response" | jq -r --arg sha "$GIT_SHA" '
-              .deployments
-              | map(select(
-                  .state == "READY"
-                  and (.target == "preview" or .target == null)
-                  and .meta.githubCommitSha == $sha
-                ))
-              | .[0].url
-            ')
-
-            if [ -n "$url" ] && [ "$url" != "null" ]; then
-              echo "Found READY preview: $url"
-              echo "preview_url=https://$url" >> $GITHUB_OUTPUT
-              exit 0
+          for i in $(seq 1 60); do
+            response=$(curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=30")
+            row=$(echo "$response" | jq -c --arg sha "$GIT_SHA" '[.deployments[] | select(.meta.githubCommitSha == $sha)] | .[0] // empty')
+            state=$(echo "$row" | jq -r '.state // .readyState // empty')
+            url=$(echo "$row" | jq -r '.url // empty')
+            echo "Versuch $i: ${state:-noch nicht da}"
+            if [ "$state" = "READY" ]; then
+              echo "state=READY" >> "$GITHUB_OUTPUT"; echo "url=https://$url" >> "$GITHUB_OUTPUT"; exit 0
             fi
-
-            echo "Not ready yet. Sleeping 10s..."
+            if [ "$state" = "ERROR" ] || [ "$state" = "CANCELED" ]; then
+              echo "state=$state" >> "$GITHUB_OUTPUT"; echo "url=https://$url" >> "$GITHUB_OUTPUT"; exit 0
+            fi
             sleep 10
           done
+          echo "state=TIMEOUT" >> "$GITHUB_OUTPUT"
 
-          echo "❌ Timeout: No READY preview found for this commit."
-          exit 1
+      - name: Vorherige Nachricht merken (Cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: .discord-last-message
+          key: discord-preview-msg-${{ github.run_id }}
+          restore-keys: discord-preview-msg-
 
-      # 2) Discord-Nachricht posten (immer neu)
-      - name: Post preview message to Discord
+      - name: Karte in Discord posten, alte löschen
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          PREVIEW_URL: ${{ steps.vercel.outputs.preview_url }}
+          STATE: ${{ steps.vercel.outputs.state }}
+          DEPLOY_URL: ${{ steps.vercel.outputs.url }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
-          AUTHOR: ${{ github.event.head_commit.author.name }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
         run: |
           set -e
+          title_line=$(printf '%s' "${COMMIT_MSG:-manuell gestartet}" | head -n 1 | cut -c1-200)
+          body_lines=$(printf '%s' "$COMMIT_MSG" | sed '1d' | grep -v '^Co-Authored-By' | sed '/^\s*$/d' | head -n 8 | cut -c1-180)
+          short=${SHA:0:7}
+          if [ "$STATE" = "READY" ]; then
+            payload=$(jq -n --arg t "$title_line" --arg b "$body_lines" --arg live "$LIVE_URL" --arg dep "$DEPLOY_URL" \
+              --arg sha "$short" --arg link "https://github.com/$REPO/commit/$SHA" '{
+              username: "Kumpir Deploy",
+              embeds: [{
+                title: "🎮 Neueste Version ist live",
+                url: $live,
+                description: ("**" + $t + "**" + (if $b == "" then "" else "\n" + $b end)),
+                color: 16750615,
+                fields: [
+                  { name: "🔗 Spielen", value: $live, inline: true },
+                  { name: "🧪 Genau dieser Stand", value: $dep, inline: true },
+                  { name: "📝 Commit", value: ("[" + $sha + "](" + $link + ")"), inline: true }
+                ],
+                timestamp: (now | todate),
+                footer: { text: "Kumpir · automatisch nach jedem Deploy" }
+              }]
+            }')
+          else
+            payload=$(jq -n --arg t "$title_line" --arg s "$STATE" --arg dep "$DEPLOY_URL" --arg sha "$short" \
+              --arg link "https://github.com/$REPO/commit/$SHA" '{
+              username: "Kumpir Deploy",
+              embeds: [{
+                title: "⚠️ Deploy fehlgeschlagen",
+                description: ("**" + $t + "**\nStatus: " + $s + "\nDie Live-Seite zeigt weiter den letzten funktionierenden Stand."),
+                color: 15548997,
+                fields: [ { name: "📝 Commit", value: ("[" + $sha + "](" + $link + ")"), inline: true } ],
+                timestamp: (now | todate)
+              }]
+            }')
+          fi
 
-          payload=$(cat <<JSON
-          {
-            "content": "🔗 **AKTUELLE SPIEL-VORSCHAU (KUMPIR)**\n\n👉 ${PREVIEW_URL}\n\nDas ist die **neueste Testversion** des Spiels.\nEinfach öffnen, ausprobieren und schauen, was neu ist.\n\n🧩 **Was wurde geändert?**\n• Update von ${AUTHOR}\n• Kurzinfo: ${COMMIT_MSG}\n\n⚠️ **Wichtig**\n• Das ist eine Testversion\n• Es können Fehler auftreten\n• Fortschritt oder Inhalte können sich ändern"
-          }
-          JSON
-          )
+          res=$(curl -sS -X POST -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL?wait=true")
+          new_id=$(echo "$res" | jq -r '.id // empty')
+          if [ -z "$new_id" ]; then echo "Discord-Antwort: $res"; exit 1; fi
 
-          res=$(curl -sS -w "\nHTTP_STATUS:%{http_code}\n" -X POST \
-            -H "Content-Type: application/json" \
-            -d "$payload" \
-            "$DISCORD_WEBHOOK_URL?wait=true")
+          # Nur bei Erfolg die alte Karte entfernen (Warnungen bleiben stehen, bis wieder ein Deploy klappt)
+          if [ "$STATE" = "READY" ] && [ -f .discord-last-message ]; then
+            for old in $(cat .discord-last-message); do
+              curl -sS -o /dev/null -w "alte Nachricht $old gelöscht: %{http_code}\n" -X DELETE "$DISCORD_WEBHOOK_URL/messages/$old" || true
+            done
+            : > .discord-last-message
+          fi
+          echo "$new_id" >> .discord-last-message
 
-          echo "$res"
+      - name: Nachricht für das nächste Mal merken
+        uses: actions/cache/save@v4
+        with:
+          path: .discord-last-message
+          key: discord-preview-msg-${{ github.run_id }}
