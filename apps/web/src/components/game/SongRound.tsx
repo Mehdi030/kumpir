@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getMuted, getVolume, onAudioSettingsChanged } from "@/lib/gameFx";
 import { getSongAudio, setPendingSongPlay } from "@/lib/songAudio";
+import { serverNow } from "@/lib/serverClock";
 
 /**
  * Song-Raten (Musik-Modus): spielt den aktuellen, versteckten Song des
@@ -16,33 +17,37 @@ import { getSongAudio, setPendingSongPlay } from "@/lib/songAudio";
  * aber die bestehende Mute/Lautstärke-Einstellung (gameFx), statt einen
  * zweiten, unabhängigen Audio-Schalter einzuführen.
  */
-// Songs, deren Preview-URL wir schon vorgeladen haben (Modul-Ebene, überlebt
-// Re-Renders und den Wechsel des aktuellen Songs für die Dauer des Tabs).
-const prefetchedUrls = new Set<string>();
-const prefetchedTopics = new Set<string>();
-// Muss außerhalb jeder Funktion referenziert bleiben, sonst holt der
-// Garbage-Collector die Audio()-Objekte, bevor der Preload fertig ist.
-const prefetchAudioPool: HTMLAudioElement[] = [];
+// Kein Vorladen anderer Songs: früher wurden beim ersten Song ALLE Songs der Playlist im
+// Hintergrund geladen (bei 164 Songs ~80 MB). Das verstopfte die Verbindung zum iTunes-Server, der
+// gerade laufende Song kam dann bis zu 30 s lang nicht durch (Testrunde 2026-10-07). Der aktuelle
+// Song selbst lädt in ~0,3 s.
 
-function prefetchPreviewUrl(url: string) {
-    if (!url || prefetchedUrls.has(url)) return;
-    prefetchedUrls.add(url);
-    const a = new Audio();
-    a.preload = "auto";
-    a.src = url;
-    a.load();
-    prefetchAudioPool.push(a);
+// Länge einer iTunes-Vorschau, solange der Browser die echte Dauer noch nicht kennt.
+const PREVIEW_FALLBACK_SECONDS = 30;
+
+function previewLength(el: HTMLAudioElement | null): number {
+    const d = el?.duration;
+    return d && Number.isFinite(d) && d > 5 ? d : PREVIEW_FALLBACK_SECONDS;
 }
 
 // Wie weit der Song laut Server-Zeitstempel gerade sein müsste (Sekunden).
-// Deckel bei 28s, damit ein spät beigetretener/aufgewachter Client nicht
-// versucht, über das Ende einer typischen 30s-iTunes-Preview hinaus zu
-// seeken.
-function targetOffsetSeconds(startedAt: string | null): number {
+// Rechnet mit der Server-Uhr (nicht der Geräte-Uhr), damit alle Geräte an
+// derselben Stelle sind. Hält ein Spieler die Kartoffel länger als die
+// ~30s-Vorschau, läuft der Song in einer Schleife weiter (alle Geräte springen
+// gleichzeitig an den Anfang) statt abzubrechen.
+function targetOffsetSeconds(startedAt: string | null, el: HTMLAudioElement | null): number {
     if (!startedAt) return 0;
     const startedMs = Date.parse(startedAt);
     if (Number.isNaN(startedMs)) return 0;
-    return Math.max(0, Math.min(28, (Date.now() - startedMs) / 1000));
+    const elapsed = Math.max(0, (serverNow() - startedMs) / 1000);
+    return elapsed % previewLength(el);
+}
+
+// Abstand zwischen Ist- und Soll-Position, mit Schleife gedacht (29.9s und 0.1s liegen nah beieinander).
+function driftSeconds(el: HTMLAudioElement, target: number): number {
+    const len = previewLength(el);
+    const d = (((el.currentTime - target) % len) + len) % len;
+    return Math.min(d, len - d);
 }
 
 export function SongRound({ songId, startedAt }: { songId: string | null; startedAt: string | null }) {
@@ -51,62 +56,36 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
     // Aktuelle Start-Funktion/Sperr-Status für Intervalle und Gesten-Nachholen (ohne Neu-Abo)
     const startPlaybackRef = useRef<(() => void) | null>(null);
     const blockedRef = useRef(false);
-    const requestedForRef = useRef<string | null>(null);
 
-    // songId -> preview_url. Der Normalfall liest nur noch die von
-    // db/scripts/backfill-song-previews.mjs vorab gecachte URL (Migration
-    // 036) -- kein Live-Request mehr, keine Ladezeit. Nur für einen Song,
-    // der noch nie gecacht wurde (frisch hinzugefügt, Cache-Job noch nicht
-    // gelaufen), fragen wir als Fallback einmalig live die iTunes Search
-    // API an, statt einfach stumm zu bleiben.
+    // songId -> preview_url (vorab geprüfte iTunes-Vorschau; Titel/Interpret sind für Clients gesperrt, Migration 063).
     useEffect(() => {
         if (!songId) {
-            // Song-Runde vorbei (Thema gewechselt/Match beendet) -- lokalen
-            // Preview-Lookup zurücksetzen, damit ein späterer neuer Song mit
-            // derselben id (Rematch) wieder frisch nachgeladen wird.
-            // eslint-disable-next-line react-hooks/set-state-in-effect
+            // Song-Runde vorbei (Thema gewechselt/Match beendet)
             setPreviewUrl(null);
-            requestedForRef.current = null;
             return;
         }
-        if (requestedForRef.current === songId) return;
-        requestedForRef.current = songId;
 
+        // Läuft nur, wenn sich der Song ändert. Kein "schon angefragt"-Merker: wurde eine
+        // Anfrage abgebrochen (Song-Wechsel, React-Neumontage), muss der nächste Lauf sie
+        // wirklich neu stellen -- sonst blieb der erste Song einer Runde manchmal stumm.
         let cancelled = false;
         const supabase = getSupabaseClient();
 
         (async () => {
-            const { data, error } = await supabase
-                .from("song_pool")
-                .select("preview_url,preview_checked_at,topic_pool_id")
-                .eq("id", songId)
-                .single();
-
-            if (cancelled || error || !data) return;
-
-            // Restliche Songs derselben Kategorie im Hintergrund vorladen (einmal
-            // pro Kategorie und Tab) -- sonst lädt <audio preload="none"> die
-            // Preview erst GENAU in dem Moment, in dem der Song dran ist, und
-            // wer gerade eine langsamere Verbindung/CDN-Route hat, verliert
-            // dadurch spürbar Reaktionszeit gegenüber den anderen Haltern.
-            if (data.topic_pool_id && !prefetchedTopics.has(data.topic_pool_id)) {
-                prefetchedTopics.add(data.topic_pool_id);
-                void supabase
-                    .from("song_pool")
-                    .select("preview_url")
-                    .eq("topic_pool_id", data.topic_pool_id)
-                    .not("preview_url", "is", null)
-                    .then(({ data: siblings }) => {
-                        for (const s of siblings ?? []) {
-                            if (s.preview_url) prefetchPreviewUrl(s.preview_url as string);
-                        }
-                    });
+            // Kurzer Netz-Hänger soll den Song nicht für die ganze Runde stumm lassen: bis zu 4 Versuche.
+            let data: { preview_url: string | null } | null = null;
+            for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
+                if (attempt > 0) await new Promise((r) => setTimeout(r, 600 * attempt));
+                if (cancelled) return;
+                const res = await supabase.from("song_pool").select("preview_url").eq("id", songId).single();
+                if (!res.error && res.data) {
+                    data = res.data as { preview_url: string | null };
+                    break;
+                }
             }
 
-            // Titel/Interpret sind für Clients gesperrt (Anti-Leak, Migration 063)
-            // -- es gibt nur noch die vorab geprüfte preview_url, keinen
-            // Live-Fallback über die iTunes-Suche mehr.
-            if (data.preview_url) prefetchPreviewUrl(data.preview_url);
+            if (cancelled || !data) return;
+
             setPreviewUrl(data.preview_url ?? null);
         })();
 
@@ -123,8 +102,9 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
         const el = getSongAudio();
         if (!el || !previewUrl || getMuted()) return;
         if (el.src !== previewUrl) el.src = previewUrl;
+        el.loop = true;
         el.volume = getVolume();
-        el.currentTime = targetOffsetSeconds(startedAt);
+        el.currentTime = targetOffsetSeconds(startedAt, el);
         void el
             .play()
             .then(() => {
@@ -148,18 +128,26 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
         if (!previewUrl || getMuted()) {
             el.pause();
             setPendingSongPlay(null);
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setBlocked(false);
             return;
         }
         // Synchrone Wiedergabe: alle Clients starten an derselben Stelle im Song (aus
-        // current_song_started_at), sobald Metadaten da sind zusätzlich nachjustieren.
+        // current_song_started_at). Sobald Metadaten da sind und sobald der Ton wirklich
+        // läuft (Laden/Puffern kostet ein paar hundert ms), wird nachjustiert.
         const onLoadedMeta = () => {
-            el.currentTime = targetOffsetSeconds(startedAt);
+            el.currentTime = targetOffsetSeconds(startedAt, el);
+        };
+        const onPlaying = () => {
+            const target = targetOffsetSeconds(startedAt, el);
+            if (driftSeconds(el, target) > 0.25) el.currentTime = target;
         };
         el.addEventListener("loadedmetadata", onLoadedMeta);
+        el.addEventListener("playing", onPlaying);
         startPlayback();
-        return () => el.removeEventListener("loadedmetadata", onLoadedMeta);
+        return () => {
+            el.removeEventListener("loadedmetadata", onLoadedMeta);
+            el.removeEventListener("playing", onPlaying);
+        };
     }, [previewUrl, startedAt, startPlayback]);
 
     // Song-Runde vorbei oder Spielseite verlassen -> Ton aus, kein Nachholen mehr
@@ -177,21 +165,43 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
         []
     );
 
-    // Drift-Korrektur: läuft ein Client (Buffering, gedrosselter Hintergrund-Tab, ...)
+    // Drift-Korrektur (alle 2s): läuft ein Client (Buffering, gedrosselter Hintergrund-Tab, ...)
     // spürbar aus dem Takt, wird hart auf die Server-Zielposition zurückgesprungen.
     // Bleibt der Song trotz allem stehen (z. B. kurz Netz weg), wird er neu gestartet.
+    // Zusätzlich: Lädt der Song noch, wird nicht dazwischen gesprungen (jeder Sprung startet das
+    // Laden neu); hängt er trotz "läuft" (Position bewegt sich nicht, oder lädt > 6 s), wird er
+    // neu geladen.
     useEffect(() => {
         if (!previewUrl || !startedAt) return;
+        let lastCt = -1;
+        let loadingChecks = 0;
+        const restart = (el: HTMLAudioElement) => {
+            lastCt = -1;
+            loadingChecks = 0;
+            el.load();
+            startPlaybackRef.current?.();
+        };
         const t = window.setInterval(() => {
             const el = getSongAudio();
             if (!el || getMuted()) return;
             if (el.paused) {
+                lastCt = -1;
                 if (!blockedRef.current) startPlaybackRef.current?.();
                 return;
             }
-            const target = targetOffsetSeconds(startedAt);
-            if (Math.abs(el.currentTime - target) > 0.75) el.currentTime = target;
-        }, 3000);
+            if (el.readyState < 3) {
+                if (++loadingChecks >= 3) restart(el);
+                return;
+            }
+            loadingChecks = 0;
+            if (lastCt >= 0 && Math.abs(el.currentTime - lastCt) < 0.05) {
+                restart(el);
+                return;
+            }
+            const target = targetOffsetSeconds(startedAt, el);
+            if (driftSeconds(el, target) > 0.5) el.currentTime = target;
+            lastCt = el.currentTime;
+        }, 2000);
         return () => window.clearInterval(t);
     }, [previewUrl, startedAt]);
     useEffect(() => {

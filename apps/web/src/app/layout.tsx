@@ -63,6 +63,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <html lang="de" className={`${displayFont.variable}`}>
         <head>
             <link rel="preload" href="/fonts/kumpir-emoji.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+            {/* Song-Vorschauen kommen von hier: Verbindung schon vorher aufbauen, damit der erste Song schneller startet */}
+            <link rel="preconnect" href="https://audio-ssl.itunes.apple.com" />
         </head>
         <body>
         <Embers />

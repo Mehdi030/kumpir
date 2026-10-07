@@ -50,6 +50,8 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
     poweredByHeader: false,
+    // Nur lokal: zweiter Test-Spieler über http://127.0.0.1:3000 (eigener Browser-Speicher = eigener Spieler)
+    allowedDevOrigins: ["127.0.0.1"],
     reactCompiler: true,
     // Statische Bilder/Icons lange cachen (Dateinamen ändern sich nur mit neuem Inhalt)
     async headers() {

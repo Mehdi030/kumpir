@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { serverNow, syncServerClock } from "@/lib/serverClock";
 
 import { PlayerRing } from "@/components/game/PlayerRing";
 import { SongRound } from "@/components/game/SongRound";
@@ -145,37 +146,12 @@ function clamp(n: number, min: number, max: number) {
     return Math.max(min, Math.min(max, n));
 }
 
-// Client<->Server-Zeitversatz: manche Geräte-Uhren gehen spürbar falsch
-// (Sekunden bis Minuten), was Countdown/Heat-Anzeigen verzerrt, obwohl
-// beide Geräte dieselben Server-Zeitstempel bekommen (gemeldeter Bug:
-// "START IN" stand bei einem Gerät fest auf 10 statt wie beim anderen von
-// 5 runterzuzählen). Wird einmal pro Session grob kalibriert (siehe
-// syncClockOffset) und auf jede msUntil()-Berechnung angewandt.
-let clockOffsetMs = 0;
-
-async function syncClockOffset(supabase: ReturnType<typeof getSupabaseClient>) {
-    // Mehrere Messungen, die mit der KÜRZESTEN Laufzeit gewinnt: ein einzelner
-    // langsamer Request (Kaltstart, Netz-Hänger) würde sonst die ganze Anzeige
-    // um Sekunden verschieben (z. B. "25 s" statt 10 s beim Voting).
-    let best: { rtt: number; offset: number } | null = null;
-    for (let k = 0; k < 4; k++) {
-        const sentAt = Date.now();
-        const { data, error } = await supabase.rpc("rpc_server_time");
-        if (error || !data) continue;
-        const serverMs = Date.parse(data as unknown as string);
-        if (Number.isNaN(serverMs)) continue;
-        const rtt = Date.now() - sentAt;
-        const offset = serverMs + rtt / 2 - Date.now();
-        if (!best || rtt < best.rtt) best = { rtt, offset };
-    }
-    if (best) clockOffsetMs = best.offset;
-}
-
+// Server-Uhr statt Geräte-Uhr (lib/serverClock.ts)
 function msUntil(ts: string | null): number | null {
     if (!ts) return null;
     const ms = Date.parse(ts);
     if (Number.isNaN(ms)) return null;
-    return ms - (Date.now() + clockOffsetMs);
+    return ms - serverNow();
 }
 
 function fmtMs(ms?: number | null) {
@@ -204,8 +180,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     // Beim Laden kalibrieren und danach jede Minute nachziehen (Uhren driften).
     useEffect(() => {
-        void syncClockOffset(supabase);
-        const t = window.setInterval(() => void syncClockOffset(supabase), 60000);
+        void syncServerClock(supabase);
+        const t = window.setInterval(() => void syncServerClock(supabase), 60000);
         return () => window.clearInterval(t);
     }, [supabase]);
 
@@ -263,6 +239,13 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     const [hudPulseNonce, setHudPulseNonce] = useState(0);
 
     const inFlightRef = useRef(false);
+    // Live-Änderungen (Realtime) laden SOFORT neu, statt auf die nächste 4s-Abfrage zu warten
+    // (sonst kam z. B. ein neuer Song 4-5 s zu spät bei allen an). Läuft gerade eine Abfrage,
+    // wird direkt danach noch einmal geladen; mehrere Ereignisse auf einmal ergeben so höchstens
+    // zwei Abfragen.
+    const loadNowRef = useRef<(() => void) | null>(null);
+    const reloadPendingRef = useRef(false);
+    const inFlightSinceRef = useRef(0);
     const prevHolderRef = useRef<string | null>(null);
     const passNonceRef = useRef(0);
     const prevAliveRef = useRef<Set<string>>(new Set());
@@ -508,7 +491,13 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // polling cadence depends on it (slow when realtime is "live").
     // -----------------------------
     const reloadFromRealtime = useCallback(() => {
+        // Hängt eine Abfrage schon ungewöhnlich lange, nicht auf sie warten.
+        if (inFlightRef.current && Date.now() - inFlightSinceRef.current < 8000) {
+            reloadPendingRef.current = true;
+            return;
+        }
         inFlightRef.current = false;
+        loadNowRef.current?.();
     }, []);
     const realtimeStatus = useLobbyRealtime(lobby?.id ?? null, reloadFromRealtime);
 
@@ -568,6 +557,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const load = async () => {
             if (inFlightRef.current) return;
             inFlightRef.current = true;
+            inFlightSinceRef.current = Date.now();
 
             try {
                 // select("*") statt fester Spaltenliste: macht den Code robust
@@ -771,7 +761,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     // alive. An eliminated player is still a connected client, so they
                     // keep ticking exactly like any spectator would.
                     const explodeMs = Date.parse(nextLobby.explode_at);
-                    const due = !Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150;
+                    const due = !Number.isNaN(explodeMs) && serverNow() >= explodeMs - 150;
                     if (due) void rpcTickGame(code);
                 }
 
@@ -800,9 +790,14 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 }
             } finally {
                 inFlightRef.current = false;
+                if (reloadPendingRef.current && alive) {
+                    reloadPendingRef.current = false;
+                    void load();
+                }
             }
         };
 
+        loadNowRef.current = () => void load();
         void load();
         // When realtime is "live": slow polling (4s safety net).
         // When offline/connecting: tight polling (650ms).
@@ -811,6 +806,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
         return () => {
             alive = false;
+            loadNowRef.current = null;
             window.clearInterval(t);
         };
     }, [code, supabase, mePlayerId, rpcFinalizeTopicVote, rpcAdvanceFromCountdown, rpcTickGame, showToast, realtimeStatus]);
@@ -854,7 +850,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 }
             } else if (lobby.phase === "running" && lobby.explode_at) {
                 const explodeMs = Date.parse(lobby.explode_at);
-                if (!Number.isNaN(explodeMs) && Date.now() >= explodeMs - 150) {
+                if (!Number.isNaN(explodeMs) && serverNow() >= explodeMs - 150) {
                     void rpcTickGame(code);
                 }
             } else if (lobby.phase === "rematch_wait" && lobby.countdown_ends_at) {
