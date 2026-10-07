@@ -140,6 +140,15 @@ body::after{
     isolation: isolate;
 }
 
+/* Platz über der Karte für die Kartoffel (Bild 1200x800, Figur ab Zeile 154; wird mit dem Bild kleiner,
+   deshalb aus der Bildbreite gerechnet): so ist sie immer ganz sichtbar, auch wenn die Seite höher als das Fenster ist */
+@media (min-width: 521px){
+    .landingWrapDecor{ margin-top: calc(368px - min(900px, 120vw) * 0.1283 + 14px); }
+}
+@media (max-width: 520px){
+    .landingWrapDecor{ margin-top: 26px; }
+}
+
 /* Card IMMER vorne */
 .landingWrapDecor .card{
     position: relative;
