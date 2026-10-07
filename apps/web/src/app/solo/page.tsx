@@ -14,6 +14,7 @@ import { Spinner } from "@/components/Spinner";
 import { useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import type { Preferences } from "@/lib/accountSettings";
+import { BackButton } from "@/components/BackButton";
 
 const NAMES = ["Baro", "Medo", "Sero", "Sinan", "Elias", "Jonas", "Max", "Leo", "Emir", "Can", "Ali", "Omar", "Nico", "Sami", "Amir", "Milan"];
 const BOT_NAMES = ["Bot Anna", "Bot Ben", "Bot Cleo", "Bot Dino", "Bot Emma"];
@@ -133,6 +134,7 @@ export default function SoloPage() {
     return (
         <main className="container">
             <div className="landingWrap">
+                <BackButton href="/play" label="Zurück" />
                 <section className="card" style={{ textAlign: "center" }} aria-label="Solo-Spiel wird vorbereitet">
                     <div style={{ fontSize: 44 }} aria-hidden>
                         🤖

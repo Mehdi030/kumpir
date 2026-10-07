@@ -11,6 +11,7 @@ import {
     type AdminUserRow,
     type OnlinePlayer,
 } from "@/lib/adminApi";
+import { emailLabel } from "@/lib/accountSettings";
 
 /**
  * Admin-Schnellmenü: kleines Pop-up außerhalb der normalen Seiten – für Admins und Supporter.
@@ -304,7 +305,7 @@ export function AdminQuickPanel() {
                                                     {u.status === "suspended" ? <span className="aqTag bad">gesperrt</span> : null}
                                                     {u.status === "deletion_requested" ? <span className="aqTag bad">Löschantrag</span> : null}
                                                 </div>
-                                                <div className="aqSub">{u.email ?? "–"}</div>
+                                                <div className="aqSub">{emailLabel(u.email)}</div>
                                             </div>
                                             <div className="aqActions">
                                                 {canAct && u.status === "suspended" ? (

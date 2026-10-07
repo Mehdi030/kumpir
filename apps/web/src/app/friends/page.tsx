@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useFriends } from "@/hooks/useFriends";
 import { useSavedLobbies } from "@/hooks/useSavedLobbies";
 import { Spinner } from "@/components/Spinner";
+import { BackButton } from "@/components/BackButton";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -62,11 +63,14 @@ export default function FriendsPage() {
     if (!user) {
         return (
             <main className="container">
-                <section className="card">
-                    <h1 className="h1">Freunde</h1>
-                    <p className="p hostSub">Du musst eingeloggt sein.</p>
-                    <Link href="/login?next=/friends" className="btn btnPrimary">🔓 Einloggen</Link>
-                </section>
+                <div className="landingWrap">
+                    <BackButton href="/" label="Startseite" />
+                    <section className="card">
+                        <h1 className="h1">Freunde</h1>
+                        <p className="p hostSub">Du musst eingeloggt sein.</p>
+                        <Link href="/login?next=/friends" className="btn btnPrimary">🔓 Einloggen</Link>
+                    </section>
+                </div>
             </main>
         );
     }

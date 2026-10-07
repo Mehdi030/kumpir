@@ -8,6 +8,7 @@ import { loginWithIdentifier, resendConfirmation } from "@/actions/login";
 import { PasswordInput } from "@/components/PasswordInput";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { safeNextPath as safeNext } from "@/lib/safeNext";
+import { BackButton } from "@/components/BackButton";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -192,6 +193,7 @@ function LoginInner() {
     return (
         <main className="container">
             <div className="landingWrap">
+                <BackButton href="/" label="Startseite" />
                 <section className="card" aria-label="Anmelden">
                     <header className="hostHeader">
                         <div className="hostTitleRow">
@@ -207,7 +209,7 @@ function LoginInner() {
                             <div className="previewCard">
                                 <div className="fieldRow">
                                     <label className="fieldLabel" htmlFor="identifier">
-                                        Benutzername oder E-Mail
+                                        Benutzername
                                     </label>
                                     <div className="fieldControl">
                                         <input
@@ -215,9 +217,8 @@ function LoginInner() {
                                             className="input"
                                             value={identifier}
                                             onChange={(e) => setIdentifier(e.target.value)}
-                                            placeholder="medo oder medo@example.de"
+                                            placeholder="z.B. medo"
                                             autoComplete="username"
-                                            inputMode="email"
                                             autoCapitalize="none"
                                             autoCorrect="off"
                                             spellCheck={false}
@@ -273,8 +274,11 @@ function LoginInner() {
                                 </div>
 
                                 <div style={{ marginTop: 14 }}>
+                                    <div className="fieldHelp" style={{ opacity: 0.85 }}>
+                                        Passwort vergessen? Ein Admin kann dir ein neues setzen. Nur wenn dein Konto eine E-Mail-Adresse hat, geht es auch per Mail:
+                                    </div>
                                     <button type="button" className="linkBtnLogin" onClick={() => setShowReset((v) => !v)} aria-expanded={showReset}>
-                                        Passwort vergessen?
+                                        Link per E-Mail anfordern
                                     </button>
                                     {showReset ? (
                                         <div style={{ marginTop: 10, display: "grid", gap: 8 }}>

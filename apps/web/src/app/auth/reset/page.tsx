@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PasswordInput } from "@/components/PasswordInput";
+import { BackButton } from "@/components/BackButton";
 
 export default function ResetPasswordPage() {
     const supabase = getSupabaseClient();
@@ -44,6 +45,7 @@ export default function ResetPasswordPage() {
     return (
         <main className="container">
             <div className="landingWrap">
+                <BackButton href="/login" label="Zurück zum Login" />
                 <section className="card" aria-label="Passwort zurücksetzen">
                     <header className="hostHeader">
                         <div className="hostTitleRow">

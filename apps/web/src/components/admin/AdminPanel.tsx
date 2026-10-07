@@ -21,6 +21,8 @@ import {
     auditCategory,
     type AuditCategory,
 } from "@/lib/adminApi";
+import { emailLabel, isPlaceholderEmail } from "@/lib/accountSettings";
+import { adminSetPassword } from "@/actions/register";
 
 type Tab = "overview" | "users" | "deletion" | "lobbies" | "songs" | "stats" | "audit";
 type Msg = { ok: boolean; text: string } | null;
@@ -269,7 +271,7 @@ function UsersTab({ api, role, meId, initialFilter, onChanged }: { api: AdminApi
                                         {u.displayName || u.username || "(ohne Namen)"}
                                         {u.username ? <small> @{u.username}</small> : null}
                                     </b>
-                                    <small>{u.email}</small>
+                                    <small>{emailLabel(u.email)}</small>
                                 </span>
                                 <span className="admUserMeta">
                                     {u.role !== "user" ? <span className="admBadge staff">{ROLE_LABEL[u.role]}</span> : null}
@@ -293,6 +295,7 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
     const [busy, setBusy] = useState(false);
     const [reason, setReason] = useState("");
     const [newName, setNewName] = useState("");
+    const [newPw, setNewPw] = useState("");
     const [newRole, setNewRole] = useState<"user" | "supporter" | "admin">("user");
     const [delConfirm, setDelConfirm] = useState("");
     const [gone, setGone] = useState(false);
@@ -356,7 +359,7 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
                         {u.displayName || u.username || "(ohne Namen)"} {u.username ? <small>@{u.username}</small> : null}
                     </h2>
                     <div className="admSmall">
-                        {u.email} {u.confirmed ? "✓" : "(nicht bestätigt)"} · {ROLE_LABEL[u.role]} · {STATUS_LABEL[u.status]}
+                        {emailLabel(u.email)} {isPlaceholderEmail(u.email) ? "" : u.confirmed ? "✓" : "(nicht bestätigt)"} · {ROLE_LABEL[u.role]} · {STATUS_LABEL[u.status]}
                     </div>
                 </div>
             </div>
@@ -430,8 +433,33 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
                         <button type="button" className="btn btnSecondary btnSmall" disabled={busy || (!u.avatarEmoji && !u.avatarColor)} onClick={() => void run(() => api.moderate(u.id, { resetAvatar: true }), "Avatar zurückgesetzt.")}>
                             Avatar zurücksetzen
                         </button>
-                        <ConfirmButton label="🔑 Passwort-Reset-Mail senden" onConfirm={() => void run(() => api.sendPasswordReset(u.id), `Mail mit Reset-Link an ${u.email} gesendet.`)} disabled={busy || !u.email} />
+                        {u.email && !isPlaceholderEmail(u.email) ? (
+                            <ConfirmButton label="🔑 Passwort-Reset-Mail senden" onConfirm={() => void run(() => api.sendPasswordReset(u.id), `Mail mit Reset-Link an ${u.email} gesendet.`)} disabled={busy} />
+                        ) : null}
                     </div>
+                    {role === "admin" ? (
+                        <div className="admRow">
+                            <input
+                                className="input"
+                                type="text"
+                                value={newPw}
+                                onChange={(e) => setNewPw(e.target.value)}
+                                placeholder="Neues Passwort (mind. 8 Zeichen)"
+                                autoComplete="off"
+                                aria-label="Neues Passwort für dieses Konto"
+                            />
+                            <ConfirmButton
+                                label="🔐 Neues Passwort setzen"
+                                onConfirm={() =>
+                                    void run(async () => {
+                                        const r = await adminSetPassword(u.id, newPw);
+                                        return r.ok ? { data: true } : { error: r.error };
+                                    }, "Neues Passwort gesetzt. Gib es der Person weiter.").then(() => setNewPw(""))
+                                }
+                                disabled={busy || newPw.length < 8}
+                            />
+                        </div>
+                    ) : null}
                 </section>
             ) : null}
 

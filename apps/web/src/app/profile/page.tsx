@@ -9,6 +9,7 @@ import { Spinner } from "@/components/Spinner";
 import { AccountStats } from "@/components/profile/AccountStats";
 import { seasonKey, type ProfileStats } from "@/lib/profileStats";
 import { AccountSettings, AvatarBadge, supabaseAccountApi } from "@/components/profile/AccountSettings";
+import { isPlaceholderEmail } from "@/lib/accountSettings";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -86,7 +87,7 @@ export default function ProfilePage() {
         );
     }
 
-    const name = profile.displayName || profile.username || profile.email?.split("@")[0] || "Spieler";
+    const name = profile.displayName || profile.username || "Spieler";
 
     return (
         <main className="container">
@@ -97,9 +98,11 @@ export default function ProfilePage() {
                         <div className="profWho">
                             <h1 className="h1 profName">{name}</h1>
                             {profile.username ? <div className="profUser">@{profile.username}</div> : null}
-                            <div className="profMail">
-                                {profile.email} {profile.emailVerified ? <span className="profOk">✓ bestätigt</span> : <span className="profWarn">nicht bestätigt</span>}
-                            </div>
+                            {profile.email && !isPlaceholderEmail(profile.email) ? (
+                                <div className="profMail">
+                                    {profile.email} {profile.emailVerified ? <span className="profOk">✓ bestätigt</span> : <span className="profWarn">nicht bestätigt</span>}
+                                </div>
+                            ) : null}
                         </div>
                         <Link href="/" className="btn btnSecondary btnSmall profBack">
                             ← Start

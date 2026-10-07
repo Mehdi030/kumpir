@@ -6,6 +6,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { Spinner } from "@/components/Spinner";
 import { AdminPanel } from "@/components/admin/AdminPanel";
 import { supabaseAdminApi } from "@/lib/adminApi";
+import { BackButton } from "@/components/BackButton";
 
 /**
  * Admin-Panel: nur für Konten mit Rolle Admin oder Supporter (Migration 078).
@@ -54,6 +55,7 @@ export default function AdminPage() {
     return (
         <main className="container" style={{ alignItems: "flex-start" }}>
             <div className="landingWrap" style={{ width: "min(1100px, 100%)" }}>
+                <BackButton href="/" label="Startseite" />
                 <section className="card" aria-label="Admin-Panel">
                     <AdminPanel api={api} meId={user.id} />
                 </section>

@@ -1905,3 +1905,20 @@ textarea:focus-visible{
 .playChoiceText{ font-size: 13px; line-height: 1.4; opacity: .82; max-width: 26ch; }
 @media (max-width: 620px){ .playChoices{ grid-template-columns: 1fr; } }
 .playWrap{ width: min(760px, 100%); }
+
+/* ===============================
+   ZURÜCK-KNOPF (components/BackButton.tsx) – oben links über der Karte
+   =============================== */
+.backBtn{
+    justify-self: start; align-self: start;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px 9px 12px; border-radius: 999px;
+    font-size: 14px; font-weight: 800; color: #fff; text-decoration: none;
+    background: rgba(255, 255, 255, .12); border: 1px solid var(--glass-line);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+    transition: background .15s ease, transform .2s ease;
+}
+.backBtn:hover{ background: rgba(255, 255, 255, .2); }
+.backBtn:hover .backBtnArrow{ transform: translateX(-3px); }
+.backBtnArrow{ display: inline-block; transition: transform .2s ease; font-size: 16px; line-height: 1; }

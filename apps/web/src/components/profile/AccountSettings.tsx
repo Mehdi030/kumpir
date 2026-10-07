@@ -17,6 +17,7 @@ import {
     validateDisplayName,
     validateUsername,
     type Preferences,
+    isPlaceholderEmail,
 } from "@/lib/accountSettings";
 
 /** Alles, was die Einstellungen am Server ändern – austauschbar für Tests/Vorschau. */
@@ -543,19 +544,22 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
 
     return (
         <>
-            <div className="setGroup">
-                <h3>E-Mail-Adresse</h3>
-                <div className="setHint">
-                    Aktuell: <b>{profile.email}</b> {profile.emailVerified ? "✓ bestätigt" : "(noch nicht bestätigt)"}
+            {/* Konten ohne E-Mail (Registrierung nur mit Benutzername) sehen diesen Teil nicht */}
+            {isPlaceholderEmail(profile.email) ? null : (
+                <div className="setGroup">
+                    <h3>E-Mail-Adresse</h3>
+                    <div className="setHint">
+                        Aktuell: <b>{profile.email}</b> {profile.emailVerified ? "✓ bestätigt" : "(noch nicht bestätigt)"}
+                    </div>
+                    <div className="setRow">
+                        <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="neue@adresse.de" autoComplete="email" aria-label="Neue E-Mail-Adresse" />
+                        <button type="button" className="btn btnSecondary btnSmall" onClick={() => void changeEmail()} disabled={eBusy || !email}>
+                            {eBusy ? "…" : "Ändern"}
+                        </button>
+                    </div>
+                    <Note msg={eMsg} />
                 </div>
-                <div className="setRow">
-                    <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="neue@adresse.de" autoComplete="email" aria-label="Neue E-Mail-Adresse" />
-                    <button type="button" className="btn btnSecondary btnSmall" onClick={() => void changeEmail()} disabled={eBusy || !email}>
-                        {eBusy ? "…" : "Ändern"}
-                    </button>
-                </div>
-                <Note msg={eMsg} />
-            </div>
+            )}
 
             <div className="setGroup">
                 <h3>Passwort ändern</h3>

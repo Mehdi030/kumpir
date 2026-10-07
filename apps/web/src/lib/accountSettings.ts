@@ -37,6 +37,17 @@ export const AVATAR_COLORS = ["#ffb21a", "#ff6b35", "#e63946", "#d6336c", "#9b5d
 
 export const DEFAULT_AVATAR = { emoji: "", color: "#ffb21a" };
 
+/** Konten ohne E-Mail (Migration 089) haben intern diese Platzhalter-Adresse -- nie anzeigen. */
+export const PLACEHOLDER_EMAIL_DOMAIN = "konto.kumpir.invalid";
+export function isPlaceholderEmail(email: string | null | undefined): boolean {
+    return !!email && email.toLowerCase().endsWith("@" + PLACEHOLDER_EMAIL_DOMAIN);
+}
+/** E-Mail für die Anzeige (Konten ohne E-Mail: "ohne E-Mail"). */
+export function emailLabel(email: string | null | undefined): string {
+    if (!email) return "–";
+    return isPlaceholderEmail(email) ? "ohne E-Mail" : email;
+}
+
 export function validateUsername(raw: string): { ok: true; value: string } | { ok: false; message: string } {
     const v = raw.trim().toLowerCase();
     if (v.length < 3) return { ok: false, message: "Mindestens 3 Zeichen." };
