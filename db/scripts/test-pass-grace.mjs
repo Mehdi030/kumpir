@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Testet Migration 091 (Schutzzeit beim Weitergeben) in einer Transaktion, die am Ende zurückgerollt wird.
+ * Testet Migration 091/094 (Schutzzeit beim Weitergeben, Tempo-Abgaben) in einer Transaktion, die am Ende zurückgerollt wird.
  * Aufruf: node db/scripts/test-pass-grace.mjs
  */
 import { readFileSync } from "node:fs";
@@ -38,27 +38,27 @@ try {
     const secLeft = async () => Number((await q("select extract(epoch from explode_at - now()) s, last_grace_sec g, grace_count c from lobbies where id = $1", [l.id]))[0].s);
     const state = async () => (await q("select last_grace_sec g, grace_count c, holder_player_id h from lobbies where id = $1", [l.id]))[0];
 
-    // 1) Weitergabe 0,5 s vor dem Platzen -> Empfänger hat 6 s (Standard)
+    // 1) Weitergabe 0,5 s vor dem Platzen -> Empfänger hat 7 s (Standard)
     await q("update lobbies set holder_player_id = $2, explode_at = now() + interval '500 ms', round_bonus_used = 99 where id = $1", [l.id, ids[0]]);
     await q("select rpc_pass_potato('ZQ9X', $1)", [ids[0]]);
     let s = await secLeft();
     let st = await state();
-    check("Letzte Sekunde: Empfänger bekommt 6 s Schutzzeit", s > 5.8 && s <= 6.05 && Number(st.g) === 6 && st.c === 1, `${s.toFixed(2)} s, g=${st.g}, c=${st.c}`);
+    check("Letzte Sekunde: Empfänger bekommt 7 s Schutzzeit", s > 6.8 && s <= 7.05 && Number(st.g) === 7 && st.c === 1, `${s.toFixed(2)} s, g=${st.g}, c=${st.c}`);
     check("Kumpir ist beim Nächsten", st.h === ids[1]);
 
-    // 2) gleich nochmal knapp -> 5 s (eine Sekunde weniger)
+    // 2) gleich nochmal knapp -> 6 s (eine Sekunde weniger)
     await q("update lobbies set explode_at = now() + interval '300 ms' where id = $1", [l.id]);
     await q("select rpc_pass_potato('ZQ9X', $1)", [ids[1]]);
     s = await secLeft();
-    check("Zweite Schutzzeit im selben Zug: 5 s", s > 4.8 && s <= 5.05, `${s.toFixed(2)} s`);
+    check("Zweite Schutzzeit im selben Zug: 6 s", s > 5.8 && s <= 6.05, `${s.toFixed(2)} s`);
 
-    // 3) Untergrenze 4 s
+    // 3) Untergrenze 5 s
     for (const who of [ids[2], ids[3]]) {
         await q("update lobbies set explode_at = now() + interval '200 ms' where id = $1", [l.id]);
         await q("select rpc_pass_potato('ZQ9X', $1)", [who]);
     }
     s = await secLeft();
-    check("Schutzzeit fällt nie unter 4 s", s > 3.8 && s <= 4.05, `${s.toFixed(2)} s`);
+    check("Schutzzeit fällt nie unter 5 s", s > 4.8 && s <= 5.05, `${s.toFixed(2)} s`);
 
     // 4) Genug Restzeit -> keine Schutzzeit, Restzeit bleibt
     await q("update lobbies set explode_at = now() + interval '15 s' where id = $1", [l.id]);
@@ -66,6 +66,16 @@ try {
     s = await secLeft();
     st = await state();
     check("Mit genug Restzeit greift sie nicht", s > 14.8 && Number(st.g) === 0, `${s.toFixed(2)} s, g=${st.g}`);
+
+    // 4b) Tempo-Abgaben (094): schnell + nicht in den letzten 2 s -> zählt; Abgabe kurz vor dem Knall -> zählt nicht
+    const tempo = async (id) => (await q("select tempo_pass_count t, clutch_pass_count c from players where lobby_id = $1 and player_id = $2", [l.id, id]))[0];
+    let tp = await tempo(ids[0]);
+    check("Schnelle Abgabe mit Restzeit = Tempo-Abgabe", tp.t === 1 && tp.c === 1, `tempo=${tp.t}, clutch=${tp.c}`);
+    tp = await tempo(ids[1]);
+    check("Abgabe in letzter Sekunde = keine Tempo-Abgabe", tp.t === 0 && tp.c === 1, `tempo=${tp.t}, clutch=${tp.c}`);
+    await q("update players set pass_count = 0 where lobby_id = $1 and player_id = $2", [l.id, ids[0]]);
+    tp = await tempo(ids[0]);
+    check("Neue Runde (pass_count 0) setzt Tempo-Abgaben zurück", tp.t === 0, `tempo=${tp.t}`);
 
     // 5) Neuer Zug (jemand platzt) -> Zähler zurück
     await q("update lobbies set round_number = round_number + 1 where id = $1", [l.id]);
@@ -77,11 +87,11 @@ try {
     const h = (await state()).h;
     await q("select rpc_pass_potato('ZQ9X', $1)", [h]);
     s = await secLeft();
-    check("Blitz: 5 s", s > 4.8 && s <= 5.05, `${s.toFixed(2)} s`);
+    check("Blitz: 6 s", s > 5.8 && s <= 6.05, `${s.toFixed(2)} s`);
     await q("update lobbies set round_speed = 'calm', grace_count = 0, explode_at = now() + interval '100 ms' where id = $1", [l.id]);
     await q("select rpc_pass_potato('ZQ9X', $1)", [(await state()).h]);
     s = await secLeft();
-    check("Casual: 7 s", s > 6.8 && s <= 7.05, `${s.toFixed(2)} s`);
+    check("Casual: 8 s", s > 7.8 && s <= 8.05, `${s.toFixed(2)} s`);
 } catch (e) {
     console.error("FEHLER:", e.message);
     failed++;

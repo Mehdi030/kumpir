@@ -13,7 +13,9 @@ const RULES: { icon: string; text: string }[] = [
     { icon: "🎧", text: "Ein Song läuft: Titel tippen (1 Punkt) oder den Interpreten (½ Punkt) und die Kumpir weitergeben." },
     { icon: "🔥", text: "Wer sie beim Knall hält, fliegt raus – die Zündschnur wird jede Runde kürzer." },
     { icon: "⏱️", text: "Richtige Antworten, schwere Songs und Treffer in Folge geben Bonuszeit." },
-    { icon: "🛡️", text: "Schutzzeit: Wer die Kumpir bekommt, hat immer mindestens ein paar Sekunden – auch wenn sie in letzter Sekunde kam." },
+    { icon: "🛡️", text: "Schutzzeit: Wer die Kumpir bekommt, hat immer mindestens 5–8 Sekunden – auch wenn sie in letzter Sekunde kam." },
+    { icon: "⏰", text: "Nachspielzeit: Ist die Zündschnur eigentlich schon abgelaufen, zählt bis zum Knall nur noch der Songtitel." },
+    { icon: "⚡", text: "Schnell abgeben lohnt sich: unter 5 Sekunden gibt es +5 Punkte." },
     { icon: "🏆", text: "Wer zuletzt übrig bleibt, gewinnt. Bei mehreren Runden zählt die Summe." },
 ];
 

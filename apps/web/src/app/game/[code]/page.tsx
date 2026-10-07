@@ -89,6 +89,8 @@ type LobbyState = {
     current_song_difficulty: number;
     revenge_nonce: number;
     last_revenge_by: string | null;
+    /** Schutzzeiten in diesem Zug (Migration 091); > 0 = Nachspielzeit, nur der Titel zählt (094). */
+    grace_count: number;
 
     // Song-Raten (Musik-Modus): aktueller, versteckter Song für den Halter
     current_song_id: string | null;
@@ -114,6 +116,7 @@ type Player = {
     last_pass_at?: string | null;
     pass_count?: number;
     clutch_pass_count?: number;
+    tempo_pass_count?: number;
     fastest_pass_ms?: number | null;
     slowest_pass_ms?: number | null;
     total_hold_ms?: number;
@@ -312,6 +315,18 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     const iAmEliminated = !!meRow && !meRow.is_alive;
 
+    // Nachspielzeit (Migration 094): sobald in diesem Zug die Schutzzeit gegriffen hat, zählt nur noch der Titel
+    const overtime = lobby?.phase === "running" && !!lobby.current_song_id && (lobby.grace_count ?? 0) > 0;
+
+    // Tempo-Bonus (Migration 094): steigt meine Zahl schneller Abgaben, kurz Bescheid geben
+    const myTempo = meRow?.tempo_pass_count ?? 0;
+    const prevTempoRef = useRef<number | null>(null);
+    useEffect(() => {
+        const prev = prevTempoRef.current;
+        prevTempoRef.current = myTempo;
+        if (prev != null && myTempo > prev) showToast("⚡ Schnell abgegeben: +5 Punkte", 1400);
+    }, [myTempo, showToast]);
+
     // Zuschauer: Lobby geladen, Spielerliste da, aber man ist nicht Teil davon (spät dazugekommen).
     const isSpectator = !!lobby && players.length > 0 && !meRow;
     useEffect(() => {
@@ -392,11 +407,13 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     //    Song-Punkte, dann mehr Pässe). Das ist die einzige Rangfolge.
     //  - Arena-Punkte (Spalte "Punkte") sind davon getrennt und fließen später
     //    in Bestenlisten ein: Platzierung (1. = 100 ... Letzter = 0, linear)
-    //    + Song-Punkte x 15 (Titel 15, Interpret 7.5) + Clutch-Pässe x 10.
+    //    + Song-Punkte x 15 (Titel 15, Interpret 7.5) + Tempo-Abgaben x 5
+    //    (innerhalb von 5 s weitergegeben, nicht erst kurz vor dem Knall; Migration 094).
     const ranking = useMemo(() => {
         const base = players.map((p) => {
             const pass = p.pass_count ?? 0;
             const clutch = p.clutch_pass_count ?? 0;
+            const tempo = p.tempo_pass_count ?? 0;
             const streak = p.survival_streak ?? 0;
             const fastest = p.fastest_pass_ms ?? null;
             const slowest = p.slowest_pass_ms ?? null;
@@ -408,7 +425,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             const roundsSurvived = p.eliminated_at_round ?? lobby?.round_number ?? 0;
             const survivalKey = p.is_alive ? Number.POSITIVE_INFINITY : (p.eliminated_at_round ?? 0);
 
-            return { ...p, pass, clutch, streak, fastest, slowest, songPoints, roundsSurvived, survivalKey, holdMs: p.total_hold_ms ?? 0 };
+            return { ...p, pass, clutch, tempo, streak, fastest, slowest, songPoints, roundsSurvived, survivalKey, holdMs: p.total_hold_ms ?? 0 };
         });
 
         base.sort((a, b) => b.survivalKey - a.survivalKey || b.songPoints - a.songPoints || b.pass - a.pass);
@@ -416,7 +433,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const n = base.length;
         return base.map((r, i) => {
             const placementPts = n > 1 ? Math.round((100 * (n - 1 - i)) / (n - 1)) : 100;
-            const score = placementPts + Math.round(r.songPoints * 15) + r.clutch * 10;
+            const score = placementPts + Math.round(r.songPoints * 15) + r.tempo * 5;
             return { ...r, place: i + 1, score };
         });
     }, [players, lobby?.round_number]);
@@ -634,6 +651,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     current_song_difficulty: (raw.current_song_difficulty as number | null) ?? 2,
                     revenge_nonce: (raw.revenge_nonce as number | null) ?? 0,
                     last_revenge_by: (raw.last_revenge_by as string | null) ?? null,
+                    grace_count: Number(raw.grace_count ?? 0) || 0,
 
                     current_song_id: (raw.current_song_id as string | null) ?? null,
                     current_song_started_at: (raw.current_song_started_at as string | null) ?? null,
@@ -697,6 +715,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             "last_pass_at",
                             "pass_count",
                             "clutch_pass_count",
+                            "tempo_pass_count",
                             "fastest_pass_ms",
                             "slowest_pass_ms",
                             "total_hold_ms",
@@ -1151,6 +1170,15 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     });
                     playFx("wrong");
                     return;
+                }
+                if (err.message?.includes("overtime_title_only")) {
+                    setAnswerWrong(false);
+                    window.requestAnimationFrame(() => {
+                        setAnswerWrong(true);
+                        answerInputRef.current?.select();
+                        window.setTimeout(() => setAnswerWrong(false), 1800);
+                    });
+                    return showToast("⏱️ Nachspielzeit: Der Interpret reicht nicht – nur der Songtitel zählt!", 2600);
                 }
                 if (err.message?.includes("too_fast")) return showToast("⏳ Kurz warten …", 900);
                 if (err.message?.includes("time_up")) return showToast("⏰ Zu spät", 1400);
@@ -1989,7 +2017,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             {turnOverlay ? (
                 <div className="turnOverlay" role="status" aria-live="polite">
                     ✅ Du bist dran
-                    {turnGrace > 0 ? <div className="turnGrace">🛡️ Schutzzeit: mindestens {turnGrace} Sekunden</div> : null}
+                    {turnGrace > 0 ? (
+                        <div className="turnGrace">
+                            🛡️ Schutzzeit: {turnGrace} Sekunden · ⏱️ Nachspielzeit – nur der Titel zählt
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
 
@@ -2020,6 +2052,12 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     <span className="mbLabel">Zug</span>
                     <span className="mbValue">{Math.max(1, lobby.round_number ?? 1)}</span>
                 </div>
+                {overtime ? (
+                    <div className="mbSeg mbOvertime" title="Die Zündschnur ist abgelaufen: Bis zum nächsten Knall zählt nur noch der Songtitel">
+                        <span className="mbLabel">Nachspielzeit</span>
+                        <span className="mbValue">⏱️ nur Titel</span>
+                    </div>
+                ) : null}
                 <div className={`mbSeg ${aliveNow === 2 ? "mbDuel" : ""}`} title={aliveNow === 2 ? "Nur noch zwei: Duell" : "Tempo der Zündschnur"}>
                     <span className="mbLabel">{aliveNow === 2 ? "Finale" : "Tempo"}</span>
                     <span className="mbValue">{aliveNow === 2 ? "⚔ Duell" : `×${tempoFactor.toFixed(1)}`}</span>
@@ -2108,7 +2146,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 ) : null}
                             </div>
                             <div className="statusSub">
-                                {lobby.current_song_id ? "Welcher Song läuft? Tippe den Titel (oder den Interpreten) und drücke Enter." : "Tippe deine Antwort und drücke Enter."}
+                                {lobby.current_song_id
+                                    ? overtime
+                                        ? "⏱️ Nachspielzeit: Nur der Songtitel zählt – der Interpret reicht jetzt nicht."
+                                        : "Welcher Song läuft? Tippe den Titel (oder den Interpreten) und drücke Enter. Schnell abgeben (unter 5 s) bringt ⚡ +5 Punkte."
+                                    : "Tippe deine Antwort und drücke Enter."}
                             </div>
                             <div className="answerInputRow">
                                 <input
@@ -2514,6 +2556,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           -webkit-backdrop-filter: blur(10px);
           text-align: center;
         }
+        .mbOvertime{ background: rgba(251,191,36,0.18); box-shadow: inset 0 0 0 1px rgba(251,191,36,0.55); animation: mbOvertimePulse 1.4s ease-in-out infinite; }
+        .mbOvertime .mbValue{ color: #fde68a; }
+        @keyframes mbOvertimePulse{ 50%{ background: rgba(251,191,36,0.32); } }
+        @media (prefers-reduced-motion: reduce){ .mbOvertime{ animation: none; } }
         .turnGrace{ margin-top: 4px; font-size: 13px; font-weight: 800; color: #a7f3d0; letter-spacing: 0; }
         .elimPopup{
           position: fixed;
