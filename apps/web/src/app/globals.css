@@ -1388,10 +1388,11 @@ body::after{
     min-width: 0;
     font-size: 16px;
     font-weight: 900;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.2;
+    /* Lange Namen (auch Bots) ganz zeigen: umbrechen statt abschneiden (Wunsch Mehdi 2026-10-12) */
+    overflow-wrap: anywhere;
 }
+.playerChipAvatar { flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.1); }
 .playerChipHostBadge {
     margin-left: 6px;
 }
@@ -2024,5 +2025,54 @@ textarea:focus-visible{
     .homeMain .homeTitle{ font-size: clamp(42px, 7vh, 64px); }
     .homeMain .homeTagline{ font-size: 15px; }
     .homeMain .homeCta{ margin-top: 14px; gap: 10px; }
+}
+
+/* ===============================
+   LOBBY HOSTEN OHNE SCROLLEN (Wunsch Mehdi 2026-10-12)
+   Breit: Einstellungs-Kästen zu zweit nebeneinander, lange Erklärtexte weg, alles kompakter.
+   =============================== */
+.hostMain{ padding-top: 14px; padding-bottom: 14px; }
+.hostMain .landingWrap{ width: min(1080px, 100%); }
+.hostMain .card{ padding-top: 20px; padding-bottom: 20px; }
+.hostMain .hostSub{ margin-top: 4px; font-size: 14px; }
+.hostMain .panel > .fieldHelp:not(.fieldHelpError),
+.hostMain .pillCard > .fieldHelp:not(.fieldHelpError){ display: none; }
+.hostMain .panelHead{ margin-bottom: 6px; }
+.hostMain .divider{ margin: 8px 0; }
+.hostMain .pillCard{ padding: 10px 12px; margin-top: 0 !important; }
+.hostMain .pillCardTop{ margin-bottom: 6px; }
+.hostMain .actionsRow{ margin-top: 4px !important; }
+@media (min-width: 900px){
+    .hostMain .panel{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; row-gap: 10px; align-items: start; }
+    .hostMain .panel > .panelHead,
+    .hostMain .panel > .fieldBlock,
+    .hostMain .panel > .divider,
+    .hostMain .panel > .fieldHelpError,
+    .hostMain .panel > .actionsRow{ grid-column: 1 / -1; }
+    .hostMain .panel > .divider{ display: none; }
+    /* Name + Spielerzahl nebeneinander sparen eine Zeile */
+    .hostMain .panel > .fieldBlock{ grid-column: 1 / 2; }
+}
+@media (min-height: 760px) and (min-width: 900px){
+    html:has(.hostMain), body:has(.hostMain){ overflow: hidden; }
+}
+
+/* ===============================
+   LOBBY OHNE SCROLLEN (Wunsch Mehdi 2026-10-12)
+   Breit: links Code + Infos, rechts Spielerliste; Regeln eingeklappt darunter.
+   =============================== */
+.lobbyMain{ padding-top: 14px; padding-bottom: 14px; }
+.lobbyMain .lobbyCard{ padding-top: 20px; padding-bottom: 18px; }
+.lobbyMain .lobbyHead{ gap: 10px !important; }
+.lobbyMain .lobbyStat{ padding: 8px 6px !important; }
+.lobbyMain .lobbyStatIcon{ font-size: 22px !important; }
+.lobbyMain .codeBox{ padding: 10px 14px !important; }
+.lobbyMain .codeValue{ font-size: clamp(40px, 9vw, 56px) !important; }
+.lobbyMain .stepsWrap{ margin-top: 0; }
+.lobbyMain .rulesCard{ margin-top: 10px; }
+@media (min-width: 1000px){
+    .lobbyMain .lobbyCard{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); column-gap: 18px; align-items: start; }
+    .lobbyMain .lobbyCard > .rulesCard{ grid-column: 1 / -1; }
+    .lobbyMain .playerGrid{ grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 }
 

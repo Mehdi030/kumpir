@@ -617,7 +617,9 @@ export function PlayerRing({
           box-shadow: 0 6px 14px rgba(0,0,0,.4);
           color:#fff; font-size: 14px; font-weight: 800; white-space: nowrap;
         }
-        .seatNameText{ overflow:hidden; text-overflow: ellipsis; min-width:0; }
+        /* Lange Namen ganz zeigen: bis zu 2 Zeilen statt "…" */
+        .seatNameText{ min-width:0; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.12;
+          display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
         .seatMe{ flex:none; font-size: 10.5px; font-weight: 900; padding: 1px 6px; border-radius: 999px; background: rgba(34,211,238,.2); border: 1px solid rgba(34,211,238,.7); color: #c4f6ff; text-transform: uppercase; letter-spacing: .5px; }
         .seatPts{ flex:none; font-size: 12px; font-weight: 900; color: #ffe08a; }
         .seatBadge{
@@ -673,7 +675,7 @@ export function PlayerRing({
         @keyframes staleBlink{ 0%,100%{opacity:1;} 50%{opacity:.45;} }
 
         /* Handy: kleinere Schrift, Name kompakt */
-        .ringNarrow .seatName{ font-size: 11.5px; padding: 2px 7px; gap: 4px; max-width: 88px; top: calc(100% + 5px); }
+        .ringNarrow .seatName{ font-size: 11px; padding: 2px 7px; gap: 4px; max-width: 104px; top: calc(100% + 5px); border-radius: 12px; }
         .ringNarrow .seatMe{ display:none; }
         .ringNarrow .seatPts{ font-size: 10px; }
         .ringNarrow .seatBadge{ font-size: 9.5px; padding: 2px 7px; letter-spacing: .8px; }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { startGame, type StartGameResult } from "@/actions/startGame";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -302,9 +303,9 @@ export default function LobbyPage() {
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
 
     return (
-        <main className="container">
+        <main className="container lobbyMain">
             <div className="landingWrap withSidePanel">
-                <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
+                <section className="card lobbyCard" aria-label="Lobby" style={{ position: "relative" }}>
                     <div className="lobbyHead">
                         {isRunning ? <div className="lobbyNotice">🚀 Spiel läuft – Lobby ist read-only</div> : null}
 
@@ -431,6 +432,7 @@ export default function LobbyPage() {
                                             className={`playerChip ${isHostRow ? "playerChipHost" : ""} ${p.ready ? "playerChipReady" : "playerChipNotReady"}`}
                                         >
                                             <span className="playerChipSeat">{idx + 1}</span>
+                                            <PlayerAvatar seed={p.name} size={34} className="playerChipAvatar" />
                                             <span className="playerChipName">
                                                 {p.is_bot ? "🤖 " : ""}
                                                 {p.name}
@@ -516,7 +518,7 @@ export default function LobbyPage() {
                         </div>
                     </div>
 
-                    <RulesCard defaultOpen />
+                    <RulesCard defaultOpen={false} />
                 </section>
                 {/* Freunde rechts daneben – online Freunde direkt in diese Lobby einladen */}
                 <HomeFriends inviteCode={code} />

@@ -325,7 +325,7 @@ export default function HostPage() {
     };
 
     return (
-        <main className="container">
+        <main className="container hostMain">
             <div className="landingWrap">
                 <section className="card" aria-label="Spiel erstellen">
                     <HomeButton corner />
