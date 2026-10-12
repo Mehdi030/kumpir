@@ -1,0 +1,43 @@
+name: Discord – alte Preview-Karten löschen
+
+# Einmaliges Aufräumen (von Hand gestartet): Jeder Lauf von "Discord – neuester Deploy" hat die ID seiner
+# Karte im Actions-Cache "discord-preview-msg-<run_id>" gemerkt. Dieser Workflow holt die angegebenen
+# Caches und löscht die darin stehenden Karten über den Webhook. Die neueste Karte NICHT mit angeben.
+# Eingabe: JSON-Liste der Cache-Schlüssel, z. B. ["discord-preview-msg-123","discord-preview-msg-456"]
+
+on:
+  workflow_dispatch:
+    inputs:
+      keys:
+        description: JSON-Liste der Cache-Schlüssel
+        required: true
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        key: ${{ fromJSON(inputs.keys) }}
+    steps:
+      - name: Gemerkte Nachrichten-ID holen
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .discord-last-message
+          key: ${{ matrix.key }}
+
+      - name: Karte löschen
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ ! -s .discord-last-message ]; then echo "Keine ID im Cache"; exit 0; fi
+          for id in $(cat .discord-last-message); do
+            for try in 1 2 3; do
+              code=$(curl -sS -o /tmp/del.json -w "%{http_code}" -X DELETE "$DISCORD_WEBHOOK_URL/messages/$id" || echo 000)
+              if [ "$code" = "429" ]; then sleep "$(jq -r '.retry_after // 2' /tmp/del.json)"; continue; fi
+              break
+            done
+            echo "Nachricht $id: $code"
+          done

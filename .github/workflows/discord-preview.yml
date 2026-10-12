@@ -48,17 +48,19 @@ jobs:
           done
           echo "state=TIMEOUT" >> "$GITHUB_OUTPUT"
 
+      # Erst auschecken, DANN die gemerkte Nachrichten-ID holen: checkout räumt den Ordner auf und hat die
+      # wiederhergestellte Datei bisher jedes Mal gelöscht – deshalb blieben alle alten Karten stehen.
+      - name: Letzte Änderungen holen
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 25
+
       - name: Vorherige Nachricht merken (Cache)
         uses: actions/cache/restore@v4
         with:
           path: .discord-last-message
           key: discord-preview-msg-${{ github.run_id }}
           restore-keys: discord-preview-msg-
-
-      - name: Letzte Änderungen holen
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 25
 
       - name: Karte in Discord posten, alte löschen
         env:
@@ -102,13 +104,17 @@ jobs:
           if [ -z "$new_id" ]; then echo "Discord-Antwort: $res"; exit 1; fi
 
           # Alte Karte entfernen, damit im Kanal immer nur die neueste steht
+          # Was nicht gelöscht werden konnte (z. B. Discord kurz weg), bleibt gemerkt und wird nächstes Mal erneut versucht
+          keep=""
           if [ -f .discord-last-message ]; then
             for old in $(cat .discord-last-message); do
-              curl -sS -o /dev/null -w "alte Nachricht $old gelöscht: %{http_code}\n" -X DELETE "$DISCORD_WEBHOOK_URL/messages/$old" || true
+              [ "$old" = "$new_id" ] && continue
+              code=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE "$DISCORD_WEBHOOK_URL/messages/$old" || echo 000)
+              echo "alte Nachricht $old gelöscht: $code"
+              if [ "$code" != "204" ] && [ "$code" != "404" ]; then keep="$keep $old"; fi
             done
-            : > .discord-last-message
           fi
-          echo "$new_id" >> .discord-last-message
+          printf '%s\n' $keep "$new_id" | grep -v '^$' > .discord-last-message
           echo "$new_id" > .discord-new-message
 
       # Gründlich aufräumen: mit Bot-Token ALLE übrigen Nachrichten im Preview-Kanal löschen (auch alte Karten
