@@ -196,8 +196,8 @@ function msUntil(ts: string | null): number | null {
 
 function fmtMs(ms?: number | null) {
     if (ms == null) return "—";
-    if (ms < 1000) return `${Math.round(ms)} ms`;
-    return `${(ms / 1000).toFixed(2)} s`;
+    // wie in der Ergebnis-Tabelle: eine Nachkommastelle, deutsches Komma
+    return `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
 }
 
 function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
@@ -1771,7 +1771,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const bestSong = ranking.filter((r) => !r.is_bot && r.songPoints > 0).sort((a, b) => b.songPoints - a.songPoints)[0] ?? null;
 
         const highlights: FinishHighlight[] = [];
-        if (bestSong) highlights.push({ icon: "🎵", label: "Song-Profi", name: bestSong.name, value: `${String(Math.round(bestSong.songPoints * 2) / 2).replace(".", ",")} Treffer` });
+        if (bestSong) highlights.push({ icon: "🎵", label: "Song-Profi", name: bestSong.name, value: `${String(Math.round(bestSong.songPoints * 2) / 2).replace(".", ",")} Song-Punkte` });
         if (fastRow) highlights.push({ icon: "⚡", label: "Schnellste Abgabe", name: fastRow.name, value: fmtMs(fastRow.fastestMs) });
         if (slowRow && slowRow.slowestMs !== fastRow?.fastestMs) highlights.push({ icon: "🐢", label: "Langsamste Abgabe", name: slowRow.name, value: fmtMs(slowRow.slowestMs) });
 
