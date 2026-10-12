@@ -1,5 +1,6 @@
 "use client";
 
+import { fmtNum, useI18n } from "@/lib/i18n";
 import { KumpirPotato } from "@/components/game/KumpirPotato";
 import { PlayerAvatar, type AvatarConfig } from "@/components/game/PlayerAvatar";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -50,7 +51,7 @@ function hueFor(id: string): number {
 }
 
 function fmtPts(n: number): string {
-    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(".", ",");
+    return Number.isInteger(n) ? String(n) : fmtNum(n);
 }
 
 type Pt = { x: number; y: number };
@@ -80,6 +81,7 @@ export function PlayerRing({
     showNext = false,
     showPulse = false,
 }: Props) {
+    const { tr } = useI18n();
     const isDisconnected = useCallback(
         (id: string) => (disconnectedIds instanceof Set ? disconnectedIds.has(id) : (disconnectedIds ?? []).includes(id)),
         [disconnectedIds]
@@ -396,7 +398,7 @@ export function PlayerRing({
                             key={p.player_id}
                             className={`seat ${isHolder ? "holder" : ""} ${isMe ? "me" : ""} ${isNext ? "next" : ""} ${!p.is_alive ? "dead" : ""} ${isExploded ? "exploded" : ""}`}
                             style={{ left: pos.x, top: pos.y, ["--h" as string]: hueFor(p.player_id) }}
-                            aria-label={`${p.name}${isHolder ? " (am Zug)" : ""}${isMe ? " (du)" : ""}`}
+                            aria-label={`${p.name}${isHolder ? ` (${tr("am Zug")})` : ""}${isMe ? ` (${tr("du")})` : ""}`}
                             title={p.name}
                         >
                             {isHolder ? (
@@ -406,9 +408,9 @@ export function PlayerRing({
                                             <KumpirPotato size={narrow ? 26 : 38} heat={heat} />
                                         </span>
                                     ) : null}
-                                    AM ZUG
+                                    {tr("AM ZUG")}
                                 </span>
-                            ) : isNext ? <span className="seatBadge nextBadge">als Nächstes</span> : null}
+                            ) : isNext ? <span className="seatBadge nextBadge">{tr("als Nächstes")}</span> : null}
                             <span className="seatDisc">
                                 <PlayerAvatar
                                     seed={p.name}
@@ -420,8 +422,8 @@ export function PlayerRing({
                             </span>
                             <span className="seatName">
                                 <span className="seatNameText">{p.name}</span>
-                                {isMe ? <span className="seatMe">du</span> : null}
-                                <span className="seatPts" title="Song-Punkte">♪ {fmtPts(pts)}</span>
+                                {isMe ? <span className="seatMe">{tr("du")}</span> : null}
+                                <span className="seatPts" title={tr("Song-Punkte")}>♪ {fmtPts(pts)}</span>
                             </span>
                             {isExploded ? (
                                 <span className="seatBoom" aria-hidden>
@@ -431,7 +433,7 @@ export function PlayerRing({
                                 </span>
                             ) : null}
                             {isStale ? (
-                                <span className="seatStale" title="Verbindung verloren?" aria-label="Verbindung verloren?">
+                                <span className="seatStale" title={tr("Verbindung verloren?")} aria-label={tr("Verbindung verloren?")}>
                                     📡
                                 </span>
                             ) : null}

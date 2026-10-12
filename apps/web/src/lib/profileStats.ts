@@ -1,3 +1,4 @@
+import { fmtNum } from "@/lib/i18n";
 /** Antwort von public.get_my_profile_stats (Migration 076). */
 export type ProfileStats = {
     totals: { matches: number; matchWins: number; rounds: number; roundWins: number; practiceMatches: number };
@@ -57,7 +58,7 @@ export function titleRate(titles: number, artists: number, wrong: number): numbe
 
 export function fmtSeconds(ms: number | null | undefined): string {
     if (ms == null) return "–";
-    return `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
+    return `${fmtNum(ms / 1000)} s`;
 }
 
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];

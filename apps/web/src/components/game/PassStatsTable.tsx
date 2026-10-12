@@ -1,5 +1,6 @@
 "use client";
 
+import { fmtNum, useI18n } from "@/lib/i18n";
 import { PlayerAvatar, type AvatarConfig } from "@/components/game/PlayerAvatar";
 
 export type PassStatsRow = {
@@ -19,7 +20,7 @@ const MEDAL = ["🥇", "🥈", "🥉"];
 
 function fmt(ms: number | null): string {
     if (ms == null || !Number.isFinite(ms)) return "–";
-    return `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
+    return `${fmtNum(ms / 1000)} s`;
 }
 
 /**
@@ -27,7 +28,8 @@ function fmt(ms: number | null): string {
  * Platz, Spieler, Punkte, schnellste und langsamste Abgabe. Die schnellste Abgabe ALLER Spieler ist grün
  * markiert (⚡), die langsamste rot (🐢) – so sieht man auf einen Blick, wer wie schnell weitergegeben hat.
  */
-export function PassStatsTable({ rows, title, pointsLabel = "Punkte" }: { rows: PassStatsRow[]; title?: string; pointsLabel?: string }) {
+export function PassStatsTable({ rows, title, pointsLabel }: { rows: PassStatsRow[]; title?: string; pointsLabel?: string }) {
+    const { tr } = useI18n();
     const sorted = [...rows].sort((a, b) => a.place - b.place);
     const withFast = sorted.filter((r) => r.fastestMs != null);
     const withSlow = sorted.filter((r) => r.slowestMs != null);
@@ -37,15 +39,15 @@ export function PassStatsTable({ rows, title, pointsLabel = "Punkte" }: { rows: 
     const oneOnly = withFast.length === 1 && best === worst;
 
     return (
-        <section className="pstCard" aria-label={title ?? "Ergebnis"}>
+        <section className="pstCard" aria-label={title ?? tr("Ergebnis")}>
             {title ? <h2 className="pstTitle">{title}</h2> : null}
             <div className="pstTable" role="table">
                 <div className="pstRow pstHead" role="row">
                     <span>#</span>
-                    <span>Spieler</span>
-                    <span className="r">{pointsLabel}</span>
-                    <span className="r" title="Schnellste Abgabe">⚡ Schnellste</span>
-                    <span className="r" title="Langsamste Abgabe">🐢 Langsamste</span>
+                    <span>{tr("Spieler")}</span>
+                    <span className="r">{pointsLabel ?? tr("Punkte")}</span>
+                    <span className="r" title={tr("Schnellste Abgabe")}>⚡ {tr("Schnellste")}</span>
+                    <span className="r" title={tr("Langsamste Abgabe")}>🐢 {tr("Langsamste")}</span>
                 </div>
                 {sorted.map((r) => {
                     const isBest = best != null && r.fastestMs === best;
@@ -57,7 +59,7 @@ export function PassStatsTable({ rows, title, pointsLabel = "Punkte" }: { rows: 
                                 <PlayerAvatar seed={r.name} config={r.avatarConfig} mood={r.out ? "out" : "normal"} size={30} className="pstAvatar" />
                                 <span className="pstNameText" title={r.name}>
                                     {r.name}
-                                    {r.isMe ? <em> (du)</em> : null}
+                                    {r.isMe ? <em> ({tr("du")})</em> : null}
                                 </span>
                             </span>
                             <span className="r pstPts">{r.points}</span>
@@ -68,8 +70,8 @@ export function PassStatsTable({ rows, title, pointsLabel = "Punkte" }: { rows: 
                 })}
             </div>
             <div className="pstLegend">
-                <span className="best">⚡ schnellste Abgabe von allen</span>
-                <span className="worst">🐢 langsamste Abgabe von allen</span>
+                <span className="best">⚡ {tr("schnellste Abgabe von allen")}</span>
+                <span className="worst">🐢 {tr("langsamste Abgabe von allen")}</span>
             </div>
             <style>{`
         .pstCard{ border-radius: 22px; padding: 14px; background: rgba(30,8,8,.42); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0,0,0,.28); text-align: left; }

@@ -426,3 +426,9 @@ export function dateLocale(locale?: Locale): string {
     const l = locale ?? (typeof window === "undefined" ? "de" : detectLocale());
     return l === "en" ? "en-GB" : l === "fr" ? "fr-FR" : "de-DE";
 }
+
+/** Kommazahl passend zur Sprache: Deutsch/Französisch "2,5", Englisch "2.5". */
+export function fmtNum(n: number, digits = 1): string {
+    const s = n.toFixed(digits);
+    return dateLocale() === "en-GB" ? s : s.replace(".", ",");
+}

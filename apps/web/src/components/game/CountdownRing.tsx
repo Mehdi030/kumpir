@@ -1,14 +1,16 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { useI18n } from "@/lib/i18n";
 
 /** Große Countdown-Zahl in einem Ring, der pro Sekunde weiter abläuft (Countdown vor dem Start, Revanche). */
 export function CountdownRing({ seconds, total, size = 190 }: { seconds: number; total: number; size?: number }) {
+    const { tr } = useI18n();
     const r = 52;
     const c = 2 * Math.PI * r;
     const frac = total > 0 ? Math.max(0, Math.min(1, seconds / total)) : 0;
     return (
-        <div className="cdRing" style={{ width: size, height: size, ["--cd-size" as string]: `${size}px` } as CSSProperties} role="timer" aria-label={`Noch ${seconds} Sekunden`}>
+        <div className="cdRing" style={{ width: size, height: size, ["--cd-size" as string]: `${size}px` } as CSSProperties} role="timer" aria-label={tr("Noch {n} Sekunden", { n: seconds })}>
             <svg viewBox="0 0 120 120" aria-hidden>
                 <defs>
                     <linearGradient id="cdRingGrad" x1="0" y1="0" x2="1" y2="1">

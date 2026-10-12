@@ -1,8 +1,9 @@
 "use client";
 
+import { fmtNum, useI18n } from "@/lib/i18n";
 import { useMemo } from "react";
 import { PlayerAvatar, type AvatarConfig } from "@/components/game/PlayerAvatar";
-import type { SeriesRow } from "@/components/game/SeriesTable";
+
 
 export type SummaryPlayer = {
     id: string;
@@ -14,11 +15,23 @@ export type SummaryPlayer = {
     avatarConfig?: AvatarConfig | null;
 };
 
+export type SeriesRow = {
+    set_index: number;
+    player_id: string;
+    name: string;
+    place: number;
+    arena_points: number;
+    song_points: number;
+    is_bot?: boolean;
+    fastest_ms?: number | null;
+    slowest_ms?: number | null;
+};
+
 const MEDAL = ["🥇", "🥈", "🥉"];
 
 function fmt(ms: number | null): string {
     if (ms == null || !Number.isFinite(ms)) return "–";
-    return `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
+    return `${fmtNum(ms / 1000)} s`;
 }
 
 /**
@@ -39,6 +52,7 @@ export function SummaryTable({
     totalSets: number;
     mePlayerId?: string | null;
 }) {
+    const { tr } = useI18n();
     const sets = Array.from({ length: Math.max(1, Math.min(currentSet, totalSets)) }, (_, i) => i + 1);
 
     const rows = useMemo(() => {
@@ -75,21 +89,21 @@ export function SummaryTable({
     const oneOnly = fast.length === 1 && best === worst;
 
     return (
-        <section className="sumCard" aria-label="Zwischenstand">
+        <section className="sumCard" aria-label={tr("Zwischenstand")}>
             <div className="sumScroll">
                 <table className="sumTable">
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th className="l">Spieler</th>
+                            <th className="l">{tr("Spieler")}</th>
                             {sets.map((i) => (
                                 <th key={i} className={i === currentSet ? "cur" : ""}>
                                     R{i}
                                 </th>
                             ))}
-                            <th>Gesamt</th>
-                            <th title="Schnellste Abgabe in dieser Runde">⚡ Schnellste</th>
-                            <th title="Langsamste Abgabe in dieser Runde">🐢 Langsamste</th>
+                            <th>{tr("Gesamt")}</th>
+                            <th title={tr("Schnellste Abgabe in dieser Runde")}>⚡ {tr("Schnellste")}</th>
+                            <th title={tr("Langsamste Abgabe in dieser Runde")}>🐢 {tr("Langsamste")}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -104,7 +118,7 @@ export function SummaryTable({
                                             <PlayerAvatar seed={r.name} config={r.p?.avatarConfig ?? null} mood={r.p?.out ? "out" : "normal"} size={30} className="sumAvatar" />
                                             <span className="sumNameText" title={r.name}>
                                                 {r.name}
-                                                {r.id === mePlayerId ? <em> (du)</em> : null}
+                                                {r.id === mePlayerId ? <em> ({tr("du")})</em> : null}
                                             </span>
                                         </span>
                                     </td>
@@ -113,7 +127,7 @@ export function SummaryTable({
                                         return (
                                             <td key={i} className={i === currentSet ? "cur" : ""}>
                                                 {x ? (
-                                                    <span className={`sumChip p${Math.min(x.place, 4)}`} title={`Runde ${i}: Platz ${x.place}`}>
+                                                    <span className={`sumChip p${Math.min(x.place, 4)}`} title={tr("Runde {i}: Platz {p}", { i, p: x.place })}>
                                                         {x.arena_points}
                                                     </span>
                                                 ) : (
@@ -136,8 +150,8 @@ export function SummaryTable({
                 </table>
             </div>
             <div className="sumHint">
-                Farbe = Platz in der Runde · Rang = Summe aller Runden · <span className="b">⚡ schnellste</span> /{" "}
-                <span className="w">🐢 langsamste</span> Abgabe dieser Runde
+                {tr("Farbe = Platz in der Runde · Rang = Summe aller Runden")} · <span className="b">⚡ {tr("schnellste")}</span> /{" "}
+                <span className="w">🐢 {tr("langsamste")}</span> {tr("Abgabe dieser Runde")}
             </div>
             <style>{`
         .sumCard{ border-radius: 22px; padding: 14px; background: rgba(30,8,8,.42); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0,0,0,.28); text-align: left; }

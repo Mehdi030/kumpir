@@ -5,6 +5,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getMuted, getVolume, onAudioSettingsChanged } from "@/lib/gameFx";
 import { getSongAudio, setPendingSongPlay } from "@/lib/songAudio";
 import { serverNow } from "@/lib/serverClock";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * Song-Raten (Musik-Modus): spielt den aktuellen, versteckten Song des
@@ -60,6 +61,7 @@ function driftSeconds(el: HTMLAudioElement, target: number, startSec = 0): numbe
 }
 
 export function SongRound({ songId, startedAt }: { songId: string | null; startedAt: string | null }) {
+    const { tr } = useI18n();
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [startSec, setStartSec] = useState(0);
     const [blocked, setBlocked] = useState(false);
@@ -257,8 +259,8 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
     // app-weit geteilt). Meist ist er gar nicht nötig, weil schon der nächste Tipp/Tastendruck
     // den Song startet.
     return blocked ? (
-        <button type="button" onClick={startPlayback} className="btn btnPrimary songUnblock" title="Wiedergabe starten">
-            🔊 Tippen für Musik
+        <button type="button" onClick={startPlayback} className="btn btnPrimary songUnblock" title={tr("Wiedergabe starten")}>
+            {tr("🔊 Tippen für Musik")}
             <style>{`
         .songUnblock{ position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 70; box-shadow: 0 10px 30px rgba(0,0,0,.4); animation: songPulse 1.2s ease-in-out infinite; }
         @keyframes songPulse { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.06); } }

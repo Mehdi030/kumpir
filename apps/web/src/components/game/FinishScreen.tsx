@@ -44,7 +44,7 @@ type Props = {
  * (bei mehreren Runden: Gesamtpunkte und die besten Werte über alle Runden). Auf dem Handy untereinander.
  */
 export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shareRows, highlights, loggedIn, ranked, spectator, busy, onRematch, onLobby, toasts }: Props) {
-    const { t } = useI18n();
+    const { t, tr } = useI18n();
     const [shareMsg, setShareMsg] = useState("");
     const [shareBusy, setShareBusy] = useState(false);
 
@@ -76,7 +76,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
                 : t("card.shareText", { winner: winnerName, url: window.location.origin });
             if (typeof nav.canShare === "function" && nav.canShare({ files: [file] })) {
                 try {
-                    await navigator.share({ files: [file], text, title: "Kumpir-Ergebnis" });
+                    await navigator.share({ files: [file], text, title: tr("Kumpir-Ergebnis") });
                     return;
                 } catch (e) {
                     if (e instanceof Error && e.name === "AbortError") return;
@@ -114,7 +114,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
                 </header>
 
                 {highlights.length > 0 ? (
-                    <section className="finTiles" aria-label="Highlights">
+                    <section className="finTiles" aria-label={tr("Highlights")}>
                         {highlights.map((h) => (
                             <div key={h.label} className="finTile">
                                 <div className="finTileIcon" aria-hidden>
@@ -137,11 +137,11 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
                         </Link>
                     ) : (
                         <>
-                            <button type="button" className="btn btnPrimary" onClick={onRematch} disabled={!!busy} title="Direkt nochmal (Taste R)">
-                                {busy === "rematch" ? <Spinner size={16} label="Starte…" /> : t("fin.again")}
+                            <button type="button" className="btn btnPrimary" onClick={onRematch} disabled={!!busy} title={tr("Direkt nochmal (Taste R)")}>
+                                {busy === "rematch" ? <Spinner size={16} label={tr("Starte…")} /> : t("fin.again")}
                             </button>
                             <button type="button" className="btn btnSecondary" onClick={onLobby} disabled={!!busy}>
-                                {busy === "reset" ? <Spinner size={16} label="Lade…" /> : t("fin.lobby")}
+                                {busy === "reset" ? <Spinner size={16} label={tr("Lade…")} /> : t("fin.lobby")}
                             </button>
                         </>
                     )}
@@ -173,7 +173,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
             </div>
 
             <div className="finRight">
-                <PassStatsTable rows={rows} title={isSeries ? `${t("fin.final")} · alle ${totalRounds} Runden` : t("fin.final")} pointsLabel={isSeries ? "Gesamt" : "Punkte"} />
+                <PassStatsTable rows={rows} title={isSeries ? `${t("fin.final")} · ${tr("alle {n} Runden", { n: totalRounds })}` : t("fin.final")} pointsLabel={isSeries ? tr("Gesamt") : tr("Punkte")} />
             </div>
 
             <ToastStack toasts={toasts} inline />

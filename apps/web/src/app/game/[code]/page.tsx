@@ -27,7 +27,7 @@ import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
 import { playFx } from "@/lib/gameFx";
 import type { SeriesRow } from "@/components/game/SeriesTable";
-import { useI18n } from "@/lib/i18n";
+import { fmtNum, trNow, useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import { FinishScreen, type FinishHighlight } from "@/components/game/FinishScreen";
 import { SummaryTable } from "@/components/game/SummaryTable";
@@ -171,7 +171,7 @@ function getErrorMessage(e: unknown): string {
     try {
         return JSON.stringify(e);
     } catch {
-        return "Unbekannter Fehler";
+        return trNow("Unbekannter Fehler.");
     }
 }
 
@@ -197,11 +197,11 @@ function msUntil(ts: string | null): number | null {
 function fmtMs(ms?: number | null) {
     if (ms == null) return "—";
     // wie in der Ergebnis-Tabelle: eine Nachkommastelle, deutsches Komma
-    return `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
+    return `${fmtNum(ms / 1000)} s`;
 }
 
 function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
-    const { t } = useI18n();
+    const { t, tr } = useI18n();
     const supabase = getSupabaseClient();
     const params = useParams<{ code: string }>();
     const code = String(params.code ?? "").toUpperCase();
@@ -344,7 +344,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     useEffect(() => {
         const prev = prevTempoRef.current;
         prevTempoRef.current = myTempo;
-        if (prev != null && myTempo > prev) showToast("⚡ Schnell abgegeben: +5 Punkte", 1400);
+        if (prev != null && myTempo > prev) showToast(trNow("⚡ Schnell abgegeben: +5 Punkte"), 1400);
     }, [myTempo, showToast]);
 
     // Was hat meine Antwort gebracht? (Migration 098: Titel + Künstler = 1,5)
@@ -355,9 +355,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         prevSongPointsRef.current = mySongPoints;
         if (prev == null || mySongPoints <= prev) return;
         const d = Math.round((mySongPoints - prev) * 2) / 2;
-        if (d >= 1.5) showToast("🎯 Titel + Künstler: +1,5 Punkte", 1800);
-        else if (d >= 1) showToast("🎵 Titel richtig: +1 Punkt", 1500);
-        else showToast("🎤 Künstler richtig: +½ Punkt", 1500);
+        if (d >= 1.5) showToast(trNow("🎯 Titel + Künstler: +1,5 Punkte"), 1800);
+        else if (d >= 1) showToast(trNow("🎵 Titel richtig: +1 Punkt"), 1500);
+        else showToast(trNow("🎤 Künstler richtig: +½ Punkt"), 1500);
     }, [mySongPoints, showToast]);
 
     // Zuschauer: Lobby geladen, Spielerliste da, aber man ist nicht Teil davon (spät dazugekommen).
@@ -644,7 +644,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
                 if (lobbyRes.error?.code === "PGRST116") lobbyGoneRef.current = true; // 0 Zeilen = Lobby existiert nicht
                 if (lobbyRes.error || !lobbyRes.data) {
-                    setFatalError(lobbyRes.error?.message ?? "Lobby konnte nicht geladen werden.");
+                    setFatalError(lobbyRes.error?.message ?? trNow("Lobby konnte nicht geladen werden."));
                     return;
                 }
 
@@ -747,7 +747,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 if (!alive) return;
 
                 if (playersRes.error || !playersRes.data) {
-                    setFatalError(playersRes.error?.message ?? "Spieler konnten nicht geladen werden.");
+                    setFatalError(playersRes.error?.message ?? trNow("Spieler konnten nicht geladen werden."));
                     return;
                 }
 
@@ -989,21 +989,23 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             // eine Elimination passiert ist, zeigt es immer den aktuell
             // korrekten Stand.
             if (anyDied) {
-                const nameOf = (id: string) => players.find((p) => p.player_id === id)?.name ?? "Jemand";
-                const diedNames = died.map((id) => (id === mePlayerId ? "Du" : nameOf(id)));
+                const nameOf = (id: string) => players.find((p) => p.player_id === id)?.name ?? trNow("Jemand");
+                const diedNames = died.map((id) => (id === mePlayerId ? trNow("Du") : nameOf(id)));
                 const outText =
-                    diedNames.length === 1
-                        ? `${diedNames[0]} ${diedNames[0] === "Du" ? "bist" : "ist"} raus`
-                        : `${diedNames.slice(0, -1).join(", ")} und ${diedNames[diedNames.length - 1]} sind raus`;
+                    died.length === 1
+                        ? died[0] === mePlayerId
+                            ? trNow("Du bist raus")
+                            : trNow("{name} ist raus", { name: diedNames[0] ?? "" })
+                        : trNow("{names} und {last} sind raus", { names: diedNames.slice(0, -1).join(", "), last: diedNames[diedNames.length - 1] ?? "" });
                 const aliveNames = players
                     .filter((p) => currentAlive.has(p.player_id))
                     .sort((x, y) => (x.player_id === mePlayerId ? -1 : 0) - (y.player_id === mePlayerId ? -1 : 0))
-                    .map((p) => (p.player_id === mePlayerId ? "du" : p.name));
+                    .map((p) => (p.player_id === mePlayerId ? trNow("du") : p.name));
                 const leftText =
                     aliveNames.length >= 3
-                        ? `Nur noch ${aliveNames.length} übrig`
+                        ? trNow("Nur noch {n} übrig", { n: aliveNames.length })
                         : aliveNames.length === 2
-                          ? `Nur noch ${aliveNames[0]} und ${aliveNames[1]} übrig`
+                          ? trNow("Nur noch {a} und {b} übrig", { a: aliveNames[0] ?? "", b: aliveNames[1] ?? "" })
                           : null;
                 elimTimersRef.current.forEach((t) => window.clearTimeout(t));
                 elimTimersRef.current = [];
@@ -1031,7 +1033,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         if (!passEvent) return;
         if (lobby?.phase !== "running") return;
         if (lobby?.game_mode !== "teleport") return;
-        showToast("🌀 Teleport!", 1100);
+        showToast(trNow("🌀 Teleport!"), 1100);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [passEvent]);
 
@@ -1113,7 +1115,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // Vote action (optimistic local state so highlight is instant)
     const vote = useCallback(
         async (choice: 1 | 2 | 3) => {
-            if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
+            if (!mePlayerId) return showToast(trNow("⚠️ Keine Spieler-ID"), 1800);
             if (isSpectator) return;
             if (!lobby) return;
             if (lobby.phase !== "topic_vote") return;
@@ -1148,21 +1150,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     // Topic-Mechanik B: Halter sagt seine Antwort → triggert Validierungs-Voting.
     const handleAttemptPass = useCallback(async () => {
-        if (!mePlayerId) return showToast("⚠️ Keine Player-ID", 1800);
-        if (!lobby || lobby.phase !== "running") return showToast("⏳ Noch nicht gestartet", 1400);
-        if (iAmEliminated) return showToast("💀 Du bist raus", 1400);
+        if (!mePlayerId) return showToast(trNow("⚠️ Keine Spieler-ID"), 1800);
+        if (!lobby || lobby.phase !== "running") return showToast(trNow("⏳ Noch nicht gestartet"), 1400);
+        if (iAmEliminated) return showToast(trNow("💀 Du bist raus"), 1400);
         if (!isMeHolder) return;
         if (passBusy) return;
 
         const clean = answerDraft.trim();
-        if (!clean) return showToast("✍️ Antwort eingeben", 1400);
-        if (clean.length > 60) return showToast("Antwort zu lang (max 60)", 1800);
+        if (!clean) return showToast(trNow("✍️ Antwort eingeben"), 1400);
+        if (clean.length > 60) return showToast(trNow("Antwort zu lang (max. 60)"), 1800);
 
         const used = (lobby.used_answers ?? []).map((a) => a.toLowerCase());
         // Im Song-Modus gibt es keine Duplikat-Sperre (jeder Song wird einzeln
         // geprüft, derselbe Interpret darf bei mehreren Songs zählen).
         if (!lobby.current_song_id && used.includes(clean.toLowerCase())) {
-            return showToast("⚠️ Schon gesagt — andere Antwort probieren", 2000);
+            return showToast(trNow("⚠️ Schon gesagt – andere Antwort probieren"), 2000);
         }
 
         setPassBusy(true);
@@ -1191,14 +1193,14 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         answerInputRef.current?.focus();
                         window.setTimeout(() => setAnswerWrong(false), 1800);
                     });
-                    return showToast("⏱️ Nachspielzeit: Der Interpret reicht nicht – nur der Songtitel zählt!", 2600);
+                    return showToast(trNow("⏱️ Nachspielzeit: Der Interpret reicht nicht – nur der Songtitel zählt!"), 2600);
                 }
                 // Gesperrt (1 s nach falscher Antwort): Eingabe zurückholen, damit man nicht neu tippen muss
                 if (err.message?.includes("too_fast")) {
                     setAnswerDraft((d) => d || clean);
-                    return showToast("⏳ 1 Sekunde nach einer falschen Antwort warten – dann nochmal Enter", 1600);
+                    return showToast(trNow("⏳ 1 Sekunde nach einer falschen Antwort warten – dann nochmal Enter"), 1600);
                 }
-                if (err.message?.includes("time_up")) return showToast("⏰ Zu spät", 1400);
+                if (err.message?.includes("time_up")) return showToast(trNow("⏰ Zu spät"), 1400);
                 return showToast(`❌ ${errorText(err.message)}`, 2400);
             }
             setAnswerDraft("");
@@ -1288,7 +1290,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     useEffect(() => {
         const c = meRow?.combo ?? 0;
         if (c >= 2 && c > prevComboRef.current) {
-            showToast(`🔥 Combo ×${c} (+${Math.min(2, 0.5 * (c - 1))}s)`, 1500);
+            showToast(trNow("🔥 Combo ×{c} (+{s} s)", { c, s: fmtNum(Math.min(2, 0.5 * (c - 1)), Number.isInteger(Math.min(2, 0.5 * (c - 1))) ? 0 : 1) }), 1500);
         }
         prevComboRef.current = c;
     }, [meRow?.combo, showToast]);
@@ -1301,8 +1303,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         try {
             const { error } = await supabase.rpc("rpc_revenge_flip", { p_code: code, p_player_id: mePlayerId });
             if (error) {
-                if (error.message.includes("duel_no_revenge")) showToast("Im Duell gibt es keine Rache mehr", 1800);
-                else showToast("Rache-Pass nicht möglich", 1600);
+                if (error.message.includes("duel_no_revenge")) showToast(trNow("Im Duell gibt es keine Rache mehr"), 1800);
+                else showToast(trNow("Rache-Pass nicht möglich"), 1600);
             }
         } finally {
             setRevengeBusy(false);
@@ -1313,8 +1315,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     useEffect(() => {
         const n = lobby?.revenge_nonce ?? 0;
         if (prevRevengeNonceRef.current !== null && n > prevRevengeNonceRef.current) {
-            const who = players.find((p) => p.player_id === lobby?.last_revenge_by)?.name ?? "Jemand";
-            showToast(`🔄 ${who} dreht die Richtung!`, 2400);
+            const who = players.find((p) => p.player_id === lobby?.last_revenge_by)?.name ?? trNow("Jemand");
+            showToast(trNow("🔄 {name} dreht die Richtung!", { name: who }), 2400);
             playFx("pass");
         }
         prevRevengeNonceRef.current = n;
@@ -1328,11 +1330,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         try {
             const { error } = await supabase.rpc("rpc_skip_song", { p_code: code, p_player_id: mePlayerId });
             if (error) {
-                if (error.message.includes("too_late")) showToast("⏳ Zu spät zum Tauschen", 1500);
-                else if (error.message.includes("no_skips_left")) showToast("Kein Joker mehr übrig", 1500);
+                if (error.message.includes("too_late")) showToast(trNow("⏳ Zu spät zum Tauschen"), 1500);
+                else if (error.message.includes("no_skips_left")) showToast(trNow("Kein Joker mehr übrig."), 1500);
                 else showToast(`❌ ${errorText(error.message)}`, 2200);
             } else {
-                showToast("🔀 Neuer Song (−2s)", 1400);
+                showToast(trNow("🔀 Neuer Song (−2 s)"), 1400);
             }
         } finally {
             setSkipBusy(false);
@@ -1350,7 +1352,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             showToast(`❌ ${errorText(error.message)}`, 2400);
             return;
         }
-        showToast("🔁 Rematch gestartet", 1200);
+        showToast(trNow("🔁 Revanche gestartet"), 1200);
     }, [endActionBusy, mePlayerId, isSpectator, supabase, code, showToast]);
 
     // Keyboard shortcuts: Space (pass), 1/2/3 (vote), R (rematch), M (mute)
@@ -1404,7 +1406,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main className="fullH" style={{ display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(720px, calc(100vw - 48px))", textAlign: "center" }}>
-                    <div style={{ fontWeight: 950, fontSize: 22 }}>⚠️ Spiel konnte nicht geladen werden</div>
+                    <div style={{ fontWeight: 950, fontSize: 22 }}>{tr("⚠️ Spiel konnte nicht geladen werden")}</div>
                     <div style={{ marginTop: 10, opacity: 0.8 }}>{fatalError}</div>
                 </div>
             </main>
@@ -1414,7 +1416,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     if (!lobby)
         return (
             <main className="fullH" style={{ display: "grid", placeItems: "center", padding: 24, color: "white" }}>
-                <Spinner size={28} label="Lade Spiel…" />
+                <Spinner size={28} label={tr("Lade Spiel…")} />
             </main>
         );
 
@@ -1423,7 +1425,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // "Zufällig" wie eh und je (verlost dann zwischen Thema A und B).
     const aLabel = lobby.topic_a ?? "…";
     const bLabel = lobby.topic_b ?? "…";
-    const cLabel = lobby.topic_c ?? "Zufall";
+    const cLabel = lobby.topic_c ?? tr("Zufall");
     // Anzahl Karten: 1 Playlist = keine Abstimmung, 2 Playlists = nur A und B, ab 3 = A, B und Zufall
     const voteCards = Math.min(3, Math.max(1, lobby.topic_vote_cards ?? 3));
     // Jede Playlist hat ihr Symbol und ihre Akzentfarbe (Karte 3 ohne echtes Thema = Zufall)
@@ -1441,14 +1443,14 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main className="fullH gameStage plReveal" style={plStyle(lookA.color)}>
                 <div className="plRevealInner">
-                    <div className="plKicker">Playlist dieser Runde</div>
+                    <div className="plKicker">{tr("Playlist dieser Runde")}</div>
                     <div className="plCard">
                         <span className="plIcon" aria-hidden>
                             {lookA.icon}
                         </span>
                         <span className="plName">{aLabel}</span>
                     </div>
-                    <div className="plSub">Gleich geht&apos;s los …</div>
+                    <div className="plSub">{tr("Gleich geht’s los …")}</div>
                 </div>
                 <style>{`
           .plReveal{ display:grid; place-items:center; padding:24px; color:#fff; text-align:center; }
@@ -1490,10 +1492,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             >
                 <div style={{ width: "min(1160px, calc(100vw - 48px))", position: "relative", zIndex: 2 }}>
                     <div style={{ textAlign: "center" }}>
-                        <div className="kicker">Abstimmung</div>
+                        <div className="kicker">{tr("Abstimmung")}</div>
 
                         <div className="headline">
-                            Welche Playlist?
+                            {tr("Welche Playlist?")}
                             <span className="headlineGlow" aria-hidden />
                         </div>
 
@@ -1511,10 +1513,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">①</span>
-                                    <span className="micro">Playlist A</span>
+                                    <span className="micro">{tr("Playlist A")}</span>
                                 </div>
                                 <div className="cardTitle">{aLabel}</div>
-                                <div className="cardHint">{voteCards === 1 ? "Nur diese Playlist ist aktiv" : myVote === 1 ? "✓ Deine Wahl" : "Tippen zum Wählen"}</div>
+                                <div className="cardHint">{voteCards === 1 ? tr("Nur diese Playlist ist aktiv") : myVote === 1 ? tr("✓ Deine Wahl") : tr("Tippen zum Wählen")}</div>
                             </button>
 
                             {voteCards >= 2 ? (
@@ -1531,10 +1533,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">②</span>
-                                    <span className="micro">Playlist B</span>
+                                    <span className="micro">{tr("Playlist B")}</span>
                                 </div>
                                 <div className="cardTitle">{bLabel}</div>
-                                <div className="cardHint">{myVote === 2 ? "✓ Deine Wahl" : "Tippen zum Wählen"}</div>
+                                <div className="cardHint">{myVote === 2 ? tr("✓ Deine Wahl") : tr("Tippen zum Wählen")}</div>
                             </button>
                             ) : null}
 
@@ -1552,18 +1554,18 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 <div className="glassShine" aria-hidden />
                                 <div className="cardTop">
                                     <span className="chip">{lobby.topic_c ? "③" : "🎲"}</span>
-                                    <span className="micro">{lobby.topic_c ? "Thema C" : "Zufall"}</span>
+                                    <span className="micro">{lobby.topic_c ? tr("Playlist C") : tr("Zufall")}</span>
                                 </div>
                                 <div className="cardTitle">{cLabel}</div>
                                 <div className="cardHint">
-                                    {myVote === 3 ? "✓ Deine Wahl" : lobby.topic_c ? "Tippen zum Wählen" : "Das Los zieht eine andere Playlist"}
+                                    {myVote === 3 ? tr("✓ Deine Wahl") : lobby.topic_c ? tr("Tippen zum Wählen") : tr("Das Los zieht eine andere Playlist")}
                                 </div>
                             </button>
                             ) : null}
                         </div>
 
                         <div className="statusLine">
-                            {voteCards === 1 ? "Es geht gleich los…" : allVoted ? "✅ Alle haben gewählt – wird ausgewertet…" : "Wählt schnell – bei allen Votes geht’s sofort weiter."}
+                            {voteCards === 1 ? tr("Es geht gleich los…") : allVoted ? tr("✅ Alle haben gewählt – wird ausgewertet…") : tr("Wählt schnell – wenn alle abgestimmt haben, geht’s sofort weiter.")}
                         </div>
 
                         <ToastStack toasts={toasts} inline />
@@ -1575,8 +1577,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         <div className="bottomLeft">
                             <div className="brandMark">🥔</div>
                             <div className="bottomText">
-                                <div className="bottomTitle">Abstimmung läuft</div>
-                                <div className="bottomSub">{myVote ? "Du kannst noch wechseln." : "Tippe auf eine Karte."}</div>
+                                <div className="bottomTitle">{tr("Abstimmung läuft")}</div>
+                                <div className="bottomSub">{myVote ? tr("Du kannst noch wechseln.") : tr("Tippe auf eine Karte.")}</div>
                             </div>
                         </div>
 
@@ -1593,7 +1595,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <div className="barGlow" />
                         </div>
 
-                        <div className="timeBox" aria-label="Sekunden verbleibend">
+                        <div className="timeBox" aria-label={tr("Sekunden verbleibend")}>
                             {timeLeft}s
                         </div>
                     </div>
@@ -1681,7 +1683,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const labelForChoice = (c: number) => {
             if (c === 1) return `① ${aLabel}`;
             if (c === 2) return `② ${bLabel}`;
-            if (c === 3) return lobby.topic_c ? `③ ${cLabel}` : `🎲 Zufall`;
+            if (c === 3) return lobby.topic_c ? `③ ${cLabel}` : `🎲 ${tr("Zufall")}`;
             return String(c);
         };
 
@@ -1692,7 +1694,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main className="fullH gameStage" style={{ display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(1100px, calc(100vw - 48px))", textAlign: "center", display: "grid", justifyItems: "center", gap: 14 }}>
-                    <div className="stageKicker">{voteCards === 1 ? "Playlist dieser Runde" : "Playlist gewählt"}</div>
+                    <div className="stageKicker">{voteCards === 1 ? tr("Playlist dieser Runde") : tr("Playlist gewählt")}</div>
 
                     {/* Abstimmungs-Ergebnis nur, wenn es wirklich eine Abstimmung gab (ab 2 Playlists) */}
                     {voteCards >= 2 ? (
@@ -1708,7 +1710,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             {voteCards >= 3 ? (
                                 <div className={`resultTile ${isWinner(3) ? "win" : "lose"}`} style={plStyle(lookC.color)}>
                                     <div className="resultBadge">{lobby.topic_c ? "③" : "🎲"}</div>
-                                    <div className="resultTitle">{isWinner(3) && !lobby.topic_c ? `Zufall: ${selectedTopic}` : cLabel}</div>
+                                    <div className="resultTitle">{isWinner(3) && !lobby.topic_c ? `${tr("Zufall")}: ${selectedTopic}` : cLabel}</div>
                                 </div>
                             ) : null}
                         </div>
@@ -1723,9 +1725,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
                     {tie ? (
                         <div style={{ opacity: 0.9, fontWeight: 850 }}>
-                            Gleichstand zwischen: <span style={{ opacity: 0.98 }}>{tieChoices.map((c) => labelForChoice(c)).join(" · ")}</span>
+                            {tr("Gleichstand zwischen:")} <span style={{ opacity: 0.98 }}>{tieChoices.map((c) => labelForChoice(c)).join(" · ")}</span>
                             <div style={{ marginTop: 6, opacity: 0.92 }}>
-                                Das Los entscheidet: <b>{pick ? labelForChoice(pick) : "…"}</b>
+                                {tr("Das Los entscheidet:")} <b>{pick ? labelForChoice(pick) : "…"}</b>
                             </div>
                         </div>
                     ) : null}
@@ -1733,13 +1735,13 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     <div style={{ marginTop: 10 }}>
                         <CountdownRing seconds={cdLeft} total={cdTotal} size={200} />
                     </div>
-                    <div style={{ fontWeight: 850, opacity: 0.8 }}>Gleich läuft der erste Song – Ohren auf! 🎧</div>
+                    <div style={{ fontWeight: 850, opacity: 0.8 }}>{tr("Gleich läuft der erste Song – Ohren auf! 🎧")}</div>
 
                     {/* Nur der Startspieler sieht diesen Hinweis -- alle anderen
                         erfahren es erst, wenn die Runde wirklich losgeht. */}
                     {mePlayerId && lobby.countdown_starter_player_id === mePlayerId ? (
                         <div className="stageChip" style={{ paddingLeft: 14, background: "rgba(255,214,10,0.16)", borderColor: "rgba(255,214,10,0.45)" }}>
-                            🥔 Du startest mit der Kumpir!
+                            {tr("🥔 Du startest mit der Kumpir!")}
                         </div>
                     ) : null}
 
@@ -1769,7 +1771,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // =========================================================
     if (lobby.phase === "finished") {
         const isSeries = (lobby.series_total ?? 1) > 1;
-        const winnerName = (isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? "Unbekannt";
+        const winnerName = (isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? tr("Unbekannt");
 
         // Ergebnis-Zeilen mit schnellster/langsamster Abgabe (bei mehreren Runden: beste Werte aller Runden, Migration 101)
         const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
@@ -1786,9 +1788,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const bestSong = ranking.filter((r) => !r.is_bot && r.songPoints > 0).sort((a, b) => b.songPoints - a.songPoints)[0] ?? null;
 
         const highlights: FinishHighlight[] = [];
-        if (bestSong) highlights.push({ icon: "🎵", label: "Song-Profi", name: bestSong.name, value: `${String(Math.round(bestSong.songPoints * 2) / 2).replace(".", ",")} Song-Punkte` });
-        if (fastRow) highlights.push({ icon: "⚡", label: "Schnellste Abgabe", name: fastRow.name, value: fmtMs(fastRow.fastestMs) });
-        if (slowRow && slowRow.slowestMs !== fastRow?.fastestMs) highlights.push({ icon: "🐢", label: "Langsamste Abgabe", name: slowRow.name, value: fmtMs(slowRow.slowestMs) });
+        if (bestSong) highlights.push({ icon: "🎵", label: tr("Song-Profi"), name: bestSong.name, value: tr("{n} Song-Punkte", { n: fmtNum(Math.round(bestSong.songPoints * 2) / 2, Number.isInteger(bestSong.songPoints) ? 0 : 1) }) });
+        if (fastRow) highlights.push({ icon: "⚡", label: tr("Schnellste Abgabe"), name: fastRow.name, value: fmtMs(fastRow.fastestMs) });
+        if (slowRow && slowRow.slowestMs !== fastRow?.fastestMs) highlights.push({ icon: "🐢", label: tr("Langsamste Abgabe"), name: slowRow.name, value: fmtMs(slowRow.slowestMs) });
 
         const me = isSeries
             ? mySeriesRank > 0
@@ -1885,12 +1887,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             >
                 <div className="setSum">
                     <header className="setSumHead">
-                        <div className="setSumKicker">
-                            Runde {idx} von {total} · Zwischenstand
-                        </div>
-                        <div className="setSumTitle">🏆 {setWinner} holt die Runde</div>
+                        <div className="setSumKicker">{tr("Runde {i} von {n} · Zwischenstand", { i: idx, n: total })}</div>
+                        <div className="setSumTitle">{tr("🏆 {name} holt die Runde", { name: setWinner })}</div>
                         <div className="setSumNext">
-                            Nächste Runde in <b>{Math.max(0, countdownSecondsLeft ?? 12)}</b> s
+                            {tr("Nächste Runde in")} <b>{Math.max(0, countdownSecondsLeft ?? 12)}</b> s
                         </div>
                     </header>
                     <SummaryTable
@@ -1924,9 +1924,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main className="fullH gameStage" style={{ display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(680px, calc(100vw - 48px))", textAlign: "center", display: "grid", justifyItems: "center", gap: 12 }}>
-                    <div className="stageKicker">Revanche</div>
-                    <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px, 4.4vw, 46px)", fontWeight: 800 }}>🔁 Nächstes Match startet gleich</div>
-                    <div style={{ opacity: 0.8, fontWeight: 700 }}>Alle Anwesenden gehen automatisch weiter.</div>
+                    <div className="stageKicker">{tr("Revanche")}</div>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px, 4.4vw, 46px)", fontWeight: 800 }}>{tr("🔁 Nächstes Match startet gleich")}</div>
+                    <div style={{ opacity: 0.8, fontWeight: 700 }}>{tr("Alle Anwesenden gehen automatisch weiter.")}</div>
 
                     <div style={{ marginTop: 6 }}>
                         <CountdownRing seconds={Math.max(0, countdownSecondsLeft ?? 10)} total={10} size={170} />
@@ -1937,7 +1937,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <span key={p.player_id} className="stageChip" style={{ animationDelay: `${i * 60}ms`, ["--h" as string]: hueOf(p.player_id) }}>
                                 <span className="stageChipDot">{p.name.slice(0, 1).toUpperCase()}</span>
                                 {p.name}
-                                {mePlayerId === p.player_id ? " (du)" : ""}
+                                {mePlayerId === p.player_id ? ` (${tr("du")})` : ""}
                             </span>
                         ))}
                     </div>
@@ -1981,20 +1981,20 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         </>
                     ) : players.length === 0 || (players.length === 1 && !!mePlayerId && players[0]?.player_id === mePlayerId) ? (
                         <>
-                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>NIEMAND DA</div>
-                            <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>👻 Lobby leer</div>
-                            <div style={{ marginTop: 10, opacity: 0.82, fontWeight: 700 }}>Alle anderen sind weg. Zurück zur Lobby?</div>
+                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>{tr("NIEMAND DA")}</div>
+                            <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>{tr("👻 Lobby leer")}</div>
+                            <div style={{ marginTop: 10, opacity: 0.82, fontWeight: 700 }}>{tr("Alle anderen sind weg. Zurück zur Lobby?")}</div>
                             <div style={{ marginTop: 18 }}>
-                                <a className="btn btnPrimary" href={`/lobby/${encodeURIComponent(code)}`}>← Zur Lobby</a>
+                                <a className="btn btnPrimary" href={`/lobby/${encodeURIComponent(code)}`}>{tr("← Zur Lobby")}</a>
                             </div>
                         </>
                     ) : (
                         <>
-                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>WARTEN</div>
+                            <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>{tr("WARTEN")}</div>
                             <div style={{ fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 950, marginTop: 12 }}>
-                                <Spinner size={28} label="Warten…" />
+                                <Spinner size={28} label={tr("Warten…")} />
                             </div>
-                            <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>Der Host startet gleich das Spiel.</div>
+                            <div style={{ marginTop: 10, opacity: 0.78, fontWeight: 700 }}>{tr("Der Host startet gleich das Spiel.")}</div>
                         </>
                     )}
                 </div>
@@ -2010,7 +2010,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         ? "radial-gradient(circle at 50% 28%, rgba(120,130,150,0.22) 0%, rgba(10,12,18,0) 62%), linear-gradient(180deg, #171a22 0%, #0f1218 60%, #0a0c11 100%)"
         : "radial-gradient(circle at 50% 28%, rgba(60,110,190,0.30) 0%, rgba(10,16,34,0) 62%), linear-gradient(180deg, #121a33 0%, #0c1226 55%, #080c1c 100%)";
 
-    const passDisabledReason = iAmEliminated ? "Du bist raus" : !isMeHolder ? "Nicht dein Turn" : passBusy ? "Busy" : null;
+    const passDisabledReason = iAmEliminated ? tr("Du bist raus") : !isMeHolder ? tr("Du bist nicht dran") : passBusy ? "…" : null;
 
     const aliveNow = players.filter((p) => p.is_alive).length;
 
@@ -2058,10 +2058,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
             {turnOverlay ? (
                 <div className="turnOverlay" role="status" aria-live="polite">
-                    ✅ Du bist dran
+                    {tr("✅ Du bist dran")}
                     {turnGrace > 0 ? (
                         <div className="turnGrace">
-                            🛡️ Schutzzeit: {turnGrace} Sekunden · ⏱️ Nachspielzeit – schnell abgeben!
+                            {tr("🛡️ Schutzzeit: {n} Sekunden · ⏱️ Nachspielzeit – schnell abgeben!", { n: turnGrace })}
                         </div>
                     ) : null}
                 </div>
@@ -2075,37 +2075,37 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             ) : null}
 
             {/* Info-Leiste oben: alles zum Spielstand an einer Stelle, klar getrennt vom Tisch */}
-            <div className="matchBar" role="group" aria-label="Spielstand">
-                <div className="mbSeg mbTopic" title="Playlist">
-                    <span className="mbLabel">Playlist</span>
+            <div className="matchBar" role="group" aria-label={tr("Spielstand")}>
+                <div className="mbSeg mbTopic" title={tr("Playlist")}>
+                    <span className="mbLabel">{tr("Playlist")}</span>
                     <span className="mbValue">
                         {playlistLook(selectedTopic).icon} {selectedTopic}
                     </span>
                 </div>
                 {(lobby.series_total ?? 1) > 1 ? (
-                    <div className="mbSeg" title="Runde des Matches">
-                        <span className="mbLabel">Runde</span>
+                    <div className="mbSeg" title={tr("Runde des Matches")}>
+                        <span className="mbLabel">{tr("Runde")}</span>
                         <span className="mbValue">
                             {lobby.series_index}/{lobby.series_total}
                         </span>
                     </div>
                 ) : null}
-                <div className="mbSeg" title="Zug in dieser Runde (steigt mit jedem Ausscheiden)">
-                    <span className="mbLabel">Zug</span>
+                <div className="mbSeg" title={tr("Zug in dieser Runde (steigt mit jedem Ausscheiden)")}>
+                    <span className="mbLabel">{tr("Zug")}</span>
                     <span className="mbValue">{Math.max(1, lobby.round_number ?? 1)}</span>
                 </div>
                 {overtime ? (
-                    <div className="mbSeg mbOvertime" title="Die Zündschnur ist abgelaufen: Bis zum nächsten Knall zählt nur noch der Songtitel">
-                        <span className="mbLabel">Nachspielzeit</span>
-                        <span className="mbValue">⏱️ nur Titel</span>
+                    <div className="mbSeg mbOvertime" title={tr("Die Zündschnur ist eigentlich abgelaufen – jetzt schnell abgeben!")}>
+                        <span className="mbLabel">{tr("Nachspielzeit")}</span>
+                        <span className="mbValue">⏱️ {tr("schnell!")}</span>
                     </div>
                 ) : null}
-                <div className={`mbSeg ${aliveNow === 2 ? "mbDuel" : ""}`} title={aliveNow === 2 ? "Nur noch zwei: Duell" : "Tempo der Zündschnur"}>
-                    <span className="mbLabel">{aliveNow === 2 ? "Finale" : "Tempo"}</span>
-                    <span className="mbValue">{aliveNow === 2 ? "⚔ Duell" : `×${tempoFactor.toFixed(1)}`}</span>
+                <div className={`mbSeg ${aliveNow === 2 ? "mbDuel" : ""}`} title={aliveNow === 2 ? tr("Nur noch zwei: Duell") : tr("Tempo der Zündschnur")}>
+                    <span className="mbLabel">{aliveNow === 2 ? tr("Finale") : tr("Tempo")}</span>
+                    <span className="mbValue">{aliveNow === 2 ? tr("⚔ Duell") : `×${tempoFactor.toFixed(1)}`}</span>
                 </div>
-                <div className="mbSeg" title={`${aliveNow} von ${totalPlayers} Spielern noch im Spiel`}>
-                    <span className="mbLabel">Im Spiel</span>
+                <div className="mbSeg" title={tr("{n} von {total} Spielern noch im Spiel", { n: aliveNow, total: totalPlayers })}>
+                    <span className="mbLabel">{tr("Im Spiel")}</span>
                     <span className="mbValue">
                         {aliveNow}/{totalPlayers}
                     </span>
@@ -2124,7 +2124,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             {isHost ? (
                 <div className="hostKickPanel">
                     <button type="button" className="hostKickLabel" onClick={() => setKickOpen((v) => !v)} aria-expanded={kickOpen}>
-                        👑 Kicken {kickOpen ? "▴" : "▾"}
+                        👑 {tr("Kicken")} {kickOpen ? "▴" : "▾"}
                     </button>
                     <div className="hostKickList" style={{ display: kickOpen ? "flex" : "none" }}>
                         {players
@@ -2136,7 +2136,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                     className="hostKickChip"
                                     onClick={() => void handleHostKick(p.player_id)}
                                     disabled={kickBusyId === p.player_id}
-                                    title={`${p.name} sofort eliminieren`}
+                                    title={tr("{name} sofort eliminieren", { name: p.name })}
                                 >
                                     {kickBusyId === p.player_id ? "…" : `✖ ${p.name}`}
                                 </button>
@@ -2165,31 +2165,31 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     ) : null}
 
                     <div className="srOnly" key={hudPulseNonce} aria-live="polite">
-                        Am Zug: {holderName}.
+                        {tr("Am Zug: {name}.", { name: holderName })}
                     </div>
 
                     {iAmEliminated ? (
                         <div className="statusCard">
-                            <div className="statusTitle">Du bist raus – schau zu 👀</div>
-                            <div className="statusSub">Schau zu, wer als Letzter übrig bleibt.</div>
+                            <div className="statusTitle">{tr("Du bist raus – schau zu 👀")}</div>
+                            <div className="statusSub">{tr("Schau zu, wer als Letzter übrig bleibt.")}</div>
                             {(lobby.game_mode ?? "original") === "original" && !meRow?.revenge_used && aliveNow > 2 ? (
                                 <button
                                     type="button"
                                     className="btn btnSecondary btnSmall"
                                     onClick={() => void handleRevenge()}
                                     disabled={revengeBusy}
-                                    title="Einmal pro Runde: die Richtung der Weitergabe drehen"
+                                    title={tr("Einmal pro Runde: die Richtung der Weitergabe drehen")}
                                 >
-                                    🔄 Rache-Pass: Richtung drehen
+                                    {tr("🔄 Rache-Pass: Richtung drehen")}
                                 </button>
                             ) : null}
                         </div>
                     ) : isMeHolder ? (
                         <div className="answerCard">
                             <div className="answerHead">
-                                <div className="statusTitle myTurnTitle">🥔 Du bist dran!</div>
+                                <div className="statusTitle myTurnTitle">{tr("🥔 Du bist dran!")}</div>
                                 {lobby.current_song_id ? (
-                                    <div className="diffChip" title="Schwierigkeit des Songs – schwere Songs geben mehr Bonuszeit">
+                                    <div className="diffChip" title={tr("Schwierigkeit des Songs – schwere Songs geben mehr Bonuszeit")}>
                                         {"★".repeat(lobby.current_song_difficulty ?? 2)}
                                         {"☆".repeat(3 - (lobby.current_song_difficulty ?? 2))}
                                     </div>
@@ -2198,9 +2198,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <div className={`answerHint ${overtime ? "answerHintOvertime" : ""}`}>
                                 {lobby.current_song_id
                                     ? overtime
-                                        ? "⏱️ Nachspielzeit – schnell abgeben! Titel 1 · Künstler ½ · beides 1,5"
-                                        : "Titel 1 · Künstler ½ · beides 1,5 (z. B. „Wolke 7 Gzuz“) · unter 5 s ⚡ +5"
-                                    : "Tippe deine Antwort und drücke Enter."}
+                                        ? tr("⏱️ Nachspielzeit – schnell abgeben! Titel 1 · Künstler ½ · beides 1,5")
+                                        : tr("Titel 1 · Künstler ½ · beides 1,5 (z. B. „Wolke 7 Gzuz“) · unter 5 s ⚡ +5")
+                                    : tr("Tippe deine Antwort und drücke Enter.")}
                             </div>
                             <div className="answerInputRow">
                                 <input
@@ -2215,7 +2215,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                             void handleAttemptPass();
                                         }
                                     }}
-                                    placeholder={lobby.current_song_id ? "Songtitel …" : "Deine Antwort …"}
+                                    placeholder={lobby.current_song_id ? tr("Songtitel …") : tr("Deine Antwort …")}
                                     maxLength={60}
                                     autoFocus
                                     autoComplete="off"
@@ -2224,21 +2224,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                     spellCheck={false}
                                     inputMode="text"
                                     enterKeyHint="send"
-                                    aria-label="Antwort"
+                                    aria-label={tr("Antwort")}
                                 />
                                 <button
                                     type="button"
                                     className="btn btnPrimary answerSend"
                                     onClick={() => void handleAttemptPass()}
                                     disabled={!!passDisabledReason || answerDraft.trim().length === 0}
-                                    title={passDisabledReason ?? "Antwort senden (Enter)"}
+                                    title={passDisabledReason ?? tr("Antwort senden (Enter)")}
                                 >
-                                    {passBusy ? "…" : "Senden ⏎"}
+                                    {passBusy ? "…" : tr("Senden ⏎")}
                                 </button>
                             </div>
                             <div className="answerFoot">
                                 <span className={`answerFeedback ${answerWrong ? "show" : ""}`} aria-live="polite">
-                                    {answerWrong ? "Nicht richtig – nochmal!" : ""}
+                                    {answerWrong ? tr("Nicht richtig – nochmal!") : ""}
                                 </span>
                                 {lobby.current_song_id && (meRow?.skips_left ?? 0) > 0 ? (
                                     <button
@@ -2246,21 +2246,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                         className="linkBtn"
                                         onClick={() => void handleSkipSong()}
                                         disabled={skipBusy || passBusy}
-                                        title="Song tauschen (einmal pro Runde, kostet 2 Sekunden)"
+                                        title={tr("Song tauschen (einmal pro Runde, kostet 2 Sekunden)")}
                                     >
-                                        🔀 Song tauschen (−2 s)
+                                        {tr("🔀 Song tauschen (−2 s)")}
                                     </button>
                                 ) : null}
                             </div>
                         </div>
                     ) : (
                         <div className="statusCard watchCard">
-                            <div className="watchLabel">👀 Zuschauen</div>
-                            <div className="statusTitle watchTitle">{holderName} ist dran</div>
+                            <div className="watchLabel">{tr("👀 Zuschauen")}</div>
+                            <div className="statusTitle watchTitle">{tr("{name} ist dran", { name: holderName })}</div>
                             <div className="statusSub">
                                 {isSpectator
-                                    ? "Du schaust nur zu – in der nächsten Runde kannst du mitspielen."
-                                    : "Warte ab – gleich kann es dich treffen."}
+                                    ? tr("Du schaust nur zu – in der nächsten Runde kannst du mitspielen.")
+                                    : tr("Warte ab – gleich kann es dich treffen.")}
                             </div>
                         </div>
                     )}
@@ -2271,8 +2271,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         iAmEliminated). */}
                     {/* Erratene Songs dieser Runde: der richtige Song ("Titel – Künstler", Migration 092), neuester zuerst */}
                     {lobby.used_answers && lobby.used_answers.length > 0 ? (
-                        <div className="usedAnswers" aria-label="Erratene Songs">
-                            <span className="usedAnswersLabel">🎵 Erratene Songs</span>
+                        <div className="usedAnswers" aria-label={tr("Erratene Songs")}>
+                            <span className="usedAnswersLabel">🎵 {tr("Erratene Songs")}</span>
                             <div className="usedAnswerList">
                                 {lobby.used_answers
                                     .slice(-14)
@@ -2282,7 +2282,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                             {a}
                                         </span>
                                     ))}
-                                {lobby.used_answers.length > 14 ? <span className="usedAnswerChip more">+{lobby.used_answers.length - 14} weitere</span> : null}
+                                {lobby.used_answers.length > 14 ? <span className="usedAnswerChip more">{tr("+{n} weitere", { n: lobby.used_answers.length - 14 })}</span> : null}
                             </div>
                         </div>
                     ) : null}
