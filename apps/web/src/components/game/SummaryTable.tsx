@@ -55,10 +55,18 @@ export function SummaryTable({
         }
         // Spieler ohne Serien-Eintrag (sollte nicht vorkommen) trotzdem zeigen
         for (const p of players) if (!byPlayer.has(p.id)) byPlayer.set(p.id, { id: p.id, name: p.name, sets: new Map(), total: 0, wins: 0, placeSum: 0, n: 0 });
+        // Zeiten dieser Runde: gespeichertes Rundenergebnis (series_results) hat Vorrang vor dem Live-Stand
+        const num = (v: unknown) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
         return [...byPlayer.values()]
-            .map((e) => ({ ...e, p: info.get(e.id) ?? null, avgPlace: e.n ? e.placeSum / e.n : 99 }))
+            .map((e) => {
+                const live = info.get(e.id) ?? null;
+                const saved = e.sets.get(currentSet);
+                const fastestMs = saved ? num(saved.fastest_ms) : (live?.fastestMs ?? null);
+                const slowestMs = saved ? num(saved.slowest_ms) : (live?.slowestMs ?? null);
+                return { ...e, p: { ...(live ?? ({ id: e.id, name: e.name } as SummaryPlayer)), fastestMs, slowestMs } as SummaryPlayer, avgPlace: e.n ? e.placeSum / e.n : 99 };
+            })
             .sort((a, b) => b.total - a.total || b.wins - a.wins || a.avgPlace - b.avgPlace);
-    }, [players, seriesRows]);
+    }, [players, seriesRows, currentSet]);
 
     const fast = rows.map((r) => r.p?.fastestMs).filter((v): v is number => v != null);
     const slow = rows.map((r) => r.p?.slowestMs).filter((v): v is number => v != null);
