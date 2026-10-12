@@ -148,6 +148,8 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
     const [fb, setFb] = useState<{ ok: boolean; msg: string } | null>(null);
     const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
     const [showAll, setShowAll] = useState(false);
+    // Hauptmenü: bei weniger als 3 Freunden online klein eingeklappt (Wunsch Mehdi 2026-10-12); null = automatisch
+    const [openPref, setOpenPref] = useState<boolean | null>(null);
 
     useEffect(() => {
         if (!confirmRemove) return;
@@ -197,12 +199,45 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
         );
     }
 
+    const collapsible = !inviteCode && !status.loading && !status.error;
+    const collapsed = collapsible && !adding && friendsApi.incoming.length === 0 && (openPref === null ? onlineCount < 3 : !openPref);
+    if (collapsed) {
+        const onlineFriends = status.friends.filter((f) => f.online);
+        return (
+            <section className="frSec frCollapsed" aria-label="Freunde">
+                <div className="frHead">
+                    <h2 className="frTitle">
+                        👥 Freunde <span className="frCount">{status.friends.length}</span>
+                    </h2>
+                    <button type="button" className="frToggle" onClick={() => setOpenPref(true)} aria-expanded={false}>
+                        Aufklappen ▾
+                    </button>
+                </div>
+                {onlineFriends.length === 0 ? (
+                    <div className="frMiniNone">Gerade ist niemand online.</div>
+                ) : (
+                    <div className="frList">
+                        {onlineFriends.map((f) => (
+                            <FriendRow key={f.userId} f={f} confirming={false} inviteState={null} onInvite={() => {}} onRemoveClick={() => setOpenPref(true)} />
+                        ))}
+                    </div>
+                )}
+                <style>{STYLES}</style>
+            </section>
+        );
+    }
+
     return (
         <section className="frSec" aria-label="Freunde">
             <div className="frHead">
                 <h2 className="frTitle">
                     👥 Freunde <span className="frCount">{status.friends.length}</span>
                 </h2>
+                {collapsible ? (
+                    <button type="button" className="frToggle" onClick={() => setOpenPref(false)} aria-expanded title="Einklappen">
+                        ▴
+                    </button>
+                ) : null}
                 <button type="button" className="btn btnPrimary btnSmall" onClick={() => setAdding((v) => !v)} aria-expanded={adding} title="Freund hinzufügen">
                     {adding ? "✕" : "＋"}
                     <span className="frAddLabel">{adding ? " Schließen" : " Hinzufügen"}</span>
@@ -376,8 +411,12 @@ const STYLES = `
     overflow: auto; overscroll-behavior: contain;
     animation: kmRise .7s var(--ease-out) .25s backwards;
   }
-  .frSec.frGuest{ min-height: 0; }
+  .frSec.frGuest, .frSec.frCollapsed{ min-height: 0; }
 }
+.frToggle{ margin-left:auto; border:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.08); color:#fff; font:inherit; font-weight:800; font-size:13px; padding:6px 12px; border-radius:999px; cursor:pointer; white-space:nowrap; }
+.frToggle:hover{ background:rgba(255,255,255,.16); }
+.frCollapsed{ gap:10px; padding:14px 16px; }
+.frMiniNone{ font-size:13.5px; font-weight:700; opacity:.75; }
 .frHead{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .frTitle{ margin:0; font-size:22px; display:flex; align-items:center; gap:10px; }
 .frCount{ font-size:13px; font-weight:900; padding:2px 10px; border-radius:999px; background:rgba(255,255,255,.16); }

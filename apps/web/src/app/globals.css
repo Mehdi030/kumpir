@@ -1961,13 +1961,18 @@ textarea:focus-visible{
    Kumpir-Bild 1200x800: Figur beginnt bei 19,25 % der Höhe, Hände liegen 23,2 % der Breite tief auf der Karte.
    =============================== */
 .homeMain{
-    --potW: min(900px, 120vw, max(380px, calc((100dvh - 480px) * 2.45)));
-    padding-top: 10px; padding-bottom: 22px;
+    --potW: min(900px, 120vw, max(380px, calc((100dvh - 520px) * 2.45)));
+    padding-top: 10px;
+    /* Unten etwa halb so viel Platz wie die Kumpir oben braucht -> die Karte selbst sitzt mittiger (Wunsch Mehdi) */
+    padding-bottom: calc(var(--potW) * 0.14 + 10px);
 }
-@media (min-width: 521px){
-    .homeMain .potatoBg{ top: calc(var(--potW) * -0.4089); }
-    .homeMain .potatoBgImg{ width: var(--potW); }
-    .homeMain .landingWrapDecor{ margin-top: calc(var(--potW) * 0.2806 + 4px); }
+/* Kumpir liegt mit den Händen auf der Karte – auf allen Bildschirmen gleich (früher auf dem Handy in der Karte) */
+.homeMain .potatoBg{ top: calc(var(--potW) * -0.4089); }
+.homeMain .potatoBgImg{ width: var(--potW); }
+.homeMain .landingWrapDecor{ margin-top: calc(var(--potW) * 0.2806 + 4px); }
+@media (max-width: 520px){
+    .homeMain{ --potW: min(112vw, max(300px, calc((100dvh - 470px) * 1.6))); padding-bottom: 12px; }
+    .homeMain .homeCard{ padding-top: 22px !important; }
 }
 @media (min-height: 600px){
     html:has(.homeMain), body:has(.homeMain){ overflow: hidden; height: 100%; }
@@ -2021,7 +2026,6 @@ textarea:focus-visible{
     .homeChipText b{ font-size: 14px; }
     .homeChipText span{ font-size: 11.5px; }
     .homeChipArrow{ display: none; }
-    .homeMain .homeCard{ padding-top: 76px; }
     .homeMain .homeTitle{ font-size: clamp(42px, 7vh, 64px); }
     .homeMain .homeTagline{ font-size: 15px; }
     .homeMain .homeCta{ margin-top: 14px; gap: 10px; }
@@ -2056,8 +2060,15 @@ textarea:focus-visible{
 @media (min-height: 760px) and (min-width: 900px){
     html:has(.hostMain), body:has(.hostMain){ overflow: hidden; }
 }
-/* Niedrige Fenster: Regel-Leiste unter der Karte weglassen (steht auch in der Lobby) */
-@media (max-height: 820px) and (min-width: 900px){
+/* "So wird gespielt" steht auf breiten Bildschirmen NEBEN der Karte (Wunsch Mehdi 2026-10-12):
+   aufgeklappt braucht es so keinen Platz unter der Karte und nichts muss scrollen. */
+@media (min-width: 1200px){
+    .hostMain .landingWrap{ width: min(1320px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 16px; align-items: start; }
+    .hostMain .rulesOutside{ margin: 0; width: auto; padding: 14px 16px; border-radius: 22px; position: sticky; top: 14px; }
+    .hostMain .rulesOutside summary{ text-align: left; font-size: 15px; }
+}
+/* Schmaler und niedrig: Regel-Leiste unter der Karte weglassen (steht auch in der Lobby) */
+@media (max-height: 820px) and (min-width: 900px) and (max-width: 1199px){
     .hostMain .rulesOutside{ display: none; }
 }
 
