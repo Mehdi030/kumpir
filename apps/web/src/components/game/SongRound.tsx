@@ -30,28 +30,38 @@ function previewLength(el: HTMLAudioElement | null): number {
     return d && Number.isFinite(d) && d > 5 ? d : PREVIEW_FALLBACK_SECONDS;
 }
 
+// Gesangsstart (Migration 098/100): die Hörprobe startet dort, wo die Stimme einsetzt, statt mit dem
+// Instrumental-Intro. Mindestens 10 s Song bleiben immer übrig.
+function vocalStart(el: HTMLAudioElement | null, startSec: number): number {
+    return Math.max(0, Math.min(startSec, previewLength(el) - 10));
+}
+
 // Wie weit der Song laut Server-Zeitstempel gerade sein müsste (Sekunden).
 // Rechnet mit der Server-Uhr (nicht der Geräte-Uhr), damit alle Geräte an
 // derselben Stelle sind. Hält ein Spieler die Kartoffel länger als die
-// ~30s-Vorschau, läuft der Song in einer Schleife weiter (alle Geräte springen
-// gleichzeitig an den Anfang) statt abzubrechen.
-function targetOffsetSeconds(startedAt: string | null, el: HTMLAudioElement | null): number {
-    if (!startedAt) return 0;
+// Vorschau, läuft der Song ab dem Gesangsstart in einer Schleife weiter (alle Geräte
+// springen gleichzeitig zurück) statt abzubrechen.
+function targetOffsetSeconds(startedAt: string | null, el: HTMLAudioElement | null, startSec = 0): number {
+    const start = vocalStart(el, startSec);
+    if (!startedAt) return start;
     const startedMs = Date.parse(startedAt);
-    if (Number.isNaN(startedMs)) return 0;
+    if (Number.isNaN(startedMs)) return start;
     const elapsed = Math.max(0, (serverNow() - startedMs) / 1000);
-    return elapsed % previewLength(el);
+    return start + (elapsed % (previewLength(el) - start));
 }
 
-// Abstand zwischen Ist- und Soll-Position, mit Schleife gedacht (29.9s und 0.1s liegen nah beieinander).
-function driftSeconds(el: HTMLAudioElement, target: number): number {
-    const len = previewLength(el);
-    const d = (((el.currentTime - target) % len) + len) % len;
-    return Math.min(d, len - d);
+// Abstand zwischen Ist- und Soll-Position, mit Schleife gedacht (Ende und Gesangsstart liegen "nah" beieinander).
+function driftSeconds(el: HTMLAudioElement, target: number, startSec = 0): number {
+    const start = vocalStart(el, startSec);
+    if (el.currentTime < start - 0.3) return Number.POSITIVE_INFINITY; // noch im Intro -> sofort springen
+    const seg = previewLength(el) - start;
+    const d = (((el.currentTime - target) % seg) + seg) % seg;
+    return Math.min(d, seg - d);
 }
 
 export function SongRound({ songId, startedAt }: { songId: string | null; startedAt: string | null }) {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [startSec, setStartSec] = useState(0);
     const [blocked, setBlocked] = useState(false);
     // Aktuelle Start-Funktion/Sperr-Status für Intervalle und Gesten-Nachholen (ohne Neu-Abo)
     const startPlaybackRef = useRef<(() => void) | null>(null);
@@ -73,19 +83,20 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
 
         (async () => {
             // Kurzer Netz-Hänger soll den Song nicht für die ganze Runde stumm lassen: bis zu 4 Versuche.
-            let data: { preview_url: string | null } | null = null;
+            let data: { preview_url: string | null; vocal_start_ms?: number | null } | null = null;
             for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
                 if (attempt > 0) await new Promise((r) => setTimeout(r, 600 * attempt));
                 if (cancelled) return;
-                const res = await supabase.from("song_pool").select("preview_url").eq("id", songId).single();
+                const res = await supabase.from("song_pool").select("preview_url, vocal_start_ms").eq("id", songId).single();
                 if (!res.error && res.data) {
-                    data = res.data as { preview_url: string | null };
+                    data = res.data as { preview_url: string | null; vocal_start_ms?: number | null };
                     break;
                 }
             }
 
             if (cancelled || !data) return;
 
+            setStartSec(Math.max(0, Number(data.vocal_start_ms ?? 0) / 1000));
             setPreviewUrl(data.preview_url ?? null);
         })();
 
@@ -102,9 +113,10 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
         const el = getSongAudio();
         if (!el || !previewUrl || getMuted()) return;
         if (el.src !== previewUrl) el.src = previewUrl;
-        el.loop = true;
+        // Keine eingebaute Schleife: die würde beim Intro (0 s) neu anfangen. Das Ende fängt "ended" ab.
+        el.loop = false;
         el.volume = getVolume();
-        el.currentTime = targetOffsetSeconds(startedAt, el);
+        el.currentTime = targetOffsetSeconds(startedAt, el, startSec);
         void el
             .play()
             .then(() => {
@@ -117,7 +129,7 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
                     setPendingSongPlay(() => startPlaybackRef.current?.());
                 }
             });
-    }, [previewUrl, startedAt]);
+    }, [previewUrl, startedAt, startSec]);
     useEffect(() => {
         startPlaybackRef.current = startPlayback;
     }, [startPlayback]);
@@ -135,20 +147,27 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
         // current_song_started_at). Sobald Metadaten da sind und sobald der Ton wirklich
         // läuft (Laden/Puffern kostet ein paar hundert ms), wird nachjustiert.
         const onLoadedMeta = () => {
-            el.currentTime = targetOffsetSeconds(startedAt, el);
+            el.currentTime = targetOffsetSeconds(startedAt, el, startSec);
         };
         const onPlaying = () => {
-            const target = targetOffsetSeconds(startedAt, el);
-            if (driftSeconds(el, target) > 0.25) el.currentTime = target;
+            const target = targetOffsetSeconds(startedAt, el, startSec);
+            if (driftSeconds(el, target, startSec) > 0.25) el.currentTime = target;
+        };
+        // Ende der Hörprobe: zurück an den Gesangsstart (an die Server-Position) und weiter
+        const onEnded = () => {
+            el.currentTime = targetOffsetSeconds(startedAt, el, startSec);
+            void el.play().catch(() => {});
         };
         el.addEventListener("loadedmetadata", onLoadedMeta);
         el.addEventListener("playing", onPlaying);
+        el.addEventListener("ended", onEnded);
         startPlayback();
         return () => {
             el.removeEventListener("loadedmetadata", onLoadedMeta);
             el.removeEventListener("playing", onPlaying);
+            el.removeEventListener("ended", onEnded);
         };
-    }, [previewUrl, startedAt, startPlayback]);
+    }, [previewUrl, startedAt, startSec, startPlayback]);
 
     // Song-Runde vorbei oder Spielseite verlassen -> Ton aus, kein Nachholen mehr
     useEffect(() => {
@@ -198,12 +217,12 @@ export function SongRound({ songId, startedAt }: { songId: string | null; starte
                 restart(el);
                 return;
             }
-            const target = targetOffsetSeconds(startedAt, el);
-            if (driftSeconds(el, target) > 0.5) el.currentTime = target;
+            const target = targetOffsetSeconds(startedAt, el, startSec);
+            if (driftSeconds(el, target, startSec) > 0.5) el.currentTime = target;
             lastCt = el.currentTime;
         }, 2000);
         return () => window.clearInterval(t);
-    }, [previewUrl, startedAt]);
+    }, [previewUrl, startedAt, startSec]);
     useEffect(() => {
         blockedRef.current = blocked;
     }, [blocked]);

@@ -13,8 +13,8 @@ export async function createSupabaseServerClient(sessionToken?: string | null) {
     const cookieStore = await cookies();
 
     return createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(),
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!.trim(),
         {
             global: sessionToken ? { headers: { [SESSION_HEADER]: sessionToken } } : undefined,
             cookies: {
