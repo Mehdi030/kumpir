@@ -1193,7 +1193,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     });
                     return showToast("⏱️ Nachspielzeit: Der Interpret reicht nicht – nur der Songtitel zählt!", 2600);
                 }
-                if (err.message?.includes("too_fast")) return showToast("⏳ Kurz warten …", 900);
+                // Gesperrt (1 s nach falscher Antwort): Eingabe zurückholen, damit man nicht neu tippen muss
+                if (err.message?.includes("too_fast")) {
+                    setAnswerDraft((d) => d || clean);
+                    return showToast("⏳ 1 Sekunde nach einer falschen Antwort warten – dann nochmal Enter", 1600);
+                }
                 if (err.message?.includes("time_up")) return showToast("⏰ Zu spät", 1400);
                 return showToast(`❌ ${errorText(err.message)}`, 2400);
             }

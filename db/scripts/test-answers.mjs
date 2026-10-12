@@ -40,6 +40,15 @@ const CASES = [
     ["Wolken", "Apache 207", [], "Apache", 0.5],
     ["Wolken", "Apache 207", [], "Apache 207", 0.5],
     ["Wolken", "Apache 207", [], "wolken apache", 1.5],
+    // Samra (Wunsch Mehdi 2026-10-12)
+    ["Tranquillo", "Capital Bra & Samra", [], "Samra", 0.5],
+    ["Tranquillo", "Capital Bra & Samra", [], "samra.", 0.5],
+    ["Tranquillo", "Capital Bra & Samra", [], "Samraa", 0.5],
+    ["Tranquillo", "Capital Bra & Samra", [], "Tranquillo Samra", 1.5],
+    ["Tranquillo", "Capital Bra & Samra", [], "Samra Capital Bra", 0.5],
+    ["Guerilla", "Farid Bang", ["Samra", "Capital Bra"], "Samra", 0.5],
+    ["Herz aus Stein", "Estikay, Samra & SANTOS", [], "samra", 0.5],
+    ["Ich Liebe Dich", "Samra & Sido", [], "ich liebe dich von samra", 1.5],
     ["OCEAN", "RAF Camora & Ufo361", [], "ufo", 0.5],
     ["Testlied", "OG", [], "OG", 0.5],
 ];
