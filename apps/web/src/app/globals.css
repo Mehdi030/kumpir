@@ -1974,6 +1974,10 @@ textarea:focus-visible{
     .homeMain{ --potW: min(112vw, max(300px, calc((100dvh - 470px) * 1.6))); padding-bottom: 12px; }
     .homeMain .homeCard{ padding-top: 22px !important; }
 }
+/* Kleine Handys: die drei Schritte weglassen, damit Knöpfe und Statistik/Freunde immer ganz sichtbar sind */
+@media (max-width: 520px) and (max-height: 720px){
+    .homeMain .homeSteps{ display: none; }
+}
 @media (min-height: 600px){
     html:has(.homeMain), body:has(.homeMain){ overflow: hidden; height: 100%; }
 }
