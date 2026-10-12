@@ -2113,6 +2113,8 @@ textarea:focus-visible{
     .hostMain .pillStepValue{ flex: none; width: 48px; height: 36px; font-size: 17px; }
     .hostMain .plChip{ padding: 5px 10px; font-size: 12.5px; }
     .hostMain .plPick > :not(.plChips){ display: none; }
+    .hostMain .plPick{ margin-left: auto; min-width: 0; }
+    .hostMain .plChips{ justify-content: flex-end; }
     .hostMain .actionsRow{ margin-top: 2px !important; }
     .hostMain .actionsRow .btnXL{ width: 100%; padding-top: 13px; padding-bottom: 13px; }
     .hostMain .rulesOutside{ display: none; }
