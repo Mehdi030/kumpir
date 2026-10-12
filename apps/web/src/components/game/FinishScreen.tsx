@@ -179,7 +179,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
             <ToastStack toasts={toasts} inline />
 
             <style>{`
-        .finWrap{ width: min(1080px, calc(100vw - 32px)); position: relative; z-index: 2; display: grid; gap: 14px; align-items: center; align-content: center; min-height: calc(100dvh - 32px); padding: 8px 0; }
+        .finWrap{ width: min(1080px, calc(100vw - 32px)); position: relative; z-index: 2; display: grid; gap: 14px; align-items: center; align-content: center; min-height: calc(100dvh - 64px); padding: 0; }
         @media (min-width: 900px){ .finWrap{ grid-template-columns: minmax(0, .9fr) minmax(0, 1.25fr); gap: 26px; } }
         .finLeft{ display: grid; gap: 12px; align-content: center; }
         .finHero{ text-align: center; display: grid; justify-items: center; gap: 2px; animation: finIn .7s cubic-bezier(.16,1,.3,1) both; }
