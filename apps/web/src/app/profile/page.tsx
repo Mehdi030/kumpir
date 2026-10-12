@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { PlayerAvatar } from "@/components/game/PlayerAvatar";
+import { AvatarEditor } from "@/components/profile/AvatarEditor";
 import { useMemo } from "react";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useProfile } from "@/hooks/useProfile";
 import { Spinner } from "@/components/Spinner";
-import { AccountSettings, AvatarBadge, supabaseAccountApi } from "@/components/profile/AccountSettings";
+import { AccountSettings, supabaseAccountApi } from "@/components/profile/AccountSettings";
 import { isPlaceholderEmail } from "@/lib/accountSettings";
 import { HomeButton } from "@/components/BackButton";
 
@@ -65,7 +67,7 @@ export default function ProfilePage() {
             <div className="landingWrap">
                 <section className="card">
                     <div className="profHead">
-                        <AvatarBadge emoji={profile.avatarEmoji} color={profile.avatarColor} name={name} />
+                        <PlayerAvatar seed={name} config={profile.avatarConfig} size={84} className="profAvatar" />
                         <div className="profWho">
                             <h1 className="h1 profName">{name}</h1>
                             {profile.username ? <div className="profUser">@{profile.username}</div> : null}
@@ -77,6 +79,8 @@ export default function ProfilePage() {
                         </div>
                         <HomeButton className="profBack" />
                     </div>
+
+                    <AvatarEditor name={name} initial={profile.avatarConfig} onSaved={() => void refresh()} />
 
                     <div className="profLinks">
                         <Link href="/stats" className="profLink">
@@ -112,6 +116,7 @@ export default function ProfilePage() {
 
                     <style>{`
             .profHead{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+            .profAvatar{ width:84px; height:84px; border-radius:50%; background: radial-gradient(circle at 40% 35%, rgba(255,226,122,.45), rgba(255,178,26,.18) 70%); box-shadow: 0 0 0 3px rgba(255,214,10,.3); }
             .profWho{ flex:1; min-width:180px; }
             .profName{ font-size: clamp(28px,6vw,40px) !important; }
             .profUser{ font-size:14px; font-weight:700; opacity:.85; margin-top:2px; }

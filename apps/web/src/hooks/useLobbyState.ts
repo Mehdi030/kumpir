@@ -26,6 +26,7 @@ export type PlayerRow = {
     status?: "active" | "left" | "kicked" | string;
     is_bot?: boolean | null;
     bot_skill?: number | null;
+    avatar_config?: Record<string, string> | null;
 };
 
 type UseLobbyStateOpts = {
@@ -89,7 +90,7 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
 
         const playersRes = await supabase
             .from("players")
-            .select("player_id,name,ready,joined_at,status,is_bot,bot_skill")
+            .select("player_id,name,ready,joined_at,status,is_bot,bot_skill,avatar_config")
             .eq("lobby_id", lobbyRow.id)
             .eq("status", "active")
             .order("joined_at", { ascending: true });

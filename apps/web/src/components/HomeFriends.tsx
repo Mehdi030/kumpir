@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { useAuth } from "@/components/AuthProvider";
 import { useFriends } from "@/hooks/useFriends";
 import { useFriendsStatus, type FriendStatus } from "@/hooks/useFriendsStatus";
@@ -28,13 +29,19 @@ function friendError(err: string): string {
     return err;
 }
 
+// Zuletzt da (Migration 102: Online-Anzeige, sonst letztes Match, sonst letzte Anmeldung) – als Tag
 function lastSeenText(iso: string | null): string {
-    if (!iso) return "Noch nie gesehen";
-    const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    if (!iso) return "Noch nicht gespielt";
+    const d = new Date(iso);
+    const mins = Math.max(1, Math.round((Date.now() - d.getTime()) / 60000));
     if (mins < 60) return `Zuletzt vor ${mins} Min.`;
-    const h = Math.round(mins / 60);
-    if (h < 48) return `Zuletzt vor ${h} Std.`;
-    return `Zuletzt vor ${Math.round(h / 24)} Tagen`;
+    const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+    const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    if (days === 0) return `Zuletzt heute, ${time} Uhr`;
+    if (days === 1) return `Zuletzt gestern, ${time} Uhr`;
+    if (days < 7) return `Zuletzt am ${d.toLocaleDateString("de-DE", { weekday: "long" })}`;
+    return `Zuletzt am ${d.toLocaleDateString("de-DE", { day: "numeric", month: "numeric", year: days > 300 ? "numeric" : undefined })}`;
 }
 
 type Filter = "all" | "online";
@@ -357,8 +364,8 @@ function FriendRow({
     const shownName = f.displayName || f.username;
     return (
         <article className={`frRow ${f.online ? "online" : ""}`}>
-            <div className="frAvatar" style={{ background: f.avatarColor || colorFor(f.username) }} aria-hidden>
-                {f.avatarEmoji || shownName.slice(0, 1).toUpperCase()}
+            <div className="frAvatar frAvatarFig" style={{ background: f.avatarColor || colorFor(f.username) }} aria-hidden>
+                <PlayerAvatar seed={shownName} config={f.avatarConfig ?? null} size={46} />
                 {f.online ? <span className="frAvatarDot" /> : null}
             </div>
             <div className="frInfo">
@@ -444,6 +451,8 @@ const STYLES = `
 .frRow:hover{ transform: translateX(-3px); border-color: rgba(255,255,255,.3); }
 .frRow.online{ border-color:rgba(52,211,153,.7); background:linear-gradient(180deg, rgba(52,211,153,.2), rgba(255,255,255,.05)); }
 .frAvatar{ position:relative; width:46px; height:46px; border-radius:999px; display:grid; place-items:center; font-size:23px; font-weight:900; color:#fff; border:2px solid rgba(255,255,255,.5); box-shadow:0 6px 14px rgba(0,0,0,.3); }
+.frAvatarFig{ overflow:visible; }
+.frAvatarFig img{ width:46px; height:46px; border-radius:50%; }
 .frAvatar.sm{ width:34px; height:34px; font-size:16px; }
 .frAvatarDot{ position:absolute; right:-1px; bottom:-1px; width:14px; height:14px; border-radius:999px; background:#34d399; border:2.5px solid #1f3d33; box-shadow:0 0 8px #34d399; }
 .frInfo{ min-width:0; display:grid; gap:2px; }

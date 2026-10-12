@@ -1,7 +1,7 @@
 "use client";
 
 import { KumpirPotato } from "@/components/game/KumpirPotato";
-import { PlayerAvatar } from "@/components/game/PlayerAvatar";
+import { PlayerAvatar, type AvatarConfig } from "@/components/game/PlayerAvatar";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Player = {
@@ -10,6 +10,7 @@ type Player = {
     is_alive: boolean;
     ready?: boolean;
     song_points?: number;
+    avatar_config?: AvatarConfig | null;
 };
 
 type DisconnectedIds = Set<string> | string[];
@@ -407,6 +408,7 @@ export function PlayerRing({
                             <span className="seatDisc">
                                 <PlayerAvatar
                                     seed={p.name}
+                                    config={p.avatar_config}
                                     mood={!p.is_alive || isExploded ? "out" : isHolder ? "panic" : "normal"}
                                     size={Math.round(seatPx * 1.4)}
                                     className="seatAvatar"

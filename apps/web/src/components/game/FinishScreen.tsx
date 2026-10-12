@@ -105,7 +105,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
                 <header className="finHero">
                     <div className="finKicker">{isSeries ? t("fin.match", { n: totalRounds }) : t("fin.round")}</div>
                     <div className="finWinnerAvatar" aria-hidden>
-                        <PlayerAvatar seed={winnerName} size={96} />
+                        <PlayerAvatar seed={winnerName} config={rows.find((r) => r.place === 1)?.avatarConfig} size={96} />
                         <span className="finTrophy">🏆</span>
                     </div>
                     <h1 className="finWinner">{winnerName}</h1>

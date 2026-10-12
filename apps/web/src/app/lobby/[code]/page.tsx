@@ -303,9 +303,9 @@ export default function LobbyPage() {
     const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
 
     return (
-        <main className="container lobbyMain">
+        <main className="container">
             <div className="landingWrap withSidePanel">
-                <section className="card lobbyCard" aria-label="Lobby" style={{ position: "relative" }}>
+                <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
                     <div className="lobbyHead">
                         {isRunning ? <div className="lobbyNotice">🚀 Spiel läuft – Lobby ist read-only</div> : null}
 
@@ -432,7 +432,7 @@ export default function LobbyPage() {
                                             className={`playerChip ${isHostRow ? "playerChipHost" : ""} ${p.ready ? "playerChipReady" : "playerChipNotReady"}`}
                                         >
                                             <span className="playerChipSeat">{idx + 1}</span>
-                                            <PlayerAvatar seed={p.name} size={34} className="playerChipAvatar" />
+                                            <PlayerAvatar seed={p.name} config={p.avatar_config} size={34} className="playerChipAvatar" />
                                             <span className="playerChipName">
                                                 {p.is_bot ? "🤖 " : ""}
                                                 {p.name}
@@ -518,7 +518,7 @@ export default function LobbyPage() {
                         </div>
                     </div>
 
-                    <RulesCard defaultOpen={false} />
+                    <RulesCard defaultOpen />
                 </section>
                 {/* Freunde rechts daneben – online Freunde direkt in diese Lobby einladen */}
                 <HomeFriends inviteCode={code} />

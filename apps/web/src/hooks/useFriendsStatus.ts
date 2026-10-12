@@ -8,6 +8,7 @@ export type FriendStatus = {
     username: string;
     displayName: string | null;
     avatarEmoji: string | null;
+    avatarConfig?: Record<string, string> | null;
     avatarColor: string | null;
     online: boolean;
     lastSeen: string | null;

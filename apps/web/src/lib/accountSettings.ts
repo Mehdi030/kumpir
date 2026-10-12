@@ -28,6 +28,8 @@ export type AccountSettings = {
     displayName: string | null;
     avatarEmoji: string | null;
     avatarColor: string | null;
+    /** eigene Spielfigur (Migration 102), null = aus dem Namen */
+    avatarConfig: Record<string, string> | null;
     preferences: Preferences;
 };
 

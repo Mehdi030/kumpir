@@ -62,6 +62,7 @@ const PLAYER_COLUMNS = [
     "combo",
     "revenge_used",
     "last_seen_at",
+    "avatar_config",
 ].join(",");
 
 type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
@@ -149,6 +150,7 @@ type Player = {
     survival_streak?: number;
     eliminated_at_round?: number | null;
     song_points?: number;
+    avatar_config?: Record<string, string> | null;
     skips_left?: number;
     combo?: number;
     revenge_used?: boolean;
@@ -1761,9 +1763,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                   const mine = seriesRows.filter((r) => r.player_id === e.id);
                   const f = mine.map((r) => num(r.fastest_ms)).filter((x): x is number => x != null);
                   const sl = mine.map((r) => num(r.slowest_ms)).filter((x): x is number => x != null);
-                  return { id: e.id, name: e.name, place: i + 1, points: e.total, fastestMs: f.length ? Math.min(...f) : null, slowestMs: sl.length ? Math.max(...sl) : null, isMe: e.id === mePlayerId };
+                  return { id: e.id, name: e.name, place: i + 1, points: e.total, fastestMs: f.length ? Math.min(...f) : null, slowestMs: sl.length ? Math.max(...sl) : null, isMe: e.id === mePlayerId, avatarConfig: players.find((p) => p.player_id === e.id)?.avatar_config ?? null };
               })
-            : ranking.map((r) => ({ id: r.player_id, name: r.name, place: r.place, points: r.score, fastestMs: num(r.fastest), slowestMs: num(r.slowest), isMe: r.player_id === mePlayerId, out: !r.is_alive }));
+            : ranking.map((r) => ({ id: r.player_id, name: r.name, place: r.place, points: r.score, fastestMs: num(r.fastest), slowestMs: num(r.slowest), isMe: r.player_id === mePlayerId, out: !r.is_alive, avatarConfig: r.avatar_config ?? null }));
         const fastRow = [...finRows].filter((r) => r.fastestMs != null).sort((a, b) => a.fastestMs! - b.fastestMs!)[0] ?? null;
         const slowRow = [...finRows].filter((r) => r.slowestMs != null).sort((a, b) => b.slowestMs! - a.slowestMs!)[0] ?? null;
         const bestSong = ranking.filter((r) => !r.is_bot && r.songPoints > 0).sort((a, b) => b.songPoints - a.songPoints)[0] ?? null;
@@ -1888,6 +1890,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 slowestMs: r.slowest == null ? null : Number(r.slowest),
                                 isMe: r.player_id === mePlayerId,
                                 out: !r.is_alive,
+                                avatarConfig: r.avatar_config ?? null,
                             }))}
                         />
                         <SeriesTable rows={seriesRows} totalSets={total} playedSets={idx} mePlayerId={mePlayerId} title="Gesamt nach Runden" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { PlayerAvatar } from "@/components/game/PlayerAvatar";
+import { PlayerAvatar, type AvatarConfig } from "@/components/game/PlayerAvatar";
 
 export type PassStatsRow = {
     id: string;
@@ -12,6 +12,7 @@ export type PassStatsRow = {
     slowestMs: number | null;
     isMe?: boolean;
     out?: boolean;
+    avatarConfig?: AvatarConfig | null;
 };
 
 const MEDAL = ["🥇", "🥈", "🥉"];
@@ -53,7 +54,7 @@ export function PassStatsTable({ rows, title, pointsLabel = "Punkte" }: { rows: 
                         <div key={r.id} className={`pstRow ${r.isMe ? "me" : ""} ${r.place === 1 ? "first" : ""}`} role="row">
                             <span className="pstPlace">{MEDAL[r.place - 1] ?? r.place}</span>
                             <span className="pstName">
-                                <PlayerAvatar seed={r.name} mood={r.out ? "out" : "normal"} size={30} className="pstAvatar" />
+                                <PlayerAvatar seed={r.name} config={r.avatarConfig} mood={r.out ? "out" : "normal"} size={30} className="pstAvatar" />
                                 <span className="pstNameText" title={r.name}>
                                     {r.name}
                                     {r.isMe ? <em> (du)</em> : null}

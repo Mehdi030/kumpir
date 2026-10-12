@@ -14,6 +14,7 @@ export type Profile = {
     displayName: string | null;
     avatarEmoji: string | null;
     avatarColor: string | null;
+    avatarConfig: Record<string, string> | null;
     preferences: Preferences;
     /** Name für Lobbys: Spielername, sonst Benutzername. */
     playerName: string | null;
@@ -33,7 +34,7 @@ type ProfileCtx = {
     savePreferences: (patch: Preferences) => Promise<{ ok: boolean; error?: string }>;
 };
 
-const EMPTY: AccountSettings = { role: "user", status: "active", username: null, displayName: null, avatarEmoji: null, avatarColor: null, preferences: {} };
+const EMPTY: AccountSettings = { role: "user", status: "active", username: null, displayName: null, avatarEmoji: null, avatarColor: null, avatarConfig: null, preferences: {} };
 
 const Ctx = createContext<ProfileCtx>({
     profile: null,
@@ -68,6 +69,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
                 displayName: d.displayName ?? null,
                 avatarEmoji: d.avatarEmoji ?? null,
                 avatarColor: d.avatarColor ?? null,
+                avatarConfig: (d.avatarConfig as Record<string, string> | null) ?? null,
                 preferences: (d.preferences as Preferences) ?? {},
             });
         } else {
@@ -117,6 +119,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
                   displayName: s.displayName,
                   avatarEmoji: s.avatarEmoji,
                   avatarColor: s.avatarColor,
+                  avatarConfig: s.avatarConfig,
                   preferences: s.preferences,
                   playerName: s.displayName || s.username,
                   role: s.role,

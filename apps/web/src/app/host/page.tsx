@@ -104,7 +104,7 @@ export default function HostPage() {
         const u = profile?.playerName;
         if (u) setHostName(u.slice(0, 24));
     }, [profile?.playerName]);
-    const [maxPlayers, setMaxPlayers] = useState(8);
+    const [maxPlayers, setMaxPlayers] = useState(6);
 
     const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>("normal");
     // Original ist aktuell der einzige spielbare Modus (Teleport/Reverse
@@ -176,6 +176,8 @@ export default function HostPage() {
 
     const nameValidation = useMemo(() => validatePlayerName(hostName), [hostName]);
     const isNameValid = nameValidation.ok;
+    // Angemeldet: Name kommt aus dem Konto (Spielername, sonst Benutzername) – kein Eingabefeld (Wunsch Mehdi)
+    const nameFromAccount = !!user && !!profile?.playerName && isNameValid;
     const nameError = useMemo(() => {
         if (!hostName.length) return "";
         if ("message" in nameValidation) return nameValidation.message;
@@ -353,6 +355,8 @@ export default function HostPage() {
 
                     <div className="hostGrid" style={{ gridTemplateColumns: "1fr" }}>
                         <div className="panel">
+                            {nameFromAccount ? null : (
+                            <>
                             <div className="panelHead">
                                 <div className="panelTitle">Spieler-Details</div>
                                 <div className="panelHint">Du kannst das später ändern.</div>
@@ -392,6 +396,8 @@ export default function HostPage() {
                             </div>
 
                             <div className="divider" />
+                            </>
+                            )}
 
                             {category === "friends" ? (
                             <>
