@@ -30,6 +30,7 @@ import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
 import { useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import { FinishScreen, type FinishHighlight } from "@/components/game/FinishScreen";
+import { PassStatsTable } from "@/components/game/PassStatsTable";
 
 // Ein pass_attempt ohne Timeout konnte für immer "pending" hängen bleiben,
 // sobald bei wenigen lebenden Spielern (v_alive <= 2) Einstimmigkeit
@@ -195,15 +196,6 @@ function fmtMs(ms?: number | null) {
     if (ms == null) return "—";
     if (ms < 1000) return `${Math.round(ms)} ms`;
     return `${(ms / 1000).toFixed(2)} s`;
-}
-
-function fmtHold(ms?: number) {
-    if (!ms) return "—";
-    const s = Math.max(0, Math.round(ms / 1000));
-    if (s < 60) return `${s}s`;
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${m}m ${r}s`;
 }
 
 function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
@@ -1248,7 +1240,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         void (async () => {
             const { data } = await supabase
                 .from("series_results")
-                .select("set_index,player_id,name,place,arena_points,song_points,is_bot")
+                .select("set_index,player_id,name,place,arena_points,song_points,is_bot,fastest_ms,slowest_ms")
                 .eq("lobby_id", lobby.id)
                 .order("set_index", { ascending: true });
             if (!cancel && data) setSeriesRows(data as unknown as SeriesRow[]);
@@ -1762,17 +1754,24 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const isSeries = (lobby.series_total ?? 1) > 1;
         const winnerName = (isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? "Unbekannt";
 
-        // Auszeichnungen und Treffer-Statistik nur für Menschen – Bots zählen hier nicht mit
-        const humans = ranking.filter((r) => !r.is_bot);
-        const fastestOverall =
-            [...humans].filter((r) => r.fastest != null).sort((a, b) => (a.fastest ?? 9e9) - (b.fastest ?? 9e9))[0] ?? null;
-        const longestHold = [...humans].sort((a, b) => b.holdMs - a.holdMs)[0] ?? null;
-        const bestSong = [...humans].filter((r) => r.songPoints > 0).sort((a, b) => b.songPoints - a.songPoints)[0] ?? null;
+        // Ergebnis-Zeilen mit schnellster/langsamster Abgabe (bei mehreren Runden: beste Werte aller Runden, Migration 101)
+        const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
+        const finRows = isSeries
+            ? seriesRanked.map((e, i) => {
+                  const mine = seriesRows.filter((r) => r.player_id === e.id);
+                  const f = mine.map((r) => num(r.fastest_ms)).filter((x): x is number => x != null);
+                  const sl = mine.map((r) => num(r.slowest_ms)).filter((x): x is number => x != null);
+                  return { id: e.id, name: e.name, place: i + 1, points: e.total, fastestMs: f.length ? Math.min(...f) : null, slowestMs: sl.length ? Math.max(...sl) : null, isMe: e.id === mePlayerId };
+              })
+            : ranking.map((r) => ({ id: r.player_id, name: r.name, place: r.place, points: r.score, fastestMs: num(r.fastest), slowestMs: num(r.slowest), isMe: r.player_id === mePlayerId, out: !r.is_alive }));
+        const fastRow = [...finRows].filter((r) => r.fastestMs != null).sort((a, b) => a.fastestMs! - b.fastestMs!)[0] ?? null;
+        const slowRow = [...finRows].filter((r) => r.slowestMs != null).sort((a, b) => b.slowestMs! - a.slowestMs!)[0] ?? null;
+        const bestSong = ranking.filter((r) => !r.is_bot && r.songPoints > 0).sort((a, b) => b.songPoints - a.songPoints)[0] ?? null;
 
         const highlights: FinishHighlight[] = [];
         if (bestSong) highlights.push({ icon: "🎵", label: "Song-Profi", name: bestSong.name, value: `${String(Math.round(bestSong.songPoints * 2) / 2).replace(".", ",")} Treffer` });
-        if (fastestOverall) highlights.push({ icon: "⚡", label: "Schnellster Pass", name: fastestOverall.name, value: fmtMs(fastestOverall.fastest) });
-        if (longestHold && longestHold.holdMs > 0) highlights.push({ icon: "🧱", label: "Längste Haltezeit", name: longestHold.name, value: fmtHold(longestHold.holdMs) });
+        if (fastRow) highlights.push({ icon: "⚡", label: "Schnellste Abgabe", name: fastRow.name, value: fmtMs(fastRow.fastestMs) });
+        if (slowRow && slowRow.slowestMs !== fastRow?.fastestMs) highlights.push({ icon: "🐢", label: "Langsamste Abgabe", name: slowRow.name, value: fmtMs(slowRow.slowestMs) });
 
         const me = isSeries
             ? mySeriesRank > 0
@@ -1823,16 +1822,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     totalRounds={lobby.series_total ?? 1}
                     winnerName={winnerName}
                     me={me}
-                    rows={ranking.map((r) => ({
-                        id: r.player_id,
-                        name: r.name,
-                        place: r.place,
-                        score: r.score,
-                        songPoints: r.is_bot ? 0 : r.songPoints,
-                        moves: r.roundsSurvived,
-                        isMe: r.player_id === mePlayerId,
-                    }))}
-                    seriesRows={seriesRows}
+                    rows={finRows}
                     shareRows={
                         isSeries
                             ? seriesRanked.map((e, i) => ({ place: i + 1, name: e.name, score: e.total, isMe: e.id === mePlayerId }))
@@ -1876,24 +1866,43 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     color: "white",
                 }}
             >
-                <div style={{ width: "min(860px, calc(100vw - 48px))", textAlign: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1.6, opacity: 0.75 }}>
-                        RUNDE {idx} VON {total} · ZWISCHENSTAND
-                    </div>
-                    <div style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 950, marginTop: 10 }}>🏆 {setWinner} holt die Runde</div>
-
-                    <div style={{ marginTop: 18, textAlign: "left" }}>
-                        <SeriesTable rows={seriesRows} totalSets={total} playedSets={idx} mePlayerId={mePlayerId} title="Zwischenstand" />
-                    </div>
-
-                    <div style={{ marginTop: 20, opacity: 0.85, fontWeight: 800 }}>
-                        Nächste Runde: Themen-Voting in
-                    </div>
-                    <div style={{ fontSize: "clamp(48px, 7vw, 84px)", fontWeight: 950, textShadow: "0 14px 50px rgba(0,0,0,0.35)" }}>
-                        {Math.max(0, countdownSecondsLeft ?? 12)}
+                <div className="setSum">
+                    <header className="setSumHead">
+                        <div className="setSumKicker">
+                            Runde {idx} von {total} · Zwischenstand
+                        </div>
+                        <div className="setSumTitle">🏆 {setWinner} holt die Runde</div>
+                        <div className="setSumNext">
+                            Nächste Runde in <b>{Math.max(0, countdownSecondsLeft ?? 12)}</b> s
+                        </div>
+                    </header>
+                    <div className="setSumGrid">
+                        <PassStatsTable
+                            title={`Runde ${idx}: Punkte & Abgaben`}
+                            rows={ranking.map((r) => ({
+                                id: r.player_id,
+                                name: r.name,
+                                place: r.place,
+                                points: r.score,
+                                fastestMs: r.fastest == null ? null : Number(r.fastest),
+                                slowestMs: r.slowest == null ? null : Number(r.slowest),
+                                isMe: r.player_id === mePlayerId,
+                                out: !r.is_alive,
+                            }))}
+                        />
+                        <SeriesTable rows={seriesRows} totalSets={total} playedSets={idx} mePlayerId={mePlayerId} title="Gesamt nach Runden" />
                     </div>
                     <ToastStack toasts={toasts} inline />
                 </div>
+                <style>{`
+          .setSum{ width: min(1180px, calc(100vw - 32px)); display: grid; gap: 14px; text-align: center; }
+          .setSumKicker{ font-size: 13px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .75; }
+          .setSumTitle{ font-family: var(--font-display); font-size: clamp(24px, 3.6vw, 40px); font-weight: 900; margin-top: 4px; overflow-wrap: anywhere; }
+          .setSumNext{ margin-top: 4px; font-weight: 800; opacity: .9; }
+          .setSumNext b{ font-size: 22px; color: #ffe08a; }
+          .setSumGrid{ display: grid; gap: 14px; text-align: left; align-items: start; }
+          @media (min-width: 980px){ .setSumGrid{ grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
+        `}</style>
             </main>
         );
     }

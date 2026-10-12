@@ -10,6 +10,8 @@ export type SeriesRow = {
     arena_points: number;
     song_points: number;
     is_bot?: boolean;
+    fastest_ms?: number | null;
+    slowest_ms?: number | null;
 };
 
 type Props = {

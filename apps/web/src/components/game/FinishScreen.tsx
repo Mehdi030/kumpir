@@ -2,22 +2,15 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
+import { PassStatsTable, type PassStatsRow } from "@/components/game/PassStatsTable";
+import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { Spinner } from "@/components/Spinner";
 import { ToastStack } from "@/components/ToastStack";
 import { renderResultCard } from "@/lib/resultCard";
 import { useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
 
-export type FinishRow = {
-    id: string;
-    name: string;
-    place: number;
-    score: number;
-    songPoints: number;
-    moves: number;
-    isMe: boolean;
-};
+export type FinishRow = PassStatsRow;
 
 export type FinishHighlight = { label: string; icon: string; name: string; value: string };
 
@@ -30,7 +23,6 @@ type Props = {
     /** Eigener Platz + Punkte (Match-Gesamt bei mehreren Runden). */
     me: { place: number; score: number } | null;
     rows: FinishRow[];
-    seriesRows: SeriesRow[];
     /** Kompakte Wertung für die teilbare Ergebniskarte (bei Match: Gesamtwertung). */
     shareRows: { place: number; name: string; score: number; isMe?: boolean }[];
     mePlayerId: string | null;
@@ -46,14 +38,12 @@ type Props = {
     toasts: ToastItem;
 };
 
-const MEDAL = ["🥇", "🥈", "🥉"];
-
 /**
- * Endseite: ein Held (Sieger), EINE Wertung (Tabelle), kurze Highlights, zwei Buttons.
- * Bei mehreren Runden ist die Wertung die Match-Gesamtwertung (Punkte je Runde + Summe),
- * bei einer einzelnen Runde die Rundenwertung.
+ * Endseite – passt ohne Scrollen auf den Bildschirm (Wunsch Mehdi 2026-10-12):
+ * links Sieger + Highlights + Knöpfe, rechts EINE Wertung mit Punkten und schnellster/langsamster Abgabe
+ * (bei mehreren Runden: Gesamtpunkte und die besten Werte über alle Runden). Auf dem Handy untereinander.
  */
-export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seriesRows, shareRows, mePlayerId, highlights, loggedIn, ranked, spectator, busy, onRematch, onLobby, toasts }: Props) {
+export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shareRows, highlights, loggedIn, ranked, spectator, busy, onRematch, onLobby, toasts }: Props) {
     const { t } = useI18n();
     const [shareMsg, setShareMsg] = useState("");
     const [shareBusy, setShareBusy] = useState(false);
@@ -111,186 +101,123 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, seri
 
     return (
         <div className="finWrap">
-            <header className="finHero">
-                <div className="finKicker">{isSeries ? t("fin.match", { n: totalRounds }) : t("fin.round")}</div>
-                <div className="finTrophy" aria-hidden>
-                    🏆
-                </div>
-                <h1 className="finWinner">{winnerName}</h1>
-                <div className="finSub">{isSeries ? t("fin.winsMatch") : t("fin.winsRound")}</div>
-                {me ? (
-                    <div className="finMe">
-                        {t("fin.me", { place: me.place, score: me.score })}
+            <div className="finLeft">
+                <header className="finHero">
+                    <div className="finKicker">{isSeries ? t("fin.match", { n: totalRounds }) : t("fin.round")}</div>
+                    <div className="finWinnerAvatar" aria-hidden>
+                        <PlayerAvatar seed={winnerName} size={96} />
+                        <span className="finTrophy">🏆</span>
                     </div>
-                ) : null}
-            </header>
+                    <h1 className="finWinner">{winnerName}</h1>
+                    <div className="finSub">{isSeries ? t("fin.winsMatch") : t("fin.winsRound")}</div>
+                    {me ? <div className="finMe">{t("fin.me", { place: me.place, score: me.score })}</div> : null}
+                </header>
 
-            {shareRows.length >= 2 ? <Podium rows={shareRows} pts={t("card.pts")} /> : null}
-
-            {isSeries ? (
-                <SeriesTable rows={seriesRows} totalSets={totalRounds} playedSets={totalRounds} mePlayerId={mePlayerId} title={t("fin.final")} />
-            ) : (
-                <section className="finCard">
-                    <h2 className="finCardTitle">{t("fin.final")}</h2>
-                    <div className="finTable" role="table">
-                        <div className="finRow finHead" role="row">
-                            <span>#</span>
-                            <span>{t("fin.player")}</span>
-                            <span className="r">{t("fin.points")}</span>
-                            <span className="r" title="Richtig erratene Songs">♪ Treffer</span>
-                            <span className="r" title="Überlebte Züge">Züge</span>
-                        </div>
-                        {rows.map((r) => (
-                            <div key={r.id} className={`finRow ${r.isMe ? "me" : ""} ${r.place === 1 ? "first" : ""}`} role="row">
-                                <span>{MEDAL[r.place - 1] ?? r.place}</span>
-                                <span className="finName">{r.name}</span>
-                                <span className="r finPts">{r.score}</span>
-                                <span className="r">{r.songPoints > 0 ? (Math.round(r.songPoints * 2) / 2).toString().replace(".", ",") : "–"}</span>
-                                <span className="r">{r.moves}</span>
+                {highlights.length > 0 ? (
+                    <section className="finTiles" aria-label="Highlights">
+                        {highlights.map((h) => (
+                            <div key={h.label} className="finTile">
+                                <div className="finTileIcon" aria-hidden>
+                                    {h.icon}
+                                </div>
+                                <div className="finTileLabel">{h.label}</div>
+                                <div className="finTileName" title={h.name}>
+                                    {h.name}
+                                </div>
+                                <div className="finTileValue">{h.value}</div>
                             </div>
                         ))}
-                    </div>
-                </section>
-            )}
+                    </section>
+                ) : null}
 
-            {highlights.length > 0 ? (
-                <section className="finTiles" aria-label="Highlights">
-                    {highlights.map((h) => (
-                        <div key={h.label} className="finTile">
-                            <div className="finTileIcon" aria-hidden>
-                                {h.icon}
-                            </div>
-                            <div className="finTileLabel">{h.label}</div>
-                            <div className="finTileName">{h.name}</div>
-                            <div className="finTileValue">{h.value}</div>
-                        </div>
-                    ))}
-                </section>
-            ) : null}
-
-            {spectator ? (
-                <div className="finAccount">{t("fin.spectator")}</div>
-            ) : !ranked ? (
-                <div className="finAccount">{loggedIn ? t("fin.unrankedAccount") : t("fin.unranked")}</div>
-            ) : loggedIn ? (
-                <div className="finAccount ok">{t("fin.saved2")}</div>
-            ) : (
-                <div className="finAccount">
-                    <span>{t("fin.keep")}</span>
-                    <Link href="/register?next=/" className="finAccountLink">
-                        {t("fin.create")}
-                    </Link>
-                </div>
-            )}
-
-            {spectator ? (
-                // Zuschauer: Die Lobby ist noch gesperrt – sobald der Host zurück zur Lobby geht,
-                // zeigt die Spielseite automatisch "Jetzt mitspielen".
                 <div className="finActions">
-                    <Link href="/" className="btn btnSecondary btnXL">
-                        {t("solo.home")}
-                    </Link>
-                </div>
-            ) : (
-                <div className="finActions">
-                    <button type="button" className="btn btnPrimary btnXL" onClick={onRematch} disabled={!!busy} title="Direkt nochmal (Taste R)">
-                        {busy === "rematch" ? <Spinner size={16} label="Starte…" /> : t("fin.again")}
-                    </button>
-                    <button type="button" className="btn btnSecondary btnXL" onClick={onLobby} disabled={!!busy}>
-                        {busy === "reset" ? <Spinner size={16} label="Lade…" /> : t("fin.lobby")}
+                    {spectator ? (
+                        <Link href="/" className="btn btnSecondary">
+                            {t("solo.home")}
+                        </Link>
+                    ) : (
+                        <>
+                            <button type="button" className="btn btnPrimary" onClick={onRematch} disabled={!!busy} title="Direkt nochmal (Taste R)">
+                                {busy === "rematch" ? <Spinner size={16} label="Starte…" /> : t("fin.again")}
+                            </button>
+                            <button type="button" className="btn btnSecondary" onClick={onLobby} disabled={!!busy}>
+                                {busy === "reset" ? <Spinner size={16} label="Lade…" /> : t("fin.lobby")}
+                            </button>
+                        </>
+                    )}
+                    <button type="button" className="btn btnSecondary finShareBtn" onClick={() => void shareResult()} disabled={shareBusy} title={t("fin.share")} aria-label={t("fin.share")}>
+                        {shareBusy ? <Spinner size={14} label={t("fin.shareBusy")} /> : "📤"}
                     </button>
                 </div>
-            )}
-            <div className="finShare">
-                <button type="button" className="btn btnSecondary btnSmall" onClick={() => void shareResult()} disabled={shareBusy}>
-                    {shareBusy ? <Spinner size={14} label={t("fin.shareBusy")} /> : t("fin.share")}
-                </button>
-                <span className="finShareMsg" aria-live="polite">
-                    {shareMsg}
-                </span>
+                <div className="finFoot">
+                    {shareMsg ? (
+                        <span className="finShareMsg" aria-live="polite">
+                            {shareMsg}
+                        </span>
+                    ) : null}
+                    {spectator ? (
+                        <span>{t("fin.spectator")}</span>
+                    ) : !ranked ? (
+                        <span>{loggedIn ? t("fin.unrankedAccount") : t("fin.unranked")}</span>
+                    ) : loggedIn ? (
+                        <span className="ok">{t("fin.saved2")}</span>
+                    ) : (
+                        <span>
+                            {t("fin.keep")}{" "}
+                            <Link href="/register?next=/" className="finAccountLink">
+                                {t("fin.create")}
+                            </Link>
+                        </span>
+                    )}
+                </div>
             </div>
-            {spectator ? null : <div className="finHint">{t("fin.tip")}</div>}
+
+            <div className="finRight">
+                <PassStatsTable rows={rows} title={isSeries ? `${t("fin.final")} · alle ${totalRounds} Runden` : t("fin.final")} pointsLabel={isSeries ? "Gesamt" : "Punkte"} />
+            </div>
 
             <ToastStack toasts={toasts} inline />
 
             <style>{`
-        .finWrap{ width: min(820px, calc(100vw - 32px)); position: relative; z-index: 2; display: grid; gap: 18px; padding: 8px 0 28px; }
-        .finHero{ text-align: center; display: grid; justify-items: center; gap: 4px; animation: finIn .7s cubic-bezier(.16,1,.3,1) both; }
+        .finWrap{ width: min(1080px, calc(100vw - 32px)); position: relative; z-index: 2; display: grid; gap: 14px; align-items: center; align-content: center; min-height: calc(100dvh - 32px); padding: 8px 0; }
+        @media (min-width: 900px){ .finWrap{ grid-template-columns: minmax(0, .9fr) minmax(0, 1.25fr); gap: 26px; } }
+        .finLeft{ display: grid; gap: 12px; align-content: center; }
+        .finHero{ text-align: center; display: grid; justify-items: center; gap: 2px; animation: finIn .7s cubic-bezier(.16,1,.3,1) both; }
         .finKicker{ font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .8; }
-        .finTrophy{
-          width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; font-size: 40px; margin: 6px 0 2px;
-          background: radial-gradient(circle at 35% 30%, #ffe27a, #ffb21a 70%);
-          box-shadow: 0 0 0 6px rgba(255,255,255,.18), 0 16px 40px rgba(0,0,0,.35);
-          animation: finBob 3s ease-in-out infinite;
-        }
-        .finWinner{ margin: 0; font-size: clamp(38px, 8vw, 68px); line-height: 1.05; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 6px 30px rgba(0,0,0,.35); word-break: break-word; }
-        .finSub{ font-size: 15px; opacity: .8; font-weight: 600; }
-        .finMe{ margin-top: 10px; padding: 8px 16px; border-radius: 999px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); font-size: 15px; }
+        .finWinnerAvatar{ position: relative; width: 104px; height: 104px; margin: 4px 0; border-radius: 50%; display: grid; place-items: center;
+          background: radial-gradient(circle at 40% 35%, rgba(255,226,122,.55), rgba(255,178,26,.25) 70%); box-shadow: 0 0 0 5px rgba(255,214,10,.35), 0 16px 40px rgba(0,0,0,.35); animation: finBob 3s ease-in-out infinite; }
+        .finTrophy{ position: absolute; right: -6px; bottom: -4px; font-size: 32px; filter: drop-shadow(0 4px 8px rgba(0,0,0,.4)); }
+        .finWinner{ margin: 0; font-size: clamp(30px, 5vw, 52px); line-height: 1.05; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 6px 30px rgba(0,0,0,.35); overflow-wrap: anywhere; }
+        .finSub{ font-size: 14px; opacity: .8; font-weight: 600; }
+        .finMe{ margin-top: 6px; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); font-size: 14px; }
         .finMe b{ font-weight: 800; }
+        .finRight{ animation: finIn .7s .1s cubic-bezier(.16,1,.3,1) both; min-width: 0; }
 
-        .finCard{ border-radius: 24px; padding: 18px; background: rgba(30,8,8,.42); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0,0,0,.28); animation: finIn .7s .1s cubic-bezier(.16,1,.3,1) both; }
-        .finCardTitle{ margin: 0 0 10px; font-size: 18px; font-weight: 800; }
-        .finTable{ display: grid; gap: 6px; }
-        .finRow{ display: grid; grid-template-columns: 38px 1fr 76px 72px 54px; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.07); font-weight: 600; }
-        .finRow.finHead{ background: none; padding-top: 0; padding-bottom: 2px; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; opacity: .65; }
-        .finRow.first{ background: rgba(255,214,10,.16); border: 1px solid rgba(255,214,10,.4); }
-        .finRow.me{ box-shadow: inset 0 0 0 2px rgba(34,211,238,.6); }
-        .finRow .r{ text-align: right; }
-        .finName{ font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .finPts{ font-weight: 800; color: #ffe08a; }
+        .finTiles{ display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; animation: finIn .7s .2s cubic-bezier(.16,1,.3,1) both; }
+        .finTile{ border-radius: 16px; padding: 8px; text-align: center; background: rgba(30,8,8,.36); border: 1px solid rgba(255,255,255,.14); display: grid; justify-items: center; min-width: 0; }
+        .finTileIcon{ font-size: 20px; }
+        .finTileLabel{ font-size: 9.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; opacity: .65; }
+        .finTileName{ font-size: 14.5px; font-weight: 800; max-width: 100%; overflow-wrap: anywhere; line-height: 1.15; }
+        .finTileValue{ font-size: 13px; font-weight: 800; color: #ffe08a; }
 
-        .finTiles{ display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; animation: finIn .7s .2s cubic-bezier(.16,1,.3,1) both; }
-        .finTile{ border-radius: 20px; padding: 14px; text-align: center; background: rgba(30,8,8,.36); border: 1px solid rgba(255,255,255,.14); display: grid; gap: 2px; justify-items: center; }
-        .finTileIcon{ font-size: 26px; }
-        .finTileLabel{ font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; opacity: .65; }
-        .finTileName{ font-size: 18px; font-weight: 800; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .finTileValue{ font-size: 14px; font-weight: 700; color: #ffe08a; }
-
-        .finAccount{ display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 12px 16px; border-radius: 16px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.2); font-size: 14px; font-weight: 600; text-align: center; }
-        .finAccount.ok{ background: rgba(60,200,110,.18); border-color: rgba(110,230,150,.45); }
-        .finAccountLink{ color: #2b0f04; background: #ffd23f; padding: 6px 14px; border-radius: 999px; font-weight: 800; text-decoration: none; }
-        .finActions{ display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
-        .finShare{ display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
-        .finShareMsg{ font-size: 13px; font-weight: 700; opacity: .85; }
-        .finHint{ text-align: center; font-size: 12px; opacity: .6; }
+        .finActions{ display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .finShareBtn{ padding-left: 14px; padding-right: 14px; }
+        .finFoot{ display: grid; gap: 4px; justify-items: center; text-align: center; font-size: 12.5px; font-weight: 600; opacity: .85; }
+        .finFoot .ok{ color: #a7f3d0; }
+        .finAccountLink{ color: #2b0f04; background: #ffd23f; padding: 3px 10px; border-radius: 999px; font-weight: 800; text-decoration: none; }
+        .finShareMsg{ font-size: 13px; font-weight: 700; }
 
         @keyframes finIn{ from{ opacity: 0; transform: translateY(14px); } to{ opacity: 1; transform: translateY(0); } }
         @keyframes finBob{ 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-5px); } }
-        @media (max-width: 520px){ .finRow{ grid-template-columns: 30px 1fr 56px 56px; padding: 9px 10px; font-size: 14px; } .finRow > :nth-child(5){ display: none; } .finName{ white-space: normal; } }
+        @media (max-width: 899px){
+          .finWrap{ gap: 10px; }
+          .finWinnerAvatar{ width: 72px; height: 72px; }
+          .finWinnerAvatar img{ width: 66px; height: 66px; }
+          .finTrophy{ font-size: 24px; }
+          .finLeft{ gap: 8px; }
+          .finActions .btn{ padding-top: 10px; padding-bottom: 10px; }
+        }
       `}</style>
-        </div>
-    );
-}
-
-const PODIUM_COLORS = ["#f59e0b", "#94a3b8", "#c2733a"];
-
-/** Siegertreppchen für die ersten drei: Mitte = Platz 1 (am höchsten), links 2, rechts 3. */
-function Podium({ rows, pts }: { rows: { place: number; name: string; score: number; isMe?: boolean }[]; pts: string }) {
-    const top = [...rows].sort((a, b) => a.place - b.place).slice(0, 3);
-    const order = top.length === 3 ? [top[1], top[0], top[2]] : top.length === 2 ? [top[1], top[0]] : top;
-    return (
-        <div className="finPodium" aria-label="Siegertreppchen">
-            {order.map((r) => {
-                const i = r!.place - 1;
-                return (
-                    <div key={r!.name + r!.place} className={`finPod finPod${r!.place} ${r!.isMe ? "me" : ""}`}>
-                        <div className="finPodAvatar" style={{ background: PODIUM_COLORS[i] ?? "#64748b" }} aria-hidden>
-                            {r!.name.slice(0, 1).toUpperCase()}
-                        </div>
-                        <div className="finPodName" title={r!.name}>
-                            {r!.name}
-                        </div>
-                        <div className="finPodScore">
-                            {r!.score} {pts}
-                        </div>
-                        <div className="finPodBlock">
-                            <span className="finPodMedal" aria-hidden>
-                                {MEDAL[i] ?? r!.place}
-                            </span>
-                        </div>
-                    </div>
-                );
-            })}
         </div>
     );
 }
