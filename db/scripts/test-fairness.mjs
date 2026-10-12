@@ -101,7 +101,8 @@ async function playMatch(acc, plan) {
         // Claude hat die Kumpir: Antwort vorbereiten
         const left = new Date(L.explode_at).getTime() - Date.now();
         let wait;
-        if (plan.strat === "lastsecond") wait = Math.max(300, left - 700);
+        // 1,2 s vor Schluss: das Skript fragt vor dem Antworten noch 2x die Datenbank ab (~0,6 s), der Browser nicht
+        if (plan.strat === "lastsecond") wait = Math.max(300, left - 1200);
         else wait = pickHuman();
         if (wait >= left - 150) return; // schafft es nicht -> explodiert
         await sleep(wait);
