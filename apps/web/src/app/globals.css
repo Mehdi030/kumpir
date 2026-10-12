@@ -2056,6 +2056,10 @@ textarea:focus-visible{
 @media (min-height: 760px) and (min-width: 900px){
     html:has(.hostMain), body:has(.hostMain){ overflow: hidden; }
 }
+/* Niedrige Fenster: Regel-Leiste unter der Karte weglassen (steht auch in der Lobby) */
+@media (max-height: 820px) and (min-width: 900px){
+    .hostMain .rulesOutside{ display: none; }
+}
 
 /* ===============================
    LOBBY OHNE SCROLLEN (Wunsch Mehdi 2026-10-12)
