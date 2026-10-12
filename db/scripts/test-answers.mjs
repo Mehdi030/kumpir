@@ -37,6 +37,11 @@ const CASES = [
     ["7 Stunden", "Capital Bra", [], "Kartoffel", 0],
     ["7 Stunden", "Capital Bra", [], "Capital Bra Kartoffel", 0],
     ["Nador", "Miami Yacine", [], "Nador Kartoffelsalat", 0],
+    ["Wolken", "Apache 207", [], "Apache", 0.5],
+    ["Wolken", "Apache 207", [], "Apache 207", 0.5],
+    ["Wolken", "Apache 207", [], "wolken apache", 1.5],
+    ["OCEAN", "RAF Camora & Ufo361", [], "ufo", 0.5],
+    ["Testlied", "OG", [], "OG", 0.5],
 ];
 let bad = 0;
 for (const [t, a, f, inp, exp] of CASES) {

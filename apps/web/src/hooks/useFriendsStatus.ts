@@ -17,7 +17,7 @@ export type FriendStatus = {
     joinable: boolean;
 };
 
-const REFRESH_MS = 30000;
+const REFRESH_MS = 20000;
 
 /** Meine Freunde mit Online-Status (Migration 086). Aktualisiert sich alle 30 s, solange der Tab sichtbar ist. */
 export function useFriendsStatus(userId: string | null | undefined) {
@@ -43,10 +43,23 @@ export function useFriendsStatus(userId: string | null | undefined) {
         const first = window.setTimeout(() => void load(), 0); // erstes Laden immer; danach nur, solange der Tab sichtbar ist
         const t = window.setInterval(run, REFRESH_MS);
         document.addEventListener("visibilitychange", run);
+        // Sofort neu laden, wenn ein Freund online kommt (Broadcast aus touch_presence, Migration 103)
+        // (try: auf dem Handy kann die Liste zweimal offen sein – ein zweites Abo desselben Kanals darf nichts kaputt machen)
+        const sb = getSupabaseClient();
+        let ch: ReturnType<typeof sb.channel> | null = null;
+        try {
+            ch = sb
+                .channel(`friends:${userId}`)
+                .on("broadcast", { event: "presence" }, () => void load())
+                .subscribe();
+        } catch {
+            ch = null;
+        }
         return () => {
             window.clearTimeout(first);
             window.clearInterval(t);
             document.removeEventListener("visibilitychange", run);
+            if (ch) void sb.removeChannel(ch);
         };
     }, [userId, load]);
 

@@ -80,7 +80,7 @@ export default function ProfilePage() {
                         <HomeButton className="profBack" />
                     </div>
 
-                    <AvatarEditor name={name} initial={profile.avatarConfig} onSaved={() => void refresh()} />
+                    <AvatarEditor name={name} initial={profile.avatarConfig} onSaved={() => void refresh()} allowGoatee={profile.username?.toLowerCase() === "achi"} />
 
                     <div className="profLinks">
                         <Link href="/stats" className="profLink">

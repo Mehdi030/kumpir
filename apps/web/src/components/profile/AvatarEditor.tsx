@@ -1,14 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { PlayerAvatar, AVATAR_OPTIONS, type AvatarConfig } from "@/components/game/PlayerAvatar";
+import { PlayerAvatar, AVATAR_OPTIONS, GOATEE_OPTION, TOPS_FEMALE, TOPS_HEADWEAR, topValues, type AvatarConfig } from "@/components/game/PlayerAvatar";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 /**
  * Eigene Spielfigur einstellen (Profil, Migration 102). Die Figur erscheint danach am Tisch, in der Lobby,
  * in den Ergebnissen und bei Freunden. Ohne eigene Wahl wird sie aus dem Namen erzeugt.
  */
-export function AvatarEditor({ name, initial, onSaved }: { name: string; initial: AvatarConfig | null; onSaved: () => void }) {
+export function AvatarEditor({
+    name,
+    initial,
+    onSaved,
+    allowGoatee = false,
+}: {
+    name: string;
+    initial: AvatarConfig | null;
+    onSaved: () => void;
+    /** Ziegenbart ist für Achi reserviert (Migration 103) */
+    allowGoatee?: boolean;
+}) {
     const [cfg, setCfg] = useState<AvatarConfig>(initial ?? {});
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -16,7 +27,15 @@ export function AvatarEditor({ name, initial, onSaved }: { name: string; initial
 
     const randomize = () => {
         const next: AvatarConfig = {};
-        for (const o of AVATAR_OPTIONS) next[o.key] = o.values[Math.floor(Math.random() * o.values.length)]!.v;
+        const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)]!;
+        next.gender = cfg.gender ?? pick(["m", "f"]);
+        for (const o of AVATAR_OPTIONS) {
+            if (o.key === "gender") continue;
+            const vals = o.key === "top" ? topValues(next.gender) : o.values;
+            if (!vals.length || (o.when && !o.when(next))) continue;
+            next[o.key] = pick(vals).v;
+        }
+        if (cfg.facialHair === "goatee") next.facialHair = "goatee";
         setCfg(next);
         setMsg(null);
     };
@@ -25,7 +44,8 @@ export function AvatarEditor({ name, initial, onSaved }: { name: string; initial
         setBusy(true);
         const { error } = await getSupabaseClient().rpc("update_my_avatar", { p_config: Object.keys(cfg).length ? cfg : null });
         setBusy(false);
-        if (error) return setMsg({ ok: false, text: "Speichern hat nicht geklappt. Bitte nochmal." });
+        if (error)
+            return setMsg({ ok: false, text: error.message.includes("avatar_reserved") ? "Der Ziegenbart ist für Achi reserviert." : "Speichern hat nicht geklappt. Bitte nochmal." });
         setMsg({ ok: true, text: "✅ Gespeichert – so siehst du jetzt im Spiel aus." });
         onSaved();
     };
@@ -43,12 +63,15 @@ export function AvatarEditor({ name, initial, onSaved }: { name: string; initial
                 <h2 className="avEdTitle">🧑 Deine Spielfigur</h2>
                 <p className="avEdSub">So sitzt du am Tisch, in der Lobby und in den Ergebnissen.</p>
                 <div className="avEdGrid">
-                    {AVATAR_OPTIONS.map((o) => (
+                    {AVATAR_OPTIONS.filter((o) => !o.when || o.when(cfg)).map((o) => {
+                        const values =
+                            o.key === "top" ? topValues(cfg.gender) : o.key === "facialHair" && allowGoatee ? [...o.values, GOATEE_OPTION] : o.values;
+                        return (
                         <label key={o.key} className="avEdField">
                             <span>{o.label}</span>
-                            {o.values[0]?.color ? (
+                            {values[0]?.color ? (
                                 <div className="avEdSwatches" role="radiogroup" aria-label={o.label}>
-                                    {o.values.map((v) => (
+                                    {values.map((v) => (
                                         <button
                                             key={v.v}
                                             type="button"
@@ -74,13 +97,20 @@ export function AvatarEditor({ name, initial, onSaved }: { name: string; initial
                                             const n = { ...c };
                                             if (val) n[o.key] = val;
                                             else delete n[o.key];
+                                            // Typ gewechselt: unpassende Frisur und Bart weg
+                                            if (o.key === "gender" && val === "f") {
+                                                delete n.facialHair;
+                                                delete n.facialHairColor;
+                                                if (n.top && !TOPS_FEMALE.includes(n.top) && !TOPS_HEADWEAR.includes(n.top)) delete n.top;
+                                            }
+                                            if (o.key === "gender" && val === "m" && n.top && !topValues("m").some((t) => t.v === n.top)) delete n.top;
                                             return n;
                                         });
                                         setMsg(null);
                                     }}
                                 >
                                     <option value="">Automatisch</option>
-                                    {o.values.map((v) => (
+                                    {values.map((v) => (
                                         <option key={v.v} value={v.v}>
                                             {v.label}
                                         </option>
@@ -88,7 +118,8 @@ export function AvatarEditor({ name, initial, onSaved }: { name: string; initial
                                 </select>
                             )}
                         </label>
-                    ))}
+                        );
+                    })}
                 </div>
                 <div className="avEdActions">
                     <button type="button" className="btn btnSecondary btnSmall" onClick={randomize}>

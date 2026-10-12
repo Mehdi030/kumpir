@@ -34,8 +34,10 @@ type Props = {
     heat?: number;
     /** Weitergabe-Richtung: 1 = Sitzreihenfolge vorwärts, -1 = rückwärts (Rache-Pass). */
     direction?: number;
-    /** Veraltet: "Als Nächstes" + Pfeil sind seit 2026-10-12 für alle sichtbar (Wunsch Mehdi). */
+    /** "Als Nächstes" + Pfeil: nur für den, der die Kumpir hält (Wunsch Mehdi 2026-10-12 abends). */
     showNext?: boolean;
+    /** Pulsierende Glut am Tisch: nur für den Halter (die anderen sehen sie nicht). */
+    showPulse?: boolean;
 };
 
 const TILT_DEG = 48;
@@ -75,6 +77,8 @@ export function PlayerRing({
     disconnectedIds,
     heat = 0,
     direction = 1,
+    showNext = false,
+    showPulse = false,
 }: Props) {
     const isDisconnected = useCallback(
         (id: string) => (disconnectedIds instanceof Set ? disconnectedIds.has(id) : (disconnectedIds ?? []).includes(id)),
@@ -283,16 +287,16 @@ export function PlayerRing({
     }, [flyRender, fly]);
     const potatoPx = narrow ? 40 : 62;
 
-    // Wer bekommt die Kartoffel als Nächstes? Für alle sichtbar: Pfeil auf dem Tisch + Schild "als Nächstes"
+    // Wer bekommt die Kartoffel als Nächstes? Nur der Halter sieht es: Pfeil auf dem Tisch + Schild "als Nächstes"
     const nextId = useMemo(() => {
-        if (!holderPlayerId) return null;
+        if (!showNext || !holderPlayerId) return null;
         const alive = players.filter((p) => p.is_alive);
         const n = alive.length;
         if (n < 2) return null;
         const hi = alive.findIndex((p) => p.player_id === holderPlayerId);
         if (hi < 0) return null;
         return alive[(hi + (direction < 0 ? -1 : 1) + n) % n]?.player_id ?? null;
-    }, [players, holderPlayerId, direction]);
+    }, [players, holderPlayerId, direction, showNext]);
 
     // Pfeil Halter -> Nächster: Bogen über die Tischplatte (Richtung Mitte gebogen), Enden vor den Figuren
     const nextArrow = useMemo(() => {
@@ -326,7 +330,7 @@ export function PlayerRing({
     const pulseSec = (2.6 - 2.3 * Math.pow(heatLevel, 1.15)).toFixed(2);
     const pulseAmp = (0.1 + 0.9 * heatLevel).toFixed(2);
 
-    const hot = heat > 0.66;
+    const hot = showPulse && heat > 0.66;
 
     return (
         <div
@@ -349,9 +353,9 @@ export function PlayerRing({
                     <div className="tRim" />
                     <div className="tTop" />
                     <div className="tInlay" />
-                    <div className="tCenter" />
+                    <div className="tInlay2" />
                     <div className="tGloss" />
-                    <div className="tPulse" />
+                    {showPulse ? <div className="tPulse" /> : null}
                 </div>
 
                 {/* Kontakt-Schatten der Sitze */}
@@ -513,33 +517,28 @@ export function PlayerRing({
           background: conic-gradient(from 210deg, #9aa1b3, #eef1f7 14%, #7b8194 30%, #cfd4e0 46%, #686e80 62%, #e2e6ef 78%, #9aa1b3);
           box-shadow: inset 0 0 0 1px rgba(255,255,255,.4), 0 0 30px rgba(0,0,0,.45);
         }
-        /* Tischplatte: tiefes Anthrazit mit ganz feiner Struktur */
+        /* Tischplatte: dunkelgrüner Filz mit feiner Webstruktur und weichem Licht von oben (ohne Logo) */
         .tTop{
           inset: 2.6%;
           transform: translateZ(1px);
           background:
-            radial-gradient(circle at 50% 42%, rgba(255,255,255,.07), transparent 58%),
-            repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,.018) 0 1px, transparent 1px 4px),
-            radial-gradient(circle at 50% 50%, #23252f 0%, #15161d 60%, #0b0c11 100%);
-          box-shadow: inset 0 0 0 1px rgba(0,0,0,.7), inset 0 18px 40px rgba(0,0,0,.45);
+            radial-gradient(ellipse 70% 60% at 50% 40%, rgba(255,255,240,.13), transparent 62%),
+            repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,.016) 0 1deg, transparent 1deg 3deg),
+            repeating-radial-gradient(circle at 50% 50%, rgba(0,0,0,.05) 0 1px, transparent 1px 3px),
+            radial-gradient(circle at 50% 50%, #1f5a46 0%, #164536 52%, #0c2a22 100%);
+          box-shadow: inset 0 0 0 2px rgba(0,0,0,.55), inset 0 22px 50px rgba(0,0,0,.45), inset 0 -10px 30px rgba(0,0,0,.35);
         }
-        /* dünne goldene Zierlinie */
+        /* doppelte goldene Zierlinie */
         .tInlay{
-          inset: 11%;
+          inset: 9%;
           transform: translateZ(2px);
-          border: 1.5px solid rgba(255,206,120,.32);
-          box-shadow: 0 0 0 6px rgba(255,206,120,.035);
+          border: 2px solid rgba(255,214,140,.42);
+          box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 0 14px rgba(255,214,140,.10);
         }
-        /* Mitte: kleines Kumpir-Emblem */
-        .tCenter{
-          inset: 41%;
-          transform: translateZ(2.5px);
-          background: radial-gradient(circle at 40% 32%, #3a2a17, #1a130b 70%);
-          box-shadow: 0 0 0 1.5px rgba(255,206,120,.45), inset 0 2px 6px rgba(0,0,0,.6);
-        }
-        .tCenter::after{
-          content:"🥔"; position:absolute; inset:0; display:grid; place-items:center;
-          font-size: calc(var(--seat, 56px) * .5); opacity: .55; filter: grayscale(.2);
+        .tInlay2{
+          inset: 12%;
+          transform: translateZ(2px);
+          border: 1px solid rgba(255,214,140,.22);
         }
         .tGloss{
           transform: translateZ(4px);
@@ -608,7 +607,7 @@ export function PlayerRing({
           user-select:none;
         }
         .seatName{
-          position:absolute; left:50%; top: calc(100% + 7px);
+          position:absolute; left:50%; bottom: calc(100% + var(--seat) * .5 + 6px);
           transform: translateX(-50%);
           display:flex; align-items:center; gap:6px;
           max-width: 190px;
@@ -625,7 +624,7 @@ export function PlayerRing({
         .seatMe{ flex:none; font-size: 10.5px; font-weight: 900; padding: 1px 6px; border-radius: 999px; background: rgba(34,211,238,.2); border: 1px solid rgba(34,211,238,.7); color: #c4f6ff; text-transform: uppercase; letter-spacing: .5px; }
         .seatPts{ flex:none; font-size: 12px; font-weight: 900; color: #ffe08a; }
         .seatBadge{
-          position:absolute; left:50%; bottom: calc(100% + var(--seat) * .48 + 4px);
+          position:absolute; left:50%; top: calc(100% + 6px);
           transform: translateX(-50%);
           padding: 3px 10px; border-radius: 999px;
           font-size: 11px; font-weight: 950; letter-spacing: 1.2px; white-space: nowrap;
@@ -677,7 +676,7 @@ export function PlayerRing({
         @keyframes staleBlink{ 0%,100%{opacity:1;} 50%{opacity:.45;} }
 
         /* Handy: kleinere Schrift, Name kompakt */
-        .ringNarrow .seatName{ font-size: 11px; padding: 2px 7px; gap: 4px; max-width: 104px; top: calc(100% + 5px); border-radius: 12px; }
+        .ringNarrow .seatName{ font-size: 11px; padding: 2px 7px; gap: 4px; max-width: 104px; bottom: calc(100% + var(--seat) * .5 + 4px); border-radius: 12px; }
         .ringNarrow .seatMe{ display:none; }
         .ringNarrow .seatPts{ font-size: 10px; }
         .ringNarrow .seatBadge{ font-size: 9.5px; padding: 2px 7px; letter-spacing: .8px; }

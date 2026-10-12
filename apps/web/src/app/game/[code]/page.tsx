@@ -2004,17 +2004,6 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     const aliveNow = players.filter((p) => p.is_alive).length;
 
-    // Wer bekommt die Kumpir als Nächstes? (gleiche Rechnung wie der Pfeil am Tisch)
-    const nextPlayer = (() => {
-        const alive = players.filter((p) => p.is_alive);
-        const hi = alive.findIndex((p) => p.player_id === lobby.holder_player_id);
-        if (hi < 0 || alive.length < 2) return null;
-        const dir = (lobby.pass_direction ?? 1) < 0 ? -1 : 1;
-        return alive[(hi + dir + alive.length) % alive.length] ?? null;
-    })();
-    const nextIsMe = !!mePlayerId && nextPlayer?.player_id === mePlayerId;
-    const nextName = nextPlayer?.name ?? null;
-
     // Heat-Ratio (0..1): kontinuierlich statt nur 3 Stufen, damit man nach
     // einem Pass sofort sieht, WIE WEIT die aktuelle Runde schon ist, statt
     // nur "ruhig/mittel/heiß" grob zu erahnen. Bezugsgröße ist die Dauer
@@ -2041,7 +2030,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 kontinuierlich mit heatRatio, statt in 3 groben Sprüngen, damit
                 man nach einem Pass sofort ein Gefühl dafür hat, wie weit die
                 Runde schon ist. */}
-            <div className="edgeFire" style={{ ["--heat" as string]: heatRatio }} aria-hidden />
+            {/* Glut am Bildschirmrand: nur für den, der die Kumpir hält */}
+            {isMeHolder ? <div className="edgeFire" style={{ ["--heat" as string]: heatRatio }} aria-hidden /> : null}
 
             <PlayerRing
                 players={players}
@@ -2052,7 +2042,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 disconnectedIds={disconnectedIds}
                 heat={heatRatio}
                 direction={lobby.pass_direction ?? 1}
-                showNext={isMeHolder || iAmEliminated}
+                showNext={isMeHolder}
+                showPulse={isMeHolder}
             />
 
             {turnOverlay ? (
@@ -2253,17 +2244,13 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             </div>
                         </div>
                     ) : (
-                        <div className={`statusCard watchCard ${nextIsMe ? "watchNextMe" : ""}`}>
+                        <div className="statusCard watchCard">
                             <div className="watchLabel">👀 Zuschauen</div>
                             <div className="statusTitle watchTitle">{holderName} ist dran</div>
                             <div className="statusSub">
                                 {isSpectator
                                     ? "Du schaust nur zu – in der nächsten Runde kannst du mitspielen."
-                                    : nextIsMe
-                                      ? "⚠️ Du bist als Nächstes dran – Ohren auf!"
-                                      : nextName
-                                        ? `Danach kommt ${nextName}.`
-                                        : "Warte ab – gleich kann es dich treffen."}
+                                    : "Warte ab – gleich kann es dich treffen."}
                             </div>
                         </div>
                     )}
@@ -2278,14 +2265,14 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <span className="usedAnswersLabel">🎵 Erratene Songs</span>
                             <div className="usedAnswerList">
                                 {lobby.used_answers
-                                    .slice(-8)
+                                    .slice(-14)
                                     .reverse()
                                     .map((a, i) => (
                                         <span key={`${a}-${i}`} className={`usedAnswerChip ${i === 0 ? "newest" : ""}`}>
                                             {a}
                                         </span>
                                     ))}
-                                {lobby.used_answers.length > 8 ? <span className="usedAnswerChip more">+{lobby.used_answers.length - 8} weitere</span> : null}
+                                {lobby.used_answers.length > 14 ? <span className="usedAnswerChip more">+{lobby.used_answers.length - 14} weitere</span> : null}
                             </div>
                         </div>
                     ) : null}
@@ -2355,8 +2342,6 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .watchCard{ background: rgba(30,50,100,.28) !important; border-color: rgba(140,180,255,.22) !important; padding: 14px 18px !important; gap: 6px !important; }
         .watchLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; color: rgba(190,215,255,.75); }
         .watchTitle{ font-size: clamp(18px, 2.6vw, 23px) !important; color: rgba(235,242,255,.95); }
-        .watchNextMe{ border-color: rgba(255,214,10,.6) !important; box-shadow: 0 0 0 3px rgba(255,214,10,.12); }
-        .watchNextMe .statusSub{ color: #ffe08a; opacity: 1; font-weight: 800; }
         @media (prefers-reduced-motion: reduce){ .myTurnFrame.on{ animation: none; } }
 
         .statusCard, .answerCard{
@@ -2610,12 +2595,14 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .voteCounter.accept{ color: #34c759; }
         .voteCounter.reject{ color: #ff453a; }
 
+        /* Erratene Songs: unten mittig am Bildschirmrand, neue Zeilen stapeln sich nach oben */
         .usedAnswers{
           margin-top: 10px;
           display: grid;
           justify-items: center;
           gap: 8px;
           width: min(620px, 100%);
+          pointer-events: none;
         }
         .usedAnswerList{ display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
         .usedAnswersLabel{
@@ -2627,9 +2614,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           align-self: center;
         }
         .usedAnswerChip{
-          font-size: 13px;
+          font-size: 15px;
           font-weight: 800;
-          padding: 5px 12px;
+          padding: 7px 15px;
           border-radius: 999px;
           background: rgba(255,255,255,0.08);
           border: 1px solid rgba(255,255,255,0.14);
@@ -2641,22 +2628,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .usedAnswerChip.more{
           opacity: .7;
         }
-        /* Breite Bildschirme: Liste unten links neben dem Tisch statt unter der Karte (spart Höhe) */
-        @media (min-width: 1100px){
+        @media (min-width: 760px) and (min-height: 640px){
           .usedAnswers{
-            position: fixed; left: 16px; bottom: 16px; z-index: 4; margin: 0;
-            width: min(280px, calc((100vw - 640px) / 2 - 24px)); max-height: 46vh; overflow: hidden;
-            justify-items: start; gap: 6px; padding: 12px 12px 10px; border-radius: 18px;
-            background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.12);
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 2; margin: 0;
+            width: min(980px, calc(100vw - 32px)); max-height: 30vh; overflow: hidden;
+            display: flex; flex-direction: column-reverse; align-items: center; gap: 6px;
           }
-          .usedAnswerList{ flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; width: 100%; }
-          .usedAnswerChip{ text-align: left; }
+          .usedAnswerList{ flex-wrap: wrap-reverse; }
+          .usedAnswerChip{ background: rgba(0,0,0,.32); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+          .usedAnswerChip.newest{ background: rgba(60,45,0,.55); }
         }
-        /* Schmal: nur die 3 neuesten, damit nichts unter den Bildschirmrand rutscht */
-        @media (max-width: 1099px){
-          .usedAnswers{ margin-top: 2px; gap: 6px; }
-          .usedAnswerList > :nth-child(n+4){ display: none; }
+        /* Handy: in der Spalte unter der Karte, nur die 4 neuesten */
+        @media (max-width: 759px), (max-height: 639px){
+          .usedAnswers{ margin-top: 4px; gap: 6px; }
+          .usedAnswerChip{ font-size: 13px; padding: 5px 12px; }
+          .usedAnswerList > :nth-child(n+5){ display: none; }
         }
 
         .turnOverlay{
