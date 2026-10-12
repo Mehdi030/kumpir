@@ -38,6 +38,31 @@ import { FinishScreen, type FinishHighlight } from "@/components/game/FinishScre
 // löst nach dieser Frist rpc_resolve_stale_attempt aus (idempotent).
 const STALE_ATTEMPT_MS = 8000;
 
+// Spalten der Spielerliste (players hat Spalten-Freigaben: neue Spalte = GRANT SELECT in der Migration!)
+const PLAYER_COLUMNS = [
+    "player_id",
+    "name",
+    "is_alive",
+    "status",
+    "seat_index",
+    "ready",
+    "is_bot",
+    "last_pass_at",
+    "pass_count",
+    "clutch_pass_count",
+    "tempo_pass_count",
+    "fastest_pass_ms",
+    "slowest_pass_ms",
+    "total_hold_ms",
+    "survival_streak",
+    "eliminated_at_round",
+    "song_points",
+    "skips_left",
+    "combo",
+    "revenge_used",
+    "last_seen_at",
+].join(",");
+
 type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" | "finished" | string;
 
 type LobbyState = {
@@ -231,6 +256,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     const [turnOverlay, setTurnOverlay] = useState(false);
     const [turnGrace, setTurnGrace] = useState(0);
     const lastShownTurnNonceRef = useRef<number>(0);
+    const lobbyIdRef = useRef<string | null>(null);
 
     // Pass animation event
     const [passEvent, setPassEvent] = useState<PassEvent | null>(null);
@@ -326,6 +352,19 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         prevTempoRef.current = myTempo;
         if (prev != null && myTempo > prev) showToast("⚡ Schnell abgegeben: +5 Punkte", 1400);
     }, [myTempo, showToast]);
+
+    // Was hat meine Antwort gebracht? (Migration 098: Titel + Künstler = 1,5)
+    const mySongPoints = Number(meRow?.song_points ?? 0);
+    const prevSongPointsRef = useRef<number | null>(null);
+    useEffect(() => {
+        const prev = prevSongPointsRef.current;
+        prevSongPointsRef.current = mySongPoints;
+        if (prev == null || mySongPoints <= prev) return;
+        const d = Math.round((mySongPoints - prev) * 2) / 2;
+        if (d >= 1.5) showToast("🎯 Titel + Künstler: +1,5 Punkte", 1800);
+        else if (d >= 1) showToast("🎵 Titel richtig: +1 Punkt", 1500);
+        else showToast("🎤 Künstler richtig: +½ Punkt", 1500);
+    }, [mySongPoints, showToast]);
 
     // Zuschauer: Lobby geladen, Spielerliste da, aber man ist nicht Teil davon (spät dazugekommen).
     const isSpectator = !!lobby && players.length > 0 && !meRow;
@@ -593,11 +632,19 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 // gegen fehlende Spalten (Migration 001 nicht ausgeführt →
                 // current_attempt_id / used_answers existieren noch nicht in DB).
                 // Werden später per Optional-Access behandelt.
-                const lobbyRes = await supabase
-                    .from("lobbies")
-                    .select("*")
-                    .eq("code", code)
-                    .single();
+                // Lobby und Spieler parallel laden (ein Netz-Umlauf statt zwei), sobald die Lobby-ID bekannt ist
+                const playersSelect = (lobbyId: string) =>
+                    supabase
+                        .from("players")
+                        .select(PLAYER_COLUMNS)
+                        .eq("lobby_id", lobbyId)
+                        .in("status", ["active", "left"])
+                        .order("seat_index", { ascending: true });
+                const knownLobbyId = lobbyIdRef.current;
+                const [lobbyRes, earlyPlayersRes] = await Promise.all([
+                    supabase.from("lobbies").select("*").eq("code", code).single(),
+                    knownLobbyId ? playersSelect(knownLobbyId) : Promise.resolve(null),
+                ]);
 
                 if (!alive) return;
 
@@ -694,6 +741,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 }
 
                 prevHolderRef.current = nextHolder;
+                lobbyIdRef.current = nextLobby.id;
                 setLobby(nextLobby);
 
                 // IMPORTANT: finished => include status "left" too, so a player who
@@ -701,41 +749,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 // excluded even when finished -- the host removed them, so they never
                 // really played this match (this also covers a player kicked before
                 // the match even started, who'd otherwise show up with 0 passes).
-                const playersQuery = supabase
-                    .from("players")
-                    .select(
-                        [
-                            "player_id",
-                            "name",
-                            "is_alive",
-                            "status",
-                            "seat_index",
-                            "ready",
-                            "is_bot",
-                            "last_pass_at",
-                            "pass_count",
-                            "clutch_pass_count",
-                            "tempo_pass_count",
-                            "fastest_pass_ms",
-                            "slowest_pass_ms",
-                            "total_hold_ms",
-                            "survival_streak",
-                            "eliminated_at_round",
-                            "song_points",
-                            "skips_left",
-                            "combo",
-                            "revenge_used",
-                            "last_seen_at",
-                        ].join(",")
-                    )
-                    .eq("lobby_id", nextLobby.id)
-                    .order("seat_index", { ascending: true });
-
-                const playersRes =
-                    nextLobby.phase === "finished"
-                        ? await playersQuery.in("status", ["active", "left"])
-                        : await playersQuery.eq("status", "active");
-
+                const playersRes = earlyPlayersRes && knownLobbyId === nextLobby.id ? earlyPlayersRes : await playersSelect(nextLobby.id);
                 if (!alive) return;
 
                 if (playersRes.error || !playersRes.data) {
@@ -743,7 +757,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     return;
                 }
 
-                const nextPlayers = playersRes.data as unknown as Player[];
+                // "left" nur im Endstand zeigen (wer mittendrin ging, behält seine Werte); sonst nur aktive Spieler
+                const nextPlayers = (playersRes.data as unknown as Player[]).filter((p) =>
+                    nextLobby.phase === "finished" ? p.status === "active" || p.status === "left" : p.status === "active"
+                );
                 setPlayers(nextPlayers);
                 setFatalError("");
 
@@ -1185,7 +1202,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 return showToast(`❌ ${errorText(err.message)}`, 2400);
             }
             setAnswerDraft("");
-            showToast("✅ Angenommen", 900);
+            // Nicht auf die Live-Benachrichtigung warten: Weitergabe sofort anzeigen
+            loadNowRef.current?.();
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2400);
         } finally {
@@ -2149,7 +2167,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                 {lobby.current_song_id
                                     ? overtime
                                         ? "⏱️ Nachspielzeit: Nur der Songtitel zählt – der Interpret reicht jetzt nicht."
-                                        : "Welcher Song läuft? Tippe den Titel (oder den Interpreten) und drücke Enter. Schnell abgeben (unter 5 s) bringt ⚡ +5 Punkte."
+                                        : "Welcher Song läuft? Titel (1 Punkt), Künstler (½) oder beides zusammen (1,5) – z. B. „Wolke 7 Gzuz“. Unter 5 s abgeben bringt ⚡ +5."
                                     : "Tippe deine Antwort und drücke Enter."}
                             </div>
                             <div className="answerInputRow">

@@ -48,10 +48,20 @@ export function useLobbyRealtime(lobbyId: string | null | undefined, onChange: (
                 else if (event === "CLOSED") setStatus("offline");
             });
 
+        // Schneller Weg (Migration 097): die Datenbank schickt jede Lobby-/Spieleränderung als Broadcast.
+        // Kommt im Mittel nach ~60 ms an statt ~440 ms (postgres_changes prüft Rechte pro Zuhörer).
+        // postgres_changes oben bleibt als Rückfallebene bestehen; doppelte Signale fasst die Spielseite zusammen.
+        const fast = supabase
+            .channel(`kumpir:${lobbyId}`)
+            .on("broadcast", { event: "lobby" }, () => onChange())
+            .on("broadcast", { event: "players" }, () => onChange())
+            .subscribe();
+
         return () => {
             window.clearTimeout(initT);
             setStatus("idle");
             void supabase.removeChannel(channel);
+            void supabase.removeChannel(fast);
         };
     }, [lobbyId, onChange]);
 
