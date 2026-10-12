@@ -102,3 +102,6 @@ db/scripts/data/play-claude-report.json
 
 # lokale Sicherungen (enthalten E-Mail-Adressen)
 db/backups/
+
+.vercel
+.env*
