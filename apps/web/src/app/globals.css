@@ -2070,6 +2070,7 @@ textarea:focus-visible{
 .lobbyMain .lobbyHead{ gap: 10px !important; }
 .lobbyMain .lobbyStat{ padding: 8px 6px !important; }
 .lobbyMain .lobbyStatIcon{ font-size: 22px !important; }
+.lobbyMain .lobbyStatValue{ font-size: clamp(17px, 1.9vw, 24px) !important; white-space: normal !important; overflow-wrap: anywhere; text-overflow: clip !important; }
 .lobbyMain .codeBox{ padding: 10px 14px !important; }
 .lobbyMain .codeValue{ font-size: clamp(40px, 9vw, 56px) !important; }
 .lobbyMain .stepsWrap{ margin-top: 0; }
