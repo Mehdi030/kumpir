@@ -143,12 +143,27 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 setError(t("join.notFound"));
                 return;
             }
+
+            // Angemeldet und schon mal in dieser Lobby gewesen (z. B. verlassen und wiederkommen):
+            // rpc_join_lobby holt dann die alte Zeile zurück -- also auch deren player_id verwenden,
+            // sonst sucht die Lobby-Seite nach einer neuen ID und schickt einen sofort wieder raus.
+            let ownPlayerId: string | null = null;
+            if (user?.id) {
+                const { data: own } = await supabase
+                    .from("players")
+                    .select("player_id")
+                    .eq("lobby_id", lobbyRow.id)
+                    .eq("user_id", user.id)
+                    .limit(1)
+                    .maybeSingle();
+                ownPlayerId = (own?.player_id as string | undefined) ?? null;
+            }
             if (lobbyRow.locked) {
                 const inLobbyPhase = lobbyRow.phase === "waiting" || lobbyRow.phase === "lobby";
 
                 // Wiedereinstieg: Wer schon mitspielt (z. B. nach Absturz/Neustart den Einladungslink
                 // erneut öffnet), kommt direkt zurück an seinen Platz statt vor die Sperre.
-                const storedId = getStoredPlayerId();
+                const storedId = ownPlayerId ?? getStoredPlayerId();
                 if (storedId) {
                     const { data: meRow } = await supabase
                         .from("players")
@@ -178,7 +193,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             // Join-Link nach einem Reload/Crash erneut öffnet. Eine neue player_id (wie
             // zuvor bei jedem Aufruf) hätte stattdessen einen doppelten Geister-Spieler
             // in der Lobby erzeugt.
-            const myPlayerId = getStoredPlayerId() ?? crypto.randomUUID();
+            const myPlayerId = ownPlayerId ?? getStoredPlayerId() ?? crypto.randomUUID();
 
             const { error: rpcErr } = await supabase.rpc("rpc_join_lobby", {
                 p_code: lobbyCode,

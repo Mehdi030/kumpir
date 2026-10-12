@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect } from "react";
 import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
+import { OpenLobbies } from "@/components/OpenLobbies";
 import { HomeFriends, HomeFriendsButton } from "@/components/HomeFriends";
 import { HomePotato } from "@/components/HomePotato";
 import { HomeStatsSection } from "@/components/HomeStatsSection";
@@ -61,7 +62,8 @@ export default function Home() {
                             {t("home.join")}
                         </Link>
                     </div>
-                    <p className="homeFree">{t("home.free")}</p>
+                    {/* Offene Lobbys statt "Kein Download" – direkt beitreten ohne Code (Wunsch Mehdi) */}
+                    <OpenLobbies />
 
                     <div className="homeSteps">
                         {STEPS.map((s, i) => (

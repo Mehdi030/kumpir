@@ -22,7 +22,9 @@ function colorFor(name: string): string {
 }
 
 function friendError(err: string): string {
-    if (err.includes("user_not_found")) return "Diesen Benutzernamen gibt es nicht.";
+    if (err.includes("user_not_found")) return "⚠️ Diesen Benutzernamen gibt es nicht. Bitte genau so schreiben wie im Profil.";
+    if (err.includes("already_friends")) return "Ihr seid schon befreundet.";
+    if (err.includes("already_requested")) return "Die Anfrage läuft schon – warte, bis sie angenommen wird.";
     if (err.includes("cannot_befriend_self")) return "Dich selbst kannst du nicht hinzufügen.";
     if (err.includes("already") || err.includes("duplicate")) return "Ihr seid schon befreundet oder die Anfrage läuft.";
     if (err.includes("rate")) return "Zu viele Anfragen – bitte später noch einmal.";
@@ -179,12 +181,13 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
         setBusy(true);
         const err = await friendsApi.sendRequest(n);
         setBusy(false);
+        // Fehler bleibt stehen, bis man weitertippt (vorher nach 4 s weg und leicht zu übersehen)
         if (err) setFb({ ok: false, msg: friendError(err) });
         else {
             setName("");
-            setFb({ ok: true, msg: `Anfrage an ${n} geschickt.` });
+            setFb({ ok: true, msg: `✅ Anfrage an ${n} geschickt.` });
+            window.setTimeout(() => setFb(null), 4000);
         }
-        window.setTimeout(() => setFb(null), 4000);
     }, [name, busy, friendsApi]);
 
     const onlineCount = status.friends.filter((f) => f.online).length;
@@ -264,7 +267,10 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
                     <input
                         className="frInput"
                         value={name}
-                        onChange={(e) => setName(e.target.value)}
+                        onChange={(e) => {
+                            setName(e.target.value);
+                            if (fb && !fb.ok) setFb(null);
+                        }}
                         onKeyDown={(e) => {
                             if (e.key === "Enter") void add();
                         }}
@@ -436,7 +442,7 @@ const STYLES = `
 .frInput::placeholder{ color:rgba(255,255,255,.5); }
 .frFb{ flex-basis:100%; font-weight:700; font-size:13px; }
 .frFb.ok{ color:#86efac; }
-.frFb.err{ color:#fca5a5; }
+.frFb.err{ color:#fff; background: rgba(220,38,38,.35); border: 1px solid rgba(252,165,165,.75); padding: 8px 10px; border-radius: 12px; font-size: 14px; }
 .frReqs{ display:grid; gap:8px; padding:10px; border-radius:16px; background:rgba(255,210,63,.14); border:1px solid rgba(255,210,63,.5); }
 .frReqsTitle{ font-weight:900; font-size:14px; }
 .frReq{ display:flex; align-items:center; gap:8px; }

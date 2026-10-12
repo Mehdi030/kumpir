@@ -26,11 +26,11 @@ import { Spinner } from "@/components/Spinner";
 import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
 import { playFx } from "@/lib/gameFx";
-import { SeriesTable, type SeriesRow } from "@/components/game/SeriesTable";
+import type { SeriesRow } from "@/components/game/SeriesTable";
 import { useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import { FinishScreen, type FinishHighlight } from "@/components/game/FinishScreen";
-import { PassStatsTable } from "@/components/game/PassStatsTable";
+import { SummaryTable } from "@/components/game/SummaryTable";
 
 // Ein pass_attempt ohne Timeout konnte für immer "pending" hängen bleiben,
 // sobald bei wenigen lebenden Spielern (v_alive <= 2) Einstimmigkeit
@@ -1166,6 +1166,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         }
 
         setPassBusy(true);
+        // Nach jeder Abgabe ist das Feld sofort leer (Wunsch Mehdi) – auch bei falscher Antwort
+        setAnswerDraft("");
         try {
             const err = await rpcAttemptPass(code, mePlayerId, clean);
             if (err) {
@@ -1176,7 +1178,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     setAnswerWrong(false);
                     window.requestAnimationFrame(() => {
                         setAnswerWrong(true);
-                        answerInputRef.current?.select();
+                        answerInputRef.current?.focus();
                         window.setTimeout(() => setAnswerWrong(false), 1800);
                     });
                     playFx("wrong");
@@ -1186,7 +1188,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     setAnswerWrong(false);
                     window.requestAnimationFrame(() => {
                         setAnswerWrong(true);
-                        answerInputRef.current?.select();
+                        answerInputRef.current?.focus();
                         window.setTimeout(() => setAnswerWrong(false), 1800);
                     });
                     return showToast("⏱️ Nachspielzeit: Der Interpret reicht nicht – nur der Songtitel zählt!", 2600);
@@ -1231,6 +1233,15 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         },
         [mePlayerId, lobby, kickBusyId, code, rpcHostKickDuringRound, showToast]
     );
+
+    // Host hat nach dem Spiel "Zur Lobby" gedrückt (Phase wieder waiting/lobby): alle Mitspieler automatisch
+    // mit zurück in die Lobby ziehen, statt sie auf dem Endbildschirm stehen zu lassen (Wunsch Mehdi).
+    const backToLobbyPhase = !!lobby && (lobby.phase === "waiting" || lobby.phase === "lobby") && !!meRow;
+    useEffect(() => {
+        if (!backToLobbyPhase) return;
+        const t = window.setTimeout(() => window.location.replace(`/lobby/${encodeURIComponent(code)}`), 500);
+        return () => window.clearTimeout(t);
+    }, [backToLobbyPhase, code]);
 
     // Ergebnisse der Serie (nur bei mehreren Durchgängen): für Zwischenstand
     // und Gesamtwertung am Ende.
@@ -1878,33 +1889,28 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             Nächste Runde in <b>{Math.max(0, countdownSecondsLeft ?? 12)}</b> s
                         </div>
                     </header>
-                    <div className="setSumGrid">
-                        <PassStatsTable
-                            title={`Runde ${idx}: Punkte & Abgaben`}
-                            rows={ranking.map((r) => ({
-                                id: r.player_id,
-                                name: r.name,
-                                place: r.place,
-                                points: r.score,
-                                fastestMs: r.fastest == null ? null : Number(r.fastest),
-                                slowestMs: r.slowest == null ? null : Number(r.slowest),
-                                isMe: r.player_id === mePlayerId,
-                                out: !r.is_alive,
-                                avatarConfig: r.avatar_config ?? null,
-                            }))}
-                        />
-                        <SeriesTable rows={seriesRows} totalSets={total} playedSets={idx} mePlayerId={mePlayerId} title="Gesamt nach Runden" />
-                    </div>
+                    <SummaryTable
+                        currentSet={idx}
+                        totalSets={total}
+                        mePlayerId={mePlayerId}
+                        seriesRows={seriesRows}
+                        players={ranking.map((r) => ({
+                            id: r.player_id,
+                            name: r.name,
+                            fastestMs: r.fastest == null ? null : Number(r.fastest),
+                            slowestMs: r.slowest == null ? null : Number(r.slowest),
+                            out: !r.is_alive,
+                            avatarConfig: r.avatar_config ?? null,
+                        }))}
+                    />
                     <ToastStack toasts={toasts} inline />
                 </div>
                 <style>{`
-          .setSum{ width: min(1180px, calc(100vw - 32px)); display: grid; gap: 14px; text-align: center; }
+          .setSum{ width: min(980px, calc(100vw - 32px)); display: grid; gap: 14px; text-align: center; }
           .setSumKicker{ font-size: 13px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .75; }
           .setSumTitle{ font-family: var(--font-display); font-size: clamp(24px, 3.6vw, 40px); font-weight: 900; margin-top: 4px; overflow-wrap: anywhere; }
           .setSumNext{ margin-top: 4px; font-weight: 800; opacity: .9; }
           .setSumNext b{ font-size: 22px; color: #ffe08a; }
-          .setSumGrid{ display: grid; gap: 14px; text-align: left; align-items: start; }
-          @media (min-width: 980px){ .setSumGrid{ grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
         `}</style>
             </main>
         );

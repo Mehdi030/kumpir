@@ -27,15 +27,18 @@ export default function FriendsPage() {
         const err = await friends.sendRequest(name);
         setBusy(false);
         if (err) {
-            const msg = err.includes("user_not_found") ? "Username nicht gefunden."
+            const msg = err.includes("user_not_found") ? "⚠️ Diesen Benutzernamen gibt es nicht. Bitte genau so schreiben wie im Profil."
                 : err.includes("cannot_befriend_self") ? "Dich selbst kannst du nicht anfreunden 🙃"
+                : err.includes("already_friends") ? "Ihr seid schon befreundet."
+                : err.includes("already_requested") ? "Die Anfrage läuft schon – warte, bis sie angenommen wird."
                 : err;
+            // Fehler bleibt stehen, bis man weitertippt
             setFeedback({ ok: false, msg });
         } else {
             setUsernameToAdd("");
             setFeedback({ ok: true, msg: `✅ Anfrage an ${name} geschickt.` });
+            window.setTimeout(() => setFeedback(null), 3000);
         }
-        window.setTimeout(() => setFeedback(null), 3000);
     }, [busy, usernameToAdd, friends]);
 
     if (AUTH_DISABLED) {
@@ -113,7 +116,7 @@ export default function FriendsPage() {
                         <input
                             className="pillInput"
                             value={usernameToAdd}
-                            onChange={(e) => setUsernameToAdd(e.target.value)}
+                            onChange={(e) => { setUsernameToAdd(e.target.value); setFeedback((f) => (f && !f.ok ? null : f)); }}
                             onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }}
                             placeholder="z.B. medo"
                             style={{ flex: 1 }}

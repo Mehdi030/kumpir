@@ -105,6 +105,25 @@ export default function HostPage() {
         if (u) setHostName(u.slice(0, 24));
     }, [profile?.playerName]);
     const [maxPlayers, setMaxPlayers] = useState(6);
+    // Öffentlich = im Hauptmenü unter "Offene Lobbys" sichtbar (Migration 104). Standard an, Wahl wird gemerkt.
+    const [isPublic, setIsPublic] = useState(true);
+    useEffect(() => {
+        try {
+            if (window.localStorage.getItem("kumpir_host_public") === "0") setIsPublic(false);
+        } catch {
+            /* privater Modus */
+        }
+    }, []);
+    const togglePublic = useCallback(() => {
+        setIsPublic((v) => {
+            try {
+                window.localStorage.setItem("kumpir_host_public", v ? "0" : "1");
+            } catch {
+                /* privater Modus */
+            }
+            return !v;
+        });
+    }, []);
 
     const [roundSpeed, setRoundSpeed] = useState<RoundSpeed | null>("normal");
     // Original ist aktuell der einzige spielbare Modus (Teleport/Reverse
@@ -253,6 +272,13 @@ export default function HostPage() {
                     .single();
 
                 if (!lobbyErr && lobbyRow?.id) {
+                    if (isPublic) {
+                        await supabase.rpc("set_lobby_privacy", {
+                            p_lobby_id: lobbyRow.id,
+                            p_me_player_id: hostPlayerId,
+                            p_privacy: "public",
+                        });
+                    }
                     if (mode && mode !== "original") {
                         await supabase.rpc("set_lobby_mode", {
                             p_lobby_id: lobbyRow.id,
@@ -292,7 +318,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, seriesTotal, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, profile?.preferences?.host?.excludedPlaylists, savePreferences]);
+    }, [canCreate, hostName, roundSpeed, mode, seriesTotal, isPublic, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, profile?.preferences?.host?.excludedPlaylists, savePreferences]);
 
     const onStartBots = async () => {
         setBotError("");
@@ -417,6 +443,7 @@ export default function HostPage() {
                                 </div>
                             </div>
 
+
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">Modus</div>
@@ -540,6 +567,21 @@ export default function HostPage() {
                                     className={`btn btnPrimary btnXL ${canCreate ? "btnGlow" : "btnDisabled"}`}
                                 >
                                     {creating ? "⏳ Lobby wird erstellt…" : "🚀 Lobby erstellen"}
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`publicToggle ${isPublic ? "on" : ""}`}
+                                    role="switch"
+                                    aria-checked={isPublic}
+                                    onClick={togglePublic}
+                                >
+                                    <span className="publicToggleText">
+                                        <b>{isPublic ? "🌍 Öffentlich" : "🔒 Nur mit Code"}</b>
+                                        <span>{isPublic ? "Alle sehen die Lobby im Hauptmenü und können direkt beitreten" : "Nur wer den Code oder eine Einladung hat, kommt rein"}</span>
+                                    </span>
+                                    <span className="publicSwitch" aria-hidden>
+                                        <span />
+                                    </span>
                                 </button>
 
                             </div>

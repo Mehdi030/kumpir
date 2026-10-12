@@ -50,7 +50,7 @@ function hueFor(id: string): number {
 }
 
 function fmtPts(n: number): string {
-    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(".", ",");
 }
 
 type Pt = { x: number; y: number };
@@ -421,7 +421,7 @@ export function PlayerRing({
                             <span className="seatName">
                                 <span className="seatNameText">{p.name}</span>
                                 {isMe ? <span className="seatMe">du</span> : null}
-                                {pts > 0 ? <span className="seatPts">♪ {fmtPts(pts)}</span> : null}
+                                <span className="seatPts" title="Song-Punkte">♪ {fmtPts(pts)}</span>
                             </span>
                             {isExploded ? (
                                 <span className="seatBoom" aria-hidden>
@@ -610,19 +610,20 @@ export function PlayerRing({
           position:absolute; left:50%; bottom: calc(100% + var(--seat) * .32 + 6px);
           transform: translateX(-50%);
           display:flex; align-items:center; gap:6px;
-          width: max-content; max-width: 190px;
-          padding: 4px 11px;
+          width: max-content; max-width: 230px;
+          padding: 6px 8px 6px 14px;
           border-radius: 999px;
           background: rgba(10,12,20,.86);
           border: 1px solid rgba(255,255,255,.18);
           box-shadow: 0 6px 14px rgba(0,0,0,.4);
-          color:#fff; font-size: 14px; font-weight: 800; white-space: nowrap;
+          color:#fff; font-size: 16.5px; font-weight: 800; white-space: nowrap;
         }
         /* Lange Namen ganz zeigen: bis zu 2 Zeilen statt "…" */
         .seatNameText{ min-width:0; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.12;
           display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
         .seatMe{ flex:none; font-size: 10.5px; font-weight: 900; padding: 1px 6px; border-radius: 999px; background: rgba(34,211,238,.2); border: 1px solid rgba(34,211,238,.7); color: #c4f6ff; text-transform: uppercase; letter-spacing: .5px; }
-        .seatPts{ flex:none; font-size: 12px; font-weight: 900; color: #ffe08a; }
+        /* Punkte: eigene gelbe Plakette, gut lesbar */
+        .seatPts{ flex:none; font-size: 15px; font-weight: 950; color: #2a1a00; background: linear-gradient(180deg, #ffe58a, #ffc02e); padding: 2px 9px; border-radius: 999px; box-shadow: 0 2px 8px rgba(255,180,30,.45), inset 0 1px 0 rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
         .seatBadge{
           position:absolute; left:50%; top: calc(100% + 6px);
           transform: translateX(-50%);
@@ -676,9 +677,9 @@ export function PlayerRing({
         @keyframes staleBlink{ 0%,100%{opacity:1;} 50%{opacity:.45;} }
 
         /* Handy: kleinere Schrift, Name kompakt */
-        .ringNarrow .seatName{ font-size: 11px; padding: 2px 7px; gap: 4px; max-width: 104px; bottom: calc(100% + var(--seat) * .32 + 4px); border-radius: 12px; }
+        .ringNarrow .seatName{ font-size: 13px; padding: 3px 5px 3px 9px; gap: 5px; max-width: 130px; bottom: calc(100% + var(--seat) * .32 + 4px); border-radius: 12px; }
         .ringNarrow .seatMe{ display:none; }
-        .ringNarrow .seatPts{ font-size: 10px; }
+        .ringNarrow .seatPts{ font-size: 12px; padding: 1px 6px; }
         .ringNarrow .seatBadge{ font-size: 9.5px; padding: 2px 7px; letter-spacing: .8px; }
 
         /* Explosion */

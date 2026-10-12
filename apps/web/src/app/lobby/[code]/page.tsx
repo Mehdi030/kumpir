@@ -67,7 +67,7 @@ export default function LobbyPage() {
         go(`/game/${encodeURIComponent(code)}?t=${Date.now()}`);
     }, [code, go]);
 
-    const { lobby, players, loading, error } = useLobbyState(code, { pollMs: 900 });
+    const { lobby, players, loading, error, reload } = useLobbyState(code, { pollMs: 900 });
 
     const lobbyId = lobby?.id ?? null;
 
@@ -134,6 +134,21 @@ export default function LobbyPage() {
     const [toast, setToast] = useState("");
     const [busyReady, setBusyReady] = useState(false);
     const [starting, setStarting] = useState(false);
+
+    const isPublic = lobby?.privacy === "public";
+    const [privacyBusy, setPrivacyBusy] = useState(false);
+    const togglePrivacy = useCallback(async () => {
+        if (!amIHost || !lobbyId || !mePlayerId || privacyBusy) return;
+        setPrivacyBusy(true);
+        const { error: e } = await getSupabaseClient().rpc("set_lobby_privacy", {
+            p_lobby_id: lobbyId,
+            p_me_player_id: mePlayerId,
+            p_privacy: isPublic ? "private" : "public",
+        });
+        setPrivacyBusy(false);
+        if (e) console.error("set_lobby_privacy:", e.message);
+        void reload();
+    }, [amIHost, lobbyId, mePlayerId, privacyBusy, isPublic, reload]);
 
     const showToast = useCallback((msg: string, ms = 1800) => {
         setToast(msg);
@@ -352,6 +367,18 @@ export default function LobbyPage() {
                                 <span className="lobbyStatValue">{lobby?.series_total ?? 1}</span>
                                 <span className="lobbyStatLabel">{(lobby?.series_total ?? 1) > 1 ? "Runden" : "Runde"}</span>
                             </div>
+                            {/* Öffentlich = im Hauptmenü unter "Offene Lobbys" (Migration 104); der Host kann umschalten */}
+                            <button
+                                type="button"
+                                className={`lobbyStat lobbyStatBtn ${isPublic ? "pub" : ""}`}
+                                onClick={() => void togglePrivacy()}
+                                disabled={!amIHost || isRunning || privacyBusy}
+                                title={amIHost ? "Tippen: Öffentlich ↔ nur mit Code" : isPublic ? "Steht im Hauptmenü unter „Offene Lobbys“" : "Nur mit Code oder Einladung"}
+                            >
+                                <span className="lobbyStatIcon" aria-hidden>{isPublic ? "🌍" : "🔒"}</span>
+                                <span className="lobbyStatValue">{isPublic ? "Offen" : "Privat"}</span>
+                                <span className="lobbyStatLabel">{amIHost && !isRunning ? "Tippen = ändern" : "Sichtbarkeit"}</span>
+                            </button>
                         </div>
 
                         <button
@@ -395,7 +422,12 @@ export default function LobbyPage() {
                 .codeLabel{ font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .7; }
                 .codeValue{ font-family: var(--font-display); font-size: clamp(44px, 12vw, 64px); font-weight: 800; letter-spacing: .18em; padding-left: .18em; line-height: 1.05; color: #ffd23f; text-shadow: 0 4px 0 rgba(120,50,0,.55), 0 10px 26px rgba(0,0,0,.35); }
                 .codeHint{ font-size: 12px; opacity: .72; min-height: 16px; }
-                .lobbyStats{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+                .lobbyStats{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+                .lobbyStatBtn{ color: inherit; font: inherit; cursor: pointer; }
+                .lobbyStatBtn:disabled{ cursor: default; opacity: 1; }
+                .lobbyStatBtn.pub{ background: rgba(34,197,94,.16); border-color: rgba(134,239,172,.55); }
+                .lobbyStatBtn:not(:disabled):hover{ border-color: rgba(255,255,255,.4); }
+                @media (max-width: 520px){ .lobbyStats{ gap: 6px; } .lobbyStat{ padding: 10px 4px; } .lobbyStatIcon{ font-size: 22px; } .lobbyStatLabel{ font-size: 9.5px; letter-spacing: .4px; } }
                 .lobbyStat{ display: grid; justify-items: center; gap: 2px; padding: 12px 8px; border-radius: 20px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); text-align: center; min-width: 0; }
                 .lobbyStatIcon{ font-size: 26px; line-height: 1.1; }
                 .lobbyStatValue{ font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 28px); font-weight: 800; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
