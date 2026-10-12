@@ -2295,6 +2295,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         }
         .hudInner{
           width: min(920px, 100%);
+          min-width: 0;
           display: grid;
           justify-items: center;
           gap: 14px;
@@ -2590,7 +2591,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           display: grid;
           justify-items: center;
           gap: 8px;
-          width: min(620px, 94vw);
+          width: min(620px, 100%);
         }
         .usedAnswerList{ display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
         .usedAnswersLabel{
