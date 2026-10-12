@@ -1961,10 +1961,10 @@ textarea:focus-visible{
    Kumpir-Bild 1200x800: Figur beginnt bei 19,25 % der Höhe, Hände liegen 23,2 % der Breite tief auf der Karte.
    =============================== */
 .homeMain{
-    --potW: min(900px, 120vw, max(380px, calc((100dvh - 520px) * 2.45)));
+    --potW: min(860px, 120vw, max(380px, calc((100dvh - 520px) * 2.45)));
     padding-top: 10px;
-    /* Unten etwa halb so viel Platz wie die Kumpir oben braucht -> die Karte selbst sitzt mittiger (Wunsch Mehdi) */
-    padding-bottom: calc(var(--potW) * 0.14 + 10px);
+    /* Unten fast so viel Platz wie die Kumpir oben braucht -> die Karte selbst sitzt mittig (Wunsch Mehdi) */
+    padding-bottom: calc(var(--potW) * 0.2 + 10px);
 }
 /* Kumpir liegt mit den Händen auf der Karte – auf allen Bildschirmen gleich (früher auf dem Handy in der Karte) */
 .homeMain .potatoBg{ top: calc(var(--potW) * -0.4089); }
