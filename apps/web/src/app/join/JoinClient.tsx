@@ -9,9 +9,10 @@ import { errorText } from "@/lib/errorText";
 import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
-import { useI18n } from "@/lib/i18n";
+import { trNow, useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import { HomeButton } from "@/components/BackButton";
+import { AccountNameNote } from "@/components/AccountNameNote";
 
 function normalizeCode(input: string) {
     return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
@@ -53,11 +54,11 @@ function getErrorMessage(err: unknown): string {
         const m = (err as { message?: unknown }).message;
         if (typeof m === "string") return errorText(m);
     }
-    return "Unbekannter Fehler.";
+    return trNow("Unbekannter Fehler.");
 }
 
 export default function JoinClient({ initialCode }: { initialCode: string }) {
-    const { t } = useI18n();
+    const { t, tr } = useI18n();
     const supabase = getSupabaseClient();
     const router = useRouter();
     const { user } = useAuth();
@@ -84,11 +85,11 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
         setName(getStoredName());
     }, []);
 
-    // Eingeloggt: Spielername aus dem Konto vorbelegen (sonst Benutzername) – bleibt änderbar.
+    // Mit Konto steht der Name fest (Anzeigename, sonst Benutzername) – ändern nur in den Einstellungen (Wunsch Mehdi)
+    const accountName = user && profile?.playerName ? profile.playerName.trim().slice(0, 24) : null;
     useEffect(() => {
-        const u = profile?.playerName;
-        if (u && sanitizeName(u).length >= 2) setName(sanitizeName(u));
-    }, [profile?.playerName]);
+        if (accountName) setName(accountName);
+    }, [accountName]);
 
     useEffect(() => {
         if (!showNameModal) return;
@@ -136,7 +137,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                 .maybeSingle();
 
             if (lobbyErr) {
-                setError(errorText(lobbyErr.message, "Lobby konnte nicht geprüft werden."));
+                setError(errorText(lobbyErr.message, tr("Lobby konnte nicht geprüft werden.")));
                 return;
             }
             if (!lobbyRow) {
@@ -203,7 +204,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
             });
 
             if (rpcErr) {
-                setError(errorText(rpcErr.message, "Konnte der Lobby nicht beitreten."));
+                setError(errorText(rpcErr.message, tr("Konnte der Lobby nicht beitreten.")));
                 return;
             }
 
@@ -243,10 +244,10 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
 
     return (
         <main className="container">
-            <Link href="/" className="brandLogo" aria-label="Zur Landing Page">
+            <Link href="/" className="brandLogo" aria-label={tr("Zur Startseite")}>
                 <Image
                     src="/HGLogo-v2.webp"
-                    alt="Kumpir Maskottchen"
+                    alt={tr("Kumpir Maskottchen")}
                     width={400}
                     height={267}
                     priority
@@ -284,7 +285,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                             value={code}
                                             onChange={(e) => setCode(normalizeCode(e.target.value))}
                                             placeholder="ABCD"
-                                            aria-label="Lobby-Code (4 Zeichen)"
+                                            aria-label={tr("Lobby-Code (4 Zeichen)")}
                                             maxLength={4}
                                             spellCheck={false}
                                             autoCorrect="off"
@@ -295,26 +296,30 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                     <div className="fieldHelp">{t("join.codeHelp")}</div>
                                 </div>
 
-                                <div className="fieldRow" style={{ margin: 0 }}>
-                                    <label className="fieldLabel" htmlFor="name">
-                                        {t("join.nameLabel")}
-                                    </label>
-                                    <div className="fieldControl">
-                                        <input
-                                            id="name"
-                                            className="input"
-                                            value={name}
-                                            onChange={(e) => setName(sanitizeName(e.target.value))}
-                                            placeholder="z.B. Sero"
-                                            maxLength={12}
-                                            autoComplete="nickname"
-                                            inputMode="text"
-                                            spellCheck={false}
-                                            autoCorrect="off"
-                                        />
+                                {accountName ? (
+                                    <AccountNameNote name={accountName} />
+                                ) : (
+                                    <div className="fieldRow" style={{ margin: 0 }}>
+                                        <label className="fieldLabel" htmlFor="name">
+                                            {t("join.nameLabel")}
+                                        </label>
+                                        <div className="fieldControl">
+                                            <input
+                                                id="name"
+                                                className="input"
+                                                value={name}
+                                                onChange={(e) => setName(sanitizeName(e.target.value))}
+                                                placeholder={tr("z. B. Sero")}
+                                                maxLength={12}
+                                                autoComplete="nickname"
+                                                inputMode="text"
+                                                spellCheck={false}
+                                                autoCorrect="off"
+                                            />
+                                        </div>
+                                        <div className="fieldHelp">{t("join.nameHelp")}</div>
                                     </div>
-                                    <div className="fieldHelp">{t("join.nameHelp")}</div>
-                                </div>
+                                )}
                             </div>
 
                             {error ? (
@@ -336,7 +341,7 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                     disabled={!canJoin || loading}
                                     style={{ width: "100%", maxWidth: 360, margin: "0 auto" }}
                                 >
-                                    {loading ? "Trete bei…" : "Start"}
+                                    {loading ? t("join.joining") : tr("Start")}
                                 </button>
 
                             </div>
@@ -344,10 +349,10 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                     ) : (
                         <div className="panel" style={{ width: "100%", maxWidth: 540, margin: "0 auto" }}>
                             <div className="fieldHelp" style={{ opacity: 0.9 }}>
-                                Code erkannt: <b style={{ letterSpacing: 1 }}>{fixedCodeFromLink}</b>
+                                {tr("Code erkannt:")} <b style={{ letterSpacing: 1 }}>{fixedCodeFromLink}</b>
                             </div>
                             <div className="fieldHelp" style={{ marginTop: 6, opacity: 0.8 }}>
-                                Gib kurz deinen Namen ein, dann geht’s direkt in die Lobby.
+                                {accountName ? tr("Gleich geht’s direkt in die Lobby.") : tr("Gib kurz deinen Namen ein, dann geht’s direkt in die Lobby.")}
                             </div>
                         </div>
                     )}
@@ -388,29 +393,35 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                                     {t("join.modalSub")}
                                 </div>
 
-                                <div style={{ marginTop: 12 }}>
-                                    <label className="fieldLabel" htmlFor="modalName">
-                                        {t("join.yourName")}
-                                    </label>
-                                    <div className="fieldControl" style={{ marginTop: 8 }}>
-                                        <input
-                                            id="modalName"
-                                            ref={nameInputRef}
-                                            className="input"
-                                            value={name}
-                                            onChange={(e) => setName(sanitizeName(e.target.value))}
-                                            placeholder="z.B. Medo"
-                                            maxLength={12}
-                                            autoComplete="nickname"
-                                            inputMode="text"
-                                            spellCheck={false}
-                                            autoCorrect="off"
-                                        />
+                                {accountName ? (
+                                    <div style={{ marginTop: 12 }}>
+                                        <AccountNameNote name={accountName} />
                                     </div>
-                                    <div className="fieldHelp" style={{ marginTop: 6 }}>
-                                        Enter = Join
+                                ) : (
+                                    <div style={{ marginTop: 12 }}>
+                                        <label className="fieldLabel" htmlFor="modalName">
+                                            {t("join.yourName")}
+                                        </label>
+                                        <div className="fieldControl" style={{ marginTop: 8 }}>
+                                            <input
+                                                id="modalName"
+                                                ref={nameInputRef}
+                                                className="input"
+                                                value={name}
+                                                onChange={(e) => setName(sanitizeName(e.target.value))}
+                                                placeholder={tr("z. B. Medo")}
+                                                maxLength={12}
+                                                autoComplete="nickname"
+                                                inputMode="text"
+                                                spellCheck={false}
+                                                autoCorrect="off"
+                                            />
+                                        </div>
+                                        <div className="fieldHelp" style={{ marginTop: 6 }}>
+                                            {tr("Enter = Beitreten")}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {error ? (
                                     <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }} role="alert">

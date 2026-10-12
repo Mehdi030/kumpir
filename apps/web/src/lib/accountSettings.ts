@@ -1,7 +1,8 @@
 /** Konto-Einstellungen (Migration 077). Die Datenbank prüft alles noch einmal. */
+import { tk } from "@/lib/i18nMark";
 
 export type Preferences = {
-    lang?: "de" | "en";
+    lang?: "de" | "en" | "fr";
     muted?: boolean;
     volume?: number;
     host?: {
@@ -106,8 +107,8 @@ export function mergePreferences(base: Preferences, patch: Preferences): Prefere
 }
 
 export const SOLO_SKILL_LABEL: Record<NonNullable<NonNullable<Preferences["solo"]>["skill"]>, string> = {
-    mixed: "Gemischt",
-    "1": "Anfänger",
-    "2": "Mittel",
-    "3": "Profi",
+    mixed: tk("Gemischt"),
+    "1": tk("Anfänger"),
+    "2": tk("Mittel"),
+    "3": tk("Profi"),
 };

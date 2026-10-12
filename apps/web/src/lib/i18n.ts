@@ -7,7 +7,12 @@
  *   t("home.tagline")                       // → "Die heiße Kartoffel mit Musik …"
  *   t("join.hint", { code: "AB12" })        // {code} wird ersetzt
  *
- * Neuer Text: Schlüssel in BEIDE Wörterbücher (`de` und `en`) eintragen. Fehlt ein englischer
+ * Zweiter, einfacherer Weg (seit 2026-10-12, für alle neuen Texte):
+ *   const { tr } = useI18n();  tr(deutscherText, { n: 3 })  (z. B. Text „Noch {n} Sekunden“)
+ * Der deutsche Text IST der Schlüssel; Englisch/Französisch stehen in i18nPhrasesEn.ts / i18nPhrasesFr.ts.
+ * Außerhalb von Komponenten: trNow(text). Der Test i18nPhrases.test.ts meldet jeden tr()-Text ohne Übersetzung.
+ *
+ * Schlüssel-Weg (alt): Schlüssel in ALLE Wörterbücher (`de`, `en`, `fr`) eintragen. Fehlt ein englischer
  * Eintrag, fällt es auf Deutsch zurück. Die Sprache gilt sofort überall (kein Neuladen nötig) und
  * wird in localStorage gemerkt. Standard ist Deutsch – Englisch nur, wenn jemand es im Schalter wählt
  * (die App ist noch nicht vollständig übersetzt, und viele Deutsche nutzen einen englischen Browser).
@@ -17,8 +22,11 @@
  */
 
 import { useCallback, useSyncExternalStore } from "react";
+import { PHRASES_EN } from "./i18nPhrasesEn";
+import { PHRASES_FR } from "./i18nPhrasesFr";
 
-export type Locale = "de" | "en";
+export type Locale = "de" | "en" | "fr";
+export const LOCALES: Locale[] = ["de", "en", "fr"];
 
 const de = {
     "common.back": "← Zurück",
@@ -238,7 +246,112 @@ const en: Partial<Record<TranslationKey, string>> = {
     "card.shareTextMe": "{winner} wins at Kumpir – me: place {place}, {score} points. Play along: {url}",
 };
 
-const dictionaries: Record<Locale, Partial<Record<TranslationKey, string>>> = { de, en };
+const fr: Partial<Record<TranslationKey, string>> = {
+    "common.back": "← Retour",
+    "common.loading": "Chargement…",
+    "lang.switch": "Langue",
+
+    "home.players": "👥 2–12 joueurs",
+    "home.leaderboard": "🏆 Classement",
+    "home.tagline": "La patate chaude en musique. Reconnais le son, passe-la, survis.",
+    "home.solo": "🤖 Essayer en solo",
+    "home.host": "🚀 Jouer entre amis",
+    "home.join": "Rejoindre avec un code",
+    "home.play": "🎮 Jouer",
+    "home.free": "Sans téléchargement · Sans compte",
+    "play.title": "Comment veux-tu jouer ?",
+    "play.sub": "Seul contre des bots ou avec tes amis.",
+    "play.solo.title": "Solo contre des bots",
+    "play.solo.text": "C'est parti tout de suite – trois bots comme adversaires, ça démarre en quelques secondes.",
+    "play.host.title": "Jouer entre amis",
+    "play.host.text": "Crée un salon, partage le code, jouez ensemble.",
+    "play.back": "← Retour",
+    "home.step1.title": "Ouvrir un salon",
+    "home.step1.text": "Une personne héberge, les autres rejoignent avec un code à 4 caractères.",
+    "home.step2.title": "Reconnaître le son",
+    "home.step2.text": "Un son passe. Celui qui a le Kumpir tape le titre et le passe.",
+    "home.step3.title": "Ne pas se faire prendre",
+    "home.step3.text": "La mèche raccourcit. Celui qui le tient quand ça explose est éliminé.",
+    "auth.login": "Connexion",
+    "auth.register": "Inscription",
+    "auth.account": "Mon compte",
+
+    "solo.title": "Solo contre des bots",
+    "solo.creating": "Création du salon …",
+    "solo.bots": "Les bots se préparent …",
+    "solo.go": "C'est parti – choix du thème …",
+    "solo.info": "Tu joues contre trois bots. Un son passe – tape le titre avant que la mèche soit consumée.",
+    "solo.failed": "Ça n'a pas marché :",
+    "solo.retry": "Réessayer",
+    "solo.home": "Retour à l'accueil",
+
+    "join.title": "Rejoindre un salon",
+    "join.sub": "Entre vite – sans compte.",
+    "join.codeLabel": "1) Code du salon",
+    "join.codeHelp": "4 caractères (A–Z, 0–9).",
+    "join.nameLabel": "2) Ton nom",
+    "join.nameHelp": "Lettres uniquement, 12 caractères max.",
+    "join.modalTitle": "Entre ton nom",
+    "join.modalSub": "Juste un instant – et tu es dedans.",
+    "join.yourName": "Ton nom",
+    "join.btn": "🚀 Rejoindre",
+    "join.joining": "Connexion…",
+    "join.running": "Une partie est en cours. Tu peux regarder et jouer après la partie.",
+    "join.spectate": "👀 Regarder",
+    "join.notFound": "Salon introuvable.",
+    "join.badCode": "Entre un code valide à 4 caractères.",
+
+    "invite.share": "📲 Partager l'invitation",
+    "invite.qr": "📷 QR code",
+    "invite.qrHide": "Masquer le QR",
+    "invite.qrHint": "Scanne avec l'appareil photo du téléphone pour rejoindre directement",
+    "invite.text": "Viens dans mon salon Kumpir ! Code : {code}",
+
+    "game.spectating": "👀 Tu regardes",
+    "fin.match": "Partie terminée · {n} manches",
+    "fin.round": "Manche terminée",
+    "fin.winsMatch": "remporte la partie",
+    "fin.winsRound": "remporte la manche",
+    "fin.me": "Ton résultat : place {place} · {score} points",
+    "fin.final": "Classement final",
+    "fin.player": "Joueur",
+    "fin.points": "Points",
+    "fin.share": "📤 Partager le résultat",
+    "fin.shareBusy": "Création de l'image…",
+    "fin.saved": "✅ Image enregistrée",
+    "fin.shareFail": "⚠️ Impossible de créer l'image",
+    "fin.again": "🔁 Rejouer",
+    "fin.lobby": "Retour au salon",
+    "fin.saved2": "✓ Tes points et victoires sont enregistrés sur ton compte.",
+    "fin.keep": "💾 Garder tes points, victoires et ton rang de saison ?",
+    "fin.create": "Créer un compte gratuit",
+    "fin.tip": "Astuce : la touche R relance directement une manche",
+
+    "pwa.install": "📲 Installe Kumpir comme appli – démarre plus vite, sans barre de navigateur.",
+    "pwa.ios": "📲 Enregistrer comme appli : touche Partager en bas, puis « Sur l'écran d'accueil ».",
+    "pwa.btn": "Installer",
+    "pwa.dismiss": "Fermer",
+
+    "fin.unranked": "🤖 Partie d'entraînement (un seul humain) : ne compte pas pour le classement.",
+    "fin.unrankedAccount": "🤖 Partie d'entraînement (un seul humain) : ne compte pas pour le classement, les victoires ni les succès – mais apparaît dans ton historique.",
+    "fin.spectator": "👀 Tu as regardé. Dès que l'hôte revient au salon, tu peux jouer.",
+    "spec.kicker": "SPECTATEUR",
+    "spec.openTitle": "Tu peux jouer maintenant",
+    "spec.openSub": "La partie est finie – rejoins le salon pour la prochaine.",
+    "spec.lockedTitle": "Salon verrouillé 🔒",
+    "spec.lockedSub": "L'hôte a verrouillé le salon. Attends qu'il soit rouvert.",
+    "spec.joinBtn": "🚀 Jouer",
+    "join.locked": "L'hôte a verrouillé ce salon (🔒). Réessaie dans un instant.",
+
+    "card.tagline": "Kumpir · La patate chaude en musique",
+    "card.me": "Moi : place {place} · {score} points",
+    "card.pts": "pts",
+    "card.cta": "Joue aussi – gratuit dans le navigateur",
+    "card.shareText": "{winner} gagne à Kumpir. Joue aussi : {url}",
+    "card.shareTextMe": "{winner} gagne à Kumpir – moi : place {place}, {score} points. Joue aussi : {url}",
+};
+
+const dictionaries: Record<Locale, Partial<Record<TranslationKey, string>>> = { de, en, fr };
 
 const STORAGE_KEY = "kumpir_locale";
 const EVENT = "kumpir:locale";
@@ -246,7 +359,7 @@ const EVENT = "kumpir:locale";
 function detectLocale(): Locale {
     try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (stored === "de" || stored === "en") return stored;
+        if (stored === "de" || stored === "en" || stored === "fr") return stored;
     } catch {
         // ignore
     }
@@ -283,6 +396,33 @@ export function useI18n() {
     }, []);
 
     const t = useCallback((key: TranslationKey, vars?: Record<string, string | number>) => translate(locale, key, vars), [locale]);
+    const tr = useCallback((text: string, vars?: Record<string, string | number>) => trIn(locale, text, vars), [locale]);
 
-    return { locale, setLocale, t };
+    return { locale, setLocale, t, tr };
+}
+
+type Vars = Record<string, string | number>;
+const PHRASES: Record<Exclude<Locale, "de">, Record<string, string>> = { en: PHRASES_EN, fr: PHRASES_FR };
+
+function fill(s: string, vars?: Vars): string {
+    if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v));
+    return s;
+}
+
+/** Deutscher Text -> Text in der Sprache `locale` (fehlt die Übersetzung, bleibt es Deutsch). */
+export function trIn(locale: Locale, text: string, vars?: Vars): string {
+    return fill(locale === "de" ? text : (PHRASES[locale][text] ?? text), vars);
+}
+
+export { tk } from "./i18nMark";
+
+/** Wie tr(), aber ohne Hook (für Hilfsfunktionen, Toasts außerhalb von Komponenten). */
+export function trNow(text: string, vars?: Vars): string {
+    return trIn(typeof window === "undefined" ? "de" : detectLocale(), text, vars);
+}
+
+/** Locale-Code für Datums-/Zahlenformate (toLocaleDateString usw.) passend zur gewählten Sprache. */
+export function dateLocale(locale?: Locale): string {
+    const l = locale ?? (typeof window === "undefined" ? "de" : detectLocale());
+    return l === "en" ? "en-GB" : l === "fr" ? "fr-FR" : "de-DE";
 }

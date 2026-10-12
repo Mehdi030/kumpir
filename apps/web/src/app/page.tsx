@@ -62,8 +62,7 @@ export default function Home() {
                             {t("home.join")}
                         </Link>
                     </div>
-                    {/* Offene Lobbys statt "Kein Download" – direkt beitreten ohne Code (Wunsch Mehdi) */}
-                    <OpenLobbies />
+                    <p className="homeFree">{t("home.free")}</p>
 
                     <div className="homeSteps">
                         {STEPS.map((s, i) => (
@@ -80,10 +79,14 @@ export default function Home() {
                     </div>
 
                     {!wide ? (
-                        <div className="homeQuick">
-                            <HomeStatsSection variant="chip" />
-                            <HomeFriendsButton />
-                        </div>
+                        <>
+                            <div className="homeQuick">
+                                <HomeStatsSection variant="chip" />
+                                <HomeFriendsButton />
+                            </div>
+                            {/* Schmal: offene Lobbys unter dem Freunde-Knopf, nur wenn es welche gibt */}
+                            <OpenLobbies variant="inline" />
+                        </>
                     ) : null}
                     <PwaSetup showHint />
                 </section>
@@ -91,7 +94,7 @@ export default function Home() {
                 {wide ? (
                     <>
                         <HomeStatsSection variant="dock" />
-                        <HomeFriends />
+                        <HomeFriends withOpenLobbies />
                     </>
                 ) : null}
 

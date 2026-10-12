@@ -13,6 +13,8 @@ import { track } from "@/lib/track";
 import { startBotGame, type BotSkill } from "@/lib/botGame";
 import { SOLO_SKILL_LABEL } from "@/lib/accountSettings";
 import { HomeButton } from "@/components/BackButton";
+import { AccountNameNote } from "@/components/AccountNameNote";
+import { tk, trNow, useI18n } from "@/lib/i18n";
 
 type ModeKey = "original" | "teleport" | "reverse";
 type RoundSpeed = "fast" | "normal" | "calm";
@@ -20,9 +22,9 @@ const ROUND_SPEEDS: Record<
     RoundSpeed,
     { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }
 > = {
-    fast: { label: "⚡ Blitz", seconds: 15, hint: "Schnell, hoher Druck.", variant: "fast" },
-    normal: { label: "🎯 Standard", seconds: 25, hint: "Ausgewogenes Tempo.", variant: "normal" },
-    calm: { label: "🧊 Casual", seconds: 40, hint: "Entspannt, mehr Zeit.", variant: "calm" },
+    fast: { label: tk("⚡ Blitz"), seconds: 15, hint: tk("Schnell, hoher Druck."), variant: "fast" },
+    normal: { label: tk("🎯 Standard"), seconds: 25, hint: tk("Ausgewogenes Tempo."), variant: "normal" },
+    calm: { label: tk("🧊 Casual"), seconds: 40, hint: tk("Entspannt, mehr Zeit."), variant: "calm" },
 };
 
 const MODES: Record<
@@ -40,14 +42,14 @@ const MODES: Record<
     original: {
         label: "Original",
         icon: "🥔",
-        desc: "Standard-Regeln. Beste Basis für alle.",
+        desc: tk("Standard-Regeln. Beste Basis für alle."),
         featured: true,
         variant: "original",
     },
     teleport: {
         label: "Teleport",
         icon: "🌀",
-        desc: "Die Kartoffel springt bei jedem Pass zu einem zufälligen Spieler.",
+        desc: tk("Die Kartoffel springt bei jedem Pass zu einem zufälligen Spieler."),
         disabled: true,
         comingSoon: true,
         variant: "teleport",
@@ -55,7 +57,7 @@ const MODES: Record<
     reverse: {
         label: "Reverse",
         icon: "🔁",
-        desc: "Die Richtung wechselt gelegentlich. Mehr Chaos, mehr Lacher.",
+        desc: tk("Die Richtung wechselt gelegentlich. Mehr Chaos, mehr Lacher."),
         disabled: true,
         comingSoon: true,
         variant: "reverse",
@@ -89,7 +91,7 @@ function getErrorMessage(err: unknown): string {
         const m = (err as { message?: unknown }).message;
         if (typeof m === "string") return errorText(m);
     }
-    return "Unbekannter Fehler.";
+    return trNow("Unbekannter Fehler.");
 }
 
 export default function HostPage() {
@@ -97,9 +99,10 @@ export default function HostPage() {
     const router = useRouter();
     const { user } = useAuth();
     const { profile, savePreferences } = useProfile();
+    const { tr } = useI18n();
 
     const [hostName, setHostName] = useState("");
-    // Eingeloggt: Spielername aus dem Konto vorbelegen (sonst Benutzername) – bleibt änderbar.
+    // Mit Konto steht der Name fest (Spielername, sonst Benutzername) – ändern nur in den Einstellungen.
     useEffect(() => {
         const u = profile?.playerName;
         if (u) setHostName(u.slice(0, 24));
@@ -196,7 +199,7 @@ export default function HostPage() {
     const nameValidation = useMemo(() => validatePlayerName(hostName), [hostName]);
     const isNameValid = nameValidation.ok;
     // Angemeldet: Name kommt aus dem Konto (Spielername, sonst Benutzername) – kein Eingabefeld (Wunsch Mehdi)
-    const nameFromAccount = !!user && !!profile?.playerName && isNameValid;
+    const nameFromAccount = !!user;
     const nameError = useMemo(() => {
         if (!hostName.length) return "";
         if ("message" in nameValidation) return nameValidation.message;
@@ -229,7 +232,7 @@ export default function HostPage() {
             });
 
             if (error) {
-                setCreateError(errorText(error.message, "Lobby konnte nicht erstellt werden."));
+                setCreateError(errorText(error.message, tr("Lobby konnte nicht erstellt werden.")));
                 return;
             }
 
@@ -238,11 +241,11 @@ export default function HostPage() {
             const hostPlayerId = String(row?.host_player_id ?? "");
 
             if (!code || code.length !== 4) {
-                setCreateError("RPC Return ungültig (kein code).");
+                setCreateError(tr("Lobby konnte nicht erstellt werden."));
                 return;
             }
             if (!hostPlayerId) {
-                setCreateError("RPC Return ungültig (kein host_player_id).");
+                setCreateError(tr("Lobby konnte nicht erstellt werden."));
                 return;
             }
 
@@ -256,7 +259,7 @@ export default function HostPage() {
             });
 
             if (ensure.error) {
-                setCreateError(errorText(ensure.error.message, "Host konnte nicht als Spieler eingetragen werden."));
+                setCreateError(errorText(ensure.error.message, tr("Host konnte nicht als Spieler eingetragen werden.")));
                 return;
             }
 
@@ -318,7 +321,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, seriesTotal, isPublic, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, profile?.preferences?.host?.excludedPlaylists, savePreferences]);
+    }, [canCreate, hostName, roundSpeed, mode, seriesTotal, isPublic, tr, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, profile?.preferences?.host?.excludedPlaylists, savePreferences]);
 
     const onStartBots = async () => {
         setBotError("");
@@ -355,43 +358,43 @@ export default function HostPage() {
     return (
         <main className="container hostMain">
             <div className="landingWrap">
-                <section className="card" aria-label="Spiel erstellen">
+                <section className="card" aria-label={tr("Spiel erstellen")}>
                     <HomeButton corner />
                     <header className="hostHeader">
                         <div className="hostTitleRow" style={{ justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                            <h1 className="h1">{category === "bots" ? "Gegen Bots" : "Lobby hosten"}</h1>
+                            <h1 className="h1">{category === "bots" ? tr("Gegen Bots") : tr("Lobby hosten")}</h1>
                         </div>
                         <p className="p hostSub">
-                            {category === "bots" ? "Bots aussuchen, Stärke wählen, los – das Spiel startet sofort." : "Erstelle eine Lobby, teile den Code und spiel mit deinen Freunden!"}
+                            {category === "bots" ? tr("Bots aussuchen, Stärke wählen, los – das Spiel startet sofort.") : tr("Erstelle eine Lobby, teile den Code und spiel mit deinen Freunden!")}
                         </p>
                     </header>
 
-                    <div className="hostCats" role="tablist" aria-label="Art des Spiels">
+                    <div className="hostCats" role="tablist" aria-label={tr("Art des Spiels")}>
                         <button type="button" role="tab" aria-selected={category === "friends"} className={`hostCat ${category === "friends" ? "on" : ""}`} onClick={() => setCategory("friends")}>
                             <span className="hostCatIcon" aria-hidden>👥</span>
-                            <span className="hostCatTitle">Mit Freunden</span>
-                            <span className="hostCatText">Lobby + Code zum Teilen</span>
+                            <span className="hostCatTitle">{tr("Mit Freunden")}</span>
+                            <span className="hostCatText">{tr("Lobby + Code zum Teilen")}</span>
                         </button>
                         <button type="button" role="tab" aria-selected={category === "bots"} className={`hostCat ${category === "bots" ? "on" : ""}`} onClick={() => setCategory("bots")}>
                             <span className="hostCatIcon" aria-hidden>🤖</span>
-                            <span className="hostCatTitle">Gegen Bots</span>
-                            <span className="hostCatText">Allein spielen, sofort los</span>
+                            <span className="hostCatTitle">{tr("Gegen Bots")}</span>
+                            <span className="hostCatText">{tr("Allein spielen, sofort los")}</span>
                         </button>
                     </div>
 
                     <div className="hostGrid" style={{ gridTemplateColumns: "1fr" }}>
                         <div className="panel">
-                            {nameFromAccount ? null : (
+                            {nameFromAccount ? (hostName ? <AccountNameNote name={hostName} /> : null) : (
                             <>
                             <div className="panelHead">
-                                <div className="panelTitle">Spieler-Details</div>
-                                <div className="panelHint">Du kannst das später ändern.</div>
+                                <div className="panelTitle">{tr("Spieler-Details")}</div>
+                                <div className="panelHint">{tr("Du kannst das später ändern.")}</div>
                             </div>
 
                             <div className="fieldBlock">
                                 <div className="fieldTop">
-                                    <div className="fieldTitle">Dein Name</div>
-                                    <div className="fieldHint">Mindestens 2 Zeichen</div>
+                                    <div className="fieldTitle">{tr("Dein Name")}</div>
+                                    <div className="fieldHint">{tr("Mindestens 2 Zeichen")}</div>
                                 </div>
 
                                 <div className="pillInputWrap">
@@ -400,17 +403,17 @@ export default function HostPage() {
                                         className="pillInput"
                                         value={hostName}
                                         onChange={(e) => setHostName(e.target.value)}
-                                        placeholder="z.B. Steve"
+                                        placeholder={tr("z. B. Steve")}
                                         autoComplete="nickname"
                                         maxLength={24}
-                                        aria-label="Host Name"
+                                        aria-label={tr("Dein Name")}
                                     />
                                     <div className="pillRight" aria-hidden>
                                         <button
                                             type="button"
                                             className="pillIconBtn"
                                             onClick={() => setHostName(randomHostName())}
-                                            title="Zufälliger Name"
+                                            title={tr("Zufälliger Name")}
                                         >
                                             🎲
                                         </button>
@@ -429,8 +432,8 @@ export default function HostPage() {
                             <>
                             <div className="pillCard">
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">Max. Spieler</div>
-                                    <div className="pillCardHint">Empfohlen: 4–8 · max. 12</div>
+                                    <div className="pillCardTitle">{tr("Max. Spieler")}</div>
+                                    <div className="pillCardHint">{tr("Empfohlen: 4–8 · max. 12")}</div>
                                 </div>
                                 <div className="pillStepper">
                                     <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>
@@ -446,8 +449,8 @@ export default function HostPage() {
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">Modus</div>
-                                    <div className="pillCardHint">Wähle die Regeln für die Runde</div>
+                                    <div className="pillCardTitle">{tr("Modus")}</div>
+                                    <div className="pillCardHint">{tr("Wähle die Regeln für die Runde")}</div>
                                 </div>
 
                                 <div className="pillSeg" style={{ flexWrap: "wrap" }}>
@@ -464,12 +467,12 @@ export default function HostPage() {
                                                 onClick={() => setMode(key)}
                                                 aria-pressed={active}
                                                 disabled={!!m.disabled}
-                                                title={m.comingSoon ? "Kommt bald" : undefined}
+                                                title={m.comingSoon ? tr("Kommt bald") : undefined}
                                             >
                                                 <span className="segIcon" aria-hidden>{m.icon}</span>
                                                 <span className="segLabel">{m.label}</span>
                                                 {m.featured ? <span className="segBadge">✨</span> : null}
-                                                {m.comingSoon ? <span className="segSoon">SOON</span> : null}
+                                                {m.comingSoon ? <span className="segSoon">{tr("BALD")}</span> : null}
                                             </button>
                                         );
                                     })}
@@ -481,18 +484,18 @@ export default function HostPage() {
                       <span style={{ fontWeight: 900 }}>
                         {activeMode.icon} {activeMode.label}:
                       </span>{" "}
-                                            {activeMode.desc}
+                                            {tr(activeMode.desc)}
                                         </>
                                     ) : (
-                                        <span style={{ fontWeight: 900 }}>Bitte Modus auswählen.</span>
+                                        <span style={{ fontWeight: 900 }}>{tr("Bitte Modus auswählen.")}</span>
                                     )}
                                 </div>
                             </div>
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">Tempo</div>
-                                    <div className="pillCardHint">{activeSpeed ? activeSpeed.hint : "Bitte auswählen."}</div>
+                                    <div className="pillCardTitle">{tr("Tempo")}</div>
+                                    <div className="pillCardHint">{activeSpeed ? tr(activeSpeed.hint) : tr("Bitte auswählen.")}</div>
                                 </div>
 
                                 <div className="pillSeg" style={{ flexWrap: "wrap" }}>
@@ -509,7 +512,7 @@ export default function HostPage() {
                                                 onClick={() => setRoundSpeed(key)}
                                                 aria-pressed={active}
                                             >
-                                                <span className="segLabel">{s.label}</span>
+                                                <span className="segLabel">{tr(s.label)}</span>
                                             </button>
                                         );
                                     })}
@@ -518,9 +521,9 @@ export default function HostPage() {
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">Runden pro Match</div>
+                                    <div className="pillCardTitle">{tr("Runden pro Match")}</div>
                                     <div className="pillCardHint">
-                                        {seriesTotal === 1 ? "Eine einzelne Runde" : `${seriesTotal} Runden mit Zwischenstand und Gesamtwertung`}
+                                        {seriesTotal === 1 ? tr("Eine einzelne Runde") : tr("{n} Runden mit Zwischenstand und Gesamtwertung", { n: seriesTotal })}
                                     </div>
                                 </div>
                                 <div className="pillSeg" style={{ flexWrap: "wrap" }}>
@@ -532,22 +535,22 @@ export default function HostPage() {
                                             onClick={() => setSeriesTotal(n)}
                                             aria-pressed={seriesTotal === n}
                                         >
-                                            <span className="segLabel">{n === 1 ? "1 Runde" : `${n} Runden`}</span>
+                                            <span className="segLabel">{n === 1 ? tr("1 Runde") : tr("{n} Runden", { n })}</span>
                                         </button>
                                     ))}
                                 </div>
                                 <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                    Nach jeder Runde (bis nur noch einer übrig ist) wird der Zwischenstand gespeichert und es geht wieder ins Themen-Voting.
+                                    {tr("Nach jeder Runde (bis nur noch einer übrig ist) wird der Zwischenstand gespeichert und es geht wieder ins Themen-Voting.")}
                                 </div>
                             </div>
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">🎵 Playlists</div>
-                                    <div className="pillCardHint">Antippen = rausnehmen</div>
+                                    <div className="pillCardHint">{tr("Antippen = rausnehmen")}</div>
                                 </div>
                                 <div className="fieldHelp" style={{ opacity: 0.9, marginBottom: 8 }}>
-                                    Jede Runde wird eine der ausgewählten Playlists gespielt – der Halter hört einen Song-Schnipsel und muss Titel oder Interpret erraten.
+                                    {tr("Jede Runde wird eine der ausgewählten Playlists gespielt – der Halter hört einen Song-Schnipsel und muss Titel oder Interpret erraten.")}
                                 </div>
                                 <PlaylistPicker selected={playlists} onChange={setPlaylists} />
                             </div>
@@ -566,7 +569,7 @@ export default function HostPage() {
                                     disabled={!canCreate}
                                     className={`btn btnPrimary btnXL ${canCreate ? "btnGlow" : "btnDisabled"}`}
                                 >
-                                    {creating ? "⏳ Lobby wird erstellt…" : "🚀 Lobby erstellen"}
+                                    {creating ? tr("⏳ Lobby wird erstellt…") : tr("🚀 Lobby erstellen")}
                                 </button>
                                 <button
                                     type="button"
@@ -576,8 +579,8 @@ export default function HostPage() {
                                     onClick={togglePublic}
                                 >
                                     <span className="publicToggleText">
-                                        <b>{isPublic ? "🌍 Öffentlich" : "🔒 Nur mit Code"}</b>
-                                        <span>{isPublic ? "Alle sehen die Lobby im Hauptmenü und können direkt beitreten" : "Nur wer den Code oder eine Einladung hat, kommt rein"}</span>
+                                        <b>{isPublic ? tr("🌍 Öffentlich") : tr("🔒 Nur mit Code")}</b>
+                                        <span>{isPublic ? tr("Alle sehen die Lobby im Hauptmenü und können direkt beitreten") : tr("Nur wer den Code oder eine Einladung hat, kommt rein")}</span>
                                     </span>
                                     <span className="publicSwitch" aria-hidden>
                                         <span />
@@ -590,8 +593,8 @@ export default function HostPage() {
                             <>
                                 <div className="pillCard">
                                     <div className="pillCardTop">
-                                        <div className="pillCardTitle">Wie viele Bots?</div>
-                                        <div className="pillCardHint">1 bis 5 Gegner</div>
+                                        <div className="pillCardTitle">{tr("Wie viele Bots?")}</div>
+                                        <div className="pillCardHint">{tr("1 bis 5 Gegner")}</div>
                                     </div>
                                     <div className="pillSeg" style={{ flexWrap: "wrap" }}>
                                         {[1, 2, 3, 4, 5].map((n) => (
@@ -610,9 +613,9 @@ export default function HostPage() {
 
                                 <div className="pillCard" style={{ marginTop: 14 }}>
                                     <div className="pillCardTop">
-                                        <div className="pillCardTitle">Stärke</div>
+                                        <div className="pillCardTitle">{tr("Stärke")}</div>
                                         <div className="pillCardHint">
-                                            {botSkill === "1" ? "Raten oft daneben, lassen sich Zeit" : botSkill === "2" ? "Kennen viele Songs" : botSkill === "3" ? "Schnell und treffsicher" : "Bunt gemischt – vom Anfänger bis zum Profi"}
+                                            {botSkill === "1" ? tr("Raten oft daneben, lassen sich Zeit") : botSkill === "2" ? tr("Kennen viele Songs") : botSkill === "3" ? tr("Schnell und treffsicher") : tr("Bunt gemischt – vom Anfänger bis zum Profi")}
                                         </div>
                                     </div>
                                     <div className="pillSeg" style={{ flexWrap: "wrap" }}>
@@ -625,7 +628,7 @@ export default function HostPage() {
                                                 aria-pressed={botSkill === k}
                                             >
                                                 <span className="segLabel">
-                                                    {k === "1" ? "🌱" : k === "2" ? "🎧" : k === "3" ? "🔥" : "🎲"} {SOLO_SKILL_LABEL[k]}
+                                                    {k === "1" ? "🌱" : k === "2" ? "🎧" : k === "3" ? "🔥" : "🎲"} {tr(SOLO_SKILL_LABEL[k])}
                                                 </span>
                                             </button>
                                         ))}
@@ -634,8 +637,8 @@ export default function HostPage() {
 
                                 <div className="pillCard" style={{ marginTop: 14 }}>
                                     <div className="pillCardTop">
-                                        <div className="pillCardTitle">Tempo</div>
-                                        <div className="pillCardHint">{activeSpeed ? activeSpeed.hint : "Bitte auswählen."}</div>
+                                        <div className="pillCardTitle">{tr("Tempo")}</div>
+                                        <div className="pillCardHint">{activeSpeed ? tr(activeSpeed.hint) : tr("Bitte auswählen.")}</div>
                                     </div>
                                     <div className="pillSeg" style={{ flexWrap: "wrap" }}>
                                         {(Object.keys(ROUND_SPEEDS) as RoundSpeed[]).map((key) => (
@@ -647,7 +650,7 @@ export default function HostPage() {
                                                 onClick={() => setRoundSpeed(key)}
                                                 aria-pressed={roundSpeed === key}
                                             >
-                                                <span className="segLabel">{ROUND_SPEEDS[key].label}</span>
+                                                <span className="segLabel">{tr(ROUND_SPEEDS[key].label)}</span>
                                             </button>
                                         ))}
                                     </div>
@@ -666,7 +669,7 @@ export default function HostPage() {
                                         disabled={!isNameValid || botBusy || !roundSpeed}
                                         className={`btn btnPrimary btnXL ${isNameValid && !botBusy ? "btnGlow" : "btnDisabled"}`}
                                     >
-                                        {botBusy ? "⏳ Bots machen sich bereit…" : `🤖 Gegen ${botCount} ${botCount === 1 ? "Bot" : "Bots"} spielen`}
+                                        {botBusy ? tr("⏳ Bots machen sich bereit…") : botCount === 1 ? tr("🤖 Gegen 1 Bot spielen") : tr("🤖 Gegen {n} Bots spielen", { n: botCount })}
                                     </button>
                                 </div>
                             </>

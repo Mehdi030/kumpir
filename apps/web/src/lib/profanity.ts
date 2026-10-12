@@ -1,3 +1,4 @@
+import { trNow } from "@/lib/i18n";
 /**
  * Lightweight name validator: blocks the worst offenders client-side.
  * Backend should validate again — never trust the browser.
@@ -52,15 +53,15 @@ export type NameValidation =
 
 export function validatePlayerName(raw: string): NameValidation {
     const trimmed = raw.trim();
-    if (trimmed.length === 0) return { ok: false, reason: "empty", message: "Name darf nicht leer sein." };
-    if (trimmed.length < 2) return { ok: false, reason: "tooShort", message: "Mindestens 2 Zeichen." };
-    if (trimmed.length > 24) return { ok: false, reason: "tooLong", message: "Maximal 24 Zeichen." };
+    if (trimmed.length === 0) return { ok: false, reason: "empty", message: trNow("Name darf nicht leer sein.") };
+    if (trimmed.length < 2) return { ok: false, reason: "tooShort", message: trNow("Mindestens 2 Zeichen.") };
+    if (trimmed.length > 24) return { ok: false, reason: "tooLong", message: trNow("Maximal 24 Zeichen.") };
 
     const norm = normalize(trimmed);
     const tokens = new Set(norm.split(/\s+/).filter(Boolean));
     for (const bad of BANNED) {
         if (tokens.has(bad)) {
-            return { ok: false, reason: "profane", message: "Bitte einen anderen Namen wählen." };
+            return { ok: false, reason: "profane", message: trNow("Bitte einen anderen Namen wählen.") };
         }
     }
 

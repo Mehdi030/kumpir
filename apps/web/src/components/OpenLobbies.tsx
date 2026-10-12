@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useI18n } from "@/lib/i18n";
 import { PlayerAvatar, type AvatarConfig } from "@/components/game/PlayerAvatar";
 
 type OpenLobby = {
@@ -17,42 +17,18 @@ type OpenLobby = {
 };
 
 const REFRESH_MS = 12000;
-const SHOWN = 2;
 
 function joinHref(code: string) {
     return `/join?code=${encodeURIComponent(code)}&go=1`;
 }
 
-function LobbyChip({ l }: { l: OpenLobby }) {
-    const host = l.hostName ?? "Lobby";
-    return (
-        <Link href={joinHref(l.code)} className="olChip" title={`${host}s Lobby beitreten (Code ${l.code})`}>
-            <PlayerAvatar seed={host} config={l.hostAvatar} size={30} className="olAvatar" />
-            <span className="olText">
-                <b>{host}</b>
-                <span>
-                    {l.players}/{l.maxPlayers} Spieler
-                </span>
-            </span>
-            <span className="olGo">Beitreten ›</span>
-        </Link>
-    );
-}
-
-/**
- * "Offene Lobbys" im Hauptmenü (Migration 104): öffentliche Lobbys, die noch nicht gestartet und nicht voll sind –
- * direkt beitreten ohne Code. Klein, aber mit grünem Puls-Punkt gut sichtbar; mehr als 2 -> "Alle"-Fenster.
- * Ohne offene Lobby steht nur eine schmale Zeile da.
- */
-export function OpenLobbies() {
+/** Offene Lobbys laden (alle 12 s, nur wenn der Tab sichtbar ist). */
+function useOpenLobbies() {
     const [list, setList] = useState<OpenLobby[] | null>(null);
-    const [open, setOpen] = useState(false);
-
     const load = useCallback(async () => {
         const { data, error } = await getSupabaseClient().rpc("get_public_lobbies");
         if (!error && Array.isArray(data)) setList(data as OpenLobby[]);
     }, []);
-
     useEffect(() => {
         const first = window.setTimeout(() => void load(), 0);
         const t = window.setInterval(() => {
@@ -66,101 +42,91 @@ export function OpenLobbies() {
             document.removeEventListener("visibilitychange", onVis);
         };
     }, [load]);
+    return list;
+}
 
-    useEffect(() => {
-        if (!open) return;
-        const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [open]);
-
-    if (list === null) return <div className="olBar olEmpty" aria-hidden />;
-
-    if (list.length === 0) {
-        return (
-            <div className="olBar olEmpty">
-                <span className="olDot off" aria-hidden />
-                Gerade keine offenen Lobbys – hoste eine, dann sehen dich alle hier.
-                <style>{STYLES}</style>
-            </div>
-        );
-    }
-
+function LobbyRow({ l, i }: { l: OpenLobby; i: number }) {
+    const { tr } = useI18n();
+    const host = l.hostName ?? "Lobby";
     return (
-        <section className="olBar" aria-label="Offene Lobbys">
-            <span className="olHead">
-                <span className="olDot" aria-hidden />
-                <b>{list.length === 1 ? "1 offene Lobby" : `${list.length} offene Lobbys`}</b>
+        <Link href={joinHref(l.code)} className="olRow" style={{ ["--i" as string]: i }} title={tr("{name}s Lobby beitreten (Code {code})", { name: host, code: l.code })}>
+            <PlayerAvatar seed={host} config={l.hostAvatar} size={32} className="olAvatar" />
+            <span className="olText">
+                <b>{host}</b>
+                <span>{tr("{n}/{max} Spieler", { n: l.players, max: l.maxPlayers })}</span>
             </span>
-            <div className="olChips">
-                {list.slice(0, SHOWN).map((l) => (
-                    <LobbyChip key={l.code} l={l} />
-                ))}
-                {list.length > SHOWN ? (
-                    <button type="button" className="olMore" onClick={() => setOpen(true)}>
-                        Alle {list.length} ›
-                    </button>
-                ) : null}
+            <span className="olGo">{tr("Beitreten ›")}</span>
+        </Link>
+    );
+}
+
+/**
+ * "Offene Lobbys" (Migration 104): öffentliche Lobbys, die noch nicht gestartet und nicht voll sind –
+ * direkt beitreten ohne Code. Steht an der Seite unter den Freunden (Wunsch Mehdi 2026-10-12):
+ *  - variant "side": eigener Block in der Freunde-Leiste (breite Bildschirme), auch ohne Lobby sichtbar
+ *  - variant "inline": schmale Bildschirme, nur wenn es wirklich offene Lobbys gibt
+ */
+export function OpenLobbies({ variant = "side" }: { variant?: "side" | "inline" }) {
+    const { tr } = useI18n();
+    const list = useOpenLobbies();
+    const [showAll, setShowAll] = useState(false);
+
+    if (list === null) return null;
+    if (!list.length && variant === "inline") return null;
+
+    const shown = showAll ? list : list.slice(0, 3);
+    return (
+        <section className={`olBox ${variant} ${list.length ? "has" : "none"}`} aria-label={tr("Offene Lobbys")}>
+            <div className="olHead">
+                <span className={`olDot ${list.length ? "" : "off"}`} aria-hidden />
+                <b>{list.length ? tr("Offene Lobbys") : tr("Keine offenen Lobbys")}</b>
+                {list.length ? <span className="olCount">{list.length}</span> : null}
             </div>
-            {open
-                ? createPortal(
-                      <div className="olModalBack" onClick={() => setOpen(false)} role="presentation">
-                          <div className="olModal" role="dialog" aria-modal="true" aria-label="Offene Lobbys" onClick={(e) => e.stopPropagation()}>
-                              <div className="olModalHead">
-                                  <span className="olDot" aria-hidden />
-                                  <b>Offene Lobbys</b>
-                                  <button type="button" className="olModalClose" onClick={() => setOpen(false)} aria-label="Schließen">
-                                      ✕
-                                  </button>
-                              </div>
-                              <div className="olModalList">
-                                  {list.map((l) => (
-                                      <LobbyChip key={l.code} l={l} />
-                                  ))}
-                              </div>
-                          </div>
-                          <style>{STYLES}</style>
-                      </div>,
-                      document.body
-                  )
-                : null}
+            {list.length ? (
+                <div className="olList">
+                    {shown.map((l, i) => (
+                        <LobbyRow key={l.code} l={l} i={i} />
+                    ))}
+                    {list.length > 3 ? (
+                        <button type="button" className="olMore" onClick={() => setShowAll((v) => !v)}>
+                            {showAll ? tr("Weniger anzeigen") : tr("Alle {n} anzeigen", { n: list.length })}
+                        </button>
+                    ) : null}
+                </div>
+            ) : (
+                <div className="olNone">{tr("Hoste eine öffentliche Lobby – dann sehen dich alle hier.")}</div>
+            )}
             <style>{STYLES}</style>
         </section>
     );
 }
 
 const STYLES = `
-.olBar{ margin: 12px auto 0; width: min(640px, 100%); display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; border-radius: 20px;
-  background: linear-gradient(90deg, rgba(22,163,74,.30), rgba(22,163,74,.12)); border: 1.5px solid rgba(134,239,172,.65);
-  box-shadow: 0 0 0 4px rgba(34,197,94,.10), 0 10px 24px rgba(0,0,0,.18); animation: olGlow 2.4s ease-in-out infinite; }
-.olBar.olEmpty{ justify-content: center; gap: 8px; padding: 6px 12px; min-height: 34px; background: rgba(0,0,0,.14); border: 1px dashed rgba(255,255,255,.22);
-  box-shadow: none; animation: none; font-size: 12.5px; font-weight: 700; opacity: .8; text-align: center; }
-@keyframes olGlow{ 0%,100%{ box-shadow: 0 0 0 4px rgba(34,197,94,.10), 0 10px 24px rgba(0,0,0,.18); } 50%{ box-shadow: 0 0 0 7px rgba(34,197,94,.16), 0 10px 24px rgba(0,0,0,.18); } }
-.olHead{ display: flex; align-items: center; gap: 8px; flex: none; font-size: 13.5px; line-height: 1.1; }
-.olHead b{ font-weight: 900; color: #dcfce7; white-space: nowrap; }
-.olDot{ display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,.7); animation: olPulse 1.6s infinite; }
+.olBox{ display: grid; gap: 8px; padding: 12px; border-radius: 20px; }
+.olBox.has{ background: linear-gradient(160deg, rgba(22,163,74,.28), rgba(22,163,74,.10)); border: 1.5px solid rgba(134,239,172,.6);
+  box-shadow: 0 0 0 3px rgba(34,197,94,.10); animation: olGlow 2.4s ease-in-out infinite; }
+.olBox.none{ background: rgba(0,0,0,.16); border: 1px dashed rgba(255,255,255,.22); }
+.olBox.inline{ margin: 12px auto 0; width: min(640px, 100%); }
+@keyframes olGlow{ 0%,100%{ box-shadow: 0 0 0 3px rgba(34,197,94,.10); } 50%{ box-shadow: 0 0 0 6px rgba(34,197,94,.18); } }
+.olHead{ display: flex; align-items: center; gap: 8px; font-size: 14.5px; }
+.olHead b{ font-weight: 900; }
+.olBox.has .olHead b{ color: #dcfce7; }
+.olCount{ margin-left: auto; font-size: 12px; font-weight: 900; padding: 2px 9px; border-radius: 999px; background: #4ade80; color: #052e16; }
+.olDot{ flex: none; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #22c55e; animation: olPulse 1.6s infinite; }
 .olDot.off{ background: rgba(255,255,255,.35); animation: none; }
 @keyframes olPulse{ 0%{ box-shadow: 0 0 0 0 rgba(34,197,94,.7); } 70%{ box-shadow: 0 0 0 9px rgba(34,197,94,0); } 100%{ box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
-.olChips{ display: flex; gap: 8px; flex: 1; min-width: 0; justify-content: flex-end; flex-wrap: wrap; }
-.olChip{ display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 230px; padding: 5px 6px 5px 6px; border-radius: 16px; color: #fff; text-decoration: none;
-  background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.2); transition: transform .12s, background .12s; }
-.olChip:hover{ transform: translateY(-1px); background: rgba(0,0,0,.4); }
-.olAvatar{ width: 30px; height: 30px; flex: none; border-radius: 50%; background: rgba(255,255,255,.14); }
-.olText{ display: grid; min-width: 0; text-align: left; line-height: 1.15; }
-.olText b{ font-size: 13.5px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olList{ display: grid; gap: 6px; }
+.olRow{ display: flex; align-items: center; gap: 9px; min-width: 0; padding: 6px 7px; border-radius: 14px; color: #fff; text-decoration: none;
+  background: rgba(0,0,0,.26); border: 1px solid rgba(255,255,255,.16); transition: transform .15s ease, background .15s ease;
+  animation: olIn .45s cubic-bezier(.22,1,.36,1) backwards; animation-delay: calc(var(--i, 0) * 60ms); }
+.olRow:hover{ transform: translateX(3px); background: rgba(0,0,0,.4); }
+@keyframes olIn{ from{ opacity: 0; transform: translateY(6px); } }
+.olAvatar{ width: 32px; height: 32px; flex: none; border-radius: 50%; background: rgba(255,255,255,.14); }
+.olText{ display: grid; min-width: 0; line-height: 1.15; flex: 1; }
+.olText b{ font-size: 14px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .olText span{ font-size: 11.5px; font-weight: 700; opacity: .8; }
-.olGo{ margin-left: auto; flex: none; font-size: 12.5px; font-weight: 900; color: #052e16; background: #4ade80; padding: 5px 9px; border-radius: 11px; }
-.olMore{ flex: none; align-self: center; padding: 7px 11px; border-radius: 12px; border: 1px solid rgba(134,239,172,.6); background: rgba(0,0,0,.2); color: #dcfce7; font-weight: 900; font-size: 12.5px; cursor: pointer; }
-.olModalBack{ position: fixed; inset: 0; z-index: 4000; background: rgba(10,4,2,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; padding: 14px; }
-.olModal{ width: min(460px, 100%); max-height: calc(100dvh - 28px); overflow: auto; border-radius: 24px; padding: 16px; color: #fff;
-  background: linear-gradient(180deg, rgba(20,60,32,.97), rgba(10,30,16,.98)); border: 1px solid rgba(134,239,172,.45); }
-.olModalHead{ display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 18px; }
-.olModalClose{ margin-left: auto; width: 36px; height: 36px; border-radius: 999px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
-.olModalList{ display: grid; gap: 8px; }
-.olModalList .olChip{ flex: none; padding: 8px 10px; }
-@media (max-width: 560px){
-  .olBar{ flex-wrap: wrap; padding: 8px 10px; }
-  .olChips{ flex: 1 1 100%; justify-content: stretch; }
-  .olChip{ flex: 1 1 100%; }
-}
+.olGo{ flex: none; font-size: 12px; font-weight: 900; color: #052e16; background: #4ade80; padding: 5px 9px; border-radius: 10px; }
+.olMore{ justify-self: start; padding: 5px 10px; border-radius: 10px; border: 1px solid rgba(134,239,172,.6); background: rgba(0,0,0,.2); color: #dcfce7; font-weight: 900; font-size: 12px; cursor: pointer; }
+.olNone{ font-size: 12.5px; font-weight: 700; opacity: .75; line-height: 1.35; }
+@media (prefers-reduced-motion: reduce){ .olBox.has, .olDot, .olRow{ animation: none; } }
 `;

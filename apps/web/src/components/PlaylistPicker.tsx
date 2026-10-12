@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { MUSIC_GENRE_KEYS, MUSIC_PLAYLISTS } from "@/lib/musicGenres";
+import { useI18n } from "@/lib/i18n";
 
 export type PlaylistInfo = { name: string; songs: number };
 
@@ -56,8 +57,9 @@ type Props = {
  */
 export function PlaylistPicker({ selected, onChange, disabled = false }: Props) {
     const list = usePlaylists();
+    const { tr } = useI18n();
     const [hint, setHint] = useState("");
-    if (!list) return <div className="fieldHelp">Lade Playlists…</div>;
+    if (!list) return <div className="fieldHelp">{tr("Lade Playlists…")}</div>;
 
     const allNames = list.map((p) => p.name);
     const sel = selected.filter((n) => allNames.includes(n));
@@ -66,7 +68,7 @@ export function PlaylistPicker({ selected, onChange, disabled = false }: Props) 
     const toggle = (name: string) => {
         if (sel.includes(name)) {
             if (sel.length <= 1) {
-                setHint("Mindestens eine Playlist muss drin bleiben.");
+                setHint(tr("Mindestens eine Playlist muss drin bleiben."));
                 window.setTimeout(() => setHint(""), 2200);
                 return;
             }
@@ -78,7 +80,7 @@ export function PlaylistPicker({ selected, onChange, disabled = false }: Props) 
 
     return (
         <div className="plPick">
-            <div className="plChips" role="group" aria-label="Playlists">
+            <div className="plChips" role="group" aria-label={tr("Playlists")}>
                 {list.map((p) => {
                     const on = sel.includes(p.name);
                     return (
@@ -89,7 +91,7 @@ export function PlaylistPicker({ selected, onChange, disabled = false }: Props) 
                             aria-pressed={on}
                             onClick={() => toggle(p.name)}
                             disabled={disabled}
-                            title={on ? "Antippen zum Rausnehmen" : "Antippen zum Hinzufügen"}
+                            title={on ? tr("Antippen zum Rausnehmen") : tr("Antippen zum Hinzufügen")}
                         >
                             <span aria-hidden>{MUSIC_PLAYLISTS[p.name]?.icon ?? "🎵"}</span>
                             <span className="plName">{p.name}</span>
@@ -100,12 +102,12 @@ export function PlaylistPicker({ selected, onChange, disabled = false }: Props) 
             </div>
             <div className="plFoot">
                 <span>
-                    {sel.length === allNames.length ? "Alle Playlists" : `${sel.length} von ${allNames.length} Playlists`}
-                    {songs ? ` · ${songs} Songs` : ""}
+                    {sel.length === allNames.length ? tr("Alle Playlists") : tr("{n} von {total} Playlists", { n: sel.length, total: allNames.length })}
+                    {songs ? ` · ${tr("{n} Songs", { n: songs })}` : ""}
                 </span>
                 {sel.length !== allNames.length ? (
                     <button type="button" className="plAll" onClick={() => onChange(allNames)} disabled={disabled}>
-                        Alle wieder rein
+                        {tr("Alle wieder rein")}
                     </button>
                 ) : null}
             </div>

@@ -116,7 +116,7 @@ type LobbyState = {
     current_song_difficulty: number;
     revenge_nonce: number;
     last_revenge_by: string | null;
-    /** Schutzzeiten in diesem Zug (Migration 091); > 0 = Nachspielzeit, nur der Titel zählt (094). */
+    /** Schutzzeiten in diesem Zug (Migration 091); > 0 = Nachspielzeit (seit 105 zählen Künstler auch dort). */
     grace_count: number;
 
     // Song-Raten (Musik-Modus): aktueller, versteckter Song für den Halter
@@ -2061,7 +2061,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     ✅ Du bist dran
                     {turnGrace > 0 ? (
                         <div className="turnGrace">
-                            🛡️ Schutzzeit: {turnGrace} Sekunden · ⏱️ Nachspielzeit – nur der Titel zählt
+                            🛡️ Schutzzeit: {turnGrace} Sekunden · ⏱️ Nachspielzeit – schnell abgeben!
                         </div>
                     ) : null}
                 </div>
@@ -2198,7 +2198,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             <div className={`answerHint ${overtime ? "answerHintOvertime" : ""}`}>
                                 {lobby.current_song_id
                                     ? overtime
-                                        ? "⏱️ Nachspielzeit: nur der Songtitel zählt"
+                                        ? "⏱️ Nachspielzeit – schnell abgeben! Titel 1 · Künstler ½ · beides 1,5"
                                         : "Titel 1 · Künstler ½ · beides 1,5 (z. B. „Wolke 7 Gzuz“) · unter 5 s ⚡ +5"
                                     : "Tippe deine Antwort und drücke Enter."}
                             </div>

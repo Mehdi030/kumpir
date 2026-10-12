@@ -2069,7 +2069,7 @@ textarea:focus-visible{
 @media (min-width: 1200px){
     .hostMain .landingWrap{ width: min(1320px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 16px; align-items: start; }
     .hostMain .rulesOutside{ margin: 0; width: auto; padding: 14px 16px; border-radius: 22px; position: sticky; top: 14px; }
-    .hostMain .rulesOutside summary{ text-align: left; font-size: 15px; }
+    .hostMain .rulesOutside .rulesHead{ justify-content: space-between; font-size: 15px; }
 }
 /* Schmaler und niedrig: Regel-Leiste unter der Karte weglassen (steht auch in der Lobby) */
 @media (max-height: 820px) and (min-width: 900px) and (max-width: 1199px){
@@ -2138,3 +2138,11 @@ textarea:focus-visible{
     .publicToggle{ flex: 1 1 100%; max-width: none; padding: 7px 10px 7px 12px; }
     .publicToggleText span{ display: none; }
 }
+
+/* Mit Konto: fester Spielername (Beitreten, Lobby hosten) – ändern nur in den Einstellungen */
+.accountName{ display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 10px 14px; border-radius: 16px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); }
+.accountNameLabel{ font-size: 12px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; opacity: .75; }
+.accountNameValue{ font-size: 18px; font-weight: 900; }
+.accountNameLink{ margin-left: auto; font-size: 12.5px; font-weight: 700; opacity: .8; color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.accountNameLink:hover{ opacity: 1; }
+@media (max-width: 640px){ .hostMain .accountName{ display: none; } }

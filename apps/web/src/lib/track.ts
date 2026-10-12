@@ -24,6 +24,7 @@ export type TrackEvent =
     | "result_share"
     | "install_click"
     | "lang_en"
+    | "lang_fr"
     | "register_success";
 
 type Props = Record<string, string | number | boolean>;

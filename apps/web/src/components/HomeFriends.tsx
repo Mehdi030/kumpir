@@ -10,6 +10,8 @@ import { useFriendsStatus, type FriendStatus } from "@/hooks/useFriendsStatus";
 import { FRIENDS_CHANGED } from "@/components/Notifications";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { errorText } from "@/lib/errorText";
+import { dateLocale, trNow, useI18n } from "@/lib/i18n";
+import { OpenLobbies } from "@/components/OpenLobbies";
 
 const GUEST_ONLY = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 const FIRST = 5; // so viele Freunde stehen immer da, der Rest per "Alle anzeigen"
@@ -22,28 +24,29 @@ function colorFor(name: string): string {
 }
 
 function friendError(err: string): string {
-    if (err.includes("user_not_found")) return "⚠️ Diesen Benutzernamen gibt es nicht. Bitte genau so schreiben wie im Profil.";
-    if (err.includes("already_friends")) return "Ihr seid schon befreundet.";
-    if (err.includes("already_requested")) return "Die Anfrage läuft schon – warte, bis sie angenommen wird.";
-    if (err.includes("cannot_befriend_self")) return "Dich selbst kannst du nicht hinzufügen.";
-    if (err.includes("already") || err.includes("duplicate")) return "Ihr seid schon befreundet oder die Anfrage läuft.";
-    if (err.includes("rate")) return "Zu viele Anfragen – bitte später noch einmal.";
-    return err;
+    if (err.includes("user_not_found")) return trNow("⚠️ Diesen Benutzernamen gibt es nicht. Bitte genau so schreiben wie im Profil.");
+    if (err.includes("already_friends")) return trNow("Ihr seid schon befreundet.");
+    if (err.includes("already_requested")) return trNow("Die Anfrage läuft schon – warte, bis sie angenommen wird.");
+    if (err.includes("cannot_befriend_self")) return trNow("Dich selbst kannst du nicht hinzufügen.");
+    if (err.includes("already") || err.includes("duplicate")) return trNow("Ihr seid schon befreundet oder die Anfrage läuft.");
+    if (err.includes("rate")) return trNow("Zu viele Anfragen – bitte später noch einmal.");
+    return errorText(err);
 }
 
 // Zuletzt da (Migration 102: Online-Anzeige, sonst letztes Match, sonst letzte Anmeldung) – als Tag
 function lastSeenText(iso: string | null): string {
-    if (!iso) return "Noch nicht gespielt";
+    if (!iso) return trNow("Noch nicht gespielt");
+    const loc = dateLocale();
     const d = new Date(iso);
     const mins = Math.max(1, Math.round((Date.now() - d.getTime()) / 60000));
-    if (mins < 60) return `Zuletzt vor ${mins} Min.`;
+    if (mins < 60) return trNow("Zuletzt vor {n} Min.", { n: mins });
     const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
     const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
-    const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-    if (days === 0) return `Zuletzt heute, ${time} Uhr`;
-    if (days === 1) return `Zuletzt gestern, ${time} Uhr`;
-    if (days < 7) return `Zuletzt am ${d.toLocaleDateString("de-DE", { weekday: "long" })}`;
-    return `Zuletzt am ${d.toLocaleDateString("de-DE", { day: "numeric", month: "numeric", year: days > 300 ? "numeric" : undefined })}`;
+    const time = d.toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" });
+    if (days === 0) return trNow("Zuletzt heute, {time} Uhr", { time });
+    if (days === 1) return trNow("Zuletzt gestern, {time} Uhr", { time });
+    if (days < 7) return trNow("Zuletzt am {day}", { day: d.toLocaleDateString(loc, { weekday: "long" }) });
+    return trNow("Zuletzt am {day}", { day: d.toLocaleDateString(loc, { day: "numeric", month: "numeric", year: days > 300 ? "numeric" : undefined }) });
 }
 
 type Filter = "all" | "online";
@@ -54,6 +57,7 @@ type Filter = "all" | "online";
  */
 export function HomeFriendsButton() {
     const { user, loading } = useAuth();
+    const { tr } = useI18n();
     const status = useFriendsStatus(user?.id ?? null);
     const [open, setOpen] = useState(false);
     useEffect(() => {
@@ -66,13 +70,13 @@ export function HomeFriendsButton() {
     const online = status.friends.filter((f) => f.online).length;
     return (
         <>
-            <button type="button" className="homeChip" onClick={() => setOpen(true)} title="Freunde anzeigen">
+            <button type="button" className="homeChip" onClick={() => setOpen(true)} title={tr("Freunde anzeigen")}>
                 <span className="homeChipIcon" aria-hidden>
                     👥
                 </span>
                 <span className="homeChipText">
-                    <b>Freunde</b>
-                    <span>{status.loading ? "…" : online > 0 ? `${online} online` : `${status.friends.length} insgesamt`}</span>
+                    <b>{tr("Freunde")}</b>
+                    <span>{status.loading ? "…" : online > 0 ? tr("{n} online", { n: online }) : tr("{n} insgesamt", { n: status.friends.length })}</span>
                 </span>
                 {online > 0 ? <span className="homeChipDot" aria-hidden /> : null}
                 <span className="homeChipArrow" aria-hidden>
@@ -82,11 +86,11 @@ export function HomeFriendsButton() {
             {open
                 ? createPortal(
                       <div className="frModalBack" onClick={() => setOpen(false)} role="presentation">
-                          <div className="frModal" role="dialog" aria-modal="true" aria-label="Freunde" onClick={(e) => e.stopPropagation()}>
-                              <button type="button" className="frModalClose" onClick={() => setOpen(false)} aria-label="Schließen">
+                          <div className="frModal" role="dialog" aria-modal="true" aria-label={tr("Freunde")} onClick={(e) => e.stopPropagation()}>
+                              <button type="button" className="frModalClose" onClick={() => setOpen(false)} aria-label={tr("Schließen")}>
                                   ✕
                               </button>
-                              <HomeFriends />
+                              <HomeFriends inModal />
                           </div>
                           <style>{`
                             .frModalBack{ position: fixed; inset: 0; z-index: 4000; background: rgba(10,4,2,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; padding: 14px; }
@@ -108,8 +112,15 @@ export function HomeFriendsButton() {
  * die ersten 5 immer sichtbar, der Rest aufklappbar. Filter "Alle / Online", Freund hinzufügen,
  * Anfragen annehmen.
  */
-export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
+export function HomeFriends({ inviteCode, withOpenLobbies = false, inModal = false }: { inviteCode?: string; withOpenLobbies?: boolean; inModal?: boolean } = {}) {
     const { user, loading } = useAuth();
+    const { tr } = useI18n();
+    // Hauptmenü (breit): offene Lobbys stehen unten in der Freunde-Leiste (Wunsch Mehdi 2026-10-12)
+    const lobbies = withOpenLobbies ? (
+        <div className="frLobbies">
+            <OpenLobbies variant="side" />
+        </div>
+    ) : null;
     const friendsApi = useFriends(user?.id ?? null);
     const status = useFriendsStatus(user?.id ?? null);
 
@@ -185,10 +196,10 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
         if (err) setFb({ ok: false, msg: friendError(err) });
         else {
             setName("");
-            setFb({ ok: true, msg: `✅ Anfrage an ${n} geschickt.` });
+            setFb({ ok: true, msg: tr("✅ Anfrage an {name} geschickt.", { name: n }) });
             window.setTimeout(() => setFb(null), 4000);
         }
-    }, [name, busy, friendsApi]);
+    }, [name, busy, friendsApi, tr]);
 
     const onlineCount = status.friends.filter((f) => f.online).length;
     const filtered = useMemo(() => status.friends.filter((f) => filter === "all" || f.online), [status.friends, filter]);
@@ -199,32 +210,33 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
 
     if (!user) {
         return (
-            <section className="frSec frGuest" aria-label="Freunde">
+            <section className="frSec frGuest" aria-label={tr("Freunde")}>
                 <div className="frHead">
-                    <h2 className="frTitle">👥 Freunde</h2>
+                    <h2 className="frTitle">👥 {tr("Freunde")}</h2>
                 </div>
-                <p className="frLocked">Mit einem Konto siehst du hier deine Freunde, wer gerade online ist, und kannst sie direkt in ihre Lobby begleiten. Oben rechts anmelden oder registrieren.</p>
+                <p className="frLocked">{tr("Mit einem Konto siehst du hier deine Freunde, wer gerade online ist, und kannst sie direkt in ihre Lobby begleiten. Oben rechts anmelden oder registrieren.")}</p>
+                {lobbies}
                 <style>{STYLES}</style>
             </section>
         );
     }
 
-    const collapsible = !inviteCode && !status.loading && !status.error;
+    const collapsible = !inviteCode && !inModal && !status.loading && !status.error;
     const collapsed = collapsible && !adding && friendsApi.incoming.length === 0 && (openPref === null ? onlineCount < 3 : !openPref);
     if (collapsed) {
         const onlineFriends = status.friends.filter((f) => f.online);
         return (
-            <section className="frSec frCollapsed" aria-label="Freunde">
+            <section className={`frSec frCollapsed ${withOpenLobbies ? "frWithLobbies" : ""}`} aria-label={tr("Freunde")}>
                 <div className="frHead">
                     <h2 className="frTitle">
-                        👥 Freunde <span className="frCount">{status.friends.length}</span>
+                        👥 {tr("Freunde")} <span className="frCount">{status.friends.length}</span>
                     </h2>
                     <button type="button" className="frToggle" onClick={() => setOpenPref(true)} aria-expanded={false}>
-                        Aufklappen ▾
+                        {tr("Aufklappen ▾")}
                     </button>
                 </div>
                 {onlineFriends.length === 0 ? (
-                    <div className="frMiniNone">Gerade ist niemand online.</div>
+                    <div className="frMiniNone">{tr("Gerade ist niemand online.")}</div>
                 ) : (
                     <div className="frList">
                         {onlineFriends.map((f) => (
@@ -232,33 +244,34 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
                         ))}
                     </div>
                 )}
+                {lobbies}
                 <style>{STYLES}</style>
             </section>
         );
     }
 
     return (
-        <section className="frSec" aria-label="Freunde">
+        <section className={`frSec ${withOpenLobbies ? "frWithLobbies" : ""}`} aria-label={tr("Freunde")}>
             <div className="frHead">
                 <h2 className="frTitle">
-                    👥 Freunde <span className="frCount">{status.friends.length}</span>
+                    👥 {tr("Freunde")} <span className="frCount">{status.friends.length}</span>
                 </h2>
                 {collapsible ? (
-                    <button type="button" className="frToggle" onClick={() => setOpenPref(false)} aria-expanded title="Einklappen">
+                    <button type="button" className="frToggle" onClick={() => setOpenPref(false)} aria-expanded title={tr("Einklappen")}>
                         ▴
                     </button>
                 ) : null}
-                <button type="button" className="btn btnPrimary btnSmall" onClick={() => setAdding((v) => !v)} aria-expanded={adding} title="Freund hinzufügen">
+                <button type="button" className="btn btnPrimary btnSmall" onClick={() => setAdding((v) => !v)} aria-expanded={adding} title={tr("Freund hinzufügen")}>
                     {adding ? "✕" : "＋"}
-                    <span className="frAddLabel">{adding ? " Schließen" : " Hinzufügen"}</span>
+                    <span className="frAddLabel"> {adding ? tr("Schließen") : tr("Hinzufügen")}</span>
                 </button>
             </div>
-            <div className="frFilter" role="tablist" aria-label="Freunde filtern">
+            <div className="frFilter" role="tablist" aria-label={tr("Freunde filtern")}>
                 <button type="button" role="tab" aria-selected={filter === "online"} className={filter === "online" ? "on" : ""} onClick={() => pickFilter("online")}>
-                    <span className="frDot" aria-hidden /> Online <b>{onlineCount}</b>
+                    <span className="frDot" aria-hidden /> {tr("Online")} <b>{onlineCount}</b>
                 </button>
                 <button type="button" role="tab" aria-selected={filter === "all"} className={filter === "all" ? "on" : ""} onClick={() => pickFilter("all")}>
-                    Alle <b>{status.friends.length}</b>
+                    {tr("Alle")} <b>{status.friends.length}</b>
                 </button>
             </div>
 
@@ -274,14 +287,14 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
                         onKeyDown={(e) => {
                             if (e.key === "Enter") void add();
                         }}
-                        placeholder="Benutzername"
+                        placeholder={tr("Benutzername")}
                         maxLength={40}
                         autoComplete="off"
                         autoFocus
-                        aria-label="Benutzername deines Freundes"
+                        aria-label={tr("Benutzername deines Freundes")}
                     />
                     <button type="button" className="btn btnPrimary btnSmall" onClick={() => void add()} disabled={busy || !name.trim()}>
-                        {busy ? "…" : "Senden"}
+                        {busy ? "…" : tr("Senden")}
                     </button>
                     {fb ? <div className={`frFb ${fb.ok ? "ok" : "err"}`}>{fb.msg}</div> : null}
                 </div>
@@ -301,11 +314,11 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
                                     type="button"
                                     className="btn btnReadyOn btnSmall"
                                     onClick={() => void friendsApi.acceptRequest(r.user_id).then(() => window.dispatchEvent(new Event(FRIENDS_CHANGED)))}
-                                    title="Annehmen"
+                                    title={tr("Annehmen")}
                                 >
-                                    ✅ Annehmen
+                                    {tr("✅ Annehmen")}
                                 </button>
-                                <button type="button" className="btn btnReadyOff btnSmall" onClick={() => void friendsApi.removeFriend(r.user_id).then(() => window.dispatchEvent(new Event(FRIENDS_CHANGED)))} title="Ablehnen">
+                                <button type="button" className="btn btnReadyOff btnSmall" onClick={() => void friendsApi.removeFriend(r.user_id).then(() => window.dispatchEvent(new Event(FRIENDS_CHANGED)))} title={tr("Ablehnen")}>
                                     ✕
                                 </button>
                             </span>
@@ -314,11 +327,11 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
                 </div>
             ) : null}
 
-            {status.error ? <p className="frLocked">Freunde gerade nicht erreichbar. Bitte später nochmal schauen.</p> : null}
+            {status.error ? <p className="frLocked">{tr("Freunde gerade nicht erreichbar. Bitte später nochmal schauen.")}</p> : null}
 
             {!status.error && filtered.length === 0 ? (
                 <div className="frEmpty">
-                    {status.loading ? "Lade…" : status.friends.length === 0 ? "Noch keine Freunde – füge deinen ersten mit „＋ Hinzufügen“ hinzu." : "Gerade ist keiner deiner Freunde online."}
+                    {status.loading ? tr("Lade…") : status.friends.length === 0 ? tr("Noch keine Freunde – füge deinen ersten mit „＋ Hinzufügen“ hinzu.") : tr("Gerade ist keiner deiner Freunde online.")}
                 </div>
             ) : null}
 
@@ -342,9 +355,10 @@ export function HomeFriends({ inviteCode }: { inviteCode?: string } = {}) {
             </div>
             {hiddenCount > 0 || (showAll && filtered.length > FIRST) ? (
                 <button type="button" className="frMore" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
-                    {showAll ? "Weniger anzeigen ▴" : `Alle anzeigen (+${hiddenCount}) ▾`}
+                    {showAll ? tr("Weniger anzeigen ▴") : tr("Alle anzeigen (+{n}) ▾", { n: hiddenCount })}
                 </button>
             ) : null}
+            {lobbies}
             <style>{STYLES}</style>
         </section>
     );
@@ -367,6 +381,7 @@ function FriendRow({
     /** Code der Lobby, in der ich gerade bin (dort kein "Beitreten" anzeigen) */
     inLobby?: string;
 }) {
+    const { tr } = useI18n();
     const shownName = f.displayName || f.username;
     return (
         <article className={`frRow ${f.online ? "online" : ""}`}>
@@ -378,15 +393,15 @@ function FriendRow({
                 <div className="frName" title={shownName}>
                     {shownName}
                 </div>
-                <div className={`frStatus ${f.online ? "on" : ""}`}>{f.lobbyCode ? `🎮 In Lobby ${f.lobbyCode}` : f.online ? "Online" : lastSeenText(f.lastSeen)}</div>
+                <div className={`frStatus ${f.online ? "on" : ""}`}>{f.lobbyCode ? tr("🎮 In Lobby {code}", { code: f.lobbyCode }) : f.online ? tr("Online") : lastSeenText(f.lastSeen)}</div>
             </div>
             <div className="frActions">
                 {inviteState ? (
                     inviteState === "ok" ? (
-                        <span className="frInvited">✓ Eingeladen</span>
+                        <span className="frInvited">{tr("✓ Eingeladen")}</span>
                     ) : inviteState === "ready" || inviteState === "busy" ? (
-                        <button type="button" className="btn btnPrimary btnSmall" disabled={inviteState === "busy"} onClick={onInvite} title="In diese Lobby einladen">
-                            {inviteState === "busy" ? "…" : "＋ Einladen"}
+                        <button type="button" className="btn btnPrimary btnSmall" disabled={inviteState === "busy"} onClick={onInvite} title={tr("In diese Lobby einladen")}>
+                            {inviteState === "busy" ? "…" : tr("＋ Einladen")}
                         </button>
                     ) : (
                         <span className="frInviteErr" title={inviteState}>
@@ -395,17 +410,17 @@ function FriendRow({
                     )
                 ) : f.joinable && f.lobbyCode && f.lobbyCode !== inLobby ? (
                     <Link href={`/join?code=${encodeURIComponent(f.lobbyCode)}`} className="btn btnPrimary btnSmall">
-                        Beitreten
+                        {tr("Beitreten")}
                     </Link>
                 ) : null}
                 <button
                     type="button"
                     className={`frRemove ${confirming ? "armed" : ""}`}
                     onClick={onRemoveClick}
-                    title="Freundschaft beenden"
-                    aria-label={confirming ? "Wirklich entfernen?" : `${shownName} entfernen`}
+                    title={tr("Freundschaft beenden")}
+                    aria-label={confirming ? tr("Wirklich entfernen?") : tr("{name} entfernen", { name: shownName })}
                 >
-                    {confirming ? "Sicher?" : "✕"}
+                    {confirming ? tr("Sicher?") : "✕"}
                 </button>
             </div>
         </article>
@@ -426,6 +441,7 @@ const STYLES = `
   }
   .frSec.frGuest, .frSec.frCollapsed{ min-height: 0; }
 }
+.frLobbies{ margin-top:auto; padding-top:4px; }
 .frToggle{ margin-left:auto; border:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.08); color:#fff; font:inherit; font-weight:800; font-size:13px; padding:6px 12px; border-radius:999px; cursor:pointer; white-space:nowrap; }
 .frToggle:hover{ background:rgba(255,255,255,.16); }
 .frCollapsed{ gap:10px; padding:14px 16px; }

@@ -18767,3 +18767,428 @@ END;
 $function$;
 
 COMMIT;
+
+-- >>> 105_artists_in_overtime_miss_log.sql <<<
+-- ============================================================
+-- 105: Künstler zählen auch in der Nachspielzeit, falsche Antworten werden protokolliert (Wunsch Mehdi, 2026-10-12)
+-- ============================================================
+-- * rpc_attempt_pass: 'overtime_title_only' (094) entfällt – "Farid Bang" o. ä. zählt immer (½ Punkt).
+-- * public.answer_misses: jede falsche Antwort eines Menschen (Lobby, Song, Spieler, Text), nur für Admins/
+--   Skripte lesbar (keine Grants). Auswertung: node db/scripts/query.mjs "select ... from answer_misses".
+-- ============================================================
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS public.answer_misses (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  lobby_id uuid,
+  song_id uuid,
+  player_id uuid,
+  answer text NOT NULL
+);
+ALTER TABLE public.answer_misses ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.answer_misses FROM anon, authenticated;
+CREATE INDEX IF NOT EXISTS answer_misses_created_idx ON public.answer_misses (created_at DESC);
+
+CREATE OR REPLACE FUNCTION public.rpc_attempt_pass(p_code text, p_player_id uuid, p_answer text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby public.lobbies%ROWTYPE;
+  v_attempt uuid;
+  v_clean text;
+  v_topic text;
+  v_song_title text;
+  v_song_artist text;
+  v_song_feat text[];
+  v_plays int; v_hits int;
+  v_points numeric;
+  v_last_wrong timestamptz;
+  v_quality numeric := 1;
+  v_diff numeric := 1;
+  v_combo int := 0;
+  v_combo_bonus numeric := 0;
+  v_is_bot boolean;
+begin
+  select * into v_lobby from public.lobbies where code = upper(p_code) for update;
+  if not found then raise exception 'lobby_not_found'; end if;
+
+  if not public._verify_session(v_lobby.id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  if v_lobby.phase <> 'running' then raise exception 'lobby_not_running'; end if;
+  if v_lobby.holder_player_id <> p_player_id then raise exception 'not_holder'; end if;
+  if v_lobby.current_attempt_id is not null then raise exception 'attempt_already_open'; end if;
+
+  if v_lobby.explode_at is not null and now() > v_lobby.explode_at + interval '500 milliseconds' then
+    raise exception 'time_up';
+  end if;
+
+  v_clean := trim(p_answer);
+  if length(v_clean) = 0 then raise exception 'empty_answer'; end if;
+  if length(v_clean) > 60 then raise exception 'answer_too_long'; end if;
+
+  if v_lobby.current_song_id is null and exists (
+    select 1 from unnest(v_lobby.used_answers) as used
+    where lower(used) = lower(v_clean)
+  ) then raise exception 'answer_already_used'; end if;
+
+  if v_lobby.current_song_id is not null then
+    select last_wrong_guess_at, combo, coalesce(is_bot, false) into v_last_wrong, v_combo, v_is_bot
+    from public.players where lobby_id = v_lobby.id and player_id = p_player_id;
+    if v_last_wrong is not null and now() < v_last_wrong + interval '1 second' then
+      raise exception 'too_fast';
+    end if;
+
+    select title, artist, feat_artists, plays, hits into v_song_title, v_song_artist, v_song_feat, v_plays, v_hits
+    from public.song_pool where id = v_lobby.current_song_id;
+
+    v_points := public._score_song_answer(v_song_title, v_song_artist, v_song_feat, v_clean);
+
+    -- (105) Nachspielzeit: Künstler zählen wieder immer (Wunsch Mehdi 2026-10-12)
+
+    if v_points = 0 then
+      update public.players set last_wrong_guess_at = now(), combo = 0
+      where lobby_id = v_lobby.id and player_id = p_player_id;
+      -- Falsche Antwort merken (zum Nachsehen, wenn etwas "nicht erkannt" wurde)
+      if not coalesce(v_is_bot, false) then
+        insert into public.answer_misses (lobby_id, song_id, player_id, answer)
+        values (v_lobby.id, v_lobby.current_song_id, p_player_id, left(v_clean, 60));
+      end if;
+      return null;
+    end if;
+
+    -- Bonuszeit-Faktor wie bisher (Titel 1 / Interpret 0.5), Titel + Künstler zählt wie Titel
+    v_quality := least(v_points, 1);
+    v_diff := case public._song_difficulty(v_plays, v_hits) when 1 then 0.8 when 3 then 1.3 else 1.0 end;
+
+    if v_points >= 1 then
+      v_combo := coalesce(v_combo, 0) + 1;
+      v_combo_bonus := case when v_combo >= 2 then least(2, 0.5 * (v_combo - 1)) else 0 end;
+      if not coalesce(v_is_bot, false) then
+        update public.song_pool set hits = hits + 1 where id = v_lobby.current_song_id;
+      end if;
+    else
+      v_combo := 0;
+    end if;
+
+    update public.players
+    set song_points = song_points + v_points, combo = v_combo
+    where lobby_id = v_lobby.id and player_id = p_player_id;
+  end if;
+
+  v_topic := coalesce(v_lobby.topic_selected, v_lobby.topic, '');
+
+  insert into public.pass_attempts (lobby_id, round_number, holder_player_id, answer, topic)
+    values (v_lobby.id, coalesce(v_lobby.round_number, 0), p_player_id, v_clean, v_topic)
+    returning id into v_attempt;
+
+  update public.lobbies
+  set current_attempt_id = v_attempt, last_pass_quality = v_quality,
+      last_pass_diff = v_diff, last_pass_combo_bonus = v_combo_bonus
+  where id = v_lobby.id;
+
+  perform public._finalize_attempt_accept(v_attempt);
+
+  return v_attempt;
+end;
+$function$;
+
+COMMIT;
+
+-- >>> 106_close_empty_lobbies.sql <<<
+-- ============================================================
+-- 106: Leere Lobbys schließen sich sofort (Wunsch Mehdi, 2026-10-12)
+-- ============================================================
+-- * rpc_leave_lobby: verlässt der letzte Mensch die Lobby (Bots zählen nicht), wird sie gelöscht.
+-- * close_empty_lobbies (pg_cron jede Minute): Lobbys, in denen seit 3 Minuten kein Mensch mehr ein
+--   Lebenszeichen geschickt hat (Tab zu, Handy weg), werden ebenfalls gelöscht. 3 Minuten, weil Browser
+--   den Herzschlag in Hintergrund-Tabs auf ~1x pro Minute drosseln.
+-- Bisher blieben solche Lobbys bis zu 60 Minuten stehen (cleanup_expired_lobbies, bleibt als Netz).
+-- ============================================================
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.rpc_leave_lobby(p_lobby_id uuid, p_player_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_host uuid;
+  v_new_host uuid;
+begin
+  if not public._verify_session(p_lobby_id, p_player_id) then
+    raise exception 'invalid_session';
+  end if;
+
+  select host_player_id into v_host from public.lobbies where id = p_lobby_id;
+  if v_host is null then raise exception 'lobby_not_found'; end if;
+
+  update public.players
+  set status = 'left', left_at = now(), ready = false
+  where lobby_id = p_lobby_id and player_id = p_player_id and status = 'active';
+
+  if not found then return; end if;
+
+  -- Letzter Mensch weg: Lobby schließen
+  if not exists (select 1 from public.players
+                 where lobby_id = p_lobby_id and status = 'active' and not coalesce(is_bot, false)) then
+    delete from public.lobbies where id = p_lobby_id;
+    return;
+  end if;
+
+  if v_host = p_player_id then
+    select player_id into v_new_host
+    from public.players
+    where lobby_id = p_lobby_id and status = 'active' and coalesce(is_bot, false) = false
+    order by seat_index asc nulls last, joined_at asc
+    limit 1;
+
+    if v_new_host is not null then
+      update public.lobbies
+      set host_player_id = v_new_host, last_activity_at = now()
+      where id = p_lobby_id;
+    end if;
+  end if;
+
+  update public.lobbies set last_activity_at = now() where id = p_lobby_id;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.close_empty_lobbies()
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  delete from public.lobbies l
+  where l.created_at < now() - interval '3 minutes'
+    and not exists (
+      select 1 from public.players p
+      where p.lobby_id = l.id and p.status = 'active' and not coalesce(p.is_bot, false)
+        and p.last_seen_at > now() - interval '3 minutes'
+    );
+end;
+$function$;
+REVOKE EXECUTE ON FUNCTION public.close_empty_lobbies() FROM PUBLIC, anon, authenticated;
+
+SELECT cron.unschedule('kumpir-close-empty-lobbies') WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'kumpir-close-empty-lobbies');
+SELECT cron.schedule('kumpir-close-empty-lobbies', '* * * * *', 'select public.close_empty_lobbies()');
+
+COMMIT;
+
+-- >>> 107_account_name_fixed_fr.sql <<<
+-- ============================================================
+-- 107: Fester Spielername bei Konten, Französisch als Sprache (Wunsch Mehdi, 2026-10-12)
+-- ============================================================
+-- * rpc_create_lobby / rpc_join_lobby: Wer angemeldet ist, spielt IMMER unter seinem Kontonamen
+--   (profiles.display_name, sonst username) – egal was der Browser schickt. Ändern nur in den Einstellungen.
+-- * set_my_preferences: lang darf jetzt auch 'fr' sein.
+-- ============================================================
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.rpc_create_lobby(p_host_name text, p_privacy text, p_max_players integer, p_round_seconds integer, p_user_id uuid DEFAULT NULL::uuid, p_round_speed text DEFAULT 'normal'::text)
+ RETURNS TABLE(code text, host_player_id uuid)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid := gen_random_uuid();
+  v_code text;
+  v_host_player_id uuid := gen_random_uuid();
+  v_round_speed text := btrim(coalesce(p_round_speed, 'normal'));
+  v_privacy text := 'private';
+  v_headers text;
+  v_token uuid;
+  v_account_name text;
+begin
+  -- (107) Mit Konto steht der Name fest: Anzeigename, sonst Benutzername (ändern nur in den Einstellungen)
+  if auth.uid() is not null then
+    select coalesce(nullif(btrim(display_name), ''), username) into v_account_name from public.profiles where id = auth.uid();
+  end if;
+  if v_round_speed not in ('fast', 'normal', 'calm') then
+    v_round_speed := 'normal';
+  end if;
+
+  v_headers := current_setting('request.headers', true);
+  if v_headers is not null and v_headers <> '' then
+    begin
+      v_token := nullif(v_headers::json ->> 'x-kumpir-session', '')::uuid;
+    exception when others then
+      v_token := null;
+    end;
+  end if;
+
+  if p_user_id is not null and p_user_id is distinct from auth.uid() then raise exception 'user_mismatch'; end if;
+  perform public._rate_limit('createlobby:' || public._client_ip(), 20, 600);
+  if (select count(*) from public.lobbies) >= 1000 then raise exception 'rate_limited'; end if;
+  v_code := public.generate_lobby_code(4);
+
+  insert into public.lobbies (
+    id, code, host_player_id, status, privacy, max_players, round_seconds, round_speed,
+    created_at, last_activity_at, host_user_id
+  ) values (
+    v_lobby_id, upper(v_code), v_host_player_id, 'waiting', v_privacy,
+    greatest(2, least(p_max_players, 12)),
+    coalesce(p_round_seconds, 25),
+    v_round_speed,
+    now(), now(), p_user_id
+  );
+
+  insert into public.players (id, lobby_id, player_id, name, ready, joined_at, last_seen_at, user_id, session_token)
+  values (gen_random_uuid(), v_lobby_id, v_host_player_id, left(trim(coalesce(v_account_name, p_host_name)), 24), false, now(), now(), p_user_id, v_token);
+
+  return query select upper(v_code), v_host_player_id;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.rpc_join_lobby(p_code text, p_player_id uuid, p_name text, p_user_id uuid DEFAULT NULL::uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid;
+  v_locked boolean;
+  v_max_players int;
+  v_active_count int;
+  v_next_seat int;
+  v_headers text;
+  v_token uuid;
+  v_existing uuid;
+  v_own boolean;
+  v_account_name text;
+begin
+  -- (107) Mit Konto steht der Name fest: Anzeigename, sonst Benutzername (ändern nur in den Einstellungen)
+  if auth.uid() is not null then
+    select coalesce(nullif(btrim(display_name), ''), username) into v_account_name from public.profiles where id = auth.uid();
+  end if;
+  select id, locked, max_players into v_lobby_id, v_locked, v_max_players
+  from public.lobbies where upper(code) = upper(p_code) limit 1;
+
+  if v_lobby_id is null then raise exception 'lobby_not_found'; end if;
+  if v_locked then raise exception 'lobby_locked'; end if;
+  if p_user_id is not null and p_user_id is distinct from auth.uid() then raise exception 'user_mismatch'; end if;
+  perform public._rate_limit('join:' || public._client_ip(), 120, 600);
+
+  v_headers := current_setting('request.headers', true);
+  if v_headers is not null and v_headers <> '' then
+    begin
+      v_token := nullif(v_headers::json ->> 'x-kumpir-session', '')::uuid;
+    exception when others then
+      v_token := null;
+    end;
+  end if;
+
+  -- Fremdübernahme eines belegten Platzes verhindern (der eigene Platz eines angemeldeten Kontos ist erlaubt)
+  select session_token, (auth.uid() is not null and user_id = auth.uid()) into v_existing, v_own
+  from public.players where lobby_id = v_lobby_id and player_id = p_player_id;
+
+  if v_existing is null and exists (select 1 from public.players where lobby_id = v_lobby_id and player_id = p_player_id and user_id is not null and user_id is distinct from auth.uid()) then
+    raise exception 'identity_taken';
+  end if;
+  if v_existing is not null and v_token is distinct from v_existing and not coalesce(v_own, false) then
+    raise exception 'identity_taken';
+  end if;
+
+  select count(*) into v_active_count from public.players
+  where lobby_id = v_lobby_id and status = 'active';
+
+  if v_active_count >= v_max_players
+     and not exists (select 1 from public.players where lobby_id = v_lobby_id and status = 'active'
+                     and (player_id = p_player_id or (p_user_id is not null and user_id = p_user_id))) then
+    raise exception 'lobby_full';
+  end if;
+
+  if p_user_id is not null then
+    update public.players
+    set name = left(trim(coalesce(v_account_name, p_name)), 24),
+        status = 'active',
+        left_at = null,
+        kicked_at = null,
+        last_seen_at = now(),
+        session_token = coalesce(v_token, session_token)
+    where lobby_id = v_lobby_id and user_id = p_user_id;
+
+    if found then return; end if;
+  end if;
+
+  select coalesce(min(s.i), 0) into v_next_seat
+  from generate_series(0, v_max_players - 1) as s(i)
+  left join public.players p
+    on p.lobby_id = v_lobby_id and p.seat_index = s.i and p.status = 'active'
+  where p.id is null;
+
+  insert into public.players (lobby_id, player_id, name, status, seat_index, joined_at, last_seen_at, user_id, session_token)
+  values (v_lobby_id, p_player_id, left(trim(coalesce(v_account_name, p_name)), 24), 'active', v_next_seat, now(), now(), p_user_id, v_token)
+  on conflict (lobby_id, player_id) do update set
+    name = excluded.name,
+    status = 'active',
+    left_at = null,
+    kicked_at = null,
+    last_seen_at = now(),
+    seat_index = coalesce(public.players.seat_index, excluded.seat_index),
+    user_id = coalesce(public.players.user_id, excluded.user_id),
+    session_token = coalesce(public.players.session_token, excluded.session_token);
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.set_my_preferences(p_prefs jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_uid uuid := auth.uid();
+  p jsonb := coalesce(p_prefs, '{}'::jsonb);
+  h jsonb := coalesce(p_prefs -> 'host', '{}'::jsonb);
+  s jsonb := coalesce(p_prefs -> 'solo', '{}'::jsonb);
+  out jsonb := '{}'::jsonb;
+  host_out jsonb := '{}'::jsonb;
+  solo_out jsonb := '{}'::jsonb;
+  v_ex jsonb;
+begin
+  if v_uid is null then raise exception 'not_logged_in'; end if;
+  if jsonb_typeof(p) <> 'object' then raise exception 'prefs_invalid'; end if;
+
+  if p ->> 'lang' in ('de', 'en', 'fr') then out := out || jsonb_build_object('lang', p ->> 'lang'); end if;
+  if jsonb_typeof(p -> 'muted') = 'boolean' then out := out || jsonb_build_object('muted', (p ->> 'muted')::boolean); end if;
+  if jsonb_typeof(p -> 'volume') = 'number' and (p ->> 'volume')::numeric between 0 and 1 then
+    out := out || jsonb_build_object('volume', round((p ->> 'volume')::numeric, 2));
+  end if;
+
+  if jsonb_typeof(h -> 'maxPlayers') = 'number' and (h ->> 'maxPlayers')::numeric between 2 and 12 then
+    host_out := host_out || jsonb_build_object('maxPlayers', (h ->> 'maxPlayers')::numeric::int);
+  end if;
+  if h ->> 'speed' in ('fast', 'normal', 'calm') then host_out := host_out || jsonb_build_object('speed', h ->> 'speed'); end if;
+  if h ->> 'rounds' in ('1', '3', '5') then host_out := host_out || jsonb_build_object('rounds', (h ->> 'rounds')::int); end if;
+  if h ->> 'answerMode' in ('text', 'voice') then host_out := host_out || jsonb_build_object('answerMode', h ->> 'answerMode'); end if;
+  if jsonb_typeof(h -> 'excludedPlaylists') = 'array' then
+    select coalesce(jsonb_agg(distinct tp.text), '[]'::jsonb) into v_ex
+    from public.topic_pool tp
+    where tp.is_song_category is true
+      and tp.text in (select jsonb_array_elements_text(h -> 'excludedPlaylists'));
+    host_out := host_out || jsonb_build_object('excludedPlaylists', v_ex);
+  end if;
+  if host_out <> '{}'::jsonb then out := out || jsonb_build_object('host', host_out); end if;
+
+  if jsonb_typeof(s -> 'bots') = 'number' and (s ->> 'bots')::numeric between 1 and 5 then
+    solo_out := solo_out || jsonb_build_object('bots', (s ->> 'bots')::numeric::int);
+  end if;
+  if s ->> 'skill' in ('mixed', '1', '2', '3') then solo_out := solo_out || jsonb_build_object('skill', s ->> 'skill'); end if;
+  if solo_out <> '{}'::jsonb then out := out || jsonb_build_object('solo', solo_out); end if;
+
+  update public.profiles set preferences = out where id = v_uid;
+  return out;
+end;
+$function$;
+
+COMMIT;
