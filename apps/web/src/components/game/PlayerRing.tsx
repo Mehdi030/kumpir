@@ -1,6 +1,7 @@
 "use client";
 
 import { KumpirPotato } from "@/components/game/KumpirPotato";
+import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Player = {
@@ -32,18 +33,11 @@ type Props = {
     heat?: number;
     /** Weitergabe-Richtung: 1 = Sitzreihenfolge vorwärts, -1 = rückwärts (Rache-Pass). */
     direction?: number;
-    /** "Als Nächstes"-Markierung am nächsten Spieler: nur für den Halter und Ausgeschiedene (Überraschungseffekt). */
+    /** Veraltet: "Als Nächstes" + Pfeil sind seit 2026-10-12 für alle sichtbar (Wunsch Mehdi). */
     showNext?: boolean;
 };
 
 const TILT_DEG = 48;
-
-function initialsFor(name: string): string {
-    const parts = name.trim().split(/\s+/);
-    const first = parts[0]?.[0] ?? "?";
-    const second = parts[1]?.[0] ?? "";
-    return (first + second).toUpperCase().slice(0, 2);
-}
 
 /** Stable hue per player_id so avatar colors stay consistent across renders. */
 function hueFor(id: string): number {
@@ -80,7 +74,6 @@ export function PlayerRing({
     disconnectedIds,
     heat = 0,
     direction = 1,
-    showNext = false,
 }: Props) {
     const isDisconnected = useCallback(
         (id: string) => (disconnectedIds instanceof Set ? disconnectedIds.has(id) : (disconnectedIds ?? []).includes(id)),
@@ -101,7 +94,7 @@ export function PlayerRing({
     // Unterkante (vorderer Sitz + Name) -> Antwort-Box der Spielseite beginnt darunter (CSS-Variable --ringBottom)
     const ringBottom = Math.round(cyPx + tableSize * 0.305 + (narrow ? 66 : 92));
     // Auf dem Handy: kleinere Sitze und Schilder, sonst überlappen sie sich am kleinen Tisch.
-    const seatPx = narrow ? 38 : 56;
+    const seatPx = narrow ? 46 : 68;
 
     useEffect(() => {
         const el = containerRef.current;
@@ -289,16 +282,36 @@ export function PlayerRing({
     }, [flyRender, fly]);
     const potatoPx = narrow ? 40 : 62;
 
-    // Wer bekommt die Kartoffel als Nächstes? (nur für Halter/Ausgeschiedene sichtbar)
+    // Wer bekommt die Kartoffel als Nächstes? Für alle sichtbar: Pfeil auf dem Tisch + Schild "als Nächstes"
     const nextId = useMemo(() => {
-        if (!showNext || !holderPlayerId) return null;
+        if (!holderPlayerId) return null;
         const alive = players.filter((p) => p.is_alive);
         const n = alive.length;
-        if (n < 3) return null; // im Duell ist es eh klar
+        if (n < 2) return null;
         const hi = alive.findIndex((p) => p.player_id === holderPlayerId);
         if (hi < 0) return null;
         return alive[(hi + (direction < 0 ? -1 : 1) + n) % n]?.player_id ?? null;
-    }, [players, holderPlayerId, direction, showNext]);
+    }, [players, holderPlayerId, direction]);
+
+    // Pfeil Halter -> Nächster: Bogen über die Tischplatte (Richtung Mitte gebogen), Enden vor den Figuren
+    const nextArrow = useMemo(() => {
+        if (!holderPlayerId || !nextId || fly) return null;
+        const a = getPx(holderPlayerId);
+        const b = getPx(nextId);
+        if (!a || !b) return null;
+        const c = { x: size.w / 2, y: cyPx };
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const ctrl = { x: mid.x + (c.x - mid.x) * 0.55, y: mid.y + (c.y - mid.y) * 0.55 };
+        const pull = (p: Pt, toward: Pt, d: number): Pt => {
+            const dx = toward.x - p.x, dy = toward.y - p.y;
+            const len = Math.max(1, Math.hypot(dx, dy));
+            return { x: p.x + (dx / len) * d, y: p.y + (dy / len) * d };
+        };
+        const off = seatPx * 0.62;
+        const p0 = pull(a, ctrl, off);
+        const p2 = pull(b, ctrl, off + 8);
+        return `M ${p0.x} ${p0.y} Q ${ctrl.x} ${ctrl.y} ${p2.x} ${p2.y}`;
+    }, [holderPlayerId, nextId, fly, getPx, size.w, cyPx, seatPx]);
 
     const popRender = useMemo(() => {
         if (!popPlayerId) return null;
@@ -348,6 +361,19 @@ export function PlayerRing({
                 })}
                 {holderPos ? <div className="holderSpot" style={{ left: holderPos.x, top: holderPos.y }} aria-hidden /> : null}
 
+                {/* Wohin geht die Kumpir als Nächstes? Leuchtender, laufender Pfeil auf der Tischplatte */}
+                {nextArrow ? (
+                    <svg className="nextArrowSvg" width="100%" height="100%" aria-hidden>
+                        <defs>
+                            <marker id="kumpirArrowHead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#ffd23f" />
+                            </marker>
+                        </defs>
+                        <path d={nextArrow} className="nextArrowGlow" />
+                        <path d={nextArrow} className="nextArrowPath" markerEnd="url(#kumpirArrowHead)" />
+                    </svg>
+                ) : null}
+
                 {/* ---------- Spieler: Kreis am Tischrand, Name direkt darunter ---------- */}
                 {players.map((p) => {
                     const pos = getPx(p.player_id);
@@ -379,12 +405,12 @@ export function PlayerRing({
                                 </span>
                             ) : isNext ? <span className="seatBadge nextBadge">als Nächstes</span> : null}
                             <span className="seatDisc">
-                                <span className="seatInitials">{initialsFor(p.name)}</span>
-                                {!p.is_alive ? (
-                                    <span className="seatDeadOverlay" aria-hidden>
-                                        💀
-                                    </span>
-                                ) : null}
+                                <PlayerAvatar
+                                    seed={p.name}
+                                    mood={!p.is_alive || isExploded ? "out" : isHolder ? "panic" : "normal"}
+                                    size={Math.round(seatPx * 1.4)}
+                                    className="seatAvatar"
+                                />
                             </span>
                             <span className="seatName">
                                 <span className="seatNameText">{p.name}</span>
@@ -560,15 +586,25 @@ export function PlayerRing({
           z-index: 30;
           transition: left .45s cubic-bezier(.2,1,.2,1), top .45s cubic-bezier(.2,1,.2,1), transform .3s cubic-bezier(.2,1,.2,1);
         }
+        /* Figur: gezeichneter Mensch (Kopf + Schultern), steht am Tischrand. Darunter ein farbiger Lichtfleck als "Platz". */
         .seatDisc{
-          position:absolute; inset:0; border-radius:50%;
-          display:grid; place-items:center;
-          color:#fff; font-family: var(--font-display); font-weight: 800; font-size: calc(var(--seat) * .32); letter-spacing:.3px;
-          background: radial-gradient(circle at 34% 28%, hsl(var(--h) 70% 62%), hsl(var(--h) 55% 38%) 62%, hsl(var(--h) 50% 24%));
-          box-shadow: 0 0 0 2.5px rgba(255,255,255,.75), 0 0 0 4px rgba(0,0,0,.35), 0 10px 20px rgba(0,0,0,.45), inset 0 2px 4px rgba(255,255,255,.35), inset 0 -6px 10px rgba(0,0,0,.35);
-          transition: box-shadow .25s ease;
+          position:absolute; left:50%; top:50%;
+          width: calc(var(--seat) * 1.4); height: calc(var(--seat) * 1.4);
+          transform: translate(-50%, -66%);
+          display:block; pointer-events:none;
         }
-        .seatInitials{ text-shadow: 0 2px 5px rgba(0,0,0,.5); user-select:none; }
+        .seatDisc::before{
+          content:""; position:absolute; left:50%; bottom: -4%; width: 92%; height: 30%;
+          transform: translateX(-50%); border-radius: 50%;
+          background: radial-gradient(ellipse at center, hsl(var(--h) 80% 60% / .55), hsl(var(--h) 80% 40% / .18) 55%, transparent 72%);
+          filter: blur(2px);
+        }
+        .seatAvatar{
+          position:relative; display:block; width:100%; height:100%;
+          filter: drop-shadow(0 8px 10px rgba(0,0,0,.5));
+          transition: filter .3s ease, transform .3s cubic-bezier(.2,1,.2,1);
+          user-select:none;
+        }
         .seatName{
           position:absolute; left:50%; top: calc(100% + 7px);
           transform: translateX(-50%);
@@ -585,7 +621,7 @@ export function PlayerRing({
         .seatMe{ flex:none; font-size: 10.5px; font-weight: 900; padding: 1px 6px; border-radius: 999px; background: rgba(34,211,238,.2); border: 1px solid rgba(34,211,238,.7); color: #c4f6ff; text-transform: uppercase; letter-spacing: .5px; }
         .seatPts{ flex:none; font-size: 12px; font-weight: 900; color: #ffe08a; }
         .seatBadge{
-          position:absolute; left:50%; bottom: calc(100% + 8px);
+          position:absolute; left:50%; bottom: calc(100% + var(--seat) * .48 + 4px);
           transform: translateX(-50%);
           padding: 3px 10px; border-radius: 999px;
           font-size: 11px; font-weight: 950; letter-spacing: 1.2px; white-space: nowrap;
@@ -601,22 +637,33 @@ export function PlayerRing({
           border: 1px dashed rgba(255,255,255,.45); box-shadow: none; letter-spacing: .4px; font-weight: 800;
         }
 
-        /* Du: türkiser Ring */
-        .seat.me .seatDisc{ box-shadow: 0 0 0 3px #3fe0f5, 0 0 0 5px rgba(0,0,0,.35), 0 0 18px rgba(34,211,238,.45), 0 10px 20px rgba(0,0,0,.45), inset 0 2px 4px rgba(255,255,255,.35), inset 0 -6px 10px rgba(0,0,0,.35); }
+        /* Du: türkiser Lichtfleck + Rahmen am Namen */
+        .seat.me .seatDisc::before{ background: radial-gradient(ellipse at center, rgba(63,224,245,.75), rgba(34,211,238,.22) 55%, transparent 72%); }
         .seat.me .seatName{ border-color: rgba(63,224,245,.75); }
         /* Am Zug: goldener Ring, größer, Name in Gold */
         .seat.holder{ transform: translate(-50%, -50%) translateZ(60px) rotateX(calc(var(--tilt) * -1)) scale(1.16); z-index: 36; }
-        .seat.holder .seatDisc{ animation: holderRing 1.3s ease-in-out infinite; }
+        .seat.holder .seatAvatar{ animation: holderGlow 1.1s ease-in-out infinite; }
+        .seat.holder .seatDisc::before{ background: radial-gradient(ellipse at center, rgba(255,214,10,.9), rgba(255,140,30,.35) 55%, transparent 72%); }
         .seat.holder .seatName{ background: linear-gradient(180deg, #7a4a06, #5a3300); border-color: rgba(255,214,10,.9); color: #fff3c4; }
-        @keyframes holderRing{
-          0%,100%{ box-shadow: 0 0 0 3px #ffc929, 0 0 0 6px rgba(255,170,30,.28), 0 0 22px rgba(255,150,30,.55), 0 10px 20px rgba(0,0,0,.45), inset 0 2px 4px rgba(255,255,255,.35); }
-          50%{ box-shadow: 0 0 0 3px #ffe27a, 0 0 0 9px rgba(255,170,30,.18), 0 0 36px rgba(255,150,30,.8), 0 10px 20px rgba(0,0,0,.45), inset 0 2px 4px rgba(255,255,255,.35); }
+        @keyframes holderGlow{
+          0%,100%{ filter: drop-shadow(0 8px 10px rgba(0,0,0,.5)) drop-shadow(0 0 10px rgba(255,170,40,.75)); transform: rotate(-2deg); }
+          50%{ filter: drop-shadow(0 8px 10px rgba(0,0,0,.5)) drop-shadow(0 0 22px rgba(255,200,60,.95)); transform: rotate(2deg) translateY(-2px); }
         }
-        /* Als Nächstes: gestrichelter Ring */
-        .seat.next .seatDisc{ box-shadow: 0 0 0 2.5px rgba(255,255,255,.75), 0 0 0 6px rgba(255,255,255,.12), 0 10px 20px rgba(0,0,0,.45), inset 0 2px 4px rgba(255,255,255,.35); outline: 2px dashed rgba(255,255,255,.55); outline-offset: 5px; }
+        /* Als Nächstes: weißer Lichtfleck */
+        .seat.next .seatDisc::before{ background: radial-gradient(ellipse at center, rgba(255,255,255,.7), rgba(255,255,255,.18) 55%, transparent 72%); }
 
-        .seat.dead{ opacity:.34; filter: grayscale(.9); }
-        .seatDeadOverlay{ position:absolute; inset:0; display:grid; place-items:center; font-size: 22px; background: rgba(0,0,0,.34); border-radius: 50%; }
+        .seat.dead{ opacity:.4; filter: grayscale(.95); }
+
+        /* Pfeil zum Nächsten */
+        .nextArrowSvg{ position:absolute; inset:0; transform: translateZ(7px); pointer-events:none; overflow: visible; }
+        .nextArrowGlow{ fill:none; stroke: rgba(255,170,40,.35); stroke-width: 12; stroke-linecap: round; filter: blur(4px); }
+        .nextArrowPath{
+          fill:none; stroke: #ffd23f; stroke-width: 4.5; stroke-linecap: round;
+          stroke-dasharray: 10 11; animation: arrowFlow .7s linear infinite;
+          filter: drop-shadow(0 0 6px rgba(255,170,40,.9));
+        }
+        @keyframes arrowFlow{ to{ stroke-dashoffset: -21; } }
+        .ringNarrow .nextArrowPath{ stroke-width: 3.5; }
         .seatStale{
           position:absolute; top:-6px; right:-8px;
           background: rgba(120,20,20,.85); border: 1px solid rgba(255,255,255,.24);
@@ -674,7 +721,7 @@ export function PlayerRing({
         @keyframes pop{ 0%{ opacity:0; scale:.6; } 50%{ opacity:1; scale:1.1; } 100%{ opacity:0; scale:.9; } }
 
         @media (prefers-reduced-motion: reduce){
-          .badgePotato, .holderSpot, .seat.holder .seatDisc, .tPulse{ animation: none; }
+          .badgePotato, .holderSpot, .seat.holder .seatAvatar, .tPulse, .nextArrowPath{ animation: none; }
         }
       `}</style>
         </div>

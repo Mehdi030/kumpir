@@ -1992,6 +1992,17 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     const aliveNow = players.filter((p) => p.is_alive).length;
 
+    // Wer bekommt die Kumpir als Nächstes? (gleiche Rechnung wie der Pfeil am Tisch)
+    const nextPlayer = (() => {
+        const alive = players.filter((p) => p.is_alive);
+        const hi = alive.findIndex((p) => p.player_id === lobby.holder_player_id);
+        if (hi < 0 || alive.length < 2) return null;
+        const dir = (lobby.pass_direction ?? 1) < 0 ? -1 : 1;
+        return alive[(hi + dir + alive.length) % alive.length] ?? null;
+    })();
+    const nextIsMe = !!mePlayerId && nextPlayer?.player_id === mePlayerId;
+    const nextName = nextPlayer?.name ?? null;
+
     // Heat-Ratio (0..1): kontinuierlich statt nur 3 Stufen, damit man nach
     // einem Pass sofort sieht, WIE WEIT die aktuelle Runde schon ist, statt
     // nur "ruhig/mittel/heiß" grob zu erahnen. Bezugsgröße ist die Dauer
@@ -2124,6 +2135,14 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             {/* Self-elimination flash overlay */}
             {selfShake ? <div className="selfFlash" aria-hidden /> : null}
 
+            {/* Eigener Zug: ganz andere Stimmung als beim Zuschauen – warmer Hintergrund + pulsierender Rahmen */}
+            <div className={`myTurnBg ${isMeHolder ? "on" : ""}`} aria-hidden />
+            <div
+                className={`myTurnFrame ${isMeHolder ? "on" : ""}`}
+                style={{ ["--beat" as string]: `${(1.5 - Math.round(heatRatio * 10) / 10).toFixed(1)}s` }}
+                aria-hidden
+            />
+
             <ToastStack toasts={toasts} />
 
             <div className="hud">
@@ -2155,7 +2174,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     ) : isMeHolder ? (
                         <div className="answerCard">
                             <div className="answerHead">
-                                <div className="statusTitle">Du bist dran! 🥔</div>
+                                <div className="statusTitle myTurnTitle">🥔 Du bist dran!</div>
                                 {lobby.current_song_id ? (
                                     <div className="diffChip" title="Schwierigkeit des Songs – schwere Songs geben mehr Bonuszeit">
                                         {"★".repeat(lobby.current_song_difficulty ?? 2)}
@@ -2220,9 +2239,18 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                             ) : null}
                         </div>
                     ) : (
-                        <div className="statusCard">
-                            <div className="statusTitle">{holderName} ist dran</div>
-                            <div className="statusSub">{isSpectator ? "Du schaust nur zu – in der nächsten Runde kannst du mitspielen." : "Warte ab – gleich kann es dich treffen."}</div>
+                        <div className={`statusCard watchCard ${nextIsMe ? "watchNextMe" : ""}`}>
+                            <div className="watchLabel">👀 Zuschauen</div>
+                            <div className="statusTitle watchTitle">{holderName} ist dran</div>
+                            <div className="statusSub">
+                                {isSpectator
+                                    ? "Du schaust nur zu – in der nächsten Runde kannst du mitspielen."
+                                    : nextIsMe
+                                      ? "⚠️ Du bist als Nächstes dran – Ohren auf!"
+                                      : nextName
+                                        ? `Danach kommt ${nextName}.`
+                                        : "Warte ab – gleich kann es dich treffen."}
+                            </div>
                         </div>
                     )}
 
@@ -2266,7 +2294,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           padding-top: var(--ringBottom, calc(27vh + min(66vmin, 540px) * 0.31 + 128px));
         }
         .hudInner{
-          width: min(920px, 94vw);
+          width: min(920px, 100%);
           display: grid;
           justify-items: center;
           gap: 14px;
@@ -2290,8 +2318,34 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           border: 1px solid rgba(255,255,255,0.18);
           color: rgba(255,255,255,0.92);
         }
+        /* ===== Eigener Zug vs. Zuschauen (Wunsch Mehdi 2026-10-12) ===== */
+        .myTurnBg{
+          position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .45s ease;
+          background:
+            radial-gradient(circle at 50% 30%, rgba(255,150,40,.40) 0%, rgba(140,40,10,0) 62%),
+            linear-gradient(180deg, #3d1406 0%, #2a0c05 55%, #160604 100%);
+        }
+        .myTurnBg.on{ opacity: 1; }
+        .myTurnFrame{
+          position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: 0; transition: opacity .3s ease;
+          box-shadow: inset 0 0 0 3px rgba(255,190,60,.85), inset 0 0 70px rgba(255,120,30,.5);
+        }
+        .myTurnFrame.on{ opacity: 1; animation: myTurnBeat var(--beat, 1.5s) ease-in-out infinite; }
+        @keyframes myTurnBeat{ 50%{ box-shadow: inset 0 0 0 6px rgba(255,214,10,.95), inset 0 0 130px rgba(255,90,20,.7); } }
+        .myTurnTitle{
+          font-size: clamp(28px, 4.6vw, 40px) !important; text-transform: uppercase; letter-spacing: .02em !important;
+          background: linear-gradient(180deg, #fff6d6, #ffc23a 55%, #ff8a1c); -webkit-background-clip: text; background-clip: text; color: transparent;
+          filter: drop-shadow(0 3px 10px rgba(255,120,20,.45));
+        }
+        .watchCard{ background: rgba(30,50,100,.28) !important; border-color: rgba(140,180,255,.22) !important; padding: 14px 18px !important; gap: 6px !important; }
+        .watchLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; color: rgba(190,215,255,.75); }
+        .watchTitle{ font-size: clamp(18px, 2.6vw, 23px) !important; color: rgba(235,242,255,.95); }
+        .watchNextMe{ border-color: rgba(255,214,10,.6) !important; box-shadow: 0 0 0 3px rgba(255,214,10,.12); }
+        .watchNextMe .statusSub{ color: #ffe08a; opacity: 1; font-weight: 800; }
+        @media (prefers-reduced-motion: reduce){ .myTurnFrame.on{ animation: none; } }
+
         .statusCard, .answerCard{
-          width: min(560px, 94vw);
+          width: min(560px, 100%);
           display: grid;
           gap: 10px;
           justify-items: center;
@@ -2303,8 +2357,13 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           -webkit-backdrop-filter: blur(10px);
         }
         .answerCard{
-          border-color: rgba(255,214,10,0.55);
-          box-shadow: 0 0 0 4px rgba(255,214,10,0.10), 0 18px 50px rgba(0,0,0,0.35);
+          width: min(600px, 100%);
+          padding: 22px 22px 18px;
+          border: 2px solid transparent;
+          background:
+            linear-gradient(rgba(42,14,6,.92), rgba(30,9,4,.92)) padding-box,
+            linear-gradient(135deg, #ffd23f, #ff7a1a 45%, #ff2d55) border-box;
+          box-shadow: 0 0 0 5px rgba(255,170,40,.12), 0 0 46px rgba(255,130,30,.35), 0 22px 60px rgba(0,0,0,.45);
         }
         .statusTitle{ font-size: clamp(20px, 3.2vw, 28px); font-weight: 900; letter-spacing: -0.01em; }
         .statusSub{ font-size: 14px; opacity: .72; font-weight: 600; max-width: 42ch; }

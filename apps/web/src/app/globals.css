@@ -1922,13 +1922,20 @@ textarea:focus-visible{
 .homeBackBtn{
     display: inline-flex; align-items: center; gap: 8px; flex: none;
     padding: 11px 20px; border-radius: 999px;
-    font-size: 16px; font-weight: 900; color: #2b0f04; text-decoration: none; white-space: nowrap;
-    background: linear-gradient(180deg, #ffffff, #ffe9b8);
-    box-shadow: 0 10px 26px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 2px rgba(255, 255, 255, .35);
-    transition: transform .2s var(--ease-spring, ease), box-shadow .2s ease;
-    border: 0; cursor: pointer; font-family: inherit;
+    font-size: 16px; font-weight: 900; color: #fff3d6; text-decoration: none; white-space: nowrap;
+    /* Glas im Stil der Karten statt heller Pille – fällt auf, ohne zu schreien (Wunsch Mehdi 2026-10-12) */
+    background: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .05));
+    border: 1.5px solid rgba(255, 210, 120, .6);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .22);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    transition: transform .2s var(--ease-spring, ease), box-shadow .2s ease, background .2s ease, color .2s ease, border-color .2s ease;
+    cursor: pointer; font-family: inherit;
 }
-.homeBackBtn:hover{ transform: translateY(-2px); box-shadow: 0 14px 32px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 3px rgba(255, 210, 63, .6); }
+.homeBackBtn:hover, .homeBackBtn:focus-visible{
+    transform: translateY(-2px); color: #2b0f04; border-color: transparent;
+    background: linear-gradient(180deg, #ffd23f, #ff9f1c);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, .32), 0 0 0 3px rgba(255, 210, 63, .35);
+}
 .homeBackBtn:disabled{ opacity: .6; cursor: default; transform: none; }
 .cardCorner{ position: absolute; top: 20px; right: 20px; z-index: 6; }
 /* Platz für den Knopf, damit die Überschrift nicht darunter läuft */
