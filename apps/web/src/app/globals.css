@@ -2081,3 +2081,43 @@ textarea:focus-visible{
     .lobbyMain .playerGrid{ grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 }
 
+/* Lobby hosten auf dem Handy ohne Scrollen (Wunsch Mehdi 2026-10-12):
+   kleiner Kopf, schmale Kategorien, jeder Einstellungs-Kasten eine Zeile (Titel links, Auswahl rechts),
+   nicht verfügbare Modi ("SOON") und Hinweise ausgeblendet. */
+@media (max-width: 640px){
+    .hostMain{ padding: 8px 10px; }
+    .hostMain .card{ padding: 14px 14px 14px; border-radius: 24px; }
+    .hostMain .cardCorner{ position: absolute; top: 12px; right: 12px; margin: 0; padding: 7px 12px; font-size: 13.5px; }
+    .hostMain .hostHeader{ padding-right: 130px !important; }
+    .hostMain .hostHeader .h1{ font-size: 27px; line-height: 1.1; }
+    .hostMain .hostSub{ display: none; }
+    .hostMain .hostCats{ margin: 10px 0 10px; gap: 8px; }
+    .hostMain .hostCat{ grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; padding: 8px 10px; border-radius: 16px; }
+    .hostMain .hostCatIcon{ font-size: 22px; grid-row: span 2; }
+    .hostMain .hostCatTitle{ font-size: 15px; }
+    .hostMain .hostCatText{ display: none; }
+    .hostMain .panel{ padding: 10px; display: grid; gap: 8px; }
+    .hostMain .panelHead, .hostMain .divider, .hostMain .fieldTop .fieldHint, .hostMain .pillCardHint{ display: none; }
+    .hostMain .fieldTop{ margin-bottom: 4px; }
+    .hostMain .fieldTitle{ font-size: 13.5px; }
+    .hostMain .pillInputWrap{ min-height: 0; padding-top: 4px; padding-bottom: 4px; }
+    .hostMain .pillCard{ display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 10px; padding: 8px 10px; border-radius: 16px; }
+    .hostMain .pillCardTop{ margin: 0; }
+    .hostMain .pillCardTitle{ font-size: 13.5px; white-space: nowrap; }
+    .hostMain .pillSeg{ gap: 5px; flex-wrap: nowrap !important; margin-left: auto; }
+    .hostMain .pillSegBtn{ padding: 6px 9px; min-height: 34px; font-size: 12.5px; border-radius: 12px; }
+    .hostMain .pillSegBtn .segBadge{ display: none; }
+    .hostMain .pillSegBtn:has(.segSoon){ display: none; }
+    .hostMain .pillStepper{ gap: 6px; margin-left: auto; }
+    .hostMain .pillStepBtn{ width: 36px; height: 36px; min-height: 0; }
+    .hostMain .pillStepValue{ flex: none; width: 48px; height: 36px; font-size: 17px; }
+    .hostMain .plChip{ padding: 5px 10px; font-size: 12.5px; }
+    .hostMain .plPick > :not(.plChips){ display: none; }
+    .hostMain .actionsRow{ margin-top: 2px !important; }
+    .hostMain .actionsRow .btnXL{ width: 100%; padding-top: 13px; padding-bottom: 13px; }
+    .hostMain .rulesOutside{ display: none; }
+}
+@media (max-width: 640px) and (min-height: 600px){
+    html:has(.hostMain), body:has(.hostMain){ overflow: hidden; }
+}
+
