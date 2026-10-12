@@ -15,11 +15,15 @@ import { seasonKey, type ProfileStats } from "@/lib/profileStats";
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 /**
- * Statistik-Sektion auf der Startseite (nur mit Konto). Kurzüberblick in der Karte; ein Klick auf die
- * Überschrift oder "Mehr anzeigen" öffnet ein Pop-up mit allem (Verlauf, Musik-Werte, Gegner,
- * Monats-Rückblick – dieselben Daten wie im Profil, Migration 076).
+ * Statistik-Sektion auf der Startseite (nur mit Konto). Kurzüberblick; ein Klick auf die Überschrift oder
+ * "Mehr anzeigen" öffnet ein Pop-up mit allem (Verlauf, Musik-Werte, Gegner, Monats-Rückblick – Migration 076).
+ *
+ * variant (Hauptmenü ohne Scrollen, Wunsch Mehdi 2026-10-12):
+ *   dock = feste Leiste links neben der Hauptkarte (breite Bildschirme, gegenüber der Freunde-Leiste)
+ *   chip = eine Zeile/Knopf in der Hauptkarte (schmalere Bildschirme), öffnet das Pop-up
+ *   card = Kasten in der Karte (alt)
  */
-export function HomeStatsSection() {
+export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "dock" | "chip" }) {
     const { user, loading: authLoading } = useAuth();
     const { stats, unlocked, catalog, loading: statsLoading } = useAchievements(AUTH_DISABLED ? null : user?.id ?? null);
     const [open, setOpen] = useState(false);
@@ -27,9 +31,39 @@ export function HomeStatsSection() {
     if (AUTH_DISABLED || authLoading || !user) return null;
 
     const fastest = stats?.fastest_pass_ms ? `${(stats.fastest_pass_ms / 1000).toFixed(1)} s` : "–";
+    const quick: [string, string][] = [
+        ["Runden", String(stats?.games_played ?? 0)],
+        ["Rundensiege", String(stats?.wins ?? 0)],
+        ["Weitergaben", String(stats?.total_passes ?? 0)],
+        ["Rettungen in letzter Sekunde", String(stats?.total_clutch_passes ?? 0)],
+        ["Schnellste Weitergabe", fastest],
+        ["Beste Streak", String(stats?.best_survival_streak ?? 0)],
+    ];
+
+    if (variant === "chip") {
+        return (
+            <>
+                <button type="button" className="homeChip" onClick={() => setOpen(true)} title="Ganze Statistik anzeigen">
+                    <span className="homeChipIcon" aria-hidden>
+                        📊
+                    </span>
+                    <span className="homeChipText">
+                        <b>Statistik</b>
+                        <span>
+                            {statsLoading ? "…" : `${stats?.games_played ?? 0} Runden · ${stats?.wins ?? 0} Siege`}
+                        </span>
+                    </span>
+                    <span className="homeChipArrow" aria-hidden>
+                        ›
+                    </span>
+                </button>
+                {open ? <StatsModal onClose={() => setOpen(false)} quick={quick} /> : null}
+            </>
+        );
+    }
 
     return (
-        <div className="statsSectionCard">
+        <div className={`statsSectionCard ${variant === "dock" ? "statsDock" : ""}`}>
             <div className="statsSectionHead">
                 <button type="button" className="statsHeadBtn" onClick={() => setOpen(true)} title="Ganze Statistik anzeigen">
                     📊 Deine Statistik <span className="statsHeadArrow">›</span>
@@ -48,25 +82,19 @@ export function HomeStatsSection() {
                     <StatBox label="Rundensiege" value={String(stats?.wins ?? 0)} />
                     <StatBox label="Beste Streak" value={String(stats?.best_survival_streak ?? 0)} />
                     <StatBox label="Achievements" value={`${unlocked.length}/${catalog.length}`} />
+                    {variant === "dock" ? (
+                        <>
+                            <StatBox label="Weitergaben" value={String(stats?.total_passes ?? 0)} />
+                            <StatBox label="Schnellste" value={fastest} />
+                        </>
+                    ) : null}
                 </div>
             )}
             <button type="button" className="statsMoreBtn" onClick={() => setOpen(true)}>
                 Mehr anzeigen
             </button>
 
-            {open ? (
-                <StatsModal
-                    onClose={() => setOpen(false)}
-                    quick={[
-                        ["Runden", String(stats?.games_played ?? 0)],
-                        ["Rundensiege", String(stats?.wins ?? 0)],
-                        ["Weitergaben", String(stats?.total_passes ?? 0)],
-                        ["Rettungen in letzter Sekunde", String(stats?.total_clutch_passes ?? 0)],
-                        ["Schnellste Weitergabe", fastest],
-                        ["Beste Streak", String(stats?.best_survival_streak ?? 0)],
-                    ]}
-                />
-            ) : null}
+            {open ? <StatsModal onClose={() => setOpen(false)} quick={quick} /> : null}
 
             <style>{`
                 .statsSectionCard{ margin-top: 18px; padding: 16px; border-radius: 18px; background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.10); display: grid; }
@@ -78,6 +106,17 @@ export function HomeStatsSection() {
                 .statsGrid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
                 .statsMoreBtn{ justify-self: center; margin-top: 12px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; font: inherit; font-weight: 800; font-size: 13.5px; padding: 8px 18px; border-radius: 999px; cursor: pointer; }
                 .statsMoreBtn:hover{ background: rgba(255,255,255,.16); }
+                /* Leiste links (gegenüber der Freunde-Leiste, gleiche Breite/Optik) */
+                .statsDock{
+                  position: fixed; z-index: 5; margin: 0; left: 24px; top: 96px;
+                  width: clamp(240px, calc((100vw - var(--homeW, 860px)) / 2 - 56px), 400px);
+                  padding: 18px; border-radius: 26px; gap: 4px;
+                  background: rgba(20,8,4,.5); border: 1px solid var(--glass-line);
+                  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 18px 50px rgba(0,0,0,.25);
+                  animation: kmRise .7s var(--ease-out) .2s backwards;
+                }
+                .statsDock .statsHeadBtn{ font-size: 20px; font-family: var(--font-display); }
+                .statsDock .statsGrid{ grid-template-columns: 1fr 1fr; gap: 10px; }
             `}</style>
         </div>
     );

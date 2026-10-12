@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { useFriends } from "@/hooks/useFriends";
 import { useFriendsStatus, type FriendStatus } from "@/hooks/useFriendsStatus";
@@ -37,6 +38,60 @@ function lastSeenText(iso: string | null): string {
 }
 
 type Filter = "all" | "online";
+
+/**
+ * Schmalere Bildschirme (Hauptmenü ohne Scrollen): statt der Liste unter der Karte ein Knopf in der Karte
+ * ("Freunde · 2 online"), der die ganze Freunde-Liste als Fenster öffnet.
+ */
+export function HomeFriendsButton() {
+    const { user, loading } = useAuth();
+    const status = useFriendsStatus(user?.id ?? null);
+    const [open, setOpen] = useState(false);
+    useEffect(() => {
+        if (!open) return;
+        const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [open]);
+    if (GUEST_ONLY || loading || !user) return null;
+    const online = status.friends.filter((f) => f.online).length;
+    return (
+        <>
+            <button type="button" className="homeChip" onClick={() => setOpen(true)} title="Freunde anzeigen">
+                <span className="homeChipIcon" aria-hidden>
+                    👥
+                </span>
+                <span className="homeChipText">
+                    <b>Freunde</b>
+                    <span>{status.loading ? "…" : online > 0 ? `${online} online` : `${status.friends.length} insgesamt`}</span>
+                </span>
+                {online > 0 ? <span className="homeChipDot" aria-hidden /> : null}
+                <span className="homeChipArrow" aria-hidden>
+                    ›
+                </span>
+            </button>
+            {open
+                ? createPortal(
+                      <div className="frModalBack" onClick={() => setOpen(false)} role="presentation">
+                          <div className="frModal" role="dialog" aria-modal="true" aria-label="Freunde" onClick={(e) => e.stopPropagation()}>
+                              <button type="button" className="frModalClose" onClick={() => setOpen(false)} aria-label="Schließen">
+                                  ✕
+                              </button>
+                              <HomeFriends />
+                          </div>
+                          <style>{`
+                            .frModalBack{ position: fixed; inset: 0; z-index: 4000; background: rgba(10,4,2,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; padding: 14px; }
+                            .frModal{ position: relative; width: min(520px, 100%); max-height: calc(100dvh - 28px); overflow: auto; overscroll-behavior: contain; border-radius: 28px; }
+                            .frModal .frSec{ margin: 0; background: linear-gradient(180deg, rgba(60,18,8,.97), rgba(32,10,6,.98)); }
+                            .frModalClose{ position: absolute; top: 14px; right: 14px; z-index: 2; width: 38px; height: 38px; border-radius: 999px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; font-size: 15px; cursor: pointer; }
+                          `}</style>
+                      </div>,
+                      document.body
+                  )
+                : null}
+        </>
+    );
+}
 
 /**
  * Freunde im Hauptmenü: auf breiten Bildschirmen eine hohe Leiste rechts neben der Hauptkarte

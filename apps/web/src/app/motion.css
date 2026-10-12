@@ -80,13 +80,10 @@ main{ animation: kmPageIn .45s ease backwards; }
 
 /* ---------- Startseite: Kumpir (components/HomePotato.tsx) ----------
    Ruhig/statisch, lebt nur durch kleine Gesten: Zwinkern, Finger-Welle, Funke an der Zündschnur.
-   3D: Kante per gestapelten Schatten, Lichtreflex, leichte Neigung zur Maus (--rx/--ry aus JS). */
+   3D: Kante per gestapelten Schatten und Lichtreflex. Die Maus bewegt sie NICHT (Wunsch Mehdi 2026-10-12). */
 .potatoBgImg.kpStage{ position: relative; aspect-ratio: 3 / 2; filter: none; transform: none; perspective: 1100px; }
 .kpTilt{
     position: relative; width: 100%; height: 100%;
-    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-    transform-origin: 50% 62%;
-    will-change: transform;
 }
 .kpBase{
     display: block; width: 100%; height: auto;
@@ -95,16 +92,33 @@ main{ animation: kmPageIn .45s ease backwards; }
 }
 .kpLayer{ position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 
-/* Zwinkern: rechtes Auge zu, linkes kneift leicht mit (alle 8 s) */
+/* Augen (12-s-Zyklus): Blinzeln beider Augen bei 25 %, Doppelblinzeln ("Zucken") bei 50/52 %,
+   Zwinkern rechts bei 87–92 % (links kneift dabei nur leicht). */
 .kpLidUp{ transform: translateY(-125px); }
-.kpLidUp.kpWink{ animation: kpWinkUp 8s var(--ease-inout) 2.4s infinite; }
-.kpLidUp.kpSquint{ animation: kpSquint 8s var(--ease-inout) 2.4s infinite; }
-.kpLidLo{ transform: translateY(70px); animation: kpWinkLo 8s var(--ease-inout) 2.4s infinite; }
-@keyframes kpWinkUp{ 0%, 84%, 96%, 100%{ transform: translateY(-125px); } 87%, 93%{ transform: translateY(0); } }
-@keyframes kpWinkLo{ 0%, 84%, 96%, 100%{ transform: translateY(70px); } 87%, 93%{ transform: translateY(0); } }
-.kpLash{ opacity: 0; animation: kpLash 8s linear 2.4s infinite; }
-@keyframes kpLash{ 0%, 86%, 94%, 100%{ opacity: 0; } 87%, 93%{ opacity: 1; } }
-@keyframes kpSquint{ 0%, 84%, 96%, 100%{ transform: translateY(-125px); } 87%, 93%{ transform: translateY(-36px); } }
+.kpLidLo{ transform: translateY(70px); }
+.kpLidR{ animation: kpLidR 12s ease-in-out 1.5s infinite; }
+.kpLidRLo{ animation: kpLidRLo 12s ease-in-out 1.5s infinite; }
+.kpLidL{ animation: kpLidL 12s ease-in-out 1.5s infinite; }
+.kpLidLLo{ animation: kpLidLLo 12s ease-in-out 1.5s infinite; }
+@keyframes kpLidR{
+    0%, 24%, 26%, 49%, 50.8%, 51.6%, 53.2%, 84%, 95%, 100%{ transform: translateY(-125px); }
+    25%, 50%, 52.4%, 87%, 92%{ transform: translateY(0); }
+}
+@keyframes kpLidRLo{
+    0%, 24%, 26%, 49%, 50.8%, 51.6%, 53.2%, 84%, 95%, 100%{ transform: translateY(70px); }
+    25%, 50%, 52.4%, 87%, 92%{ transform: translateY(0); }
+}
+@keyframes kpLidL{
+    0%, 24%, 26%, 49%, 50.8%, 51.6%, 53.2%, 84%, 95%, 100%{ transform: translateY(-125px); }
+    25%, 50%, 52.4%{ transform: translateY(0); }
+    87%, 92%{ transform: translateY(-36px); }
+}
+@keyframes kpLidLLo{
+    0%, 24%, 26%, 49%, 50.8%, 51.6%, 53.2%, 100%{ transform: translateY(70px); }
+    25%, 50%, 52.4%{ transform: translateY(0); }
+}
+.kpLash{ opacity: 0; animation: kpLash 12s linear 1.5s infinite; }
+@keyframes kpLash{ 0%, 86%, 93%, 100%{ opacity: 0; } 87%, 92%{ opacity: 1; } }
 
 /* Finger-Welle: nacheinander kurz anheben (vom Fingeransatz aus gestreckt, deckt das Original ab) */
 .kpFinger{
@@ -142,18 +156,18 @@ main{ animation: kmPageIn .45s ease backwards; }
     82% { opacity: .7;  transform: translate(-50%, -50%) scale(.94); }
 }
 
-/* Lichtreflex (folgt der Maus) + Oberlicht, nur auf der Grafik selbst */
+/* Lichtreflex (fest) + Oberlicht, nur auf der Grafik selbst */
 .kpSheen{
     position: absolute; inset: 0; pointer-events: none;
     background:
-        radial-gradient(38% 52% at var(--lx, 50%) var(--ly, 38%), rgba(255, 248, 215, .42), transparent 70%),
+        radial-gradient(38% 52% at 46% 34%, rgba(255, 248, 215, .42), transparent 70%),
         linear-gradient(180deg, rgba(255, 240, 200, .18), transparent 45%, rgba(60, 20, 0, .22) 75%);
     mix-blend-mode: soft-light;
     -webkit-mask: url(/HGLogo-v2.webp) center / 100% 100% no-repeat;
     mask: url(/HGLogo-v2.webp) center / 100% 100% no-repeat;
 }
 @media (prefers-reduced-motion: reduce){
-    .kpFinger, .kpLidUp.kpWink, .kpLidUp.kpSquint, .kpLidLo, .kpLash, .kpSpark{ animation: none; }
+    .kpFinger, .kpLidR, .kpLidRLo, .kpLidL, .kpLidLLo, .kpLash, .kpSpark{ animation: none; }
 }
 .homeTitle{
     background: linear-gradient(100deg, #fff 0%, #fff 36%, #ffe08a 47%, #fff 58%, #fff 100%);

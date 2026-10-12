@@ -4,18 +4,22 @@ import Link from "next/link";
 import { Suspense, useEffect } from "react";
 import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
-import { HomeFriends } from "@/components/HomeFriends";
+import { HomeFriends, HomeFriendsButton } from "@/components/HomeFriends";
 import { HomePotato } from "@/components/HomePotato";
 import { HomeStatsSection } from "@/components/HomeStatsSection";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { PwaSetup } from "@/components/PwaSetup";
 import { useI18n } from "@/lib/i18n";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { track } from "@/lib/track";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 export default function Home() {
     const { t } = useI18n();
+    // Breite Bildschirme: Statistik links, Freunde rechts als feste Leisten. Sonst je ein Knopf in der Karte.
+    // So passt das Hauptmenü immer auf einen Bildschirm, ohne Scrollen (Wunsch Mehdi 2026-10-12).
+    const wide = useMediaQuery("(min-width: 1300px)");
     useEffect(() => {
         track("home_view");
     }, []);
@@ -25,7 +29,7 @@ export default function Home() {
         { icon: "💥", title: t("home.step3.title"), text: t("home.step3.text") },
     ];
     return (
-        <main className="container">
+        <main className="container homeMain">
             <div className="landingWrap landingWrapDecor">
                 <div className="potatoBg" aria-hidden="true">
                     <HomePotato />
@@ -73,11 +77,21 @@ export default function Home() {
                         ))}
                     </div>
 
-                    <HomeStatsSection />
+                    {!wide ? (
+                        <div className="homeQuick">
+                            <HomeStatsSection variant="chip" />
+                            <HomeFriendsButton />
+                        </div>
+                    ) : null}
                     <PwaSetup showHint />
                 </section>
 
-                <HomeFriends />
+                {wide ? (
+                    <>
+                        <HomeStatsSection variant="dock" />
+                        <HomeFriends />
+                    </>
+                ) : null}
 
                 <footer className="homeFooter">
                     v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"} ·{" "}
