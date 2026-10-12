@@ -2182,11 +2182,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                     </div>
                                 ) : null}
                             </div>
-                            <div className="statusSub">
+                            <div className={`answerHint ${overtime ? "answerHintOvertime" : ""}`}>
                                 {lobby.current_song_id
                                     ? overtime
-                                        ? "⏱️ Nachspielzeit: Nur der Songtitel zählt – der Interpret reicht jetzt nicht."
-                                        : "Welcher Song läuft? Titel (1 Punkt), Künstler (½) oder beides zusammen (1,5) – z. B. „Wolke 7 Gzuz“. Unter 5 s abgeben bringt ⚡ +5."
+                                        ? "⏱️ Nachspielzeit: nur der Songtitel zählt"
+                                        : "Titel 1 · Künstler ½ · beides 1,5 (z. B. „Wolke 7 Gzuz“) · unter 5 s ⚡ +5"
                                     : "Tippe deine Antwort und drücke Enter."}
                             </div>
                             <div className="answerInputRow">
@@ -2213,30 +2213,32 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                     enterKeyHint="send"
                                     aria-label="Antwort"
                                 />
-                            </div>
-                            <div className={`answerFeedback ${answerWrong ? "show" : ""}`} aria-live="polite">
-                                {answerWrong ? "Nicht richtig – versuch es nochmal!" : "\u00A0"}
-                            </div>
-                            <button
-                                type="button"
-                                className="btn btnPrimary answerSend"
-                                onClick={() => void handleAttemptPass()}
-                                disabled={!!passDisabledReason || answerDraft.trim().length === 0}
-                                title={passDisabledReason ?? "Antwort senden (Enter)"}
-                            >
-                                {passBusy ? "…" : "Senden  ⏎"}
-                            </button>
-                            {lobby.current_song_id && (meRow?.skips_left ?? 0) > 0 ? (
                                 <button
                                     type="button"
-                                    className="linkBtn"
-                                    onClick={() => void handleSkipSong()}
-                                    disabled={skipBusy || passBusy}
-                                    title="Song tauschen (einmal pro Runde, kostet 2 Sekunden)"
+                                    className="btn btnPrimary answerSend"
+                                    onClick={() => void handleAttemptPass()}
+                                    disabled={!!passDisabledReason || answerDraft.trim().length === 0}
+                                    title={passDisabledReason ?? "Antwort senden (Enter)"}
                                 >
-                                    🔀 Song tauschen (−2 s)
+                                    {passBusy ? "…" : "Senden ⏎"}
                                 </button>
-                            ) : null}
+                            </div>
+                            <div className="answerFoot">
+                                <span className={`answerFeedback ${answerWrong ? "show" : ""}`} aria-live="polite">
+                                    {answerWrong ? "Nicht richtig – nochmal!" : ""}
+                                </span>
+                                {lobby.current_song_id && (meRow?.skips_left ?? 0) > 0 ? (
+                                    <button
+                                        type="button"
+                                        className="linkBtn"
+                                        onClick={() => void handleSkipSong()}
+                                        disabled={skipBusy || passBusy}
+                                        title="Song tauschen (einmal pro Runde, kostet 2 Sekunden)"
+                                    >
+                                        🔀 Song tauschen (−2 s)
+                                    </button>
+                                ) : null}
+                            </div>
                         </div>
                     ) : (
                         <div className={`statusCard watchCard ${nextIsMe ? "watchNextMe" : ""}`}>
@@ -2323,8 +2325,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .myTurnBg{
           position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .45s ease;
           background:
-            radial-gradient(circle at 50% 30%, rgba(255,150,40,.40) 0%, rgba(140,40,10,0) 62%),
-            linear-gradient(180deg, #3d1406 0%, #2a0c05 55%, #160604 100%);
+            radial-gradient(circle at 50% 30%, rgba(255,160,50,.55) 0%, rgba(160,50,10,0) 64%),
+            linear-gradient(180deg, #6a240a 0%, #461508 55%, #260a05 100%);
         }
         .myTurnBg.on{ opacity: 1; }
         .myTurnFrame{
@@ -2334,7 +2336,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .myTurnFrame.on{ opacity: 1; animation: myTurnBeat var(--beat, 1.5s) ease-in-out infinite; }
         @keyframes myTurnBeat{ 50%{ box-shadow: inset 0 0 0 6px rgba(255,214,10,.95), inset 0 0 130px rgba(255,90,20,.7); } }
         .myTurnTitle{
-          font-size: clamp(28px, 4.6vw, 40px) !important; text-transform: uppercase; letter-spacing: .02em !important;
+          font-size: clamp(24px, 3.4vw, 34px) !important; text-transform: uppercase; letter-spacing: .02em !important;
           background: linear-gradient(180deg, #fff6d6, #ffc23a 55%, #ff8a1c); -webkit-background-clip: text; background-clip: text; color: transparent;
           filter: drop-shadow(0 3px 10px rgba(255,120,20,.45));
         }
@@ -2359,7 +2361,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         }
         .answerCard{
           width: min(600px, 100%);
-          padding: 22px 22px 18px;
+          padding: 16px 18px 10px;
+          gap: 8px;
           border: 2px solid transparent;
           background:
             linear-gradient(rgba(42,14,6,.92), rgba(30,9,4,.92)) padding-box,
@@ -2370,9 +2373,18 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .statusSub{ font-size: 14px; opacity: .72; font-weight: 600; max-width: 42ch; }
         .answerHead{ display:flex; align-items:center; gap:12px; justify-content:center; }
         .answerCard .answerInputRow{ width: 100%; }
-        .answerSend{ width: 100%; }
-        .answerFeedback{ min-height: 20px; font-size: 14px; font-weight: 800; color: #ffb4a8; opacity: 0; transition: opacity .2s ease; }
+        .answerCard .answerInput{ padding: 12px 16px; font-size: clamp(17px, 2.2vw, 22px); text-align: left; min-width: 0; }
+        .answerSend{ flex: none; padding: 0 22px; white-space: nowrap; }
+        .answerHint{ font-size: 13px; font-weight: 700; opacity: .82; line-height: 1.35; }
+        .answerHintOvertime{ color: #fde68a; opacity: 1; font-weight: 900; }
+        .answerFoot{ width: 100%; min-height: 22px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .answerFeedback{ font-size: 14px; font-weight: 800; color: #ffb4a8; opacity: 0; transition: opacity .2s ease; }
         .answerFeedback.show{ opacity: 1; }
+        .answerCard .linkBtn{ margin-left: auto; padding: 2px 4px; }
+        @media (max-width: 520px){
+          .answerSend{ padding: 0 14px; }
+          .answerHint{ font-size: 12px; }
+        }
         .linkBtn{
           background: none; border: 0; color: rgba(255,255,255,0.78); font-weight: 700; font-size: 13px;
           cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 4px 8px;
@@ -2616,6 +2628,23 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         .usedAnswerChip.newest{ opacity: 1; background: rgba(255,210,63,0.16); border-color: rgba(255,210,63,0.5); color: #fff3c4; }
         .usedAnswerChip.more{
           opacity: .7;
+        }
+        /* Breite Bildschirme: Liste unten links neben dem Tisch statt unter der Karte (spart Höhe) */
+        @media (min-width: 1100px){
+          .usedAnswers{
+            position: fixed; left: 16px; bottom: 16px; z-index: 4; margin: 0;
+            width: min(280px, calc((100vw - 640px) / 2 - 24px)); max-height: 46vh; overflow: hidden;
+            justify-items: start; gap: 6px; padding: 12px 12px 10px; border-radius: 18px;
+            background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.12);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          }
+          .usedAnswerList{ flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; width: 100%; }
+          .usedAnswerChip{ text-align: left; }
+        }
+        /* Schmal: nur die 3 neuesten, damit nichts unter den Bildschirmrand rutscht */
+        @media (max-width: 1099px){
+          .usedAnswers{ margin-top: 2px; gap: 6px; }
+          .usedAnswerList > :nth-child(n+4){ display: none; }
         }
 
         .turnOverlay{
