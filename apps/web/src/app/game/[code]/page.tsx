@@ -2161,7 +2161,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     {iAmEliminated ? (
                         <div className="statusCard">
                             <div className="statusTitle">Du bist raus – schau zu 👀</div>
-                            <div className="statusSub">Du siehst, wohin die Kumpir als Nächstes fliegt.</div>
+                            <div className="statusSub">Schau zu, wer als Letzter übrig bleibt.</div>
                             {(lobby.game_mode ?? "original") === "original" && !meRow?.revenge_used && aliveNow > 2 ? (
                                 <button
                                     type="button"
@@ -2632,9 +2632,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           .usedAnswers{
             position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 2; margin: 0;
             width: min(980px, calc(100vw - 32px)); max-height: 30vh; overflow: hidden;
-            display: flex; flex-direction: column-reverse; align-items: center; gap: 6px;
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
           }
-          .usedAnswerList{ flex-wrap: wrap-reverse; }
+          .usedAnswerList{ flex-wrap: wrap; }
           .usedAnswerChip{ background: rgba(0,0,0,.32); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
           .usedAnswerChip.newest{ background: rgba(60,45,0,.55); }
         }

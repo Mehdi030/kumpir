@@ -304,12 +304,17 @@ function decorate(svg: string, c: AvatarConfig | null, mood: AvatarMood): string
     }
     const extra: string[] = [];
     if (c.logo && c.logo !== "none" && c.clothing !== "overall") {
-        const col = DARK_CLOTHES.includes(c.clothesColor ?? "") ? "#ffffff" : "#1b1f24";
-        const at = 'transform="translate(176 236)"';
-        if (c.logo === "swoosh") extra.push(`<path ${at} d="M0 9c3 5 8 6 14 3 6-3 13-8 19-13-6 7-13 13-20 16-7 3-12 1-13-6Z" fill="${col}" opacity=".92"/>`);
-        if (c.logo === "stripes") extra.push(`<g ${at} fill="${col}" opacity=".92"><path d="M2 14 6 4h4L6 14Z"/><path d="M9 14l5-14h4l-5 14Z"/><path d="M16 14 22-2h4l-6 16Z"/></g>`);
-        if (c.logo === "crown") extra.push(`<path ${at} d="M1 12 0 1l7 5 5-7 5 7 7-5-1 11Z" fill="${col}" opacity=".92"/>`);
-        if (c.logo === "bolt") extra.push(`<path ${at} d="M10-2 1 9h6l-3 9 11-12H9l4-8Z" fill="${col}" opacity=".92"/>`);
+        // Farbe der Kleidung bekannt: Logo passend hell/dunkel. "Automatisch": weiß mit dunklem Rand, sieht man auf jeder Farbe.
+        const paint = !c.clothesColor
+            ? 'fill="#ffffff" stroke="#1b1f24" stroke-width="1.4" paint-order="stroke" stroke-linejoin="round"'
+            : `fill="${DARK_CLOTHES.includes(c.clothesColor) ? "#ffffff" : "#1b1f24"}"`;
+        const shapes: Record<string, string> = {
+            swoosh: '<path d="M0 9c3 5 8 6 14 3 6-3 13-8 19-13-6 7-13 13-20 16-7 3-12 1-13-6Z"/>',
+            stripes: '<path d="M2 14 6 4h4L6 14Z"/><path d="M9 14l5-14h4l-5 14Z"/><path d="M16 14 22-2h4l-6 16Z"/>',
+            crown: '<path d="M1 12 0 1l7 5 5-7 5 7 7-5-1 11Z"/>',
+            bolt: '<path d="M10-2 1 9h6l-3 9 11-12H9l4-8Z"/>',
+        };
+        if (shapes[c.logo]) extra.push(`<g transform="translate(176 236)" ${paint} opacity=".92">${shapes[c.logo]}</g>`);
     }
     if (c.facialHair === "goatee" && c.gender !== "f") {
         const hc = `#${c.facialHairColor ?? c.hairColor ?? "2c1b18"}`;

@@ -607,10 +607,10 @@ export function PlayerRing({
           user-select:none;
         }
         .seatName{
-          position:absolute; left:50%; bottom: calc(100% + var(--seat) * .5 + 6px);
+          position:absolute; left:50%; bottom: calc(100% + var(--seat) * .32 + 6px);
           transform: translateX(-50%);
           display:flex; align-items:center; gap:6px;
-          max-width: 190px;
+          width: max-content; max-width: 190px;
           padding: 4px 11px;
           border-radius: 999px;
           background: rgba(10,12,20,.86);
@@ -676,7 +676,7 @@ export function PlayerRing({
         @keyframes staleBlink{ 0%,100%{opacity:1;} 50%{opacity:.45;} }
 
         /* Handy: kleinere Schrift, Name kompakt */
-        .ringNarrow .seatName{ font-size: 11px; padding: 2px 7px; gap: 4px; max-width: 104px; bottom: calc(100% + var(--seat) * .5 + 4px); border-radius: 12px; }
+        .ringNarrow .seatName{ font-size: 11px; padding: 2px 7px; gap: 4px; max-width: 104px; bottom: calc(100% + var(--seat) * .32 + 4px); border-radius: 12px; }
         .ringNarrow .seatMe{ display:none; }
         .ringNarrow .seatPts{ font-size: 10px; }
         .ringNarrow .seatBadge{ font-size: 9.5px; padding: 2px 7px; letter-spacing: .8px; }
