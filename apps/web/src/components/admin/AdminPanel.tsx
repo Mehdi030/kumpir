@@ -24,35 +24,46 @@ import {
 import { emailLabel, isPlaceholderEmail } from "@/lib/accountSettings";
 import { adminSetPassword } from "@/actions/register";
 import { HomeButton } from "@/components/BackButton";
+import { dateLocale, tk, trNow, useI18n } from "@/lib/i18n";
 
 type Tab = "overview" | "users" | "deletion" | "lobbies" | "songs" | "stats" | "audit";
 type Msg = { ok: boolean; text: string } | null;
 
-const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "–");
-const STATUS_LABEL: Record<string, string> = { active: "aktiv", suspended: "⛔ gesperrt", deletion_requested: "🗑️ Löschung beantragt" };
-const ROLE_LABEL: Record<string, string> = { user: "Nutzer", supporter: "🛟 Supporter", admin: "🛡️ Admin" };
+const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(dateLocale(), { dateStyle: "short", timeStyle: "short" }) : "–");
+const STATUS_LABEL: Record<string, string> = {
+    active: tk("aktiv"),
+    suspended: tk("⛔ gesperrt"),
+    deletion_requested: tk("🗑️ Löschung beantragt"),
+};
+const ROLE_LABEL: Record<string, string> = {
+    user: tk("Nutzer"),
+    supporter: tk("🛟 Supporter"),
+    admin: tk("🛡️ Admin"),
+};
 const PHASE_LABEL: Record<string, string> = {
-    waiting: "Lobby",
-    lobby: "Lobby",
-    topic_vote: "Themenwahl",
-    countdown: "Countdown",
-    running: "läuft",
-    set_summary: "Zwischenstand",
-    finished: "beendet",
-    rematch_wait: "Rematch",
+    waiting: tk("Lobby"),
+    lobby: tk("Lobby"),
+    topic_vote: tk("Themenwahl"),
+    countdown: tk("Countdown"),
+    running: tk("läuft"),
+    set_summary: tk("Zwischenstand"),
+    finished: tk("beendet"),
+    rematch_wait: tk("Rematch"),
 };
 
 function Note({ msg }: { msg: Msg }) {
+    const { tr } = useI18n();
     if (!msg) return null;
     return (
         <div className={`admNote ${msg.ok ? "ok" : "err"}`} role={msg.ok ? "status" : "alert"}>
-            {msg.text}
+            {tr(msg.text)}
         </div>
     );
 }
 
 /** Zweistufiger Knopf: erst klicken, dann "Wirklich?" bestätigen. */
 function ConfirmButton({ label, confirmLabel, onConfirm, danger = false, disabled = false }: { label: string; confirmLabel?: string; onConfirm: () => void; danger?: boolean; disabled?: boolean }) {
+    const { tr } = useI18n();
     const [armed, setArmed] = useState(false);
     useEffect(() => {
         if (!armed) return;
@@ -71,12 +82,13 @@ function ConfirmButton({ label, confirmLabel, onConfirm, danger = false, disable
                 } else setArmed(true);
             }}
         >
-            {armed ? (confirmLabel ?? "Wirklich? Nochmal tippen") : label}
+            {armed ? (confirmLabel ?? tr("Wirklich? Nochmal tippen")) : label}
         </button>
     );
 }
 
 export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }) {
+    const { tr } = useI18n();
     const [tab, setTab] = useState<Tab>(() => {
         if (typeof window === "undefined") return "overview";
         const t = new URLSearchParams(window.location.search).get("tab");
@@ -102,32 +114,32 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
     }, [loadOverview]);
 
     if (error) return <div className="admNote err">⛔ {error}</div>;
-    if (!overview) return <Spinner size={22} label="Lade Admin-Panel…" />;
+    if (!overview) return <Spinner size={22} label={tr("Lade Admin-Panel…")} />;
     const role: AdminRole = overview.role;
     const isAdmin = role === "admin";
     const c = overview.counts;
 
     const tabs: [Tab, string, boolean][] = [
-        ["overview", "📋 Übersicht", true],
-        ["users", "👥 Nutzer", true],
-        ["deletion", `🗑️ Löschanträge${c.deletionRequests ? ` (${c.deletionRequests})` : ""}`, true],
-        ["lobbies", "🎮 Lobbys", true],
-        ["songs", "🎵 Songs", isAdmin],
-        ["stats", "📊 Statistik", isAdmin],
-        ["audit", "📜 Protokoll", true],
+        ["overview", tr("📋 Übersicht"), true],
+        ["users", tr("👥 Nutzer"), true],
+        ["deletion", `${tr("🗑️ Löschanträge")}${c.deletionRequests ? ` (${c.deletionRequests})` : ""}`, true],
+        ["lobbies", tr("🎮 Lobbys"), true],
+        ["songs", tr("🎵 Songs"), isAdmin],
+        ["stats", tr("📊 Statistik"), isAdmin],
+        ["audit", tr("📜 Protokoll"), true],
     ];
 
     return (
         <div className="adm">
             <div className="admHead">
                 <div>
-                    <h1 className="h1 admTitle">🛡️ Admin-Panel</h1>
-                    <div className="admRole">Angemeldet als {ROLE_LABEL[role]}</div>
+                    <h1 className="h1 admTitle">{tr("🛡️ Admin-Panel")}</h1>
+                    <div className="admRole">{tr("Angemeldet als {role}", { role: tr(ROLE_LABEL[role] ?? role) })}</div>
                 </div>
                 <HomeButton />
             </div>
 
-            <div className="admTabs" role="tablist" aria-label="Bereiche">
+            <div className="admTabs" role="tablist" aria-label={tr("Bereiche")}>
                 {tabs
                     .filter(([, , show]) => show)
                     .map(([key, label]) => (
@@ -150,17 +162,17 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
             {tab === "overview" ? (
                 <div className="admBox">
                     <div className="admTiles">
-                        <Tile label="Konten" value={c.users} sub={`+${c.newUsers7d} in 7 Tagen`} />
-                        <Tile label="Löschanträge" value={c.deletionRequests} warn={c.deletionRequests > 0} onClick={() => setTab("deletion")} />
-                        <Tile label="Gesperrt" value={c.suspended} onClick={() => setTab("users")} />
-                        <Tile label="Team" value={c.staff} />
-                        <Tile label="Aktive Lobbys" value={c.activeLobbies} sub={`${c.runningGames} Spiele laufen`} onClick={() => setTab("lobbies")} />
+                        <Tile label={tr("Konten")} value={c.users} sub={tr("+{n} in 7 Tagen", { n: c.newUsers7d })} />
+                        <Tile label={tr("Löschanträge")} value={c.deletionRequests} warn={c.deletionRequests > 0} onClick={() => setTab("deletion")} />
+                        <Tile label={tr("Gesperrt")} value={c.suspended} onClick={() => setTab("users")} />
+                        <Tile label={tr("Team")} value={c.staff} />
+                        <Tile label={tr("Aktive Lobbys")} value={c.activeLobbies} sub={tr("{n} Spiele laufen", { n: c.runningGames })} onClick={() => setTab("lobbies")} />
                     </div>
                     <div className="admHint">
-                        <b>Deine Rechte:</b>{" "}
+                        <b>{tr("Deine Rechte:")}</b>{" "}
                         {isAdmin
-                            ? "alles – inkl. endgültig löschen, Rollen vergeben, Songs archivieren und Statistik."
-                            : "Nutzer ansehen, sperren/entsperren, Namen/Avatar zurücksetzen, Passwort-Reset senden, Löschanträge ablehnen, Lobbys schließen, Protokoll ansehen. Endgültig löschen und Rollen vergeben dürfen nur Admins."}
+                            ? tr("alles – inkl. endgültig löschen, Rollen vergeben, Songs archivieren und Statistik.")
+                            : tr("Nutzer ansehen, sperren/entsperren, Namen/Avatar zurücksetzen, Passwort-Reset senden, Löschanträge ablehnen, Lobbys schließen, Protokoll ansehen. Endgültig löschen und Rollen vergeben dürfen nur Admins.")}
                     </div>
                 </div>
             ) : null}
@@ -170,9 +182,9 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
             {tab === "songs" && isAdmin ? <SongsTab api={api} /> : null}
             {tab === "stats" && isAdmin ? (
                 <div className="admBox">
-                    <p className="admHint">Spielzahlen, Song-Bekanntheit, Balance aus echten Zügen und der anonyme Weg der Spieler.</p>
+                    <p className="admHint">{tr("Spielzahlen, Song-Bekanntheit, Balance aus echten Zügen und der anonyme Weg der Spieler.")}</p>
                     <Link href="/admin/stats" className="btn btnPrimary btnSmall">
-                        📊 Zur Statistik-Seite
+                        {tr("📊 Zur Statistik-Seite")}
                     </Link>
                 </div>
             ) : null}
@@ -202,6 +214,7 @@ function Tile({ label, value, sub, warn, onClick }: { label: string; value: numb
 
 // ------------------------------------------------------------------ Nutzer
 function UsersTab({ api, role, meId, initialFilter, onChanged }: { api: AdminApi; role: AdminRole; meId: string | null; initialFilter: "all" | "deletion"; onChanged: () => void }) {
+    const { tr } = useI18n();
     const [search, setSearch] = useState(() => (typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("q") ?? ""));
     const [filter, setFilter] = useState<"all" | "deletion" | "suspended" | "staff">(initialFilter);
     const [rows, setRows] = useState<AdminUserRow[] | null>(null);
@@ -241,22 +254,22 @@ function UsersTab({ api, role, meId, initialFilter, onChanged }: { api: AdminApi
     return (
         <div className="admBox">
             {initialFilter === "deletion" ? (
-                <p className="admHint">Spieler, die ihre Löschung beantragt haben. Ihr Zugang ist bereits gesperrt. Öffnen → „Antrag ablehnen“ (Zugang wieder frei) oder – nur Admin – „Endgültig löschen“.</p>
+                <p className="admHint">{tr("Spieler, die ihre Löschung beantragt haben. Ihr Zugang ist bereits gesperrt. Öffnen → „Antrag ablehnen“ (Zugang wieder frei) oder – nur Admin – „Endgültig löschen“.")}</p>
             ) : null}
             <div className="admRow">
-                <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suche: Name, E-Mail …" aria-label="Nutzer suchen" />
+                <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tr("Suche: Name, E-Mail …")} aria-label={tr("Nutzer suchen")} />
                 {initialFilter === "all" ? (
-                    <select className="admSelect" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} aria-label="Filter">
-                        <option value="all">Alle</option>
-                        <option value="deletion">Löschanträge</option>
-                        <option value="suspended">Gesperrt</option>
-                        <option value="staff">Team</option>
+                    <select className="admSelect" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} aria-label={tr("Filter")}>
+                        <option value="all">{tr("Alle")}</option>
+                        <option value="deletion">{tr("Löschanträge")}</option>
+                        <option value="suspended">{tr("Gesperrt")}</option>
+                        <option value="staff">{tr("Team")}</option>
                     </select>
                 ) : null}
             </div>
             {error ? <div className="admNote err">{error}</div> : null}
             {!rows ? (
-                <Spinner size={18} label="Lade…" />
+                <Spinner size={18} label={tr("Lade…")} />
             ) : rows.length === 0 ? (
                 <div className="admHint">{initialFilter === "deletion" ? "Keine offenen Löschanträge. 🎉" : "Keine Treffer."}</div>
             ) : (
@@ -267,16 +280,16 @@ function UsersTab({ api, role, meId, initialFilter, onChanged }: { api: AdminApi
                                 <AvatarBadge emoji={u.avatarEmoji} color={u.avatarColor} name={u.displayName || u.username || "?"} size={38} />
                                 <span className="admUserMain">
                                     <b>
-                                        {u.displayName || u.username || "(ohne Namen)"}
+                                        {u.displayName || u.username || tr("(ohne Namen)")}
                                         {u.username ? <small> @{u.username}</small> : null}
                                     </b>
-                                    <small>{emailLabel(u.email)}</small>
+                                    <small>{tr(emailLabel(u.email))}</small>
                                 </span>
                                 <span className="admUserMeta">
-                                    {u.role !== "user" ? <span className="admBadge staff">{ROLE_LABEL[u.role]}</span> : null}
-                                    {u.status !== "active" ? <span className="admBadge warn">{STATUS_LABEL[u.status]}</span> : null}
+                                    {u.role !== "user" ? <span className="admBadge staff">{tr(ROLE_LABEL[u.role] ?? u.role)}</span> : null}
+                                    {u.status !== "active" ? <span className="admBadge warn">{tr(STATUS_LABEL[u.status] ?? u.status)}</span> : null}
                                     <small>
-                                        {u.matches} Matches · seit {new Date(u.createdAt).toLocaleDateString("de-DE")}
+                                        {tr("{n} Matches · seit {date}", { n: u.matches, date: new Date(u.createdAt).toLocaleDateString(dateLocale()) })}
                                     </small>
                                 </span>
                             </button>
@@ -289,6 +302,7 @@ function UsersTab({ api, role, meId, initialFilter, onChanged }: { api: AdminApi
 }
 
 function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: AdminRole; meId: string | null; userId: string; onBack: () => void }) {
+    const { tr } = useI18n();
     const [u, setU] = useState<AdminUserDetail | null>(null);
     const [msg, setMsg] = useState<Msg>(null);
     const [busy, setBusy] = useState(false);
@@ -331,109 +345,109 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
     if (gone) {
         return (
             <div className="admBox">
-                <div className="admNote ok">❌ Konto endgültig gelöscht.</div>
+                <div className="admNote ok">{tr("❌ Konto endgültig gelöscht.")}</div>
                 <button type="button" className="btn btnSecondary btnSmall" onClick={onBack}>
-                    ← Zurück zur Liste
+                    {tr("← Zurück zur Liste")}
                 </button>
             </div>
         );
     }
-    if (!u) return msg ? <Note msg={msg} /> : <Spinner size={18} label="Lade Nutzer…" />;
+    if (!u) return msg ? <Note msg={msg} /> : <Spinner size={18} label={tr("Lade Nutzer…")} />;
 
     const isAdmin = role === "admin";
     const isSelf = u.id === meId;
     const targetIsStaff = u.role !== "user";
     const canModerate = !isSelf && (isAdmin || !targetIsStaff);
-    const label = u.username || u.email || "Nutzer";
+    const label = u.username || u.email || tr("Nutzer");
 
     return (
         <div className="admBox">
             <button type="button" className="admBack" onClick={onBack}>
-                ← Zurück zur Liste
+                {tr("← Zurück zur Liste")}
             </button>
             <div className="admRow" style={{ gap: 14 }}>
                 <AvatarBadge emoji={u.avatarEmoji} color={u.avatarColor} name={u.displayName || u.username || "?"} size={56} />
                 <div style={{ minWidth: 0 }}>
                     <h2 className="admH2">
-                        {u.displayName || u.username || "(ohne Namen)"} {u.username ? <small>@{u.username}</small> : null}
+                        {u.displayName || u.username || tr("(ohne Namen)")} {u.username ? <small>@{u.username}</small> : null}
                     </h2>
                     <div className="admSmall">
-                        {emailLabel(u.email)} {isPlaceholderEmail(u.email) ? "" : u.confirmed ? "✓" : "(nicht bestätigt)"} · {ROLE_LABEL[u.role]} · {STATUS_LABEL[u.status]}
+                        {tr(emailLabel(u.email))} {isPlaceholderEmail(u.email) ? "" : u.confirmed ? "✓" : tr("(nicht bestätigt)")} · {tr(ROLE_LABEL[u.role] ?? u.role)} · {tr(STATUS_LABEL[u.status] ?? u.status)}
                     </div>
                 </div>
             </div>
 
             <div className="admTiles">
-                <Tile label="Matches" value={u.stats.matches} sub={`${u.stats.matchWins} gewonnen`} />
-                <Tile label="Runden" value={u.stats.rounds} />
-                <Tile label="Titel erkannt" value={u.stats.titles} />
-                <Tile label="Achievements" value={u.stats.achievements} />
+                <Tile label={tr("Matches")} value={u.stats.matches} sub={tr("{n} gewonnen", { n: u.stats.matchWins })} />
+                <Tile label={tr("Runden")} value={u.stats.rounds} />
+                <Tile label={tr("Titel erkannt")} value={u.stats.titles} />
+                <Tile label={tr("Erfolge")} value={u.stats.achievements} />
             </div>
             <div className="admSmall">
-                Konto seit {fmt(u.createdAt)} · letzter Login {fmt(u.lastSignInAt)} · zuletzt gespielt {fmt(u.stats.lastPlayed)}
+                {tr("Konto seit {a} · letzter Login {b} · zuletzt gespielt {c}", { a: fmt(u.createdAt), b: fmt(u.lastSignInAt), c: fmt(u.stats.lastPlayed) })}
             </div>
 
             <Note msg={msg} />
 
             {/* Status */}
             <section className="admGroup">
-                <h3>Zugang</h3>
+                <h3>{tr("Zugang")}</h3>
                 {u.status === "deletion_requested" ? (
                     <>
                         <div className="admHint">
-                            🗑️ Löschung beantragt am {fmt(u.deletionRequestedAt)}
-                            {u.statusReason ? ` – Grund: „${u.statusReason}“` : ""}. Zugang ist gesperrt.
+                            {tr("🗑️ Löschung beantragt am {date}", { date: fmt(u.deletionRequestedAt) })}
+                            {u.statusReason ? ` – ${tr("Grund:")} „${u.statusReason}“` : ""}. {tr("Zugang ist gesperrt.")}
                         </div>
                         <div className="admRow">
                             {canModerate ? (
-                                <ConfirmButton label="↩️ Antrag ablehnen (Zugang wieder öffnen)" onConfirm={() => void run(() => api.setStatus(u.id, "active"), "Antrag abgelehnt – Konto ist wieder aktiv.")} disabled={busy} />
+                                <ConfirmButton label={tr("↩️ Antrag ablehnen (Zugang wieder öffnen)")} onConfirm={() => void run(() => api.setStatus(u.id, "active"), tr("Antrag abgelehnt – Konto ist wieder aktiv."))} disabled={busy} />
                             ) : null}
                         </div>
                     </>
                 ) : u.status === "suspended" ? (
                     <>
                         <div className="admHint">
-                            ⛔ Gesperrt seit {fmt(u.statusChangedAt)}
+                            {tr("⛔ Gesperrt seit {date}", { date: fmt(u.statusChangedAt) })}
                             {u.statusReason ? ` – Grund: „${u.statusReason}“` : ""}.
                         </div>
-                        {canModerate ? <ConfirmButton label="✅ Entsperren" onConfirm={() => void run(() => api.setStatus(u.id, "active"), "Entsperrt – Login wieder möglich.")} disabled={busy} /> : null}
+                        {canModerate ? <ConfirmButton label={tr("✅ Entsperren")} onConfirm={() => void run(() => api.setStatus(u.id, "active"), tr("Entsperrt – Login wieder möglich."))} disabled={busy} /> : null}
                     </>
                 ) : canModerate ? (
                     <div className="admRow">
-                        <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Grund (optional, sieht nur das Team)" maxLength={300} aria-label="Grund für die Sperre" />
-                        <ConfirmButton label="⛔ Sperren" danger onConfirm={() => void run(() => api.setStatus(u.id, "suspended", reason), "Gesperrt und überall abgemeldet.")} disabled={busy} />
+                        <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("Grund (optional, sieht nur das Team)")} maxLength={300} aria-label={tr("Grund für die Sperre")} />
+                        <ConfirmButton label={tr("⛔ Sperren")} danger onConfirm={() => void run(() => api.setStatus(u.id, "suspended", reason), tr("Gesperrt und überall abgemeldet."))} disabled={busy} />
                     </div>
                 ) : (
-                    <div className="admHint">{isSelf ? "Das eigene Konto kann hier nicht gesperrt werden." : "Team-Konten kann nur ein Admin sperren."}</div>
+                    <div className="admHint">{isSelf ? tr("Das eigene Konto kann hier nicht gesperrt werden.") : tr("Team-Konten kann nur ein Admin sperren.")}</div>
                 )}
             </section>
 
             {/* Moderation */}
             {canModerate ? (
                 <section className="admGroup">
-                    <h3>Profil & Login-Hilfe</h3>
+                    <h3>{tr("Profil & Login-Hilfe")}</h3>
                     <div className="admRow">
                         <input
                             className="input"
                             value={newName}
                             onChange={(e) => setNewName(e.target.value.toLowerCase().replace(/\s/g, ""))}
-                            placeholder={`Neuer Benutzername (aktuell ${u.username ?? "–"})`}
+                            placeholder={tr("Neuer Benutzername (aktuell {name})", { name: u.username ?? "–" })}
                             maxLength={20}
-                            aria-label="Neuer Benutzername"
+                            aria-label={tr("Neuer Benutzername")}
                         />
-                        <button type="button" className="btn btnSecondary btnSmall" disabled={busy || !newName} onClick={() => void run(() => api.moderate(u.id, { username: newName }), "Benutzername geändert.").then(() => setNewName(""))}>
-                            Ändern
+                        <button type="button" className="btn btnSecondary btnSmall" disabled={busy || !newName} onClick={() => void run(() => api.moderate(u.id, { username: newName }), tr("Benutzername geändert.")).then(() => setNewName(""))}>
+                            {tr("Ändern")}
                         </button>
                     </div>
                     <div className="admRow">
-                        <button type="button" className="btn btnSecondary btnSmall" disabled={busy || !u.displayName} onClick={() => void run(() => api.moderate(u.id, { resetDisplayName: true }), "Spielername zurückgesetzt.")}>
-                            Spielername zurücksetzen
+                        <button type="button" className="btn btnSecondary btnSmall" disabled={busy || !u.displayName} onClick={() => void run(() => api.moderate(u.id, { resetDisplayName: true }), tr("Spielername zurückgesetzt."))}>
+                            {tr("Spielername zurücksetzen")}
                         </button>
-                        <button type="button" className="btn btnSecondary btnSmall" disabled={busy || (!u.avatarEmoji && !u.avatarColor)} onClick={() => void run(() => api.moderate(u.id, { resetAvatar: true }), "Avatar zurückgesetzt.")}>
-                            Avatar zurücksetzen
+                        <button type="button" className="btn btnSecondary btnSmall" disabled={busy || (!u.avatarEmoji && !u.avatarColor)} onClick={() => void run(() => api.moderate(u.id, { resetAvatar: true }), tr("Avatar zurückgesetzt."))}>
+                            {tr("Avatar zurücksetzen")}
                         </button>
                         {u.email && !isPlaceholderEmail(u.email) ? (
-                            <ConfirmButton label="🔑 Passwort-Reset-Mail senden" onConfirm={() => void run(() => api.sendPasswordReset(u.id), `Mail mit Reset-Link an ${u.email} gesendet.`)} disabled={busy} />
+                            <ConfirmButton label={tr("🔑 Passwort-Reset-Mail senden")} onConfirm={() => void run(() => api.sendPasswordReset(u.id), tr("Mail mit Reset-Link an {mail} gesendet.", { mail: u.email ?? "" }))} disabled={busy} />
                         ) : null}
                     </div>
                     {role === "admin" ? (
@@ -443,17 +457,17 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
                                 type="text"
                                 value={newPw}
                                 onChange={(e) => setNewPw(e.target.value)}
-                                placeholder="Neues Passwort (z.B. Kartoffel7)"
+                                placeholder={tr("Neues Passwort (z.B. Kartoffel7)")}
                                 autoComplete="off"
-                                aria-label="Neues Passwort für dieses Konto"
+                                aria-label={tr("Neues Passwort für dieses Konto")}
                             />
                             <ConfirmButton
-                                label="🔐 Neues Passwort setzen"
+                                label={tr("🔐 Neues Passwort setzen")}
                                 onConfirm={() =>
                                     void run(async () => {
                                         const r = await adminSetPassword(u.id, newPw);
                                         return r.ok ? { data: true } : { error: r.error };
-                                    }, "Neues Passwort gesetzt. Gib es der Person weiter.").then(() => setNewPw(""))
+                                    }, tr("Neues Passwort gesetzt. Gib es der Person weiter.")).then(() => setNewPw(""))
                                 }
                                 disabled={busy || newPw.length < 8}
                             />
@@ -465,15 +479,15 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
             {/* Rolle (nur Admin) */}
             {isAdmin && !isSelf ? (
                 <section className="admGroup">
-                    <h3>Rolle</h3>
+                    <h3>{tr("Rolle")}</h3>
                     <div className="admRow">
-                        <select className="admSelect" value={newRole} onChange={(e) => setNewRole(e.target.value as typeof newRole)} aria-label="Rolle">
-                            <option value="user">Nutzer</option>
-                            <option value="supporter">Supporter (weniger Rechte)</option>
-                            <option value="admin">Admin (alle Rechte)</option>
+                        <select className="admSelect" value={newRole} onChange={(e) => setNewRole(e.target.value as typeof newRole)} aria-label={tr("Rolle")}>
+                            <option value="user">{tr("Nutzer")}</option>
+                            <option value="supporter">{tr("Supporter (weniger Rechte)")}</option>
+                            <option value="admin">{tr("Admin (alle Rechte)")}</option>
                         </select>
                         <button type="button" className="btn btnSecondary btnSmall" disabled={busy || newRole === u.role} onClick={() => void run(() => api.setRole(u.id, newRole), `Rolle: ${ROLE_LABEL[newRole]}`)}>
-                            Rolle speichern
+                            {tr("Rolle speichern")}
                         </button>
                     </div>
                 </section>
@@ -482,16 +496,16 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
             {/* Endgültig löschen (nur Admin) */}
             {isAdmin && !isSelf ? (
                 <section className="admGroup admDangerBox">
-                    <h3>Konto endgültig löschen</h3>
+                    <h3>{tr("Konto endgültig löschen")}</h3>
                     {targetIsStaff ? (
-                        <div className="admHint">Team-Konten können nicht gelöscht werden – erst die Rolle auf „Nutzer“ setzen.</div>
+                        <div className="admHint">{tr("Team-Konten können nicht gelöscht werden – erst die Rolle auf „Nutzer“ setzen.")}</div>
                     ) : (
                         <>
                             <div className="admHint">
-                                Löscht Konto, Verlauf, Achievements, Saison-Punkte und Freunde. <b>Nicht rückgängig zu machen.</b> Zum Bestätigen den Benutzernamen <b>{label}</b> eintippen:
+                                {tr("Löscht Konto, Verlauf, Erfolge, Saison-Punkte und Freunde.")} <b>{tr("Nicht rückgängig zu machen.")}</b> {tr("Zum Bestätigen den Benutzernamen eintippen:")} <b>{label}</b>
                             </div>
                             <div className="admRow">
-                                <input className="input" value={delConfirm} onChange={(e) => setDelConfirm(e.target.value)} placeholder={label} aria-label="Benutzername zur Bestätigung" />
+                                <input className="input" value={delConfirm} onChange={(e) => setDelConfirm(e.target.value)} placeholder={label} aria-label={tr("Benutzername zur Bestätigung")} />
                                 <button
                                     type="button"
                                     className="btn btnSmall admDanger"
@@ -504,7 +518,7 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
                                         else setGone(true);
                                     }}
                                 >
-                                    {busy ? "…" : "Endgültig löschen"}
+                                    {busy ? "…" : tr("Endgültig löschen")}
                                 </button>
                             </div>
                         </>
@@ -514,11 +528,11 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
 
             {u.audit.length ? (
                 <section className="admGroup">
-                    <h3>Verlauf zu diesem Konto</h3>
+                    <h3>{tr("Verlauf zu diesem Konto")}</h3>
                     <ul className="admAudit">
                         {u.audit.map((a, i) => (
                             <li key={i}>
-                                <span>{fmt(a.created_at)}</span> <b>{ACTION_LABEL[a.action] ?? a.action}</b> <small>von {a.actor_name ?? "?"}</small>
+                                <span>{fmt(a.created_at)}</span> <b>{tr(ACTION_LABEL[a.action] ?? a.action)}</b> <small>{tr("von {name}", { name: a.actor_name ?? "?" })}</small>
                             </li>
                         ))}
                     </ul>
@@ -530,6 +544,7 @@ function UserDetail({ api, role, meId, userId, onBack }: { api: AdminApi; role: 
 
 // ------------------------------------------------------------------ Lobbys
 function LobbiesTab({ api }: { api: AdminApi }) {
+    const { tr } = useI18n();
     const [rows, setRows] = useState<AdminLobby[] | null>(null);
     const [msg, setMsg] = useState<Msg>(null);
     const load = useCallback(async () => {
@@ -551,42 +566,42 @@ function LobbiesTab({ api }: { api: AdminApi }) {
         <div className="admBox">
             <div className="admRow" style={{ justifyContent: "space-between" }}>
                 <p className="admHint" style={{ margin: 0 }}>
-                    Alle Lobbys (inaktive werden nach 60 Min. automatisch entfernt). „Schließen“ beendet die Lobby sofort für alle.
+                    {tr("Alle Lobbys (leere schließen sich nach 3 Min. automatisch). „Schließen“ beendet die Lobby sofort für alle.")}
                 </p>
                 <button type="button" className="btn btnSecondary btnSmall" onClick={() => void load()}>
-                    🔄 Aktualisieren
+                    {tr("🔄 Aktualisieren")}
                 </button>
             </div>
             <Note msg={msg} />
             {!rows ? (
-                <Spinner size={18} label="Lade…" />
+                <Spinner size={18} label={tr("Lade…")} />
             ) : rows.length === 0 ? (
-                <div className="admHint">Gerade keine Lobbys.</div>
+                <div className="admHint">{tr("Gerade keine Lobbys.")}</div>
             ) : (
                 <ul className="admList">
                     {rows.map((l) => (
                         <li key={l.id} className="admLobby">
                             <div>
-                                <b className="admCode">{l.code}</b> <span className="admBadge">{PHASE_LABEL[l.phase] ?? l.phase}</span>
+                                <b className="admCode">{l.code}</b> <span className="admBadge">{tr(PHASE_LABEL[l.phase] ?? l.phase)}</span>
                                 {l.locked ? <span className="admBadge">🔒</span> : null}
                                 <div className="admSmall">
-                                    Host {l.host ?? "?"} · {l.humans} Mensch{l.humans === 1 ? "" : "en"}
-                                    {l.bots ? ` + ${l.bots} Bot${l.bots === 1 ? "" : "s"}` : ""}
-                                    {l.accounts ? ` · ${l.accounts} mit Konto` : ""}
+                                    {tr("Host {name}", { name: l.host ?? "?" })} · {tr("{n} Menschen", { n: l.humans })}
+                                    {l.bots ? ` + ${tr("{n} Bots", { n: l.bots })}` : ""}
+                                    {l.accounts ? ` · ${tr("{n} mit Konto", { n: l.accounts })}` : ""}
                                     {l.playlist ? ` · ${l.playlist}` : ""}
-                                    {l.roundsTotal && l.roundsTotal > 1 ? ` · Runde ${l.roundIndex}/${l.roundsTotal}` : ""} · aktiv {fmt(l.lastActivityAt)}
+                                    {l.roundsTotal && l.roundsTotal > 1 ? ` · ${tr("Runde")} ${l.roundIndex}/${l.roundsTotal}` : ""} · {tr("aktiv {date}", { date: fmt(l.lastActivityAt) })}
                                 </div>
                             </div>
                             <div className="admRow">
                                 <Link href={`/game/${l.code}`} className="btn btnSecondary btnSmall" target="_blank">
-                                    👀 Ansehen
+                                    {tr("👀 Ansehen")}
                                 </Link>
                                 <ConfirmButton
-                                    label="🚪 Schließen"
+                                    label={tr("🚪 Schließen")}
                                     danger
                                     onConfirm={async () => {
                                         const r = await api.closeLobby(l.id);
-                                        setMsg(r.error ? { ok: false, text: adminErrorText(r.error) } : { ok: true, text: `Lobby ${l.code} geschlossen.` });
+                                        setMsg(r.error ? { ok: false, text: adminErrorText(r.error) } : { ok: true, text: tr("Lobby {code} geschlossen.", { code: l.code }) });
                                         void load();
                                     }}
                                 />
@@ -601,6 +616,7 @@ function LobbiesTab({ api }: { api: AdminApi }) {
 
 // ------------------------------------------------------------------ Songs (Admin)
 function SongsTab({ api }: { api: AdminApi }) {
+    const { tr } = useI18n();
     const [playlists, setPlaylists] = useState<string[]>([]);
     const [playlist, setPlaylist] = useState<string>("");
     const [search, setSearch] = useState("");
@@ -624,22 +640,22 @@ function SongsTab({ api }: { api: AdminApi }) {
     return (
         <div className="admBox">
             <p className="admHint">
-                Archivierte Songs werden nie mehr gespielt, bleiben aber gespeichert und lassen sich zurückholen. „Erkannt“ = Anteil voller Titel-Treffer bei Menschen (rot unter 50 %).
+                {tr("Archivierte Songs werden nie mehr gespielt, bleiben aber gespeichert und lassen sich zurückholen. „Erkannt“ = Anteil voller Titel-Treffer bei Menschen (rot unter 50 %).")}
             </p>
             <div className="admRow">
-                <select className="admSelect" value={playlist} onChange={(e) => setPlaylist(e.target.value)} aria-label="Playlist">
-                    <option value="">Alle Playlists</option>
+                <select className="admSelect" value={playlist} onChange={(e) => setPlaylist(e.target.value)} aria-label={tr("Playlist")}>
+                    <option value="">{tr("Alle Playlists")}</option>
                     {playlists.map((p) => (
                         <option key={p} value={p}>
                             {p}
                         </option>
                     ))}
                 </select>
-                <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Titel oder Interpret" aria-label="Song suchen" />
+                <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tr("Titel oder Interpret")} aria-label={tr("Song suchen")} />
             </div>
             <Note msg={msg} />
             {!rows ? (
-                <Spinner size={18} label="Lade…" />
+                <Spinner size={18} label={tr("Lade…")} />
             ) : (
                 <ul className="admList">
                     {rows.map((s) => {
@@ -649,8 +665,8 @@ function SongsTab({ api }: { api: AdminApi }) {
                                 <div style={{ minWidth: 0 }}>
                                     <b>{s.title}</b> <small>– {s.artist}</small>
                                     <div className="admSmall">
-                                        {s.archivedFrom ? `📦 archiviert (aus ${s.archivedFrom})` : s.playlist} · {s.plays} Einsätze ·{" "}
-                                        <span className={weak ? "admWeak" : ""}>{s.rate != null ? `${s.rate} % erkannt` : "noch keine Daten"}</span>
+                                        {s.archivedFrom ? tr("📦 archiviert (aus {pl})", { pl: s.archivedFrom }) : s.playlist} · {tr("{n} Einsätze", { n: s.plays })} ·{" "}
+                                        <span className={weak ? "admWeak" : ""}>{s.rate != null ? tr("{n} % erkannt", { n: s.rate }) : tr("noch keine Daten")}</span>
                                     </div>
                                 </div>
                                 <button
@@ -658,11 +674,11 @@ function SongsTab({ api }: { api: AdminApi }) {
                                     className="btn btnSecondary btnSmall"
                                     onClick={async () => {
                                         const r = await api.setSongArchived(s.id, !s.archivedFrom);
-                                        setMsg(r.error ? { ok: false, text: adminErrorText(r.error) } : { ok: true, text: s.archivedFrom ? `„${s.title}“ ist wieder in ${s.archivedFrom}.` : `„${s.title}“ archiviert.` });
+                                        setMsg(r.error ? { ok: false, text: adminErrorText(r.error) } : { ok: true, text: s.archivedFrom ? tr("„{title}“ ist wieder in {pl}.", { title: s.title, pl: s.archivedFrom }) : tr("„{title}“ archiviert.", { title: s.title }) });
                                         void load();
                                     }}
                                 >
-                                    {s.archivedFrom ? "♻️ Zurückholen" : "📦 Archivieren"}
+                                    {s.archivedFrom ? tr("♻️ Zurückholen") : tr("📦 Archivieren")}
                                 </button>
                             </li>
                         );
@@ -675,20 +691,34 @@ function SongsTab({ api }: { api: AdminApi }) {
 
 // ------------------------------------------------------------------ Protokoll
 const DETAIL_LABEL: Record<string, string> = {
-    from: "vorher", to: "nachher", email: "E-Mail", role: "Rolle", status: "Status", via: "über", count: "Anzahl", playlists: "Playlists",
-    sample: "Beispiele", aktion: "Aktion", bereiche: "Bereiche", reason: "Grund", playlist: "Playlist", lobbyId: "Lobby-ID", nachgetragen: "nachträglich eingetragen",
+    from: tk("vorher"),
+    to: tk("nachher"),
+    email: tk("E-Mail"),
+    role: tk("Rolle"),
+    status: tk("Status"),
+    via: tk("über"),
+    count: tk("Anzahl"),
+    playlists: tk("Playlists"),
+    sample: tk("Beispiele"),
+    aktion: tk("Aktion"),
+    bereiche: tk("Bereiche"),
+    reason: tk("Grund"),
+    playlist: tk("Playlist"),
+    lobbyId: tk("Lobby-ID"),
+    nachgetragen: tk("nachträglich eingetragen"),
 };
 function detailText(v: unknown): string {
     if (v === null || v === undefined || v === "") return "–";
-    if (typeof v === "boolean") return v ? "ja" : "nein";
+    if (typeof v === "boolean") return v ? trNow("ja") : trNow("nein");
     if (Array.isArray(v)) return v.map(detailText).join(", ");
     if (typeof v === "object") return Object.entries(v as Record<string, unknown>).map(([k, x]) => `${k}: ${detailText(x)}`).join(" · ");
     return String(v);
 }
-const dayKey = (iso: string) => new Date(iso).toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const dayKey = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 function AuditTab({ api }: { api: AdminApi }) {
+    const { tr } = useI18n();
     const [page, setPage] = useState<AuditPage | null>(null);
     const [limit, setLimit] = useState(300);
     const [cat, setCat] = useState<AuditCategory>("all");
@@ -730,27 +760,27 @@ function AuditTab({ api }: { api: AdminApi }) {
     return (
         <div className="admBox">
             <p className="admHint">
-                Hier steht jede Änderung an Konten, Profilen, Rollen, Sperren, Songs, Playlists und Lobbys – egal ob über das Admin-Panel, die Einstellungen eines Spielers oder ein Skript – mit Datum, Uhrzeit und Urheber. Einträge lassen sich nicht ändern oder löschen. Einzelne Spielzüge stehen nicht hier.
+                {tr("Hier steht jede Änderung an Konten, Profilen, Rollen, Sperren, Songs, Playlists und Lobbys – egal ob über das Admin-Panel, die Einstellungen eines Spielers oder ein Skript – mit Datum, Uhrzeit und Urheber. Einträge lassen sich nicht ändern oder löschen. Einzelne Spielzüge stehen nicht hier.")}
             </p>
             <div className="admRow">
                 {(Object.keys(AUDIT_CATEGORY_LABEL) as AuditCategory[]).map((k) => (
                     <button key={k} type="button" className={`btn btnSmall ${cat === k ? "btnPrimary" : "btnSecondary"}`} onClick={() => setCat(k)}>
-                        {AUDIT_CATEGORY_LABEL[k]}
+                        {tr(AUDIT_CATEGORY_LABEL[k])}
                     </button>
                 ))}
             </div>
             <div className="admRow">
-                <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen: Name, Aktion, Person …" aria-label="Protokoll durchsuchen" />
+                <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tr("Suchen: Name, Aktion, Person …")} aria-label={tr("Protokoll durchsuchen")} />
             </div>
             {error ? <div className="admNote err">{error}</div> : null}
             {!page ? (
-                <Spinner size={18} label="Lade…" />
+                <Spinner size={18} label={tr("Lade…")} />
             ) : (
                 <>
                     <div className="admSmall">
-                        {shown.length} {shown.length === 1 ? "Eintrag" : "Einträge"} angezeigt · {page.total} insgesamt im Protokoll
+                        {tr("{n} angezeigt · {total} insgesamt im Protokoll", { n: shown.length, total: page.total })}
                     </div>
-                    {shown.length === 0 ? <div className="admHint">Keine Einträge{cat !== "all" || q ? " zu diesem Filter" : ""}.</div> : null}
+                    {shown.length === 0 ? <div className="admHint">{cat !== "all" || q ? tr("Keine Einträge zu diesem Filter.") : tr("Noch keine Einträge.")}</div> : null}
                     {days.map((g) => (
                         <div key={g.day} className="admDay">
                             <h3 className="admDayHead">
@@ -764,13 +794,13 @@ function AuditTab({ api }: { api: AdminApi }) {
                                             <span className="admTime" title={fmt(a.createdAt)}>
                                                 {timeOf(a.createdAt)}
                                             </span>{" "}
-                                            <b>{ACTION_LABEL[a.action] ?? a.action}</b> {a.targetLabel ? <>· {a.targetLabel}</> : null}{" "}
-                                            <small>von {a.actorName ?? "System / Datenbank"}</small>
+                                            <b>{tr(ACTION_LABEL[a.action] ?? a.action)}</b> {a.targetLabel ? <>· {a.targetLabel}</> : null}{" "}
+                                            <small>{tr("von {name}", { name: a.actorName ?? tr("System / Datenbank") })}</small>
                                             {entries.length ? (
                                                 <div className="admDetails">
                                                     {entries.map(([k, v]) => (
                                                         <span key={k} className="admChip">
-                                                            {DETAIL_LABEL[k] ?? k}: <b>{detailText(v)}</b>
+                                                            {tr(DETAIL_LABEL[k] ?? k)}: <b>{detailText(v)}</b>
                                                         </span>
                                                     ))}
                                                 </div>
@@ -791,7 +821,7 @@ function AuditTab({ api }: { api: AdminApi }) {
                                 setLimit((l) => Math.min(l + 500, 2000));
                             }}
                         >
-                            {loading ? "Lade…" : `Mehr laden (${page.total - page.rows.length} weitere)`}
+                            {loading ? tr("Lade…") : tr("Mehr laden ({n} weitere)", { n: page.total - page.rows.length })}
                         </button>
                     ) : null}
                 </>

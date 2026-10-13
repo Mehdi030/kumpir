@@ -7,6 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { Spinner } from "@/components/Spinner";
 import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
 import { HomeButton } from "@/components/BackButton";
+import { dateLocale, tk, useI18n } from "@/lib/i18n";
 
 type Stats = {
     lobbies: {
@@ -47,8 +48,8 @@ type Stats = {
     leaderboard: { username: string; wins: number; games_played: number; win_rate_pct: number }[];
 };
 
-const MODE_LABEL: Record<string, string> = { original: "🥔 Original", teleport: "🌀 Teleport", reverse: "🔁 Reverse" };
-const SPEED_LABEL: Record<string, string> = { fast: "⚡ Blitz", normal: "🎯 Standard", calm: "🧊 Casual" };
+const MODE_LABEL: Record<string, string> = { original: tk("🥔 Original"), teleport: tk("🌀 Teleport"), reverse: tk("🔁 Reverse") };
+const SPEED_LABEL: Record<string, string> = { fast: tk("⚡ Blitz"), normal: tk("🎯 Standard"), calm: tk("🧊 Casual") };
 
 function pct(part: number, total: number): number {
     if (total <= 0) return 0;
@@ -56,6 +57,7 @@ function pct(part: number, total: number): number {
 }
 
 export default function AdminStatsPage() {
+    const { tr } = useI18n();
     const supabase = getSupabaseClient();
     const { user, loading: authLoading } = useAuth();
     const [stats, setStats] = useState<Stats | null>(null);
@@ -85,11 +87,11 @@ export default function AdminStatsPage() {
             setStats(data as Stats);
             setUpdatedAt(new Date());
         } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : "Unbekannter Fehler beim Laden der Stats.");
+            setError(e instanceof Error ? e.message : tr("Unbekannter Fehler beim Laden der Stats."));
         } finally {
             setLoading(false);
         }
-    }, [supabase, user?.id]);
+    }, [supabase, user?.id, tr]);
 
     useEffect(() => {
         if (authLoading) return;
@@ -103,10 +105,10 @@ export default function AdminStatsPage() {
     if (!authLoading && !user) {
         return (
             <main className="container">
-                <section className="card" aria-label="Kumpir Stats">
-                    <h1 className="h1">📊 Kumpir Stats</h1>
-                    <p className="p hostSub">Nur für eingeloggte Platform-Admins.</p>
-                    <Link href="/login?next=/admin/stats" className="btn btnPrimary">🔓 Einloggen</Link>
+                <section className="card" aria-label={tr("Kumpir Stats")}>
+                    <h1 className="h1">{tr("📊 Kumpir Stats")}</h1>
+                    <p className="p hostSub">{tr("Nur für eingeloggte Platform-Admins.")}</p>
+                    <Link href="/login?next=/admin/stats" className="btn btnPrimary">{tr("🔓 Einloggen")}</Link>
                 </section>
             </main>
         );
@@ -115,10 +117,10 @@ export default function AdminStatsPage() {
     if (forbidden) {
         return (
             <main className="container">
-                <section className="card" aria-label="Kumpir Stats">
+                <section className="card" aria-label={tr("Kumpir Stats")}>
                     <HomeButton corner />
-                    <h1 className="h1">⛔ Kein Zugriff</h1>
-                    <p className="p hostSub">Dieser Account hat keine Admin-Berechtigung für Kumpir Stats.</p>
+                    <h1 className="h1">{tr("⛔ Kein Zugriff")}</h1>
+                    <p className="p hostSub">{tr("Dieser Account hat keine Admin-Berechtigung für Kumpir Stats.")}</p>
                 </section>
             </main>
         );
@@ -127,7 +129,7 @@ export default function AdminStatsPage() {
     return (
         <main className="container" style={{ alignItems: "flex-start" }}>
             <div className="landingWrap" style={{ width: "min(1180px, 100%)" }}>
-                <section className="card" aria-label="Kumpir Stats">
+                <section className="card" aria-label={tr("Kumpir Stats")}>
                     <header
                         style={{
                             display: "flex",
@@ -140,11 +142,11 @@ export default function AdminStatsPage() {
                     >
                         <div>
                             <Link href="/admin" className="btn btnSecondary btnSmall" style={{ marginBottom: 10 }}>
-                                ← Zurück zum Admin-Panel
+                                {tr("← Zurück zum Admin-Panel")}
                             </Link>
-                            <h1 className="h1" style={{ marginBottom: 6 }}>📊 Kumpir Stats</h1>
+                            <h1 className="h1" style={{ marginBottom: 6 }}>{tr("📊 Kumpir Stats")}</h1>
                             <p className="p hostSub" style={{ marginTop: 0 }}>
-                                {updatedAt ? `Zuletzt aktualisiert: ${updatedAt.toLocaleTimeString("de-DE")}` : "Lädt…"}
+                                {updatedAt ? tr("Zuletzt aktualisiert: {time}", { time: updatedAt.toLocaleTimeString(dateLocale()) }) : tr("Lädt…")}
                             </p>
                         </div>
                         <button
@@ -153,7 +155,7 @@ export default function AdminStatsPage() {
                             onClick={() => void load()}
                             disabled={loading}
                         >
-                            {loading ? <Spinner size={14} /> : "🔄 Aktualisieren"}
+                            {loading ? <Spinner size={14} /> : tr("🔄 Aktualisieren")}
                         </button>
                     </header>
 
@@ -174,79 +176,79 @@ export default function AdminStatsPage() {
 
                     {!stats ? (
                         <div style={{ display: "grid", placeItems: "center", padding: 40 }}>
-                            <Spinner size={26} label="Lade Stats…" />
+                            <Spinner size={26} label={tr("Lade Stats…")} />
                         </div>
                     ) : (
                         <div style={{ display: "grid", gap: 18 }}>
-                            <StatGroup title="🍟 Lobbies & Runden">
-                                <Tile label="Lobbies gesamt" value={stats.lobbies.totalEver} />
+                            <StatGroup title={tr("🍟 Lobbies & Runden")}>
+                                <Tile label={tr("Lobbies gesamt")} value={stats.lobbies.totalEver} />
                                 <Tile
-                                    label="Aktiv gerade jetzt"
+                                    label={tr("Aktiv gerade jetzt")}
                                     value={stats.lobbies.activeNow}
                                     tone={stats.lobbies.activeNow > 0 ? "good" : "muted"}
                                 />
-                                <Tile label="Neu (24h)" value={stats.lobbies.last24h} />
-                                <DistTile label="Modus (alle)" entries={stats.lobbies.byMode} labelMap={MODE_LABEL} />
-                                <DistTile label="Speed (alle)" entries={stats.lobbies.bySpeed} labelMap={SPEED_LABEL} />
+                                <Tile label={tr("Neu (24h)")} value={stats.lobbies.last24h} />
+                                <DistTile label={tr("Modus (alle)")} entries={stats.lobbies.byMode} labelMap={MODE_LABEL} />
+                                <DistTile label={tr("Speed (alle)")} entries={stats.lobbies.bySpeed} labelMap={SPEED_LABEL} />
                             </StatGroup>
 
-                            <StatGroup title="👥 Spieler & Social">
-                                <Tile label="Registrierte Nutzer" value={stats.social.registeredUsers} />
+                            <StatGroup title={tr("👥 Spieler & Social")}>
+                                <Tile label={tr("Registrierte Nutzer")} value={stats.social.registeredUsers} />
                                 <Tile
-                                    label="Spieler-Zeilen gesamt"
+                                    label={tr("Spieler-Zeilen gesamt")}
                                     value={stats.players.totalRows}
-                                    sub={`davon ${pct(stats.players.botRows, stats.players.totalRows)}% Bots`}
+                                    sub={tr("davon {n} % Bots", { n: pct(stats.players.botRows, stats.players.totalRows) })}
                                 />
-                                <Tile label="Gerade aktiv (Zeilen)" value={stats.players.activeRows} />
-                                <Tile label="Freundschaften" value={stats.social.acceptedFriendships} />
-                                <Tile label="Gemerkte Lobbies" value={stats.social.savedLobbies} />
+                                <Tile label={tr("Gerade aktiv (Zeilen)")} value={stats.players.activeRows} />
+                                <Tile label={tr("Freundschaften")} value={stats.social.acceptedFriendships} />
+                                <Tile label={tr("Gemerkte Lobbies")} value={stats.social.savedLobbies} />
                             </StatGroup>
 
-                            <StatGroup title="🏁 Matches">
-                                <Tile label="Abgeschlossene Matches" value={stats.matches.finished} />
-                                <Tile label="⌀ Spieler / Match" value={stats.matches.avgPlayers ?? "—"} />
+                            <StatGroup title={tr("🏁 Matches")}>
+                                <Tile label={tr("Abgeschlossene Matches")} value={stats.matches.finished} />
+                                <Tile label={tr("⌀ Spieler / Match")} value={stats.matches.avgPlayers ?? "—"} />
                                 <Tile
-                                    label="⌀ Dauer"
+                                    label={tr("⌀ Dauer")}
                                     value={stats.matches.avgDurationSec != null ? formatDuration(stats.matches.avgDurationSec) : "—"}
                                 />
-                                <Tile label="Aktive Kategorien" value={stats.content.activeTopics} />
+                                <Tile label={tr("Aktive Kategorien")} value={stats.content.activeTopics} />
                             </StatGroup>
 
-                            <StatGroup title="🥔 Antwort-Validierung (Topic-Mechanik B)">
-                                <Tile label="Pass-Versuche gesamt" value={stats.votes.total} />
+                            <StatGroup title={tr("🥔 Antwort-Validierung (Topic-Mechanik B)")}>
+                                <Tile label={tr("Pass-Versuche gesamt")} value={stats.votes.total} />
                                 <Tile
-                                    label="Angenommen"
+                                    label={tr("Angenommen")}
                                     value={stats.votes.accepted}
                                     sub={`${pct(stats.votes.accepted, stats.votes.total)}%`}
                                     tone="good"
                                 />
                                 <Tile
-                                    label="Abgelehnt"
+                                    label={tr("Abgelehnt")}
                                     value={stats.votes.rejected}
                                     sub={`${pct(stats.votes.rejected, stats.votes.total)}%`}
                                     tone="warn"
                                 />
                                 <Tile
-                                    label="Hängend (> 30s)"
+                                    label={tr("Hängend (> 30s)")}
                                     value={stats.votes.stuckPending}
-                                    sub="Watchdog — siehe BALANCE_REPORT.md"
+                                    sub={tr("Watchdog – siehe BALANCE_REPORT.md")}
                                     tone={stats.votes.stuckPending > 0 ? "bad" : "good"}
                                 />
                             </StatGroup>
 
-                            <StatGroup title="🏆 Leaderboard (Top 5) & Achievements">
+                            <StatGroup title={tr("🏆 Bestenliste (Top 5) & Erfolge")}>
                                 {stats.leaderboard.length === 0 ? (
-                                    <div style={{ opacity: 0.75, gridColumn: "1 / -1" }}>Noch keine Einträge.</div>
+                                    <div style={{ opacity: 0.75, gridColumn: "1 / -1" }}>{tr("Noch keine Einträge.")}</div>
                                 ) : (
                                     <div style={{ gridColumn: "1 / -1", overflowX: "auto" }}>
                                         <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                             <thead>
                                                 <tr style={{ textAlign: "left", opacity: 0.75 }}>
                                                     <th style={{ padding: "8px 6px" }}>#</th>
-                                                    <th style={{ padding: "8px 6px" }}>Name</th>
-                                                    <th style={{ padding: "8px 6px" }}>Siege</th>
-                                                    <th style={{ padding: "8px 6px" }}>Spiele</th>
-                                                    <th style={{ padding: "8px 6px" }}>Winrate</th>
+                                                    <th style={{ padding: "8px 6px" }}>{tr("Name")}</th>
+                                                    <th style={{ padding: "8px 6px" }}>{tr("Siege")}</th>
+                                                    <th style={{ padding: "8px 6px" }}>{tr("Spiele")}</th>
+                                                    <th style={{ padding: "8px 6px" }}>{tr("Winrate")}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -263,16 +265,16 @@ export default function AdminStatsPage() {
                                         </table>
                                     </div>
                                 )}
-                                <Tile label="Achievements freigeschaltet" value={stats.achievements.totalUnlocked} />
+                                <Tile label={tr("Erfolge freigeschaltet")} value={stats.achievements.totalUnlocked} />
                             </StatGroup>
 
-                            <StatGroup title="🔌 Infrastruktur (statisch)">
-                                <InfraRow name="Datenbank" value="Supabase Postgres (RLS aktiv seit Migration 012)" />
-                                <InfraRow name="Auth" value="Supabase Auth (Email/Passwort, Gastmodus per Flag)" />
-                                <InfraRow name="Realtime" value="Supabase Realtime (postgres_changes) + Polling-Fallback" />
+                            <StatGroup title={tr("🔌 Infrastruktur (statisch)")}>
+                                <InfraRow name={tr("Datenbank")} value={tr("Supabase Postgres (RLS aktiv seit Migration 012)")} />
+                                <InfraRow name="Auth" value={tr("Supabase Auth (E-Mail/Passwort, Gastmodus per Flag)")} />
+                                <InfraRow name="Realtime" value="Supabase Realtime (postgres_changes + broadcast) + Polling" />
                                 <InfraRow name="Hosting" value="Vercel (apps/web, Next.js)" />
-                                <InfraRow name="CI" value="GitHub Actions — Lint/Test/Build auf jeden Push/PR" />
-                                <InfraRow name="Discord-Bot" value="apps/discord-bot — kein Deploy-Config im Repo gefunden (vermutlich nicht aktiv)" tone="warn" />
+                                <InfraRow name="CI" value={tr("GitHub Actions – Lint/Test/Build bei jedem Push")} />
+                                <InfraRow name="Discord" value={tr("Preview-Kanal per GitHub-Action, Spiel-Logs per Datenbank")} />
                             </StatGroup>
 
                             {/* Song-Bekanntheit, Balance aus echten Spielen, Weg der Spieler (Migration 076) */}
@@ -358,6 +360,7 @@ function DistTile({
     entries: Record<string, number>;
     labelMap: Record<string, string>;
 }) {
+    const { tr } = useI18n();
     const total = Object.values(entries).reduce((a, b) => a + b, 0);
     const rows = Object.entries(entries).sort((a, b) => b[1] - a[1]);
     return (
@@ -380,7 +383,7 @@ function DistTile({
             ) : (
                 rows.map(([key, count]) => (
                     <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                        <div style={{ width: 96, flexShrink: 0 }}>{labelMap[key] ?? key}</div>
+                        <div style={{ width: 96, flexShrink: 0 }}>{tr(labelMap[key] ?? key)}</div>
                         <div style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 999, height: 8, overflow: "hidden" }}>
                             <div
                                 style={{

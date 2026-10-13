@@ -12,6 +12,7 @@ import {
     type OnlinePlayer,
 } from "@/lib/adminApi";
 import { emailLabel } from "@/lib/accountSettings";
+import { tk, useI18n } from "@/lib/i18n";
 
 /**
  * Admin-Schnellmenü: kleines Pop-up außerhalb der normalen Seiten – für Admins und Supporter.
@@ -24,14 +25,14 @@ const VIEW_KEY = "kumpir_quick_view";
 const REFRESH_MS = 8000;
 
 const PHASE_LABEL: Record<string, string> = {
-    waiting: "Lobby",
-    lobby: "Lobby",
-    topic_vote: "Abstimmung",
-    countdown: "Countdown",
-    running: "läuft",
-    set_summary: "Zwischenstand",
-    finished: "beendet",
-    rematch_wait: "Revanche",
+    waiting: tk("Lobby"),
+    lobby: tk("Lobby"),
+    topic_vote: tk("Abstimmung"),
+    countdown: tk("Countdown"),
+    running: tk("läuft"),
+    set_summary: tk("Zwischenstand"),
+    finished: tk("beendet"),
+    rematch_wait: tk("Revanche"),
 };
 
 function readLS(key: string): string | null {
@@ -50,6 +51,7 @@ function writeLS(key: string, value: string) {
 }
 
 function Confirm({ label, danger, disabled, onYes, title }: { label: string; danger?: boolean; disabled?: boolean; onYes: () => void; title?: string }) {
+    const { tr } = useI18n();
     const [armed, setArmed] = useState(false);
     useEffect(() => {
         if (!armed) return;
@@ -69,12 +71,13 @@ function Confirm({ label, danger, disabled, onYes, title }: { label: string; dan
                 } else setArmed(true);
             }}
         >
-            {armed ? "Sicher?" : label}
+            {armed ? tr("Sicher?") : label}
         </button>
     );
 }
 
 export function AdminQuickPanel() {
+    const { tr } = useI18n();
     const { user, profile } = useProfile();
     const api = useMemo(() => supabaseAdminApi(), []);
     const isStaff = !!user && !!profile?.isStaff;
@@ -176,26 +179,26 @@ export function AdminQuickPanel() {
     return (
         <>
             {open ? (
-                <div className="aqPanel" role="dialog" aria-label="Admin-Schnellmenü">
+                <div className="aqPanel" role="dialog" aria-label={tr("Admin-Schnellmenü")}>
                     <div className="aqHead">
                         <div>
-                            <b>🛡️ Schnellmenü</b>
-                            <span className="aqKbd">Alt + A</span>
+                            <b>{tr("🛡️ Schnellmenü")}</b>
+                            <span className="aqKbd">{tr("Alt + A")}</span>
                         </div>
-                        <button type="button" className="aqClose" onClick={() => setOpen(false)} aria-label="Schließen">
+                        <button type="button" className="aqClose" onClick={() => setOpen(false)} aria-label={tr("Schließen")}>
                             ✕
                         </button>
                     </div>
 
                     <div className="aqChips">
                         <button type="button" className={`aqChip ${view === "online" ? "on" : ""}`} onClick={() => setView("online")}>
-                            🟢 Online <b>{online ? online.length : "–"}</b>
+                            🟢 {tr("Online")} <b>{online ? online.length : "–"}</b>
                         </button>
                         <button type="button" className={`aqChip ${view === "lobbies" ? "on" : ""}`} onClick={() => setView("lobbies")}>
-                            🎮 Lobbys <b>{c ? c.activeLobbies : "–"}</b>
+                            🎮 {tr("Lobbys")} <b>{c ? c.activeLobbies : "–"}</b>
                         </button>
                         <button type="button" className={`aqChip ${view === "accounts" ? "on" : ""}`} onClick={() => setView("accounts")}>
-                            👥 Konten <b>{c ? c.users : "–"}</b>
+                            👥 {tr("Konten")} <b>{c ? c.users : "–"}</b>
                         </button>
                     </div>
 
@@ -203,12 +206,12 @@ export function AdminQuickPanel() {
                         <div className="aqAlerts">
                             {c.deletionRequests > 0 ? (
                                 <Link href="/admin?tab=deletion" className="aqAlert warn" onClick={() => setOpen(false)}>
-                                    🗑️ {c.deletionRequests} Löschantrag{c.deletionRequests === 1 ? "" : "räge"}
+                                    🗑️ {c.deletionRequests === 1 ? tr("1 Löschantrag") : tr("{n} Löschanträge", { n: c.deletionRequests })}
                                 </Link>
                             ) : null}
                             {c.suspended > 0 ? (
                                 <Link href="/admin?tab=users" className="aqAlert" onClick={() => setOpen(false)}>
-                                    ⛔ {c.suspended} gesperrt
+                                    ⛔ {tr("{n} gesperrt", { n: c.suspended })}
                                 </Link>
                             ) : null}
                         </div>
@@ -219,19 +222,19 @@ export function AdminQuickPanel() {
                             className="aqSearch"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder={view === "online" ? "Online-Spieler suchen …" : "Konto suchen (Name, E-Mail) …"}
-                            aria-label="Suchen"
+                            placeholder={view === "online" ? tr("Online-Spieler suchen …") : tr("Konto suchen (Name, E-Mail) …")}
+                            aria-label={tr("Suchen")}
                         />
                     ) : null}
 
-                    {msg ? <div className={`aqMsg ${msg.ok ? "ok" : "err"}`}>{msg.text}</div> : null}
+                    {msg ? <div className={`aqMsg ${msg.ok ? "ok" : "err"}`}>{tr(msg.text)}</div> : null}
 
                     <div className="aqList">
                         {view === "online" ? (
                             online === null ? (
-                                <div className="aqEmpty">Lade …</div>
+                                <div className="aqEmpty">{tr("Lade …")}</div>
                             ) : onlineFiltered.length === 0 ? (
-                                <div className="aqEmpty">{search ? "Kein Treffer." : "Gerade ist niemand in einer Lobby."}</div>
+                                <div className="aqEmpty">{search ? tr("Kein Treffer.") : tr("Gerade ist niemand in einer Lobby.")}</div>
                             ) : (
                                 onlineFiltered.map((p) => {
                                     const isStaffTarget = p.role === "admin" || p.role === "supporter";
@@ -242,20 +245,20 @@ export function AdminQuickPanel() {
                                             <div className="aqInfo">
                                                 <div className="aqName">
                                                     {p.name}
-                                                    {p.isHost ? <span title="Host"> 👑</span> : null}
-                                                    {isStaffTarget ? <span className="aqTag">{p.role === "admin" ? "Admin" : "Supporter"}</span> : null}
+                                                    {p.isHost ? <span title={tr("Host")}> 👑</span> : null}
+                                                    {isStaffTarget ? <span className="aqTag">{p.role === "admin" ? tr("Admin") : tr("Supporter")}</span> : null}
                                                 </div>
                                                 <div className="aqSub">
-                                                    {p.username ? `@${p.username}` : "Gast"} · Lobby {p.lobbyCode} · {PHASE_LABEL[p.phase] ?? p.phase}
+                                                    {p.username ? `@${p.username}` : tr("Gast")} · {tr("Lobby")} {p.lobbyCode} · {tr(PHASE_LABEL[p.phase] ?? p.phase)}
                                                 </div>
                                             </div>
                                             <div className="aqActions">
-                                                <Confirm label="👢" title="Aus der Lobby werfen" disabled={busy || !canKick} onYes={() => void act(() => api.kickPlayer(p.lobbyId, p.playerId), `${p.name} gekickt.`)} />
+                                                <Confirm label="👢" title={tr("Aus der Lobby werfen")} disabled={busy || !canKick} onYes={() => void act(() => api.kickPlayer(p.lobbyId, p.playerId), tr("{name} gekickt.", { name: p.name }))} />
                                                 {canBan ? (
                                                     <Confirm
                                                         label="⛔"
                                                         danger
-                                                        title="Konto sperren (meldet überall ab) und rauswerfen"
+                                                        title={tr("Konto sperren (meldet überall ab) und rauswerfen")}
                                                         disabled={busy}
                                                         onYes={() =>
                                                             void act(async () => {
@@ -263,12 +266,12 @@ export function AdminQuickPanel() {
                                                                 if (s.error) return s;
                                                                 const k = await api.kickPlayer(p.lobbyId, p.playerId);
                                                                 return k.error && !k.error.includes("player_not_found") ? k : {};
-                                                            }, `${p.username ?? p.name} gesperrt und rausgeworfen.`)
+                                                            }, tr("{name} gesperrt und rausgeworfen.", { name: p.username ?? p.name }))
                                                         }
                                                     />
                                                 ) : null}
                                                 {p.username ? (
-                                                    <Link href={`/admin?tab=users&q=${encodeURIComponent(p.username)}`} className="aqBtn" title="Im Admin-Panel öffnen" onClick={() => setOpen(false)}>
+                                                    <Link href={`/admin?tab=users&q=${encodeURIComponent(p.username)}`} className="aqBtn" title={tr("Im Admin-Panel öffnen")} onClick={() => setOpen(false)}>
                                                         ↗
                                                     </Link>
                                                 ) : null}
@@ -281,9 +284,9 @@ export function AdminQuickPanel() {
 
                         {view === "accounts" ? (
                             accounts === null ? (
-                                <div className="aqEmpty">Lade …</div>
+                                <div className="aqEmpty">{tr("Lade …")}</div>
                             ) : accounts.length === 0 ? (
-                                <div className="aqEmpty">Kein Treffer.</div>
+                                <div className="aqEmpty">{tr("Kein Treffer.")}</div>
                             ) : (
                                 accounts.map((u) => {
                                     const staffTarget = u.role === "admin" || u.role === "supporter";
@@ -293,20 +296,20 @@ export function AdminQuickPanel() {
                                             <div className="aqInfo">
                                                 <div className="aqName">
                                                     {u.username ?? "?"}
-                                                    {staffTarget ? <span className="aqTag">{u.role === "admin" ? "Admin" : "Supporter"}</span> : null}
-                                                    {u.status === "suspended" ? <span className="aqTag bad">gesperrt</span> : null}
-                                                    {u.status === "deletion_requested" ? <span className="aqTag bad">Löschantrag</span> : null}
+                                                    {staffTarget ? <span className="aqTag">{u.role === "admin" ? tr("Admin") : tr("Supporter")}</span> : null}
+                                                    {u.status === "suspended" ? <span className="aqTag bad">{tr("gesperrt")}</span> : null}
+                                                    {u.status === "deletion_requested" ? <span className="aqTag bad">{tr("Löschantrag")}</span> : null}
                                                 </div>
                                                 <div className="aqSub">{emailLabel(u.email)}</div>
                                             </div>
                                             <div className="aqActions">
                                                 {canAct && u.status === "suspended" ? (
-                                                    <Confirm label="✅" title="Entsperren" disabled={busy} onYes={() => void act(() => api.setStatus(u.id, "active"), `${u.username} entsperrt.`)} />
+                                                    <Confirm label="✅" title={tr("Entsperren")} disabled={busy} onYes={() => void act(() => api.setStatus(u.id, "active"), tr("{name} entsperrt.", { name: u.username ?? "" }))} />
                                                 ) : null}
                                                 {canAct && u.status === "active" ? (
-                                                    <Confirm label="⛔" danger title="Sperren (meldet überall ab)" disabled={busy} onYes={() => void act(() => api.setStatus(u.id, "suspended", "Schnellmenü"), `${u.username} gesperrt.`)} />
+                                                    <Confirm label="⛔" danger title={tr("Sperren (meldet überall ab)")} disabled={busy} onYes={() => void act(() => api.setStatus(u.id, "suspended", "Schnellmenü"), tr("{name} gesperrt.", { name: u.username ?? "" }))} />
                                                 ) : null}
-                                                <Link href={`/admin?tab=users&q=${encodeURIComponent(u.username ?? "")}`} className="aqBtn" title="Im Admin-Panel öffnen" onClick={() => setOpen(false)}>
+                                                <Link href={`/admin?tab=users&q=${encodeURIComponent(u.username ?? "")}`} className="aqBtn" title={tr("Im Admin-Panel öffnen")} onClick={() => setOpen(false)}>
                                                     ↗
                                                 </Link>
                                             </div>
@@ -318,23 +321,23 @@ export function AdminQuickPanel() {
 
                         {view === "lobbies" ? (
                             lobbies === null ? (
-                                <div className="aqEmpty">Lade …</div>
+                                <div className="aqEmpty">{tr("Lade …")}</div>
                             ) : lobbies.length === 0 ? (
-                                <div className="aqEmpty">Keine Lobbys offen.</div>
+                                <div className="aqEmpty">{tr("Keine Lobbys offen.")}</div>
                             ) : (
                                 lobbies.map((l) => (
                                     <div key={l.id} className="aqRow">
                                         <div className="aqInfo">
                                             <div className="aqName">
-                                                {l.code} <span className="aqSub inline">· {PHASE_LABEL[l.phase] ?? l.phase}</span>
+                                                {l.code} <span className="aqSub inline">· {tr(PHASE_LABEL[l.phase] ?? l.phase)}</span>
                                             </div>
                                             <div className="aqSub">
-                                                Host {l.host ?? "?"} · {l.humans} Mensch{l.humans === 1 ? "" : "en"}
-                                                {l.bots ? ` + ${l.bots} Bot${l.bots === 1 ? "" : "s"}` : ""}
+                                                {tr("Host {name}", { name: l.host ?? "?" })} · {tr("{n} Menschen", { n: l.humans })}
+                                                {l.bots ? ` + ${tr("{n} Bots", { n: l.bots })}` : ""}
                                             </div>
                                         </div>
                                         <div className="aqActions">
-                                            <Confirm label="🚪" danger title="Lobby sofort für alle schließen" disabled={busy} onYes={() => void act(() => api.closeLobby(l.id), `Lobby ${l.code} geschlossen.`)} />
+                                            <Confirm label="🚪" danger title={tr("Lobby sofort für alle schließen")} disabled={busy} onYes={() => void act(() => api.closeLobby(l.id), tr("Lobby {code} geschlossen.", { code: l.code }))} />
                                         </div>
                                     </div>
                                 ))
@@ -344,14 +347,14 @@ export function AdminQuickPanel() {
 
                     <div className="aqFoot">
                         <Link href="/admin" onClick={() => setOpen(false)}>
-                            Admin-Panel
+                            {tr("Admin-Panel")}
                         </Link>
                         <Link href="/admin?tab=audit" onClick={() => setOpen(false)}>
-                            Protokoll
+                            {tr("Protokoll")}
                         </Link>
                         {isAdmin ? (
                             <Link href="/admin/stats" onClick={() => setOpen(false)}>
-                                Statistik
+                                {tr("Statistik")}
                             </Link>
                         ) : null}
                     </div>

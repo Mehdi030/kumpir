@@ -1,6 +1,7 @@
 "use client";
 
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { tk, trNow } from "@/lib/i18n";
 
 /** Admin-Panel (Migration 078). Jede Funktion prüft Rolle + Rechte in der Datenbank. */
 
@@ -150,56 +151,56 @@ export function supabaseAdminApi(): AdminApi {
 /** Fehlercodes aus den Admin-Funktionen -> verständlicher Text */
 export function adminErrorText(e: string | undefined): string {
     const m = e ?? "";
-    if (m.includes("not_authorized")) return "Dafür fehlen dir die Rechte.";
-    if (m.includes("not_on_self")) return "Das geht nicht mit dem eigenen Konto.";
-    if (m.includes("staff_cannot_be_deleted")) return "Team-Konten (Admin/Supporter) können nicht gelöscht werden – erst Rolle auf „Nutzer“ setzen.";
-    if (m.includes("username_taken")) return "Dieser Benutzername ist schon vergeben.";
-    if (m.includes("username_invalid")) return "Benutzername: 3–20 Zeichen, nur a–z, 0–9, Punkt, Unterstrich, Minus.";
-    if (m.includes("user_not_found")) return "Nutzer nicht gefunden (evtl. schon gelöscht).";
-    if (m.includes("lobby_not_found")) return "Lobby gibt es nicht mehr.";
-    if (m.includes("player_not_found")) return "Spieler ist nicht mehr in der Lobby.";
-    if (m.includes("rate") || m.includes("seconds")) return "Bitte kurz warten und erneut versuchen.";
-    return m || "Das hat nicht geklappt.";
+    if (m.includes("not_authorized")) return trNow("Dafür fehlen dir die Rechte.");
+    if (m.includes("not_on_self")) return trNow("Das geht nicht mit dem eigenen Konto.");
+    if (m.includes("staff_cannot_be_deleted")) return trNow("Team-Konten (Admin/Supporter) können nicht gelöscht werden – erst Rolle auf „Nutzer“ setzen.");
+    if (m.includes("username_taken")) return trNow("Dieser Benutzername ist schon vergeben.");
+    if (m.includes("username_invalid")) return trNow("Benutzername: 3–20 Zeichen, nur a–z, 0–9, Punkt, Unterstrich, Minus.");
+    if (m.includes("user_not_found")) return trNow("Nutzer nicht gefunden (evtl. schon gelöscht).");
+    if (m.includes("lobby_not_found")) return trNow("Lobby gibt es nicht mehr.");
+    if (m.includes("player_not_found")) return trNow("Spieler ist nicht mehr in der Lobby.");
+    if (m.includes("rate") || m.includes("seconds")) return trNow("Bitte kurz warten und erneut versuchen.");
+    return m || trNow("Das hat nicht geklappt.");
 }
 
 export const ACTION_LABEL: Record<string, string> = {
-    suspended: "⛔ gesperrt",
-    unsuspended: "✅ entsperrt",
-    deletion_requested: "🗑️ Löschung beantragt",
-    deletion_rejected: "↩️ Löschantrag abgelehnt",
-    deleted: "❌ endgültig gelöscht",
-    role_changed: "🛡️ Rolle geändert",
-    profile_moderated: "✏️ Profil bearbeitet",
-    password_reset_sent: "🔑 Passwort-Reset gesendet",
-    lobby_closed: "🚪 Lobby geschlossen",
-    player_kicked: "👢 Spieler gekickt",
-    song_archived: "📦 Song archiviert",
-    song_restored: "♻️ Song zurückgeholt",
-    account_created: "🆕 Konto angelegt",
-    account_deleted: "❌ Konto gelöscht (per Skript)",
-    username_changed: "✏️ Benutzername geändert",
-    display_name_changed: "✏️ Spielername geändert",
-    avatar_changed: "🙂 Avatar geändert",
-    preferences_changed: "⚙️ Einstellungen geändert",
-    email_changed: "📧 E-Mail geändert",
-    password_changed: "🔐 Passwort geändert",
-    status_changed: "🚦 Status geändert",
-    platform_admin_changed: "🛡️ Plattform-Admin geändert",
-    songs_added: "➕ Songs hinzugefügt",
-    songs_removed: "➖ Songs entfernt",
-    songs_changed: "🎵 Songs geändert",
-    playlist_changed: "📀 Playlist geändert",
-    lobbies_expired: "🧹 Lobbys automatisch geschlossen",
+    suspended: tk("⛔ gesperrt"),
+    unsuspended: tk("✅ entsperrt"),
+    deletion_requested: tk("🗑️ Löschung beantragt"),
+    deletion_rejected: tk("↩️ Löschantrag abgelehnt"),
+    deleted: tk("❌ endgültig gelöscht"),
+    role_changed: tk("🛡️ Rolle geändert"),
+    profile_moderated: tk("✏️ Profil bearbeitet"),
+    password_reset_sent: tk("🔑 Passwort-Reset gesendet"),
+    lobby_closed: tk("🚪 Lobby geschlossen"),
+    player_kicked: tk("👢 Spieler gekickt"),
+    song_archived: tk("📦 Song archiviert"),
+    song_restored: tk("♻️ Song zurückgeholt"),
+    account_created: tk("🆕 Konto angelegt"),
+    account_deleted: tk("❌ Konto gelöscht (per Skript)"),
+    username_changed: tk("✏️ Benutzername geändert"),
+    display_name_changed: tk("✏️ Spielername geändert"),
+    avatar_changed: tk("🙂 Avatar geändert"),
+    preferences_changed: tk("⚙️ Einstellungen geändert"),
+    email_changed: tk("📧 E-Mail geändert"),
+    password_changed: tk("🔐 Passwort geändert"),
+    status_changed: tk("🚦 Status geändert"),
+    platform_admin_changed: tk("🛡️ Plattform-Admin geändert"),
+    songs_added: tk("➕ Songs hinzugefügt"),
+    songs_removed: tk("➖ Songs entfernt"),
+    songs_changed: tk("🎵 Songs geändert"),
+    playlist_changed: tk("📀 Playlist geändert"),
+    lobbies_expired: tk("🧹 Lobbys automatisch geschlossen"),
 };
 
 export type AuditCategory = "all" | "account" | "profile" | "access" | "songs" | "lobbies";
 export const AUDIT_CATEGORY_LABEL: Record<AuditCategory, string> = {
-    all: "Alle",
-    account: "Konten",
-    profile: "Profil & Einstellungen",
-    access: "Rollen & Sperren",
-    songs: "Songs & Playlists",
-    lobbies: "Lobbys",
+    all: tk("Alle"),
+    account: tk("Konten"),
+    profile: tk("Profil & Einstellungen"),
+    access: tk("Rollen & Sperren"),
+    songs: tk("Songs & Playlists"),
+    lobbies: tk("Lobbys"),
 };
 const CATEGORY_OF: Record<string, AuditCategory> = {
     account_created: "account", account_deleted: "account", deleted: "account", deletion_requested: "account", deletion_rejected: "account",

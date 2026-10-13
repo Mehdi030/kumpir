@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/Spinner";
+import { fmtNum, tk, useI18n } from "@/lib/i18n";
 
 export type SongRow = {
     playlist: string;
@@ -30,20 +31,21 @@ export type FunnelRow = { event: string; total: number; devices: number };
 export type AdminAnalyticsData = { songs: SongRow[]; balance: Balance; funnel: FunnelRow[] };
 
 const FUNNEL_LABEL: Record<string, string> = {
-    home_view: "Startseite besucht",
-    solo_start: "Solo gestartet",
-    solo_game_started: "Solo-Spiel läuft",
-    host_created: "Lobby erstellt (Host)",
-    join_success: "Lobby beigetreten",
-    spectate: "Zuschauen geklickt",
-    game_finished: "Spiel zu Ende gesehen",
-    invite_share: "Einladung geteilt",
-    invite_copy: "Link kopiert",
-    invite_qr: "QR-Code geöffnet",
-    result_share: "Ergebnis geteilt",
-    install_click: "App installieren geklickt",
-    lang_en: "Auf Englisch gestellt",
-    register_success: "Konto erstellt",
+    home_view: tk("Startseite besucht"),
+    solo_start: tk("Solo gestartet"),
+    solo_game_started: tk("Solo-Spiel läuft"),
+    host_created: tk("Lobby erstellt (Host)"),
+    join_success: tk("Lobby beigetreten"),
+    spectate: tk("Zuschauen geklickt"),
+    game_finished: tk("Spiel zu Ende gesehen"),
+    invite_share: tk("Einladung geteilt"),
+    invite_copy: tk("Link kopiert"),
+    invite_qr: tk("QR-Code geöffnet"),
+    result_share: tk("Ergebnis geteilt"),
+    install_click: tk("App installieren geklickt"),
+    lang_en: tk("Auf Englisch gestellt"),
+    lang_fr: tk("Auf Französisch gestellt"),
+    register_success: tk("Konto erstellt"),
 };
 // Reihenfolge des "Wegs": Besuch -> Spielen -> Weitererzählen -> Bleiben
 const FUNNEL_ORDER = Object.keys(FUNNEL_LABEL);
@@ -52,11 +54,12 @@ const UNKNOWN_RATE = 50; // unter 50 % Titel-Erkennung gilt ein Song als "kaum b
 const MIN_PLAYS = 5;
 
 function sec(ms: number | null | undefined) {
-    return ms == null ? "–" : `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
+    return ms == null ? "–" : `${fmtNum(ms / 1000)} s`;
 }
 
 /** Lädt Song-, Balance- und Nutzungs-Auswertung (nur Platform-Admins, Prüfung in der DB). */
 export function AdminAnalytics() {
+    const { tr } = useI18n();
     const supabase = getSupabaseClient();
     const [days, setDays] = useState(30);
     const [data, setData] = useState<AdminAnalyticsData | null>(null);
@@ -88,11 +91,12 @@ export function AdminAnalytics() {
     }, [load]);
 
     if (error) return <div className="aaErr">❌ Auswertung: {error}</div>;
-    if (!data) return <Spinner size={18} label="Lade Auswertung…" />;
+    if (!data) return <Spinner size={18} label={tr("Lade Auswertung…")} />;
     return <AdminAnalyticsView data={data} days={days} onDays={setDays} />;
 }
 
 export function AdminAnalyticsView({ data, days, onDays }: { data: AdminAnalyticsData; days: number; onDays: (d: number) => void }) {
+    const { tr } = useI18n();
     const [playlist, setPlaylist] = useState("alle");
     const [onlyUnknown, setOnlyUnknown] = useState(false);
 
@@ -112,24 +116,23 @@ export function AdminAnalyticsView({ data, days, onDays }: { data: AdminAnalytic
     return (
         <div className="aa">
             <div className="aaHead">
-                <span>Zeitraum Balance & Nutzung:</span>
+                <span>{tr("Zeitraum Balance & Nutzung:")}</span>
                 {[7, 30, 90].map((d) => (
                     <button key={d} type="button" className={d === days ? "on" : ""} aria-pressed={d === days} onClick={() => onDays(d)}>
-                        {d} Tage
+                        {tr("{n} Tage", { n: d })}
                     </button>
                 ))}
             </div>
 
             {/* G: Songs */}
             <section className="aaBox" aria-labelledby="aaSongs">
-                <h2 id="aaSongs">🎵 Song-Bekanntheit (nur Menschen)</h2>
+                <h2 id="aaSongs">{tr("🎵 Song-Bekanntheit (nur Menschen)")}</h2>
                 <p className="aaHint">
-                    „Erkannt“ = voller Titel bei Menschen als Halter (seit Beginn). Ziel laut TODO: ≥ 85 %. Rot markiert: unter {UNKNOWN_RATE} % bei mind. {MIN_PLAYS} Einsätzen –
-                    Kandidaten zum Austauschen ({unknownCount}). Interpret/falsch/Zeit aus den letzten 90 Tagen.
+                    {tr("„Erkannt“ = voller Titel bei Menschen als Halter (seit Beginn). Ziel: ≥ 85 %. Rot markiert: unter {rate} % bei mind. {plays} Einsätzen – Kandidaten zum Austauschen ({n}). Interpret/falsch/Zeit aus den letzten 90 Tagen.", { rate: UNKNOWN_RATE, plays: MIN_PLAYS, n: unknownCount })}
                 </p>
                 <div className="aaFilters">
                     <label>
-                        Playlist{" "}
+                        {tr("Playlist")}{" "}
                         <select value={playlist} onChange={(e) => setPlaylist(e.target.value)}>
                             {playlists.map((p) => (
                                 <option key={p} value={p}>
@@ -139,23 +142,23 @@ export function AdminAnalyticsView({ data, days, onDays }: { data: AdminAnalytic
                         </select>
                     </label>
                     <label>
-                        <input type="checkbox" checked={onlyUnknown} onChange={(e) => setOnlyUnknown(e.target.checked)} /> nur kaum bekannte
+                        <input type="checkbox" checked={onlyUnknown} onChange={(e) => setOnlyUnknown(e.target.checked)} /> {tr("nur kaum bekannte")}
                     </label>
                 </div>
                 {songs.length === 0 ? (
-                    <div className="aaHint">Noch keine Daten – Songs erscheinen, sobald Menschen sie gespielt haben.</div>
+                    <div className="aaHint">{tr("Noch keine Daten – Songs erscheinen, sobald Menschen sie gespielt haben.")}</div>
                 ) : (
                     <div className="aaScroll">
                         <table className="aaTable">
                             <thead>
                                 <tr>
-                                    <th>Song</th>
-                                    <th>Playlist</th>
-                                    <th className="r">Einsätze</th>
-                                    <th className="r">Erkannt</th>
-                                    <th className="r">Interpret</th>
-                                    <th className="r">Falsch</th>
-                                    <th className="r">Ø Zeit</th>
+                                    <th>{tr("Song")}</th>
+                                    <th>{tr("Playlist")}</th>
+                                    <th className="r">{tr("Einsätze")}</th>
+                                    <th className="r">{tr("Erkannt")}</th>
+                                    <th className="r">{tr("Interpret")}</th>
+                                    <th className="r">{tr("Falsch")}</th>
+                                    <th className="r">{tr("Ø Zeit")}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -184,29 +187,29 @@ export function AdminAnalyticsView({ data, days, onDays }: { data: AdminAnalytic
 
             {/* H: Balance */}
             <section className="aaBox" aria-labelledby="aaBal">
-                <h2 id="aaBal">⚖️ Balance aus echten Spielen ({data.balance.days} Tage)</h2>
+                <h2 id="aaBal">⚖️ {tr("Balance aus echten Spielen ({n} Tage)", { n: data.balance.days })}</h2>
                 {data.balance.groups.length === 0 ? (
-                    <div className="aaHint">Noch keine protokollierten Spielzüge im Zeitraum.</div>
+                    <div className="aaHint">{tr("Noch keine protokollierten Spielzüge im Zeitraum.")}</div>
                 ) : (
                     <>
                         <div className="aaScroll">
                             <table className="aaTable">
                                 <thead>
                                     <tr>
-                                        <th>Wer</th>
-                                        <th className="r">Titel</th>
-                                        <th className="r">Interpret</th>
-                                        <th className="r">Falsch</th>
-                                        <th className="r">Explodiert</th>
-                                        <th className="r">Ø Antwort</th>
-                                        <th className="r">Ø gehalten bis Knall</th>
+                                        <th>{tr("Wer")}</th>
+                                        <th className="r">{tr("Titel")}</th>
+                                        <th className="r">{tr("Interpret")}</th>
+                                        <th className="r">{tr("Falsch")}</th>
+                                        <th className="r">{tr("Explodiert")}</th>
+                                        <th className="r">{tr("Ø Antwort")}</th>
+                                        <th className="r">{tr("Ø gehalten bis Knall")}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {data.balance.groups.map((g) => (
                                         <tr key={g.who}>
                                             <td>
-                                                <b>{g.who}</b>
+                                                <b>{tr(g.who)}</b>
                                             </td>
                                             <td className="r">{g.titles}</td>
                                             <td className="r">{g.artists}</td>
@@ -220,17 +223,17 @@ export function AdminAnalyticsView({ data, days, onDays }: { data: AdminAnalytic
                             </table>
                         </div>
 
-                        <h3>Nach Spielstand (nur Menschen)</h3>
-                        <p className="aaHint">Zeigt, ob das Duell zu hart ist: Antworten Menschen bei 2 Übrigen deutlich langsamer oder explodieren öfter?</p>
+                        <h3>{tr("Nach Spielstand (nur Menschen)")}</h3>
+                        <p className="aaHint">{tr("Zeigt, ob das Duell zu hart ist: Antworten Menschen bei 2 Übrigen deutlich langsamer oder explodieren öfter?")}</p>
                         <div className="aaScroll">
                             <table className="aaTable">
                                 <thead>
                                     <tr>
-                                        <th>Übrig</th>
-                                        <th className="r">Antworten</th>
-                                        <th className="r">Ø Antwort</th>
-                                        <th className="r">Explodiert</th>
-                                        <th className="r">Ø gehalten bis Knall</th>
+                                        <th>{tr("Übrig")}</th>
+                                        <th className="r">{tr("Antworten")}</th>
+                                        <th className="r">{tr("Ø Antwort")}</th>
+                                        <th className="r">{tr("Explodiert")}</th>
+                                        <th className="r">{tr("Ø gehalten bis Knall")}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -247,8 +250,8 @@ export function AdminAnalyticsView({ data, days, onDays }: { data: AdminAnalytic
                             </table>
                         </div>
 
-                        <h3>Fehlversuche vor einem Treffer (Durchprobieren)</h3>
-                        <p className="aaHint">Viele Züge mit 3+ Fehlversuchen sprechen für eine stärkere Strafe bei falschen Antworten.</p>
+                        <h3>{tr("Fehlversuche vor einem Treffer (Durchprobieren)")}</h3>
+                        <p className="aaHint">{tr("Viele Züge mit 3+ Fehlversuchen sprechen für eine stärkere Strafe bei falschen Antworten.")}</p>
                         <div className="aaBars">
                             {data.balance.wrongBeforeHit.map((w) => (
                                 <div key={w.wrong_tries} className="aaBarRow">
@@ -268,25 +271,25 @@ export function AdminAnalyticsView({ data, days, onDays }: { data: AdminAnalytic
 
             {/* I: Weg der Spieler */}
             <section className="aaBox" aria-labelledby="aaFun">
-                <h2 id="aaFun">🧭 Weg der Spieler ({days} Tage, anonym)</h2>
-                <p className="aaHint">„Geräte“ = verschiedene Browser (zufällige ID, kein Name). Anteil bezogen auf Startseiten-Besucher.</p>
+                <h2 id="aaFun">🧭 {tr("Weg der Spieler ({n} Tage, anonym)", { n: days })}</h2>
+                <p className="aaHint">{tr("„Geräte“ = verschiedene Browser (zufällige ID, kein Name). Anteil bezogen auf Startseiten-Besucher.")}</p>
                 {funnel.length === 0 ? (
-                    <div className="aaHint">Noch keine Ereignisse im Zeitraum.</div>
+                    <div className="aaHint">{tr("Noch keine Ereignisse im Zeitraum.")}</div>
                 ) : (
                     <div className="aaScroll">
                         <table className="aaTable">
                             <thead>
                                 <tr>
-                                    <th>Schritt</th>
-                                    <th className="r">Geräte</th>
-                                    <th className="r">Anteil</th>
-                                    <th className="r">Ereignisse</th>
+                                    <th>{tr("Schritt")}</th>
+                                    <th className="r">{tr("Geräte")}</th>
+                                    <th className="r">{tr("Anteil")}</th>
+                                    <th className="r">{tr("Ereignisse")}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {funnel.map((f) => (
                                     <tr key={f.event}>
-                                        <td>{FUNNEL_LABEL[f.event] ?? f.event}</td>
+                                        <td>{tr(FUNNEL_LABEL[f.event] ?? f.event)}</td>
                                         <td className="r">{f.devices}</td>
                                         <td className="r">{homeDevices ? `${Math.round((f.devices / homeDevices) * 100)} %` : "–"}</td>
                                         <td className="r">{f.total}</td>
