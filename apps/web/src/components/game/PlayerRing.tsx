@@ -423,7 +423,7 @@ export function PlayerRing({
                             <span className="seatName">
                                 <span className="seatNameText">{p.name}</span>
                                 {isMe ? <span className="seatMe">{tr("du")}</span> : null}
-                                <span className="seatPts" title={tr("Song-Punkte")}>♪ {fmtPts(pts)}</span>
+                                <span key={pts} className="seatPts" title={tr("Song-Punkte")}>♪ {fmtPts(pts)}</span>
                             </span>
                             {isExploded ? (
                                 <span className="seatBoom" aria-hidden>

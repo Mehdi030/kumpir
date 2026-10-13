@@ -2278,7 +2278,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                                     .slice(-14)
                                     .reverse()
                                     .map((a, i) => (
-                                        <span key={`${a}-${i}`} className={`usedAnswerChip ${i === 0 ? "newest" : ""}`}>
+                                        <span key={`${(lobby.used_answers ?? []).length - 1 - i}:${a}`} className={`usedAnswerChip ${i === 0 ? "newest" : ""}`}>
                                             {a}
                                         </span>
                                     ))}

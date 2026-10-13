@@ -377,8 +377,12 @@ export default function LobbyPage() {
                                 disabled={!amIHost || isRunning || privacyBusy}
                                 title={amIHost ? tr("Tippen: Öffentlich ↔ nur mit Code") : isPublic ? tr("Steht im Hauptmenü unter „Offene Lobbys“") : tr("Nur mit Code oder Einladung")}
                             >
-                                <span className="lobbyStatIcon" aria-hidden>{isPublic ? "🌍" : "🔒"}</span>
-                                <span className="lobbyStatValue">{isPublic ? tr("Offen") : tr("Privat")}</span>
+                                <span className="lobbyStatIcon" aria-hidden>
+                                    <span key={String(isPublic)} className="lobbyFlip">{isPublic ? "🌍" : "🔒"}</span>
+                                </span>
+                                <span className="lobbyStatValue">
+                                    <span key={String(isPublic)} className="lobbyFlip">{isPublic ? tr("Offen") : tr("Privat")}</span>
+                                </span>
                                 <span className="lobbyStatLabel">{amIHost && !isRunning ? tr("Tippen = ändern") : tr("Sichtbarkeit")}</span>
                             </button>
                         </div>

@@ -579,3 +579,48 @@ main.gameStage{
 .hostCatTitle{ font-family: var(--font-display); font-weight: 800; font-size: 19px; }
 .hostCatText{ font-size: 13px; font-weight: 700; opacity: .75; }
 @media (max-width: 420px){ .hostCatText{ display: none; } .hostCatTitle{ font-size: 16px; } }
+
+
+/* ---------- Mehr Bewegung (Wunsch Mehdi 2026-10-13) ---------- */
+/* Fenster: Hintergrund blendet ein, Fenster ploppt weich auf */
+.frModalBack{ animation: kmFadeIn .22s ease both; }
+.frModal{ animation: kmModalPop .42s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes kmFadeIn{ from{ opacity: 0; } }
+@keyframes kmModalPop{ from{ opacity: 0; transform: translateY(18px) scale(.94); } }
+
+/* Freunde-Liste: Einträge gleiten nacheinander herein */
+.frList > .frRow{ animation: kmSlideIn .45s cubic-bezier(.22, 1, .36, 1) backwards; }
+.frList > .frRow:nth-child(2){ animation-delay: .05s; }
+.frList > .frRow:nth-child(3){ animation-delay: .1s; }
+.frList > .frRow:nth-child(4){ animation-delay: .15s; }
+.frList > .frRow:nth-child(n+5){ animation-delay: .2s; }
+@keyframes kmSlideIn{ from{ opacity: 0; transform: translateX(14px); } }
+
+/* Zwischenstand + Endstand: Zeilen erscheinen nacheinander (Platz 1 zuerst) */
+.sumTable tbody tr, .pstTable .pstRow:not(.pstHead){ animation: kmRowIn .5s cubic-bezier(.22, 1, .36, 1) backwards; }
+.sumTable tbody tr:nth-child(1), .pstTable .pstRow:nth-child(2){ animation-delay: .15s; }
+.sumTable tbody tr:nth-child(2), .pstTable .pstRow:nth-child(3){ animation-delay: .25s; }
+.sumTable tbody tr:nth-child(3), .pstTable .pstRow:nth-child(4){ animation-delay: .35s; }
+.sumTable tbody tr:nth-child(4), .pstTable .pstRow:nth-child(5){ animation-delay: .45s; }
+.sumTable tbody tr:nth-child(n+5), .pstTable .pstRow:nth-child(n+6){ animation-delay: .55s; }
+@keyframes kmRowIn{ from{ opacity: 0; transform: translateY(10px) scale(.98); } }
+
+/* Erratene Songs: nur der neue Song ploppt auf */
+.usedAnswerChip{ animation: kmChipPop .5s cubic-bezier(.34, 1.56, .64, 1) backwards; }
+@keyframes kmChipPop{ from{ opacity: 0; transform: scale(.6) translateY(8px); } }
+
+/* Punkte am Tisch: Plakette hüpft, wenn Punkte dazukommen */
+.seatPts{ display: inline-block; animation: kmPtsBump .55s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes kmPtsBump{ 0%{ transform: scale(1); } 40%{ transform: scale(1.35); } 100%{ transform: scale(1); } }
+
+/* Einstellungen: Inhalt gleitet beim Reiterwechsel herein */
+.setTabPane{ display: grid; gap: 14px; animation: kmTabIn .35s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes kmTabIn{ from{ opacity: 0; transform: translateY(8px); } }
+
+/* Lobby: Kachel "Offen / Privat" dreht sich beim Umschalten */
+.lobbyFlip{ display: inline-block; animation: kmFlip .5s cubic-bezier(.22, 1, .36, 1); }
+@keyframes kmFlip{ from{ transform: rotateX(90deg); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce){
+    .frModalBack, .frModal, .frList > .frRow, .sumTable tbody tr, .pstTable .pstRow, .usedAnswerChip, .seatPts, .setTabPane, .lobbyFlip{ animation: none !important; }
+}

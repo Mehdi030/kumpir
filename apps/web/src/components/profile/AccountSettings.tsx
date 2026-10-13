@@ -131,9 +131,11 @@ export function AccountSettings({ profile, api, onRefresh, onSavePreferences }: 
                 <div className="setWarn">{tr("⚠️ Dein Konto hat noch keinen Benutzernamen. Wähle unten einen – damit kannst du dich auch ohne E-Mail anmelden.")}</div>
             ) : null}
 
-            {tab === "profil" ? <ProfileTab profile={profile} api={api} onRefresh={onRefresh} /> : null}
-            {tab === "spiel" ? <GameTab profile={profile} onSavePreferences={onSavePreferences} /> : null}
-            {tab === "konto" ? <AccountTab profile={profile} api={api} /> : null}
+            <div className="setTabPane" key={tab}>
+                {tab === "profil" ? <ProfileTab profile={profile} api={api} onRefresh={onRefresh} /> : null}
+                {tab === "spiel" ? <GameTab profile={profile} onSavePreferences={onSavePreferences} /> : null}
+                {tab === "konto" ? <AccountTab profile={profile} api={api} /> : null}
+            </div>
 
             <style>{`
         .setBox{ margin-top:18px; padding:16px; border-radius:18px; background: rgba(0,0,0,.18); border:1px solid rgba(255,255,255,.12); display:grid; gap:14px; }
