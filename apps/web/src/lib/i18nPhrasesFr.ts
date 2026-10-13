@@ -1271,4 +1271,8 @@ export const PHRASES_FR: Record<string, string> = {
     "Gleich knallt's!": "Ça va péter !",
     "Es wird heiß!": "Ça chauffe !",
     "Zündschnur brennt": "La mèche brûle",
+    "Spieler im Spiel: Team Rot gegen Team Blau": "Joueurs en jeu : équipe rouge contre équipe bleue",
+    "🔴 Team Rot": "🔴 Équipe rouge",
+    "🔵 Team Blau": "🔵 Équipe bleue",
+    "Team Rot gegen Team Blau: Die Kartoffel geht immer ins andere Team. Ist ein Team komplett raus, hat das andere gewonnen.": "Équipe rouge contre équipe bleue : la patate passe toujours à l'autre équipe. Quand une équipe est entièrement éliminée, l'autre gagne.",
 };

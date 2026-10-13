@@ -61,6 +61,7 @@ const PLAYER_COLUMNS = [
     "survival_streak",
     "eliminated_at_round",
     "song_points",
+    "team",
     "skips_left",
     "combo",
     "revenge_used",
@@ -167,6 +168,7 @@ type Player = {
     eliminated_at_round?: number | null;
     song_points?: number;
     avatar_config?: Record<string, string> | null;
+    team?: number | null;
     skips_left?: number;
     combo?: number;
     revenge_used?: boolean;
@@ -1828,7 +1830,14 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // =========================================================
     if (lobby.phase === "finished") {
         const isSeries = (lobby.series_total ?? 1) > 1;
-        const winnerName = (isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? tr("Unbekannt");
+        // Teams (Migration 113): das Siegerteam gewinnt (bei mehreren Runden zählt die Gesamtwertung)
+        const winTeam = lobby.game_mode === "teams" ? (players.find((p) => p.is_alive && p.team != null)?.team ?? null) : null;
+        const winnerName =
+            winTeam != null && !isSeries
+                ? winTeam === 0
+                    ? tr("🔴 Team Rot")
+                    : tr("🔵 Team Blau")
+                : ((isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? tr("Unbekannt"));
 
         // Ergebnis-Zeilen mit schnellster/langsamster Abgabe (bei mehreren Runden: beste Werte aller Runden, Migration 101)
         const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
@@ -2179,6 +2188,16 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     aliveNow === 2
                         ? { key: "tempo", label: tr("Finale"), value: tr("⚔ Duell"), title: tr("Nur noch zwei: Duell"), tone: "duel" as const }
                         : { key: "tempo", label: tr("Tempo"), value: `×${fmtNum(tempoFactor)}`, title: tr("Tempo der Zündschnur") },
+                    ...(lobby.game_mode === "teams"
+                        ? [
+                              {
+                                  key: "teams",
+                                  label: tr("Teams"),
+                                  value: `🔴 ${players.filter((p) => p.is_alive && p.team === 0).length} : ${players.filter((p) => p.is_alive && p.team === 1).length} 🔵`,
+                                  title: tr("Spieler im Spiel: Team Rot gegen Team Blau"),
+                              },
+                          ]
+                        : []),
                     { key: "alive", label: tr("Im Spiel"), value: `${aliveNow}/${totalPlayers}`, title: tr("{n} von {total} Spielern noch im Spiel", { n: aliveNow, total: totalPlayers }) },
                 ]}
             />

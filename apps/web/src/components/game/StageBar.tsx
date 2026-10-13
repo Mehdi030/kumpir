@@ -77,7 +77,7 @@ export function StageBar({
 
             <style>{`
         .stageBar{ position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 55; width: min(1040px, calc(100vw - 250px));
-          display: grid; grid-template-columns: minmax(150px, .9fr) minmax(180px, 1.4fr) auto; align-items: center; gap: 16px; padding: 10px 14px;
+          display: grid; grid-template-columns: minmax(170px, 1fr) minmax(160px, 1.3fr) auto; align-items: center; gap: 16px; padding: 10px 14px;
           border-radius: 22px; background: linear-gradient(180deg, rgba(28,24,40,.86), rgba(14,12,24,.86)); border: 1px solid rgba(255,255,255,.14);
           box-shadow: 0 16px 44px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
           transition: border-color .4s ease, box-shadow .4s ease; }
@@ -127,7 +127,7 @@ export function StageBar({
         .sbStat.duel{ background: rgba(150,20,20,.45); }
         .sbStat.duel .sbValue, .sbStat.overtime .sbValue{ color: #ffc2b8; }
 
-        @media (max-width: 1000px){ .sbStat.opt{ display: none; } }
+        @media (max-width: 1150px){ .sbStat.opt{ display: none; } }
         @media (max-width: 760px){
           .stageBar{ top: 60px; width: calc(100vw - 16px); grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; padding: 8px 10px; border-radius: 18px; }
           .sbFuse{ grid-column: 1 / -1; grid-row: 2; }

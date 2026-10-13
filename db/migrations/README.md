@@ -136,3 +136,4 @@ Bei Konflikten (z.B. „relation already exists"): die Migrations sind mit `IF N
 | 110 | [`110_slower_tempo.sql`](110_slower_tempo.sql) | **Langsameres Tempo**: Blitz 14–26 s (= altes Standard), Standard 20–36 s, Casual 28–50 s; Verkürzung -5 %/Ausscheiden bis 55 % | Empfohlen |
 | 111 | [`111_mode_popularity.sql`](111_mode_popularity.sql) | **Meistgespielte Modi**: Tabelle `mode_plays` (Trigger beim Rundenstart), `get_mode_popularity()` für „Lobby hosten“ | Empfohlen |
 | 112 | [`112_quiz_bot_buzzer_slower.sql`](112_quiz_bot_buzzer_slower.sql) | **Quiz-Bots**: buzzern später, damit Menschen eine Chance haben | Empfohlen |
+| 113 | [`113_teams_mode.sql`](113_teams_mode.sql) | **Modus Teams**: Team Rot/Blau beim Start (`players.team`), Kartoffel geht immer ins andere Team (`_next_alive`), Runde endet, wenn ein Team raus ist; Siegerteam im Endstand vorn | Empfohlen |

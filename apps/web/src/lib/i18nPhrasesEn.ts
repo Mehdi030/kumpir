@@ -1271,4 +1271,8 @@ export const PHRASES_EN: Record<string, string> = {
     "Gleich knallt's!": "About to blow!",
     "Es wird heiß!": "Getting hot!",
     "Zündschnur brennt": "Fuse is burning",
+    "Spieler im Spiel: Team Rot gegen Team Blau": "Players still in: Team Red vs. Team Blue",
+    "🔴 Team Rot": "🔴 Team Red",
+    "🔵 Team Blau": "🔵 Team Blue",
+    "Team Rot gegen Team Blau: Die Kartoffel geht immer ins andere Team. Ist ein Team komplett raus, hat das andere gewonnen.": "Team Red vs. Team Blue: the potato always goes to the other team. When a whole team is out, the other team wins.",
 };

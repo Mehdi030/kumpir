@@ -12,6 +12,8 @@ type Player = {
     ready?: boolean;
     song_points?: number;
     avatar_config?: AvatarConfig | null;
+    /** Modus Teams (Migration 113): 0 = Rot, 1 = Blau */
+    team?: number | null;
 };
 
 type DisconnectedIds = Set<string> | string[];
@@ -394,7 +396,7 @@ export function PlayerRing({
                     return (
                         <div
                             key={p.player_id}
-                            className={`seat ${isHolder ? "holder" : ""} ${isMe ? "me" : ""} ${isNext ? "next" : ""} ${!p.is_alive ? "dead" : ""} ${isExploded ? "exploded" : ""}`}
+                            className={`seat ${p.team === 0 ? "team0" : p.team === 1 ? "team1" : ""} ${isHolder ? "holder" : ""} ${isMe ? "me" : ""} ${isNext ? "next" : ""} ${!p.is_alive ? "dead" : ""} ${isExploded ? "exploded" : ""}`}
                             style={{ left: pos.x, top: pos.y, ["--h" as string]: hueFor(p.player_id) }}
                             aria-label={`${p.name}${isHolder ? ` (${tr("am Zug")})` : ""}${isMe ? ` (${tr("du")})` : ""}`}
                             title={p.name}
@@ -654,6 +656,12 @@ export function PlayerRing({
         /* Du: türkiser Lichtfleck + Rahmen am Namen */
         .seat.me .seatDisc::before{ background: radial-gradient(ellipse at center, rgba(63,224,245,.75), rgba(34,211,238,.22) 55%, transparent 72%); }
         .seat.me .seatName{ border-color: rgba(63,224,245,.75); }
+        /* Teams: Namensschild in Teamfarbe */
+        .seat.team0 .seatName{ background: rgba(120,16,16,.9); border-color: rgba(255,110,100,.85); }
+        .seat.team1 .seatName{ background: rgba(14,40,120,.9); border-color: rgba(110,160,255,.85); }
+        .seat.team0 .seatDisc::after, .seat.team1 .seatDisc::after{ content: ""; position: absolute; inset: -5px; border-radius: 50%; pointer-events: none; }
+        .seat.team0 .seatDisc::after{ box-shadow: 0 0 0 3px rgba(255,90,80,.75); }
+        .seat.team1 .seatDisc::after{ box-shadow: 0 0 0 3px rgba(90,150,255,.75); }
         /* Am Zug: goldener Ring, größer, Name in Gold */
         .seat.holder{ transform: translate(-50%, -50%) translateZ(60px) rotateX(calc(var(--tilt) * -1)) scale(1.16); z-index: 36; }
         .seat.holder .seatAvatar{ animation: holderGlow 1.1s ease-in-out infinite; }

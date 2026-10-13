@@ -29,7 +29,7 @@ const ALL_MODES: GameModeInfo[] = [
     { key: "gap", icon: "🧩", label: tk("Lückentitel"), desc: tk("Der Titel steht da, aber ein Wort fehlt. Tippe das fehlende Wort."), kind: "quiz", isNew: true },
     { key: "duel", icon: "⚔️", label: tk("Duell"), desc: tk("Zwei treten gegeneinander an, wer zuerst zwei Songs errät, gewinnt. Alle anderen wetten auf den Sieger."), kind: "quiz", isNew: true },
     { key: "year", icon: "📅", label: tk("Jahr raten"), desc: tk("In welchem Jahr kam der Song raus? Je näher du dran bist, desto mehr Punkte."), kind: "quiz", soon: true },
-    { key: "teams", icon: "🤝", label: tk("Teams"), desc: tk("Zwei Teams, die Kartoffel wandert immer ins andere Team."), kind: "potato", soon: true },
+    { key: "teams", icon: "🤝", label: tk("Teams"), desc: tk("Team Rot gegen Team Blau: Die Kartoffel geht immer ins andere Team. Ist ein Team komplett raus, hat das andere gewonnen."), kind: "potato", isNew: true },
     { key: "teleport", icon: "🌀", label: tk("Teleport"), desc: tk("Die Kartoffel springt bei jedem Pass zu einem zufälligen Spieler."), kind: "potato", soon: true },
     { key: "reverse", icon: "🔁", label: tk("Reverse"), desc: tk("Die Richtung wechselt gelegentlich. Mehr Chaos, mehr Lacher."), kind: "potato", soon: true },
 ];
