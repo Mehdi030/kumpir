@@ -2158,3 +2158,8 @@ textarea:focus-visible{
 .accountNameLink{ margin-left: auto; font-size: 12.5px; font-weight: 700; opacity: .8; color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .accountNameLink:hover{ opacity: 1; }
 @media (max-width: 640px){ .hostMain .accountName{ display: none; } }
+
+/* "Weitere Modi" beim Hosten (eingeklappt) */
+.moreModesBtn{ margin-top: 10px; padding: 6px 12px; border-radius: 999px; border: 1px dashed rgba(255,255,255,.35); background: rgba(255,255,255,.06); color: #fff; font-weight: 850; font-size: 13px; cursor: pointer; }
+.moreModesBtn:hover{ background: rgba(255,255,255,.14); border-style: solid; }
+.authMiniAvatar{ width: 22px; height: 22px; border-radius: 50%; vertical-align: -5px; margin-right: 4px; background: rgba(255,255,255,.14); }

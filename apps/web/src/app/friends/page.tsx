@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useFriends } from "@/hooks/useFriends";
-import { useSavedLobbies } from "@/hooks/useSavedLobbies";
 import { Spinner } from "@/components/Spinner";
 import { HomeButton } from "@/components/BackButton";
 import { useI18n } from "@/lib/i18n";
@@ -16,7 +15,6 @@ export default function FriendsPage() {
     const { tr } = useI18n();
     const { user, loading: authLoading } = useAuth();
     const friends = useFriends(user?.id ?? null);
-    const saved = useSavedLobbies(user?.id ?? null);
 
     const [usernameToAdd, setUsernameToAdd] = useState("");
     const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -177,34 +175,6 @@ export default function FriendsPage() {
                         </div>
                     </div>
                 ) : null}
-
-                {/* Gespeicherte Lobbies */}
-                <div className="pillCard" style={{ marginTop: 14 }}>
-                    <div className="pillCardTop">
-                        <div className="pillCardTitle">💾 {tr("Gemerkte Lobbys ({n})", { n: saved.rows.length })}</div>
-                        <div className="pillCardHint">{tr("Lobbys, die du dir gemerkt hast")}</div>
-                    </div>
-                    {saved.loading ? (
-                        <div style={{ padding: 12 }}><Spinner size={18} /></div>
-                    ) : saved.rows.length === 0 ? (
-                        <div className="fieldHelp" style={{ marginTop: 8, opacity: 0.8 }}>{tr("Noch keine gemerkten Lobbys.")}</div>
-                    ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-                            {saved.rows.map((s) => (
-                                <div key={s.lobby_code} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 10, background: "rgba(255,255,255,0.04)" }}>
-                                    <div>
-                                        <div style={{ fontWeight: 900 }}>{s.nickname}</div>
-                                        <div style={{ fontSize: 12, opacity: 0.7 }}>{s.lobby_code}</div>
-                                    </div>
-                                    <div style={{ display: "flex", gap: 6 }}>
-                                        <Link href={`/join?code=${s.lobby_code}`} className="btn btnPrimary btnSmall">{tr("Beitreten")}</Link>
-                                        <button type="button" className="btn btnSecondary btnSmall" onClick={() => void saved.unsave(s.lobby_code)} title={tr("Löschen")}>🗑️</button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
             </section>
         </main>
     );

@@ -1,5 +1,6 @@
 "use client";
 
+import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
@@ -38,7 +39,7 @@ export function AuthMini({ nextPath = "/", variant = "header" }: Props) {
     return (
         <div className={variant === "header" ? "homeAuth" : "actionsRow"}>
             <Link className={variant === "header" ? "homeLink homeLinkStrong homeUser" : "btn btnSecondary"} href="/profile" title={t("auth.account")}>
-                {profile?.avatarEmoji || "👤"} {shownName}
+                <PlayerAvatar seed={shownName} config={profile?.avatarConfig ?? null} size={22} className="authMiniAvatar" /> {shownName}
             </Link>
         </div>
     );

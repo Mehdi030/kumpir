@@ -1,10 +1,10 @@
 // Offline-Simulation der Spielregeln (Formeln 1:1 aus den SQL-Funktionen)
 const U = Math.random;
-const speeds = { fast: [9, 16], normal: [14, 26], calm: [22, 40] };
+const speeds = { fast: [14, 26], normal: [20, 36], calm: [28, 50] }; // Migration 110
 function fuseSeconds(speed, alive, roundNo) {
   const [bmin, bmax] = speeds[speed];
   const sa = Math.max(0.75, Math.min(1.25, 1.15 - alive * 0.035));
-  const sr = Math.max(0.45, 1 - Math.max(0, roundNo - 1) * 0.06);
+  const sr = Math.max(0.55, 1 - Math.max(0, roundNo - 1) * 0.05);
   const sd = alive <= 2 ? 0.8 : 1;
   const mn = Math.max(3, bmin * sa * sr * sd);
   const mx = Math.max(mn + 1, bmax * sa * sr * sd);

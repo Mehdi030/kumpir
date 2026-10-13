@@ -61,7 +61,7 @@ export function SeasonBoard() {
                             style={{ display: "grid", gridTemplateColumns: "36px 1fr auto auto", gap: 10, alignItems: "center", padding: "8px 12px", borderRadius: 12, background: "rgba(255,255,255,0.06)", fontWeight: 800 }}
                         >
                             <span>{["🥇", "🥈", "🥉"][r.rank - 1] ?? r.rank}</span>
-                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.avatar_emoji ? <span aria-hidden style={{ marginRight: 6 }}>{r.avatar_emoji}</span> : null}
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {r.username}
                             </span>
                             <span style={{ fontSize: 12, opacity: 0.7 }}>{tr("{w}× Sieg · {n} Runden", { w: r.set_wins, n: r.sets_played })}</span>

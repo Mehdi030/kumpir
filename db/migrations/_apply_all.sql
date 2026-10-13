@@ -20607,3 +20607,118 @@ $function$;
 GRANT EXECUTE ON FUNCTION public.get_match_answer_stats(text) TO anon, authenticated;
 
 COMMIT;
+
+-- >>> 110_slower_tempo.sql <<<
+-- ============================================================
+-- 110: Langsameres Tempo (Wunsch Mehdi 2026-10-13: "es ist zu schnell")
+-- ============================================================
+-- Zündschnur-Grundzeiten (Sekunden, min–max): Blitz 14–26 (= bisheriges Standard), Standard 20–36, Casual 28–50.
+-- Verkürzung pro Ausscheiden -5 % statt -6 %, höchstens bis 55 % statt 45 %.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.calc_explode_seconds(p_round_speed text, p_alive_count integer, p_round_number integer, p_exponent numeric DEFAULT 1.9, p_quantize_step_sec numeric DEFAULT 0.5, p_clamp_min_sec numeric DEFAULT 3)
+ RETURNS numeric
+ LANGUAGE plpgsql
+AS $function$
+declare
+  base_min numeric;
+  base_max numeric;
+  scale_alive numeric;
+  scale_round numeric;
+  scale_duel numeric := 1.0;
+  min_sec numeric;
+  max_sec numeric;
+  u numeric;
+  biased numeric;
+  raw numeric;
+  quantized numeric;
+begin
+  -- 110: alles langsamer (Wunsch Mehdi 2026-10-13): Blitz = bisheriges Standard, Standard/Casual neu
+  if p_round_speed = 'fast' then
+    base_min := 14; base_max := 26;
+  elsif p_round_speed = 'normal' then
+    base_min := 20; base_max := 36;
+  elsif p_round_speed = 'calm' then
+    base_min := 28; base_max := 50;
+  else
+    base_min := 20; base_max := 36;
+  end if;
+
+  scale_alive := greatest(0.75, least(1.25, 1.15 - (p_alive_count * 0.035)));
+
+  -- Tempo-Stufen: -5 % pro Eliminierung, nicht unter 55 % (110, vorher -6 % / 45 %).
+  scale_round := greatest(0.55, 1.0 - greatest(0, (p_round_number - 1)) * 0.05);
+
+  -- Duell-Finale: bei 2 Lebenden 20 % kürzer.
+  if p_alive_count <= 2 then scale_duel := 0.8; end if;
+
+  min_sec := greatest(p_clamp_min_sec, base_min * scale_alive * scale_round * scale_duel);
+  max_sec := greatest(min_sec + 1, base_max * scale_alive * scale_round * scale_duel);
+
+  u := random();
+  biased := power(u, p_exponent);
+  raw := min_sec + biased * (max_sec - min_sec);
+
+  quantized := round(raw / p_quantize_step_sec) * p_quantize_step_sec;
+
+  return greatest(p_clamp_min_sec, quantized);
+end;
+$function$;
+
+COMMIT;
+
+-- >>> 111_mode_popularity.sql <<<
+-- ============================================================
+-- 111: Meistgespielte Modi (Wunsch Mehdi 2026-10-13)
+-- ============================================================
+-- "Lobby hosten" zeigt nur die 3 meistgespielten Modi offen, der Rest ist eingeklappt.
+-- Gezählt wird jede gestartete Runde (countdown -> running/quiz). Bisherige Runden zählen als "original".
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS public.mode_plays (
+  mode text PRIMARY KEY,
+  plays bigint NOT NULL DEFAULT 0
+);
+ALTER TABLE public.mode_plays ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.mode_plays FROM anon, authenticated;
+
+INSERT INTO public.mode_plays (mode, plays)
+SELECT 'original', count(DISTINCT (match_id, round_index)) FROM public.account_rounds
+ON CONFLICT (mode) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION public._trg_count_mode_play()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  begin
+    insert into public.mode_plays (mode, plays) values (coalesce(NEW.game_mode, 'original'), 1)
+    on conflict (mode) do update set plays = public.mode_plays.plays + 1;
+  exception when others then
+    null; -- darf den Spielstart nie stören
+  end;
+  return NEW;
+end;
+$function$;
+
+DROP TRIGGER IF EXISTS lobbies_count_mode_play ON public.lobbies;
+CREATE TRIGGER lobbies_count_mode_play
+  AFTER UPDATE OF phase ON public.lobbies
+  FOR EACH ROW
+  WHEN (OLD.phase = 'countdown' AND NEW.phase IN ('running', 'quiz'))
+  EXECUTE FUNCTION public._trg_count_mode_play();
+
+CREATE OR REPLACE FUNCTION public.get_mode_popularity()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT coalesce(jsonb_object_agg(mode, plays), '{}'::jsonb) FROM public.mode_plays;
+$function$;
+GRANT EXECUTE ON FUNCTION public.get_mode_popularity() TO anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public._trg_count_mode_play() FROM PUBLIC, anon, authenticated;
+
+COMMIT;

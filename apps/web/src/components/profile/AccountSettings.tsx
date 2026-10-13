@@ -8,8 +8,6 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useI18n } from "@/lib/i18n";
 import { getMuted, getVolume, setMuted, setVolume } from "@/lib/gameFx";
 import {
-    AVATAR_COLORS,
-    AVATAR_EMOJIS,
     DEFAULT_AVATAR,
     SOLO_SKILL_LABEL,
     sanitizeDisplayName,
@@ -170,15 +168,73 @@ export function AccountSettings({ profile, api, onRefresh, onSavePreferences }: 
     );
 }
 
+
+// ------------------------------------------------------------------ Name (ganz oben im Profil)
+/** Spielername – steht im Profil ganz oben (Wunsch Mehdi 2026-10-13). Das frühere Symbol/Farbe ist weg, es gibt ja den Avatar. */
+export function NameSection({ profile, api, onRefresh }: { profile: Profile; api: AccountApi; onRefresh: () => Promise<void> }) {
+    const { tr } = useI18n();
+    const [displayName, setDisplayName] = useState(profile.displayName ?? "");
+    const [msg, setMsg] = useState<Msg>(null);
+    const [busy, setBusy] = useState(false);
+    const changed = (displayName || "") !== (profile.displayName ?? "");
+
+    const save = async () => {
+        const v = validateDisplayName(displayName);
+        if (!v.ok) return setMsg({ ok: false, text: v.message });
+        setBusy(true);
+        setMsg(null);
+        // Symbol/Farbe bleiben unverändert (werden nicht mehr angezeigt)
+        const res = await api.updateProfile(v.value, profile.avatarEmoji ?? null, profile.avatarColor ?? null);
+        setBusy(false);
+        if (res.error) return setMsg({ ok: false, text: settingsErrorText(res.error) });
+        await onRefresh();
+        setMsg({ ok: true, text: tr("✅ Gespeichert") });
+    };
+
+    return (
+        <form
+            className="nameSec"
+            onSubmit={(e) => {
+                e.preventDefault();
+                void save();
+            }}
+        >
+            <label className="nameSecLabel" htmlFor="setDisplayName">
+                {tr("Spielername")}
+            </label>
+            <div className="nameSecRow">
+                <input
+                    id="setDisplayName"
+                    className="input nameSecInput"
+                    value={displayName}
+                    onChange={(e) => {
+                        setDisplayName(sanitizeDisplayName(e.target.value));
+                        setMsg(null);
+                    }}
+                    placeholder={profile.username ? tr("leer = {name}", { name: profile.username }) : tr("z. B. Medo")}
+                    maxLength={12}
+                    autoComplete="nickname"
+                />
+                <button type="submit" className="btn btnPrimary btnSmall" disabled={busy || !changed}>
+                    {busy ? "…" : tr("Speichern")}
+                </button>
+            </div>
+            <div className="nameSecHint">{tr("Dein Name in jeder Lobby – nur hier änderbar. 2–12 Buchstaben.")}</div>
+            <Note msg={msg} />
+            <style>{`
+        .nameSec{ display: grid; gap: 6px; }
+        .nameSecLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; opacity: .7; }
+        .nameSecRow{ display: flex; gap: 8px; align-items: center; }
+        .nameSecInput{ flex: 1; min-width: 0; font-size: 18px !important; font-weight: 800 !important; }
+        .nameSecHint{ font-size: 12px; opacity: .72; }
+      `}</style>
+        </form>
+    );
+}
+
 // ------------------------------------------------------------------ Profil
 function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: AccountApi; onRefresh: () => Promise<void> }) {
     const { tr } = useI18n();
-    const [displayName, setDisplayName] = useState(profile.displayName ?? "");
-    const [emoji, setEmoji] = useState(profile.avatarEmoji ?? "");
-    const [color, setColor] = useState(profile.avatarColor ?? DEFAULT_AVATAR.color);
-    const [msg, setMsg] = useState<Msg>(null);
-    const [busy, setBusy] = useState(false);
-
     const [username, setUsername] = useState(profile.username ?? "");
     const [uStatus, setUStatus] = useState<"idle" | "checking" | "free" | "taken" | "error">("idle");
     const [uMsg, setUMsg] = useState<Msg>(null);
@@ -203,18 +259,6 @@ function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: Accoun
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [username]);
 
-    const saveProfile = async () => {
-        const v = validateDisplayName(displayName);
-        if (!v.ok) return setMsg({ ok: false, text: v.message });
-        setBusy(true);
-        setMsg(null);
-        const res = await api.updateProfile(v.value, emoji || null, color || null);
-        setBusy(false);
-        if (res.error) return setMsg({ ok: false, text: settingsErrorText(res.error) });
-        await onRefresh();
-        setMsg({ ok: true, text: tr("✅ Gespeichert") });
-    };
-
     const saveUsername = async () => {
         if (!uCheck.ok) return setUMsg({ ok: false, text: uCheck.message });
         if (uStatus === "taken") return setUMsg({ ok: false, text: tr("Dieser Benutzername ist schon vergeben.") });
@@ -228,54 +272,8 @@ function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: Accoun
         setUMsg({ ok: true, text: tr("✅ Benutzername geändert. Anmelden geht jetzt mit „{name}“.", { name: uCheck.value }) });
     };
 
-    const previewName = displayName || profile.username || "?";
-
     return (
         <>
-            <div className="setGroup">
-                <h3>{tr("Symbol & Spielername")}</h3>
-                <div className="setRow" style={{ gap: 14 }}>
-                    <AvatarBadge emoji={emoji} color={color} name={previewName} size={64} />
-                    <div className="setHint">{tr("So sehen dich andere in der Bestenliste und du dich oben in der Kopfzeile.")}</div>
-                </div>
-                <div className="setEmojis" role="group" aria-label={tr("Avatar-Symbol")}>
-                    <button type="button" className={!emoji ? "on" : ""} onClick={() => setEmoji("")} aria-pressed={!emoji} title={tr("Anfangsbuchstabe")} style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>
-                        Aa
-                    </button>
-                    {AVATAR_EMOJIS.map((e) => (
-                        <button key={e} type="button" className={emoji === e ? "on" : ""} onClick={() => setEmoji(e)} aria-pressed={emoji === e} aria-label={`${tr("Symbol")} ${e}`}>
-                            {e}
-                        </button>
-                    ))}
-                </div>
-                <div className="setColors" role="group" aria-label={tr("Avatar-Farbe")}>
-                    {AVATAR_COLORS.map((c) => (
-                        <button key={c} type="button" className={color === c ? "on" : ""} style={{ background: c }} onClick={() => setColor(c)} aria-pressed={color === c} aria-label={`${tr("Farbe")} ${c}`} />
-                    ))}
-                </div>
-                <label className="setLabel" htmlFor="setDisplayName">
-                    {tr("Spielername")}
-                </label>
-                <div className="setRow">
-                    <input
-                        id="setDisplayName"
-                        className="input"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(sanitizeDisplayName(e.target.value))}
-                        placeholder={profile.username ? tr("leer = {name}", { name: profile.username }) : tr("z. B. Medo")}
-                        maxLength={12}
-                        autoComplete="nickname"
-                    />
-                </div>
-                <div className="setHint">{tr("Dein Name in jeder Lobby – nur hier änderbar. 2–12 Buchstaben.")}</div>
-                <div className="setRow">
-                    <button type="button" className="btn btnPrimary btnSmall" onClick={() => void saveProfile()} disabled={busy}>
-                        {busy ? "…" : tr("Speichern")}
-                    </button>
-                    <Note msg={msg} />
-                </div>
-            </div>
-
             <div className="setGroup">
                 <h3>{tr("Benutzername (zum Anmelden)")}</h3>
                 <div className="setRow">

@@ -43,13 +43,13 @@ describe("GAME_MODES", () => {
 describe("pickLobbyExplodeSeconds", () => {
     it("liegt für rng=0 nahe am Minimum (auf step gerundet)", () => {
         const v = pickLobbyExplodeSeconds("normal", { rng: () => 0, quantizeStepSec: 0.5 });
-        expect(v).toBe(14); // baseMin = 14
+        expect(v).toBe(20); // baseMin = 20 (Migration 110)
     });
 
     it("liegt für rng→1 nahe am Maximum", () => {
         const v = pickLobbyExplodeSeconds("normal", { rng: () => 0.9999, quantizeStepSec: 0.5 });
-        expect(v).toBeGreaterThanOrEqual(25);
-        expect(v).toBeLessThanOrEqual(26);
+        expect(v).toBeGreaterThanOrEqual(35);
+        expect(v).toBeLessThanOrEqual(36);
     });
 
     it("respektiert clampMinSec auch bei tiefem RNG", () => {

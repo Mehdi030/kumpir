@@ -296,7 +296,7 @@ export const PHRASES_FR: Record<string, string> = {
     "Speichern hat nicht geklappt. Bitte nochmal.": "L'enregistrement n'a pas marché. Réessaie.",
     "✅ Gespeichert – so siehst du jetzt im Spiel aus.": "✅ Enregistré – voilà ton apparence dans le jeu.",
     "Deine Spielfigur": "Ton personnage",
-    "Bereiche": "Sections",
+    "Bereiche": "Rubriques",
     "Automatisch (aus dem Namen)": "Automatique (d'après ton nom)",
     "Auto": "Auto",
     "Zufällig": "Au hasard",
@@ -1260,4 +1260,9 @@ export const PHRASES_FR: Record<string, string> = {
     "„Titel + Künstler“ wird seit Oktober 2026 getrennt gezählt.": "« Titre + artiste » est compté à part depuis octobre 2026.",
     "{b} Titel + Künstler · {t} nur Titel · {w} falsch · {r} Runden": "{b} titre + artiste · {t} titre seul · {w} faux · {r} manches",
     "Beste Runde:": "Meilleure manche :",
+    "Weniger Modi ▴": "Moins de modes ▴",
+    "Weitere Modi ({n}) ▾": "Autres modes ({n}) ▾",
+    "Verlauf, Musik-Werte, Gegner": "Historique, stats musique, adversaires",
+    "Freunde & Anfragen": "Amis & demandes",
+    "Dein Profil": "Ton profil",
 };

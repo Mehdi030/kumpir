@@ -1260,4 +1260,9 @@ export const PHRASES_EN: Record<string, string> = {
     "„Titel + Künstler“ wird seit Oktober 2026 getrennt gezählt.": "“Title + artist” has been counted separately since October 2026.",
     "{b} Titel + Künstler · {t} nur Titel · {w} falsch · {r} Runden": "{b} title + artist · {t} title only · {w} wrong · {r} rounds",
     "Beste Runde:": "Best round:",
+    "Weniger Modi ▴": "Fewer modes ▴",
+    "Weitere Modi ({n}) ▾": "More modes ({n}) ▾",
+    "Verlauf, Musik-Werte, Gegner": "History, music stats, opponents",
+    "Freunde & Anfragen": "Friends & requests",
+    "Dein Profil": "Your profile",
 };

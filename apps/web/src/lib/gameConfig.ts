@@ -51,7 +51,7 @@ export const GAME_MODES: Record<
 };
 
 /**
- * UI + Timing für RoundSpeed (DB: lobbies.round_speed)
+ * UI + Timing für RoundSpeed (DB: lobbies.round_speed). Werte wie calc_explode_seconds (Migration 110).
  */
 export const ROUND_SPEEDS: Record<
     RoundSpeed,
@@ -61,19 +61,19 @@ export const ROUND_SPEEDS: Record<
         label: "Blitz",
         icon: "⚡",
         desc: "Schneller, direkter, mehr Druck.",
-        explodeRangeSec: [9, 16],
+        explodeRangeSec: [14, 26],
     },
     normal: {
         label: "Normal",
         icon: "🎯",
         desc: "Guter Standard.",
-        explodeRangeSec: [14, 26],
+        explodeRangeSec: [20, 36],
     },
     calm: {
         label: "Casual",
         icon: "🧊",
         desc: "Entspannt und locker.",
-        explodeRangeSec: [22, 40],
+        explodeRangeSec: [28, 50],
     },
 };
 
