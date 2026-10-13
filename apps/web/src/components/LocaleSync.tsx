@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { trIn, tk, useI18n } from "@/lib/i18n";
+import { LOCALES, trIn, tk, useI18n } from "@/lib/i18n";
 
 /** Seitentitel aus den (deutschen) Metadaten, die im Browser-Tab übersetzt werden. */
 const TITLES = [tk("Kumpir – Heiße Kartoffel"), tk("Lobby beitreten"), tk("Solo gegen Bots"), tk("Seite nicht gefunden")];
@@ -17,8 +17,10 @@ export function LocaleSync() {
         const fix = () => {
             const t = document.title;
             for (const de of TITLES) {
-                if (t.includes(de)) {
-                    const next = t.replace(de, trIn(locale, de));
+                // Titel kann gerade in jeder Sprache dastehen (z. B. nach dem Zurückwechseln auf Deutsch)
+                const found = LOCALES.map((l) => trIn(l, de)).find((v) => t.includes(v));
+                if (found) {
+                    const next = t.replace(found, trIn(locale, de));
                     if (next !== t) document.title = next;
                     return;
                 }
