@@ -1265,4 +1265,10 @@ export const PHRASES_EN: Record<string, string> = {
     "Verlauf, Musik-Werte, Gegner": "History, music stats, opponents",
     "Freunde & Anfragen": "Friends & requests",
     "Dein Profil": "Your profile",
+    "Du bist dran!": "Your turn!",
+    "Am Zug": "On the move",
+    "Zündschnur": "Fuse",
+    "Gleich knallt's!": "About to blow!",
+    "Es wird heiß!": "Getting hot!",
+    "Zündschnur brennt": "Fuse is burning",
 };

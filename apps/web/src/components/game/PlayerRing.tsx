@@ -41,7 +41,8 @@ type Props = {
     showPulse?: boolean;
 };
 
-const TILT_DEG = 48;
+// Bühne statt Tisch (Wunsch Mehdi 2026-10-13: "nicht wie am Roulette-Tisch") – keine Neigung mehr
+const TILT_DEG = 0;
 
 /** Stable hue per player_id so avatar colors stay consistent across renders. */
 function hueFor(id: string): number {
@@ -94,14 +95,22 @@ export function PlayerRing({
     // Tischdurchmesser: wächst mit dem Bildschirm, aber nie so groß, dass die
     // Namensschilder an den Seiten abgeschnitten werden.
     const narrow = size.w > 0 && size.w < 520;
-    const tableSize = Math.max(narrow ? 200 : 240, Math.min(Math.min(size.w, size.h) * (narrow ? 0.7 : 0.66), size.h * 0.56, 520));
-    // Tischmitte: unter der Info-Leiste oben (+ Platz für Sitz und "AM ZUG"-Schild am hinteren Rand).
-    // Projizierte halbe Tischtiefe ~ 0.455 * Größe * cos(Neigung) ≈ 0.305 * Größe.
-    const cyPx = Math.max(size.h * 0.26, (narrow ? 178 : 172) + tableSize * 0.305);
-    // Unterkante (vorderer Sitz + Name) -> Antwort-Box der Spielseite beginnt darunter (CSS-Variable --ringBottom)
-    const ringBottom = Math.round(cyPx + tableSize * 0.305 + (narrow ? 66 : 92));
-    // Auf dem Handy: kleinere Sitze und Schilder, sonst überlappen sie sich am kleinen Tisch.
+    // Auf dem Handy: kleinere Figuren und Schilder.
     const seatPx = narrow ? 46 : 68;
+    // Bühne: alle stehen nebeneinander in einem leichten Bogen unter der großen Leiste oben,
+    // die Mitte (du) etwas weiter vorn. Bei vielen Spielern auf schmalen Bildschirmen im Zickzack.
+    const seatCount = players.filter((p) => p.is_alive).length;
+    const maxGap = narrow ? 150 : 200;
+    // Namensschilder sind ~110–180 px breit: darunter kommt jede zweite Figur eine Reihe nach hinten
+    const minGap = narrow ? 130 : 180;
+    // Hintere Reihe so weit nach oben, dass die Namensschilder vorn nicht über den Figuren hinten liegen
+    const zigOffset = seatPx * (narrow ? 2.2 : 1.8);
+    const halfSpan = Math.min(size.w / 2 - (narrow ? 76 : 100), (Math.max(0, seatCount - 1) * maxGap) / 2);
+    const zigNeeded = seatCount > 2 && (halfSpan * 2) / (seatCount - 1) < minGap;
+    const rowY = Math.max(narrow ? 210 : 240, Math.min(size.h * 0.36, 320)) + (zigNeeded ? zigOffset : 0);
+    const curve = narrow ? 16 : 30;
+    // Unterkante (Figuren + Schilder) -> Antwort-Box der Spielseite beginnt darunter (CSS-Variable --ringBottom)
+    const ringBottom = Math.round(rowY + curve + seatPx * 0.5 + (narrow ? 70 : 92));
 
     useEffect(() => {
         const el = containerRef.current;
@@ -161,15 +170,14 @@ export function PlayerRing({
         const map = new Map<string, Pt>();
         if (n === 0) return map;
 
-        const step = (Math.PI * 2) / n;
-        // Jeder sieht sich selbst unten (Winkel 90°), alle anderen in
-        // derselben Reihenfolge um ihn herum -- für alle Spieler identisch.
+        // Reihenfolge bleibt die Weitergabe-Reihenfolge; die Liste wird nur so gedreht, dass du in der Mitte stehst.
         const meIdx = mePlayerId ? seatedPlayers.findIndex((p) => p.player_id === mePlayerId) : -1;
-        const startAngle = Math.PI / 2 - Math.max(0, meIdx) * step;
-
+        const mid = Math.floor((n - 1) / 2);
+        const shift = meIdx >= 0 ? (meIdx - mid + n) % n : 0;
         for (let i = 0; i < n; i++) {
-            const a = startAngle + i * step;
-            map.set(seatedPlayers[i]!.player_id, { x: Math.cos(a), y: Math.sin(a) });
+            const p = seatedPlayers[(i + shift) % n]!;
+            // x: -1 (links) .. 1 (rechts); y: Index (für Zickzack)
+            map.set(p.player_id, { x: n === 1 ? 0 : (i / (n - 1)) * 2 - 1, y: i });
         }
         return map;
     }, [seatedPlayers, mePlayerId]);
@@ -181,15 +189,15 @@ export function PlayerRing({
             if (!rel) return null;
             if (size.w <= 0 || size.h <= 0) return null;
 
+            const n = positions.size;
             const cx = size.w / 2;
-            // Oberhalb der Antwort-Box (.hud) statt exakt Bildschirmmitte.
-            const cy = cyPx;
-            // Sitze direkt am Tischrand (wie Spieler, die am Tisch sitzen).
-            const r = tableSize * 0.455;
-
-            return { x: cx + rel.x * r, y: cy + rel.y * r };
+            const half = Math.min(size.w / 2 - (narrow ? 76 : 100), ((n - 1) * maxGap) / 2);
+            const gap = n > 1 ? (half * 2) / (n - 1) : 0;
+            // Zu eng? Jede zweite Figur eine Reihe nach hinten (Zickzack)
+            const zig = n > 2 && gap < minGap && rel.y % 2 === 1 ? -zigOffset : 0;
+            return { x: cx + rel.x * half, y: rowY + (1 - rel.x * rel.x) * curve + zig };
         },
-        [positions, size.w, size.h, tableSize, cyPx]
+        [positions, size.w, size.h, narrow, maxGap, minGap, zigOffset, rowY, curve]
     );
 
     // Trigger nicer animation on passEvent
@@ -306,9 +314,9 @@ export function PlayerRing({
         const a = getPx(holderPlayerId);
         const b = getPx(nextId);
         if (!a || !b) return null;
-        const c = { x: size.w / 2, y: cyPx };
+        // Bogen über den Köpfen von Halter zum Nächsten
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        const ctrl = { x: mid.x + (c.x - mid.x) * 0.55, y: mid.y + (c.y - mid.y) * 0.55 };
+        const ctrl = { x: mid.x, y: Math.min(a.y, b.y) - Math.min(110, 30 + Math.abs(b.x - a.x) * 0.25) };
         const pull = (p: Pt, toward: Pt, d: number): Pt => {
             const dx = toward.x - p.x, dy = toward.y - p.y;
             const len = Math.max(1, Math.hypot(dx, dy));
@@ -318,7 +326,7 @@ export function PlayerRing({
         const p0 = pull(a, ctrl, off);
         const p2 = pull(b, ctrl, off + 8);
         return `M ${p0.x} ${p0.y} Q ${ctrl.x} ${ctrl.y} ${p2.x} ${p2.y}`;
-    }, [holderPlayerId, nextId, fly, getPx, size.w, cyPx, seatPx]);
+    }, [holderPlayerId, nextId, fly, getPx, seatPx]);
 
     const popRender = useMemo(() => {
         if (!popPlayerId) return null;
@@ -347,18 +355,8 @@ export function PlayerRing({
             }}
         >
             <div className="tableTilt">
-                {/* ---------- Tisch: ruhige dunkle Platte, feiner Metallrand, Glut am Rand = Zündschnur ---------- */}
-                <div className="tableBase" aria-hidden style={{ top: cyPx, width: tableSize, height: tableSize }}>
-                    <div className="tShadow" />
-                    <div className="tEdge tEdge2" />
-                    <div className="tEdge tEdge1" />
-                    <div className="tRim" />
-                    <div className="tTop" />
-                    <div className="tInlay" />
-                    <div className="tInlay2" />
-                    <div className="tGloss" />
-                    {showPulse ? <div className="tPulse" /> : null}
-                </div>
+                {/* ---------- Bühne: weicher Lichtstreifen unter den Figuren (kein Tisch mehr) ---------- */}
+                <div className={`stageFloor ${showPulse ? "hot" : ""}`} aria-hidden style={{ top: rowY + curve * 0.6 + seatPx * 0.62 }} />
 
                 {/* Kontakt-Schatten der Sitze */}
                 {seatedPlayers.map((p) => {
@@ -498,7 +496,17 @@ export function PlayerRing({
           transform: rotateX(var(--tilt));
         }
 
-        /* ===== Tisch (Ebenen gestapelt in Z) ===== */
+        /* ===== Bühne ===== */
+        .stageFloor{
+          position: absolute; left: 50%; transform: translate(-50%, -50%);
+          width: min(92vw, 1100px); height: 70px; border-radius: 50%;
+          background: radial-gradient(ellipse at center, rgba(255,200,120,.22), rgba(255,140,60,.08) 45%, transparent 70%);
+          filter: blur(2px);
+        }
+        .stageFloor.hot{ animation: stageHot var(--pulse) ease-in-out infinite; }
+        @keyframes stageHot{ 0%,100%{ opacity: .7; } 50%{ opacity: calc(.7 + var(--amp) * .5); filter: blur(2px) saturate(1.6); } }
+
+        /* ===== (alt) Tisch (Ebenen gestapelt in Z) – nicht mehr gerendert ===== */
         .tableBase{
           position:absolute;
           left:50%;

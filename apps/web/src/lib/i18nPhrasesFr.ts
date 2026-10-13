@@ -1265,4 +1265,10 @@ export const PHRASES_FR: Record<string, string> = {
     "Verlauf, Musik-Werte, Gegner": "Historique, stats musique, adversaires",
     "Freunde & Anfragen": "Amis & demandes",
     "Dein Profil": "Ton profil",
+    "Du bist dran!": "À toi !",
+    "Am Zug": "Au tour de",
+    "Zündschnur": "Mèche",
+    "Gleich knallt's!": "Ça va péter !",
+    "Es wird heiß!": "Ça chauffe !",
+    "Zündschnur brennt": "La mèche brûle",
 };

@@ -26,6 +26,7 @@ import { Spinner } from "@/components/Spinner";
 import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
 import { QuizStage } from "@/components/game/QuizStage";
+import { HeartbeatEdge, StageBar } from "@/components/game/StageBar";
 import { isQuizMode } from "@/lib/gameModes";
 import { playFx } from "@/lib/gameFx";
 import type { SeriesRow } from "@/components/game/SeriesTable";
@@ -2110,10 +2111,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         1
     );
 
-    // Tempo-Anzeige: spiegelt calc_explode_seconds (-6 % Schnurlänge pro
-    // Eliminierung, Boden 45 %) und im Duell nochmal 20 % kürzer.
+    // Tempo-Anzeige: spiegelt calc_explode_seconds (-5 % Schnurlänge pro
+    // Eliminierung, Boden 55 %, Migration 110) und im Duell nochmal 20 % kürzer.
     const tempoFactor =
-        (1 / Math.max(0.45, 1 - (Math.max(1, lobby.round_number ?? 1) - 1) * 0.06)) * (aliveNow === 2 ? 1.25 : 1);
+        (1 / Math.max(0.55, 1 - (Math.max(1, lobby.round_number ?? 1) - 1) * 0.05)) * (aliveNow === 2 ? 1.25 : 1);
 
     return (
         <main
@@ -2158,43 +2159,30 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 </div>
             ) : null}
 
-            {/* Info-Leiste oben: alles zum Spielstand an einer Stelle, klar getrennt vom Tisch */}
-            <div className="matchBar" role="group" aria-label={tr("Spielstand")}>
-                <div className="mbSeg mbTopic" title={tr("Playlist")}>
-                    <span className="mbLabel">{tr("Playlist")}</span>
-                    <span className="mbValue">
-                        {playlistLook(selectedTopic).icon} {selectedTopic}
-                    </span>
-                </div>
-                {(lobby.series_total ?? 1) > 1 ? (
-                    <div className="mbSeg" title={tr("Runde des Matches")}>
-                        <span className="mbLabel">{tr("Runde")}</span>
-                        <span className="mbValue">
-                            {lobby.series_index}/{lobby.series_total}
-                        </span>
-                    </div>
-                ) : null}
-                <div className="mbSeg" title={tr("Zug in dieser Runde (steigt mit jedem Ausscheiden)")}>
-                    <span className="mbLabel">{tr("Zug")}</span>
-                    <span className="mbValue">{Math.max(1, lobby.round_number ?? 1)}</span>
-                </div>
-                {overtime ? (
-                    <div className="mbSeg mbOvertime" title={tr("Die Zündschnur ist eigentlich abgelaufen – jetzt schnell abgeben!")}>
-                        <span className="mbLabel">{tr("Nachspielzeit")}</span>
-                        <span className="mbValue">⏱️ {tr("schnell!")}</span>
-                    </div>
-                ) : null}
-                <div className={`mbSeg ${aliveNow === 2 ? "mbDuel" : ""}`} title={aliveNow === 2 ? tr("Nur noch zwei: Duell") : tr("Tempo der Zündschnur")}>
-                    <span className="mbLabel">{aliveNow === 2 ? tr("Finale") : tr("Tempo")}</span>
-                    <span className="mbValue">{aliveNow === 2 ? tr("⚔ Duell") : `×${fmtNum(tempoFactor)}`}</span>
-                </div>
-                <div className="mbSeg" title={tr("{n} von {total} Spielern noch im Spiel", { n: aliveNow, total: totalPlayers })}>
-                    <span className="mbLabel">{tr("Im Spiel")}</span>
-                    <span className="mbValue">
-                        {aliveNow}/{totalPlayers}
-                    </span>
-                </div>
-            </div>
+            {/* Große Leiste oben: wer dran ist, brennende Zündschnur, Spielstand (ersetzt die kleine Info-Leiste) */}
+            <StageBar
+                holderId={lobby.holder_player_id}
+                holderName={holderName}
+                holderAvatar={holderRow?.avatar_config ?? null}
+                holderIsMe={isMeHolder}
+                heat={heatRatio}
+                fuseActive={!!lobby.explode_at && explodeMsLeft != null && roundTotalMsRef.current > 0}
+                stats={[
+                    { key: "pl", label: tr("Playlist"), value: `${playlistLook(selectedTopic).icon} ${selectedTopic}`, title: tr("Playlist"), tone: "opt" as const },
+                    ...((lobby.series_total ?? 1) > 1
+                        ? [{ key: "set", label: tr("Runde"), value: `${lobby.series_index}/${lobby.series_total}`, title: tr("Runde des Matches") }]
+                        : []),
+                    { key: "zug", label: tr("Zug"), value: String(Math.max(1, lobby.round_number ?? 1)), title: tr("Zug in dieser Runde (steigt mit jedem Ausscheiden)") },
+                    ...(overtime
+                        ? [{ key: "ot", label: tr("Nachspielzeit"), value: `⏱️ ${tr("schnell!")}`, title: tr("Die Zündschnur ist eigentlich abgelaufen – jetzt schnell abgeben!"), tone: "overtime" as const }]
+                        : []),
+                    aliveNow === 2
+                        ? { key: "tempo", label: tr("Finale"), value: tr("⚔ Duell"), title: tr("Nur noch zwei: Duell"), tone: "duel" as const }
+                        : { key: "tempo", label: tr("Tempo"), value: `×${fmtNum(tempoFactor)}`, title: tr("Tempo der Zündschnur") },
+                    { key: "alive", label: tr("Im Spiel"), value: `${aliveNow}/${totalPlayers}`, title: tr("{n} von {total} Spielern noch im Spiel", { n: aliveNow, total: totalPlayers }) },
+                ]}
+            />
+            <HeartbeatEdge heat={explodeMsLeft != null && roundTotalMsRef.current > 0 ? heatRatio : 0} strong={isMeHolder} />
 
             <div className="topRight">
                 <AudioControl />
