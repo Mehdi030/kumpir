@@ -11,6 +11,7 @@ import { CountUp } from "@/components/CountUp";
 import { AccountStats } from "@/components/profile/AccountStats";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { seasonKey, type ProfileStats } from "@/lib/profileStats";
+import { fmtNum, trNow, useI18n } from "@/lib/i18n";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -24,33 +25,34 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
  *   card = Kasten in der Karte (alt)
  */
 export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "dock" | "chip" }) {
+    const { tr } = useI18n();
     const { user, loading: authLoading } = useAuth();
     const { stats, unlocked, catalog, loading: statsLoading } = useAchievements(AUTH_DISABLED ? null : user?.id ?? null);
     const [open, setOpen] = useState(false);
 
     if (AUTH_DISABLED || authLoading || !user) return null;
 
-    const fastest = stats?.fastest_pass_ms ? `${(stats.fastest_pass_ms / 1000).toFixed(1)} s` : "–";
+    const fastest = stats?.fastest_pass_ms ? `${fmtNum(stats.fastest_pass_ms / 1000)} s` : "–";
     const quick: [string, string][] = [
-        ["Runden", String(stats?.games_played ?? 0)],
-        ["Rundensiege", String(stats?.wins ?? 0)],
-        ["Weitergaben", String(stats?.total_passes ?? 0)],
-        ["Rettungen in letzter Sekunde", String(stats?.total_clutch_passes ?? 0)],
-        ["Schnellste Weitergabe", fastest],
-        ["Beste Streak", String(stats?.best_survival_streak ?? 0)],
+        [tr("Runden"), String(stats?.games_played ?? 0)],
+        [tr("Rundensiege"), String(stats?.wins ?? 0)],
+        [tr("Weitergaben"), String(stats?.total_passes ?? 0)],
+        [tr("Rettungen in letzter Sekunde"), String(stats?.total_clutch_passes ?? 0)],
+        [tr("Schnellste Weitergabe"), fastest],
+        [tr("Beste Serie"), String(stats?.best_survival_streak ?? 0)],
     ];
 
     if (variant === "chip") {
         return (
             <>
-                <button type="button" className="homeChip" onClick={() => setOpen(true)} title="Ganze Statistik anzeigen">
+                <button type="button" className="homeChip" onClick={() => setOpen(true)} title={tr("Ganze Statistik anzeigen")}>
                     <span className="homeChipIcon" aria-hidden>
                         📊
                     </span>
                     <span className="homeChipText">
-                        <b>Statistik</b>
+                        <b>{tr("Statistik")}</b>
                         <span>
-                            {statsLoading ? "…" : `${stats?.games_played ?? 0} Runden · ${stats?.wins ?? 0} Siege`}
+                            {statsLoading ? "…" : tr("{n} Runden · {w} Siege", { n: stats?.games_played ?? 0, w: stats?.wins ?? 0 })}
                         </span>
                     </span>
                     <span className="homeChipArrow" aria-hidden>
@@ -65,33 +67,33 @@ export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "doc
     return (
         <div className={`statsSectionCard ${variant === "dock" ? "statsDock" : ""}`}>
             <div className="statsSectionHead">
-                <button type="button" className="statsHeadBtn" onClick={() => setOpen(true)} title="Ganze Statistik anzeigen">
-                    📊 Deine Statistik <span className="statsHeadArrow">›</span>
+                <button type="button" className="statsHeadBtn" onClick={() => setOpen(true)} title={tr("Ganze Statistik anzeigen")}>
+                    📊 {tr("Deine Statistik")} <span className="statsHeadArrow">›</span>
                 </button>
                 <Link href="/achievements" className="fieldHelp" style={{ fontWeight: 900 }}>
-                    Alle Achievements →
+                    {tr("Alle Erfolge →")}
                 </Link>
             </div>
             {statsLoading ? (
                 <div style={{ display: "grid", placeItems: "center", padding: 16 }}>
-                    <Spinner size={18} label="Lade…" />
+                    <Spinner size={18} label={tr("Lade…")} />
                 </div>
             ) : (
                 <div className="statsGrid" style={{ marginTop: 10 }}>
-                    <StatBox label="Runden" value={String(stats?.games_played ?? 0)} />
-                    <StatBox label="Rundensiege" value={String(stats?.wins ?? 0)} />
-                    <StatBox label="Beste Streak" value={String(stats?.best_survival_streak ?? 0)} />
-                    <StatBox label="Achievements" value={`${unlocked.length}/${catalog.length}`} />
+                    <StatBox label={tr("Runden")} value={String(stats?.games_played ?? 0)} />
+                    <StatBox label={tr("Rundensiege")} value={String(stats?.wins ?? 0)} />
+                    <StatBox label={tr("Beste Serie")} value={String(stats?.best_survival_streak ?? 0)} />
+                    <StatBox label={tr("Erfolge")} value={`${unlocked.length}/${catalog.length}`} />
                     {variant === "dock" ? (
                         <>
-                            <StatBox label="Weitergaben" value={String(stats?.total_passes ?? 0)} />
-                            <StatBox label="Schnellste" value={fastest} />
+                            <StatBox label={tr("Weitergaben")} value={String(stats?.total_passes ?? 0)} />
+                            <StatBox label={tr("Schnellste")} value={fastest} />
                         </>
                     ) : null}
                 </div>
             )}
             <button type="button" className="statsMoreBtn" onClick={() => setOpen(true)}>
-                Mehr anzeigen
+                {tr("Mehr anzeigen")}
             </button>
 
             {open ? <StatsModal onClose={() => setOpen(false)} quick={quick} /> : null}
@@ -123,6 +125,7 @@ export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "doc
 }
 
 function StatsModal({ onClose, quick }: { onClose: () => void; quick: [string, string][] }) {
+    const { tr } = useI18n();
     const { profile } = useProfile();
     const [season, setSeason] = useState(() => seasonKey(0));
     const [data, setData] = useState<ProfileStats | null>(null);
@@ -149,7 +152,7 @@ function StatsModal({ onClose, quick }: { onClose: () => void; quick: [string, s
             const { data: d, error: e } = await getSupabaseClient().rpc("get_my_profile_stats", { p_season: season });
             if (cancel) return;
             setLoading(false);
-            if (e) return setError("Statistik konnte nicht geladen werden.");
+            if (e) return setError(trNow("Statistik konnte nicht geladen werden."));
             setError("");
             setData(d as ProfileStats);
         })();
@@ -158,15 +161,15 @@ function StatsModal({ onClose, quick }: { onClose: () => void; quick: [string, s
         };
     }, [season]);
 
-    const name = profile?.displayName || profile?.username || "Du";
+    const name = profile?.displayName || profile?.username || tr("Du");
 
     // Direkt an <body> hängen: die Startseiten-Karte ist animiert, darin würde "position: fixed" festhängen
     return createPortal(
         <div className="stModalBack" onClick={onClose} role="presentation">
-            <div className="stModal" role="dialog" aria-modal="true" aria-label="Deine Statistik" onClick={(e) => e.stopPropagation()}>
+            <div className="stModal" role="dialog" aria-modal="true" aria-label={tr("Deine Statistik")} onClick={(e) => e.stopPropagation()}>
                 <div className="stModalHead">
-                    <h2>📊 Deine Statistik</h2>
-                    <button type="button" className="stClose" onClick={onClose} aria-label="Schließen">
+                    <h2>📊 {tr("Deine Statistik")}</h2>
+                    <button type="button" className="stClose" onClick={onClose} aria-label={tr("Schließen")}>
                         ✕
                     </button>
                 </div>
@@ -183,11 +186,11 @@ function StatsModal({ onClose, quick }: { onClose: () => void; quick: [string, s
                     <AccountStats data={data} username={name} season={season} onSeasonChange={setSeason} seasonLoading={loading} />
                 ) : loading ? (
                     <div style={{ display: "grid", placeItems: "center", padding: 30 }}>
-                        <Spinner size={24} label="Lade Statistik…" />
+                        <Spinner size={24} label={tr("Lade Statistik…")} />
                     </div>
                 ) : null}
                 <Link href="/stats" className="stProfileLink" onClick={onClose}>
-                    Als eigene Seite öffnen →
+                    {tr("Als eigene Seite öffnen →")}
                 </Link>
             </div>
             <style>{`

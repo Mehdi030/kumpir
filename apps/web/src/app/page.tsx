@@ -17,7 +17,7 @@ import { track } from "@/lib/track";
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 export default function Home() {
-    const { t } = useI18n();
+    const { t, tr } = useI18n();
     // Breite Bildschirme: Statistik links, Freunde rechts als feste Leisten. Sonst je ein Knopf in der Karte.
     // So passt das Hauptmenü immer auf einen Bildschirm, ohne Scrollen (Wunsch Mehdi 2026-10-12).
     const wide = useMediaQuery("(min-width: 1300px)");
@@ -36,7 +36,7 @@ export default function Home() {
                     <HomePotato />
                 </div>
 
-                <section className="card homeCard" aria-label="Kumpir Startseite">
+                <section className="card homeCard" aria-label={tr("Kumpir Startseite")}>
                     <Suspense fallback={null}>
                         <LobbyExitNotice />
                     </Suspense>

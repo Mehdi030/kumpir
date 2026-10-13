@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { trNow } from "@/lib/i18n";
 
 export type SavedLobby = {
     user_id: string;
@@ -36,7 +37,7 @@ export function useSavedLobbies(userId: string | null | undefined) {
     useEffect(() => { void load(); }, [load]);
 
     const save = useCallback(async (code: string, nickname: string) => {
-        if (!userId) return "Nicht eingeloggt.";
+        if (!userId) return trNow("Nicht angemeldet.");
         const { error: e } = await supabase.rpc("rpc_save_lobby", {
             p_user_id: userId,
             p_lobby_code: code,
@@ -48,7 +49,7 @@ export function useSavedLobbies(userId: string | null | undefined) {
     }, [supabase, userId, load]);
 
     const unsave = useCallback(async (code: string) => {
-        if (!userId) return "Nicht eingeloggt.";
+        if (!userId) return trNow("Nicht angemeldet.");
         const { error: e } = await supabase.rpc("rpc_unsave_lobby", {
             p_user_id: userId,
             p_lobby_code: code,

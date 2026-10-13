@@ -1,4 +1,5 @@
 import { CARD_FONT, fit, paintCardBackground, roundRect } from "@/lib/resultCard";
+import { trNow } from "@/lib/i18n";
 
 export type RecapCardInput = {
     username: string;
@@ -25,7 +26,7 @@ export async function renderRecapCard(input: RecapCardInput): Promise<Blob> {
 
     ctx.font = `800 40px ${font}`;
     ctx.globalAlpha = 0.85;
-    ctx.fillText("Kumpir · Mein Monat", W / 2, 100);
+    ctx.fillText(trNow("Kumpir · Mein Monat"), W / 2, 100);
     ctx.globalAlpha = 1;
 
     ctx.font = `800 92px ${font}`;
@@ -73,7 +74,7 @@ export async function renderRecapCard(input: RecapCardInput): Promise<Blob> {
     }
 
     ctx.font = `800 40px ${font}`;
-    ctx.fillText("Spiel mit – kostenlos im Browser", W / 2, 1240);
+    ctx.fillText(trNow("Spiel mit – kostenlos im Browser"), W / 2, 1240);
     ctx.font = `700 44px ${font}`;
     const url = input.siteUrl.replace(/^https?:\/\//, "");
     const tw = ctx.measureText(url).width + 80;

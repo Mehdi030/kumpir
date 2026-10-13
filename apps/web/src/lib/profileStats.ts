@@ -1,4 +1,4 @@
-import { fmtNum } from "@/lib/i18n";
+import { dateLocale, fmtNum } from "@/lib/i18n";
 /** Antwort von public.get_my_profile_stats (Migration 076). */
 export type ProfileStats = {
     totals: { matches: number; matchWins: number; rounds: number; roundWins: number; practiceMatches: number };
@@ -61,12 +61,10 @@ export function fmtSeconds(ms: number | null | undefined): string {
     return `${fmtNum(ms / 1000)} s`;
 }
 
-const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
-
 /** "2026-10" -> "Oktober 2026" */
 export function seasonLabel(season: string): string {
     const [y, m] = season.split("-").map(Number);
-    return m >= 1 && m <= 12 ? `${MONTHS[m - 1]} ${y}` : season;
+    return m >= 1 && m <= 12 ? new Date(y, m - 1, 1).toLocaleDateString(dateLocale(), { month: "long", year: "numeric" }) : season;
 }
 
 export function seasonKey(offsetMonths = 0): string {

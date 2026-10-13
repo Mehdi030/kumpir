@@ -44,5 +44,5 @@ export function LobbyNotFound({ code }: { code?: string }) {
 /** Rohe Datenbank-Fehlertexte in verständliche Sätze übersetzen. */
 export function isNotFoundError(message: string | null | undefined): boolean {
     const m = (message ?? "").toLowerCase();
-    return m.includes("coerce") || m.includes("nicht gefunden") || m.includes("not found") || m.includes("0 rows");
+    return m.includes("coerce") || m.includes("nicht gefunden") || m.includes("not found") || m.includes("introuvable") || m.includes("0 rows");
 }

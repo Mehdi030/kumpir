@@ -5,12 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { safeNextPath as safeNext } from "@/lib/safeNext";
 import { HomeButton } from "@/components/BackButton";
+import { useI18n } from "@/lib/i18n";
 
 function safeNextPath(v: string | null) {
     return safeNext(v, "/host");
 }
 
 export default function VerifiedPage() {
+    const { tr } = useI18n();
     const supabase = getSupabaseClient();
 
     const [loading, setLoading] = useState(false);
@@ -41,11 +43,11 @@ export default function VerifiedPage() {
 
             // Kein Session-Cookie gesetzt -> häufig Safari/Mail-App/anderer Browser
             setInfo(
-                "Deine E-Mail ist bestätigt. Falls du noch nicht eingeloggt bist: Öffne den Bestätigungslink im selben Browser, in dem du dich registriert hast, oder gehe zum Login und melde dich an."
+                tr("Deine E-Mail ist bestätigt. Falls du noch nicht eingeloggt bist: Öffne den Bestätigungslink im selben Browser, in dem du dich registriert hast, oder gehe zum Login und melde dich an.")
             );
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : null;
-            setError(msg ?? "Konnte Status nicht prüfen.");
+            setError(msg ?? tr("Konnte Status nicht prüfen."));
         } finally {
             setLoading(false);
         }
@@ -60,14 +62,14 @@ export default function VerifiedPage() {
     return (
         <main className="container">
             <div className="landingWrap">
-                <section className="card" aria-label="Bestätigt">
+                <section className="card" aria-label={tr("Bestätigt")}>
                     <HomeButton corner />
                     <header className="hostHeader">
                         <div className="hostTitleRow">
-                            <h1 className="h1">✅ Bestätigt</h1>
+                            <h1 className="h1">✅ {tr("Bestätigt")}</h1>
                         </div>
                         <p className="p hostSub">
-                            Deine E-Mail wurde bestätigt. Wenn du schon eingeloggt bist, leiten wir dich automatisch weiter.
+                            {tr("Deine E-Mail wurde bestätigt. Wenn du schon eingeloggt bist, leiten wir dich automatisch weiter.")}
                         </p>
                     </header>
 
@@ -80,17 +82,17 @@ export default function VerifiedPage() {
                                         className={`btn btnPrimary ${loading ? "btnDisabled" : ""}`}
                                         onClick={checkAndContinue}
                                         disabled={loading}
-                                        title="Prüft, ob du bereits eingeloggt bist"
+                                        title={tr("Prüft, ob du bereits eingeloggt bist")}
                                     >
-                                        {loading ? "…" : "Weiter"}
+                                        {loading ? "…" : tr("Weiter")}
                                     </button>
 
                                     <Link href={`/login?next=${encodeURIComponent(nextPath)}`} className="btn btnSecondary">
-                                        Zum Login
+                                        {tr("Zum Login")}
                                     </Link>
 
                                     <Link href="/" className="btn btnSecondary">
-                                        Startseite
+                                        {tr("Startseite")}
                                     </Link>
                                 </div>
 
@@ -106,8 +108,7 @@ export default function VerifiedPage() {
                                     </div>
                                 ) : (
                                     <div className="fieldHelp" style={{ marginTop: 12, opacity: 0.9 }}>
-                                        Tipp: Auf iPhone/Safari kann es passieren, dass die Mail-App den Link in einem anderen Kontext öffnet. Dann
-                                        einfach „Zum Login“ drücken und normal einloggen.
+                                        {tr("Tipp: Auf iPhone/Safari öffnet die Mail-App den Link manchmal woanders. Dann einfach „Zum Login“ drücken und normal anmelden.")}
                                     </div>
                                 )}
                             </div>

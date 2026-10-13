@@ -1,5 +1,6 @@
 "use server";
 
+import { tk } from "@/lib/i18nMark";
 import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
@@ -24,39 +25,39 @@ export async function registerAccount(usernameRaw: string, password: string): Pr
     const username = v.value;
     const pwErr = passwordProblem(password);
     if (pwErr) return { ok: false, field: "password", error: pwErr };
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { ok: false, error: "Registrieren ist gerade nicht verfügbar." };
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { ok: false, error: tk("Registrieren ist gerade nicht verfügbar.") };
 
     const admin = createSupabaseAdminClient();
 
     const guard = await admin.rpc("register_guard", { p_ip: await clientIp() });
     if (guard.error) {
         return guard.error.message.includes("rate_limited")
-            ? { ok: false, error: "Von diesem Anschluss wurden gerade viele Konten erstellt. Bitte in einer Stunde erneut versuchen." }
-            : { ok: false, error: "Registrieren hat gerade nicht geklappt. Bitte erneut versuchen." };
+            ? { ok: false, error: tk("Von diesem Anschluss wurden gerade viele Konten erstellt. Bitte in einer Stunde erneut versuchen.") }
+            : { ok: false, error: tk("Registrieren hat gerade nicht geklappt. Bitte erneut versuchen.") };
     }
 
     const avail = await admin.rpc("is_username_available", { p_username: username });
-    if (avail.error) return { ok: false, error: "Benutzername konnte nicht geprüft werden. Bitte erneut versuchen." };
-    if (!avail.data) return { ok: false, field: "username", error: "Benutzername ist schon vergeben oder nicht erlaubt." };
+    if (avail.error) return { ok: false, error: tk("Benutzername konnte nicht geprüft werden. Bitte erneut versuchen.") };
+    if (!avail.data) return { ok: false, field: "username", error: tk("Benutzername ist schon vergeben oder nicht erlaubt.") };
 
     const email = `${randomUUID()}@${PLACEHOLDER_EMAIL_DOMAIN}`;
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { username } });
     if (created.error || !created.data.user) {
         const m = (created.error?.message ?? "").toLowerCase();
-        if (m.includes("password")) return { ok: false, field: "password", error: "Das Passwort ist zu schwach. Bitte ein längeres wählen." };
-        return { ok: false, error: "Konto konnte nicht erstellt werden. Bitte erneut versuchen." };
+        if (m.includes("password")) return { ok: false, field: "password", error: tk("Das Passwort ist zu schwach. Bitte ein längeres wählen.") };
+        return { ok: false, error: tk("Konto konnte nicht erstellt werden. Bitte erneut versuchen.") };
     }
 
     // Hat jemand den Namen in derselben Sekunde genommen, vergibt die Datenbank einen anderen -> dann abbrechen
     const prof = await admin.from("profiles").select("username").eq("id", created.data.user.id).maybeSingle();
     if ((prof.data?.username ?? "").toLowerCase() !== username) {
         await admin.auth.admin.deleteUser(created.data.user.id);
-        return { ok: false, field: "username", error: "Benutzername wurde gerade vergeben. Bitte einen anderen wählen." };
+        return { ok: false, field: "username", error: tk("Benutzername wurde gerade vergeben. Bitte einen anderen wählen.") };
     }
 
     const supabase = await createSupabaseServerClient();
     const login = await supabase.auth.signInWithPassword({ email, password });
-    if (login.error) return { ok: false, error: "Konto ist erstellt, aber das Anmelden hat nicht geklappt. Bitte jetzt mit Benutzername und Passwort anmelden." };
+    if (login.error) return { ok: false, error: tk("Konto ist erstellt, aber das Anmelden hat nicht geklappt. Bitte jetzt mit Benutzername und Passwort anmelden.") };
     return { ok: true };
 }
 
@@ -66,11 +67,11 @@ export async function adminSetPassword(userId: string, password: string): Promis
     if (pwErr) return { ok: false, error: pwErr };
     const supabase = await createSupabaseServerClient();
     const { data: me } = await supabase.auth.getUser();
-    if (!me.user) return { ok: false, error: "Bitte erst anmelden." };
+    if (!me.user) return { ok: false, error: tk("Bitte erst anmelden.") };
     const admin = createSupabaseAdminClient();
     const { data: prof } = await admin.from("profiles").select("role,status").eq("id", me.user.id).maybeSingle();
-    if (prof?.role !== "admin" || prof?.status !== "active") return { ok: false, error: "Dafür fehlen dir die Rechte." };
+    if (prof?.role !== "admin" || prof?.status !== "active") return { ok: false, error: tk("Dafür fehlen dir die Rechte.") };
     const { error } = await admin.auth.admin.updateUserById(userId, { password });
-    if (error) return { ok: false, error: "Passwort konnte nicht gesetzt werden." };
+    if (error) return { ok: false, error: tk("Passwort konnte nicht gesetzt werden.") };
     return { ok: true };
 }

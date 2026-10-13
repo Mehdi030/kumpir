@@ -51,15 +51,15 @@ export function AchievementToast({ achievement, onDismiss, autoDismissMs = 5000 
                 cursor: "pointer",
                 textAlign: "left",
             }}
-            aria-label={tr("Erfolg freigeschaltet: {title}", { title: achievement.title })}
+            aria-label={tr("Erfolg freigeschaltet: {title}", { title: tr(achievement.title) })}
         >
             <div style={{ fontSize: 38, lineHeight: 1 }}>{achievement.icon}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 950, letterSpacing: 1.2, textTransform: "uppercase", opacity: 0.85 }}>
                     {tr("🎉 Freigeschaltet")}
                 </div>
-                <div style={{ fontSize: 17, fontWeight: 900, marginTop: 2 }}>{achievement.title}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.88, marginTop: 2 }}>{achievement.description}</div>
+                <div style={{ fontSize: 17, fontWeight: 900, marginTop: 2 }}>{tr(achievement.title)}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.88, marginTop: 2 }}>{tr(achievement.description)}</div>
             </div>
         </button>
     );

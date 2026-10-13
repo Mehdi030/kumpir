@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/Spinner";
 import { safeNextPath as safeNext } from "@/lib/safeNext";
+import { trNow, useI18n } from "@/lib/i18n";
 
 function safeNextPath(v: string | null) {
     return safeNext(v, "/verified");
@@ -27,6 +28,7 @@ function safeNextPath(v: string | null) {
  * Ergebnis warten. Für den PKCE-Fall (?code=...) tauschen wir explizit.
  */
 function AuthCallbackInner() {
+    const { tr } = useI18n();
     const router = useRouter();
     const sp = useSearchParams();
     const [error, setError] = useState("");
@@ -83,7 +85,7 @@ function AuthCallbackInner() {
             if (!data.session) {
                 // Keine Sitzung: beim Passwort-Reset ist der Link unbrauchbar; bei der Registrierung
                 // einfach anmelden (ist die E-Mail doch noch offen, bietet der Login "erneut senden" an).
-                setError(isReset ? "Link abgelaufen – du wirst weitergeleitet…" : "Fast geschafft – bitte jetzt anmelden…");
+                setError(isReset ? trNow("Link abgelaufen – du wirst weitergeleitet…") : trNow("Fast geschafft – bitte jetzt anmelden…"));
                 window.setTimeout(
                     () => router.replace(isReset ? "/login?m=link_expired" : `/login?m=confirmed&next=${encodeURIComponent(next)}`),
                     1200
@@ -98,7 +100,7 @@ function AuthCallbackInner() {
     return (
         <main className="container">
             <div style={{ display: "grid", placeItems: "center", gap: 12, padding: 40 }}>
-                {error ? <div className="fieldHelp fieldHelpError">{error}</div> : <Spinner size={26} label="Bestätige…" />}
+                {error ? <div className="fieldHelp fieldHelpError">{error}</div> : <Spinner size={26} label={tr("Bestätige…")} />}
             </div>
         </main>
     );

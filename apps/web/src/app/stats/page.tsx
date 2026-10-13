@@ -10,12 +10,14 @@ import { Spinner } from "@/components/Spinner";
 import { AccountStats } from "@/components/profile/AccountStats";
 import { HomeButton } from "@/components/BackButton";
 import { seasonKey, type ProfileStats } from "@/lib/profileStats";
+import { fmtNum, trNow, useI18n } from "@/lib/i18n";
 
 /**
  * Eigene Statistik-Seite (vorher im Profil zwischen den Konto-Einstellungen): Überblick,
  * Verlauf, Musik-Werte, Gegner, Monats-Rückblick – Daten aus get_my_profile_stats (Migration 076).
  */
 export default function StatsPage() {
+    const { tr } = useI18n();
     const { user, loading: authLoading } = useAuth();
     const { profile } = useProfile();
     const { stats, unlocked, catalog } = useAchievements(user?.id ?? null);
@@ -32,7 +34,7 @@ export default function StatsPage() {
             const { data: d, error: e } = await getSupabaseClient().rpc("get_my_profile_stats", { p_season: season });
             if (cancel) return;
             setLoading(false);
-            if (e) return setError("Statistik konnte nicht geladen werden.");
+            if (e) return setError(trNow("Statistik konnte nicht geladen werden."));
             setError("");
             setData(d as ProfileStats);
         })();
@@ -44,7 +46,7 @@ export default function StatsPage() {
     if (authLoading) {
         return (
             <main className="container">
-                <Spinner size={28} label="Lade…" />
+                <Spinner size={28} label={tr("Lade…")} />
             </main>
         );
     }
@@ -56,16 +58,16 @@ export default function StatsPage() {
                     <section className="card" style={{ textAlign: "center" }}>
                         <HomeButton corner />
                         <div style={{ fontSize: 44 }}>📊</div>
-                        <h1 className="h1" style={{ fontSize: 40 }}>Deine Statistik</h1>
+                        <h1 className="h1" style={{ fontSize: 40 }}>{tr("Deine Statistik")}</h1>
                         <p className="p hostSub" style={{ margin: "10px auto 0", maxWidth: 420 }}>
-                            Mit einem Konto zählt Kumpir deine Spiele, erratene Songs und Siege.
+                            {tr("Mit einem Konto zählt Kumpir deine Spiele, erratene Songs und Siege.")}
                         </p>
                         <div className="ctaRow" style={{ marginTop: 20 }}>
                             <Link href="/login?next=/stats" className="btn btnPrimary btnXL">
-                                Anmelden
+                                {tr("Anmelden")}
                             </Link>
                             <Link href="/register?next=/stats" className="btn btnSecondary btnXL">
-                                Konto erstellen
+                                {tr("Konto erstellen")}
                             </Link>
                         </div>
                     </section>
@@ -74,24 +76,24 @@ export default function StatsPage() {
         );
     }
 
-    const name = profile?.displayName || profile?.username || "Du";
+    const name = profile?.displayName || profile?.username || tr("Du");
     const quick: [string, string][] = [
-        ["Runden", String(stats?.games_played ?? 0)],
-        ["Rundensiege", String(stats?.wins ?? 0)],
-        ["Weitergaben", String(stats?.total_passes ?? 0)],
-        ["Rettungen in letzter Sekunde", String(stats?.total_clutch_passes ?? 0)],
-        ["Schnellste Weitergabe", stats?.fastest_pass_ms ? `${(stats.fastest_pass_ms / 1000).toFixed(1)} s` : "–"],
-        ["Achievements", `${unlocked.length}/${catalog.length}`],
+        [tr("Runden"), String(stats?.games_played ?? 0)],
+        [tr("Rundensiege"), String(stats?.wins ?? 0)],
+        [tr("Weitergaben"), String(stats?.total_passes ?? 0)],
+        [tr("Rettungen in letzter Sekunde"), String(stats?.total_clutch_passes ?? 0)],
+        [tr("Schnellste Weitergabe"), stats?.fastest_pass_ms ? `${fmtNum(stats.fastest_pass_ms / 1000)} s` : "–"],
+        [tr("Erfolge"), `${unlocked.length}/${catalog.length}`],
     ];
 
     return (
         <main className="container">
             <div className="landingWrap">
-                <section className="card" aria-label="Deine Statistik">
+                <section className="card" aria-label={tr("Deine Statistik")}>
                     <HomeButton corner />
                     <header className="hostHeader">
-                        <h1 className="h1">📊 Deine Statistik</h1>
-                        <p className="p hostSub">Alles über deine Spiele, Songs und Gegner.</p>
+                        <h1 className="h1">📊 {tr("Deine Statistik")}</h1>
+                        <p className="p hostSub">{tr("Alles über deine Spiele, Songs und Gegner.")}</p>
                     </header>
                     <div className="stQuick">
                         {quick.map(([l, v]) => (
@@ -106,7 +108,7 @@ export default function StatsPage() {
                         <AccountStats data={data} username={name} season={season} onSeasonChange={setSeason} seasonLoading={loading} />
                     ) : loading ? (
                         <div style={{ display: "grid", placeItems: "center", padding: 30 }}>
-                            <Spinner size={24} label="Lade Statistik…" />
+                            <Spinner size={24} label={tr("Lade Statistik…")} />
                         </div>
                     ) : null}
                 </section>

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { dateLocale, useI18n } from "@/lib/i18n";
 
 type Row = {
     username: string;
@@ -13,13 +14,13 @@ type Row = {
     rank: number;
 };
 
-const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 
 /**
  * Saison-Rangliste (aktueller Kalendermonat): Arena-Punkte aus allen
  * Runden eingeloggter Spieler (Migration 062/065).
  */
 export function SeasonBoard() {
+    const { tr } = useI18n();
     const [rows, setRows] = useState<Row[] | null>(null);
     const now = new Date();
     const season = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -43,15 +44,15 @@ export function SeasonBoard() {
     return (
         <div style={{ marginTop: 14, padding: 14, borderRadius: 18, background: "rgba(0,0,0,0.18)", border: "1px solid rgba(255,214,10,0.28)" }}>
             <div style={{ fontWeight: 1000, fontSize: 17 }}>
-                🗓️ Saison {MONTHS[now.getMonth()]} {now.getFullYear()}
+                🗓️ {tr("Saison {month}", { month: now.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" }) })}
             </div>
             <div style={{ fontSize: 12, opacity: 0.7, fontWeight: 700, marginBottom: 8 }}>
-                Arena-Punkte aus allen Runden · setzt sich jeden Monat zurück
+                {tr("Arena-Punkte aus allen Runden · beginnt jeden Monat neu")}
             </div>
             {rows === null ? (
-                <div style={{ opacity: 0.7 }}>Lade …</div>
+                <div style={{ opacity: 0.7 }}>{tr("Lade…")}</div>
             ) : rows.length === 0 ? (
-                <div style={{ opacity: 0.75, fontWeight: 700 }}>Noch niemand in dieser Saison — spiel eine Runde eingeloggt, um zu starten.</div>
+                <div style={{ opacity: 0.75, fontWeight: 700 }}>{tr("Noch niemand in dieser Saison – spiel angemeldet eine Runde, um zu starten.")}</div>
             ) : (
                 <div style={{ display: "grid", gap: 6 }}>
                     {rows.map((r) => (
@@ -63,7 +64,7 @@ export function SeasonBoard() {
                             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.avatar_emoji ? <span aria-hidden style={{ marginRight: 6 }}>{r.avatar_emoji}</span> : null}
                                 {r.username}
                             </span>
-                            <span style={{ fontSize: 12, opacity: 0.7 }}>{r.set_wins}× Sieg · {r.sets_played} Runden</span>
+                            <span style={{ fontSize: 12, opacity: 0.7 }}>{tr("{w}× Sieg · {n} Runden", { w: r.set_wins, n: r.sets_played })}</span>
                             <span style={{ color: "#ffe08a", fontWeight: 1000 }}>{r.arena_points}</span>
                         </div>
                     ))}

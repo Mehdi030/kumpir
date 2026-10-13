@@ -3,6 +3,7 @@
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSessionToken } from "@/lib/playerSession";
 import { startGame } from "@/actions/startGame";
+import { trNow } from "@/lib/i18n";
 
 export type BotSkill = "mixed" | "1" | "2" | "3";
 const BOT_NAMES = ["Bot Anna", "Bot Ben", "Bot Cleo", "Bot Dino", "Bot Emma"];
@@ -43,7 +44,7 @@ export async function startBotGame(opts: {
     const row = Array.isArray(data) ? data[0] : data;
     const code = String(row?.code ?? "").toUpperCase();
     const me = String(row?.host_player_id ?? "");
-    if (code.length !== 4 || !me) throw new Error("Lobby konnte nicht erstellt werden.");
+    if (code.length !== 4 || !me) throw new Error(trNow("Lobby konnte nicht erstellt werden."));
 
     try {
         localStorage.setItem("kumpir_player_name", opts.name);
@@ -58,7 +59,7 @@ export async function startBotGame(opts: {
     if (join.error) throw new Error(join.error.message);
 
     const { data: lobby, error: lErr } = await supabase.from("lobbies").select("id").eq("code", code).single();
-    if (lErr || !lobby?.id) throw new Error(lErr?.message ?? "Lobby nicht gefunden.");
+    if (lErr || !lobby?.id) throw new Error(lErr?.message ?? trNow("Lobby nicht gefunden."));
 
     await supabase.rpc("set_lobby_topic_filter", { p_lobby_id: lobby.id, p_me_player_id: me, p_categories: opts.topicFilter });
     if (opts.seriesTotal !== 1) {
@@ -70,6 +71,6 @@ export async function startBotGame(opts: {
     }
 
     const res = await startGame(code, me, getSessionToken() ?? "");
-    if (!res.ok) throw new Error("error" in res ? res.error : "Start fehlgeschlagen.");
+    if (!res.ok) throw new Error("error" in res ? res.error : trNow("Start fehlgeschlagen."));
     return code;
 }

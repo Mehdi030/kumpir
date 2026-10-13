@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { trNow } from "@/lib/i18n";
 
 export type FriendRow = {
     user_id: string;
@@ -87,7 +88,7 @@ export function useFriends(userId: string | null | undefined): Result {
     useEffect(() => { void load(); }, [load]);
 
     const sendRequest = useCallback(async (toUsername: string): Promise<string | null> => {
-        if (!userId) return "Nicht eingeloggt.";
+        if (!userId) return trNow("Nicht angemeldet.");
         const { error: e } = await supabase.rpc("rpc_send_friend_request", {
             p_from_user_id: userId,
             p_to_username: toUsername,
@@ -98,7 +99,7 @@ export function useFriends(userId: string | null | undefined): Result {
     }, [supabase, userId, load]);
 
     const acceptRequest = useCallback(async (fromUserId: string): Promise<string | null> => {
-        if (!userId) return "Nicht eingeloggt.";
+        if (!userId) return trNow("Nicht angemeldet.");
         const { error: e } = await supabase.rpc("rpc_accept_friend_request", {
             p_me_user_id: userId,
             p_from_user_id: fromUserId,
@@ -109,7 +110,7 @@ export function useFriends(userId: string | null | undefined): Result {
     }, [supabase, userId, load]);
 
     const removeFriend = useCallback(async (friendUserId: string): Promise<string | null> => {
-        if (!userId) return "Nicht eingeloggt.";
+        if (!userId) return trNow("Nicht angemeldet.");
         const { error: e } = await supabase.rpc("rpc_remove_friend", {
             p_me_user_id: userId,
             p_friend_user_id: friendUserId,

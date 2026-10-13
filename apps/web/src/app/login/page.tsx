@@ -9,6 +9,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { safeNextPath as safeNext } from "@/lib/safeNext";
 import { HomeButton } from "@/components/BackButton";
+import { trNow, useI18n } from "@/lib/i18n";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -21,12 +22,13 @@ function authErrorText(code: string | null, desc: string | null): string {
     const c = (code ?? "").toLowerCase();
     const d = (desc ?? "").toLowerCase();
     if (c.includes("otp_expired") || d.includes("expired") || d.includes("invalid")) {
-        return "⚠️ Der Link ist abgelaufen oder wurde schon benutzt. Melde dich an – oder fordere unten einen neuen Link an.";
+        return trNow("⚠️ Der Link ist abgelaufen oder wurde schon benutzt. Melde dich an – oder fordere unten einen neuen Link an.");
     }
-    return `⚠️ ${desc || code || "Anmelden fehlgeschlagen."}`;
+    return `⚠️ ${desc || code || trNow("Anmelden fehlgeschlagen.")}`;
 }
 
 function LoginInner() {
+    const { tr } = useI18n();
     const router = useRouter();
     const sp = useSearchParams();
     const { user, loading: authLoading } = useAuth();
@@ -46,31 +48,31 @@ function LoginInner() {
 
     const initialNotice = useMemo(() => {
         if (msg === "check_email" && preloadEmail) {
-            return `📨 Bestätigungsmail an ${preloadEmail} gesendet. Klick den Link, dann hier einloggen.`;
+            return tr("📨 Bestätigungsmail an {mail} gesendet. Klick den Link, dann hier einloggen.", { mail: preloadEmail });
         }
         if (msg === "auth_error" && (errorParam || errorCodeParam || errorDescParam)) {
             return authErrorText(errorCodeParam || errorParam, errorDescParam);
         }
         if (msg === "confirmed") {
-            return "✅ Deine E-Mail ist bestätigt. Melde dich jetzt an.";
+            return tr("✅ Deine E-Mail ist bestätigt. Melde dich jetzt an.");
         }
         if (msg === "reset_other_device") {
-            return "⚠️ Den Link zum Zurücksetzen bitte im selben Browser öffnen, in dem du ihn angefordert hast – oder hier einfach einen neuen anfordern.";
+            return tr("⚠️ Den Link zum Zurücksetzen bitte im selben Browser öffnen, in dem du ihn angefordert hast – oder hier einfach einen neuen anfordern.");
         }
         if (msg === "link_expired" || msg === "oauth_exchange_failed") {
-            return "⚠️ Der Link ist abgelaufen oder wurde schon benutzt. Melde dich an – oder fordere einen neuen Link an.";
+            return tr("⚠️ Der Link ist abgelaufen oder wurde schon benutzt. Melde dich an – oder fordere einen neuen Link an.");
         }
         if (msg === "account_deleted") {
-            return "Dein Konto wurde gelöscht. Du kannst jederzeit als Gast weiterspielen.";
+            return tr("Dein Konto wurde gelöscht. Du kannst jederzeit als Gast weiterspielen.");
         }
         if (msg === "deletion_requested") {
-            return "🗑️ Deine Löschung ist beantragt. Der Zugang ist gesperrt; ein Admin löscht das Konto endgültig. Als Gast kannst du weiterspielen.";
+            return tr("🗑️ Deine Löschung ist beantragt. Der Zugang ist gesperrt; ein Admin löscht das Konto endgültig. Als Gast kannst du weiterspielen.");
         }
         if (msg === "account_suspended") {
-            return "⛔ Dieses Konto ist gesperrt. Wende dich an einen Admin, wenn das ein Irrtum ist. Als Gast kannst du weiterspielen.";
+            return tr("⛔ Dieses Konto ist gesperrt. Wende dich an einen Admin, wenn das ein Irrtum ist. Als Gast kannst du weiterspielen.");
         }
         return "";
-    }, [msg, preloadEmail, errorParam, errorCodeParam, errorDescParam]);
+    }, [msg, preloadEmail, errorParam, errorCodeParam, errorDescParam, tr]);
 
     useEffect(() => {
         if (initialNotice) setInfo(initialNotice);
@@ -96,7 +98,7 @@ function LoginInner() {
         if (resetBusy) return;
         const email = resetEmail.trim().toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            setResetMsg({ ok: false, text: "Bitte eine gültige E-Mail-Adresse eingeben." });
+            setResetMsg({ ok: false, text: tr("Bitte eine gültige E-Mail-Adresse eingeben.") });
             return;
         }
         setResetBusy(true);
@@ -109,12 +111,12 @@ function LoginInner() {
         // Bewusst keine Aussage, ob die Adresse existiert (kein Konto-Ausspähen).
         setResetMsg(
             rErr && !/rate|limit|seconds/i.test(rErr.message)
-                ? { ok: false, text: "Das hat gerade nicht geklappt. Bitte später erneut versuchen." }
+                ? { ok: false, text: tr("Das hat gerade nicht geklappt. Bitte später erneut versuchen.") }
                 : rErr
-                  ? { ok: false, text: "Bitte kurz warten und dann erneut anfordern." }
-                  : { ok: true, text: "Wenn die Adresse bei uns registriert ist, ist eine Mail mit dem Link unterwegs." }
+                  ? { ok: false, text: tr("Bitte kurz warten und dann erneut anfordern.") }
+                  : { ok: true, text: tr("Wenn die Adresse bei uns registriert ist, ist eine Mail mit dem Link unterwegs.") }
         );
-    }, [resetEmail, resetBusy]);
+    }, [resetEmail, resetBusy, tr]);
 
     const onLogin = useCallback(async () => {
         if (busy) return;
@@ -134,7 +136,7 @@ function LoginInner() {
                 return;
             }
 
-            setInfo("✅ Eingeloggt, leite weiter…");
+            setInfo(tr("✅ Eingeloggt, leite weiter…"));
             // Hard-Navigation statt router.replace: die Session-Cookies wurden
             // serverseitig gesetzt -- ein voller Seitenload lässt AuthProvider
             // sie beim Mount frisch aus den Cookies lesen, statt auf einen
@@ -142,12 +144,12 @@ function LoginInner() {
             // hoffen.
             window.location.assign(nextPath);
         } catch (e: unknown) {
-            const m = e instanceof Error ? e.message : "Unbekannter Fehler.";
+            const m = e instanceof Error ? e.message : tr("Unbekannter Fehler.");
             setError(m);
         } finally {
             setBusy(false);
         }
-    }, [busy, identifier, password, nextPath]);
+    }, [busy, identifier, password, nextPath, tr]);
 
     const onResend = useCallback(async () => {
         if (resendBusy) return;
@@ -167,20 +169,20 @@ function LoginInner() {
         return (
             <main className="container">
                 <div className="landingWrap">
-                    <section className="card" aria-label="Login deaktiviert">
+                    <section className="card" aria-label={tr("Anmelden deaktiviert")}>
                         <header className="hostHeader">
                             <div className="hostTitleRow">
-                                <h1 className="h1">Login deaktiviert</h1>
+                                <h1 className="h1">{tr("Anmelden deaktiviert")}</h1>
                             </div>
                             <p className="p hostSub">
-                                Auth ist aktuell im Dev-Modus aus. Du kannst als Gast spielen.
+                                {tr("Konten sind gerade ausgeschaltet. Du kannst als Gast spielen.")}
                             </p>
                         </header>
                         <div className="panel">
                             <div className="previewCard">
                                 <div className="actionsRow" style={{ marginTop: 14 }}>
-                                    <Link href="/" className="btn btnPrimary">Zur Startseite</Link>
-                                    <Link href="/join" className="btn btnSecondary">Lobby beitreten</Link>
+                                    <Link href="/" className="btn btnPrimary">{tr("Zur Startseite")}</Link>
+                                    <Link href="/join" className="btn btnSecondary">{tr("Lobby beitreten")}</Link>
                                 </div>
                             </div>
                         </div>
@@ -193,14 +195,14 @@ function LoginInner() {
     return (
         <main className="container">
             <div className="landingWrap">
-                <section className="card" aria-label="Anmelden">
+                <section className="card" aria-label={tr("Anmelden")}>
                     <HomeButton corner />
                     <header className="hostHeader">
                         <div className="hostTitleRow">
-                            <h1 className="h1">Anmelden</h1>
+                            <h1 className="h1">{tr("Anmelden")}</h1>
                         </div>
                         <p className="p hostSub">
-                            Mit Konto speichert Kumpir deinen Verlauf, deine Musik-Werte, Achievements und Saison-Punkte – auf jedem Gerät. Spielen geht auch ohne.
+                            {tr("Mit Konto speichert Kumpir deinen Verlauf, deine Musik-Werte, Erfolge und Saison-Punkte – auf jedem Gerät. Spielen geht auch ohne.")}
                         </p>
                     </header>
 
@@ -209,7 +211,7 @@ function LoginInner() {
                             <div className="previewCard">
                                 <div className="fieldRow">
                                     <label className="fieldLabel" htmlFor="identifier">
-                                        Benutzername
+                                        {tr("Benutzername")}
                                     </label>
                                     <div className="fieldControl">
                                         <input
@@ -217,7 +219,7 @@ function LoginInner() {
                                             className="input"
                                             value={identifier}
                                             onChange={(e) => setIdentifier(e.target.value)}
-                                            placeholder="z.B. medo"
+                                            placeholder={tr("z. B. medo")}
                                             autoComplete="username"
                                             autoCapitalize="none"
                                             autoCorrect="off"
@@ -227,7 +229,7 @@ function LoginInner() {
                                 </div>
 
                                 <div className="fieldRow" style={{ marginTop: 10 }}>
-                                    <label className="fieldLabel" htmlFor="password">Passwort</label>
+                                    <label className="fieldLabel" htmlFor="password">{tr("Passwort")}</label>
                                     <div className="fieldControl">
                                         <PasswordInput
                                             id="password"
@@ -236,7 +238,7 @@ function LoginInner() {
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter") void onLogin();
                                             }}
-                                            placeholder="Dein Passwort"
+                                            placeholder={tr("Dein Passwort")}
                                             autoComplete="current-password"
                                         />
                                     </div>
@@ -244,15 +246,15 @@ function LoginInner() {
 
                                 {error ? (
                                     <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }} role="alert">
-                                        {error}
+                                        {tr(error)}
                                     </div>
                                 ) : null}
                                 {needsConfirm ? (
                                     <button type="button" className="btn btnSecondary btnSmall" style={{ marginTop: 8 }} onClick={() => void onResend()} disabled={resendBusy}>
-                                        {resendBusy ? "…" : "📨 Bestätigungsmail erneut senden"}
+                                        {resendBusy ? "…" : tr("📨 Bestätigungsmail erneut senden")}
                                     </button>
                                 ) : null}
-                                {info ? <div className="fieldHelp" style={{ marginTop: 10 }}>{info}</div> : null}
+                                {info ? <div className="fieldHelp" style={{ marginTop: 10 }}>{tr(info)}</div> : null}
 
                                 <div className="actionsRow" style={{ marginTop: 14, gap: 10, flexWrap: "wrap" }}>
                                     <button
@@ -261,25 +263,25 @@ function LoginInner() {
                                         onClick={() => void onLogin()}
                                         disabled={busy}
                                     >
-                                        {busy ? "…" : "🔓 Einloggen"}
+                                        {busy ? "…" : tr("🔓 Einloggen")}
                                     </button>
 
                                     <Link href={`/register?next=${encodeURIComponent(nextPath)}`} className="btn btnSecondary">
-                                        Konto erstellen
+                                        {tr("Konto erstellen")}
                                     </Link>
 
                                 </div>
 
                                 <div style={{ marginTop: 14 }}>
                                     <div className="fieldHelp" style={{ opacity: 0.85 }}>
-                                        Passwort vergessen? Ein Admin kann dir ein neues setzen. Nur wenn dein Konto eine E-Mail-Adresse hat, geht es auch per Mail:
+                                        {tr("Passwort vergessen? Ein Admin kann dir ein neues setzen. Nur wenn dein Konto eine E-Mail-Adresse hat, geht es auch per Mail:")}
                                     </div>
                                     <button type="button" className="linkBtnLogin" onClick={() => setShowReset((v) => !v)} aria-expanded={showReset}>
-                                        Link per E-Mail anfordern
+                                        {tr("Link per E-Mail anfordern")}
                                     </button>
                                     {showReset ? (
                                         <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-                                            <div className="fieldHelp">Gib deine E-Mail-Adresse ein – wir schicken dir einen Link zum Zurücksetzen.</div>
+                                            <div className="fieldHelp">{tr("Gib deine E-Mail-Adresse ein – wir schicken dir einen Link zum Zurücksetzen.")}</div>
                                             <div className="fieldControl">
                                                 <input
                                                     className="input"
@@ -289,11 +291,11 @@ function LoginInner() {
                                                     onKeyDown={(e) => {
                                                         if (e.key === "Enter") void sendReset();
                                                     }}
-                                                    placeholder="du@beispiel.de"
+                                                    placeholder={tr("du@beispiel.de")}
                                                     autoComplete="email"
                                                 />
                                                 <button type="button" className="btn btnSecondary" onClick={() => void sendReset()} disabled={resetBusy}>
-                                                    {resetBusy ? "…" : "Link senden"}
+                                                    {resetBusy ? "…" : tr("Link senden")}
                                                 </button>
                                             </div>
                                             {resetMsg ? <div className={`fieldHelp ${resetMsg.ok ? "" : "fieldHelpError"}`}>{resetMsg.text}</div> : null}

@@ -5,6 +5,7 @@ import { fmtSeconds, hitRate, seasonKey, seasonLabel, strongestPlaylist, titleRa
 import { renderRecapCard } from "@/lib/recapCard";
 import { shareOrDownloadPng } from "@/lib/resultCard";
 import { Spinner } from "@/components/Spinner";
+import { dateLocale, useI18n } from "@/lib/i18n";
 
 type Props = {
     data: ProfileStats;
@@ -17,7 +18,7 @@ type Props = {
 
 function fmtDate(iso: string): string {
     const d = new Date(iso);
-    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " · " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleDateString(dateLocale(), { day: "2-digit", month: "2-digit" }) + " · " + d.toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 /**
@@ -25,6 +26,7 @@ function fmtDate(iso: string): string {
  * Monats-Rückblick (teilbar), häufigste Gegner und die letzten 20 Matches.
  */
 export function AccountStats({ data, username, season, onSeasonChange, seasonLoading = false }: Props) {
+    const { tr } = useI18n();
     const [shareBusy, setShareBusy] = useState(false);
     const [shareMsg, setShareMsg] = useState("");
 
@@ -42,27 +44,27 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
         setShareMsg("");
         try {
             const lines = [
-                recap.favoritePlaylist ? `Lieblings-Playlist: ${recap.favoritePlaylist}` : "",
-                recap.bestPlaylist ? `Stärkste Playlist: ${recap.bestPlaylist}` : "",
+                recap.favoritePlaylist ? `${tr("Lieblings-Playlist:")} ${recap.favoritePlaylist}` : "",
+                recap.bestPlaylist ? `${tr("Stärkste Playlist:")} ${recap.bestPlaylist}` : "",
             ].filter(Boolean);
             const blob = await renderRecapCard({
                 username,
                 monthLabel: seasonLabel(recap.season),
                 tiles: [
-                    { label: "Saison-Platz", value: recap.rank ? `#${recap.rank}` : "–" },
-                    { label: "Saison-Punkte", value: String(recap.seasonPoints ?? 0) },
-                    { label: "Matches", value: `${recap.matches}` },
-                    { label: "Match-Siege", value: `${recap.matchWins}` },
-                    { label: "Titel erkannt", value: String(recap.titles) },
-                    { label: "Trefferquote", value: recapRate != null ? `${recapRate} %` : "–" },
+                    { label: tr("Saison-Platz"), value: recap.rank ? `#${recap.rank}` : "–" },
+                    { label: tr("Saison-Punkte"), value: String(recap.seasonPoints ?? 0) },
+                    { label: tr("Matches"), value: `${recap.matches}` },
+                    { label: tr("Match-Siege"), value: `${recap.matchWins}` },
+                    { label: tr("Titel erkannt"), value: String(recap.titles) },
+                    { label: tr("Trefferquote"), value: recapRate != null ? `${recapRate} %` : "–" },
                 ],
                 lines,
                 siteUrl: window.location.origin,
             });
-            const res = await shareOrDownloadPng(blob, `kumpir-${recap.season}.png`, `Mein Kumpir-Monat ${seasonLabel(recap.season)} – spiel mit: ${window.location.origin}`, "Kumpir-Rückblick");
-            if (res === "saved") setShareMsg("✅ Bild gespeichert");
+            const res = await shareOrDownloadPng(blob, `kumpir-${recap.season}.png`, tr("Mein Kumpir-Monat {month} – spiel mit: {url}", { month: seasonLabel(recap.season), url: window.location.origin }), tr("Kumpir-Rückblick"));
+            if (res === "saved") setShareMsg(tr("✅ Bild gespeichert"));
         } catch {
-            setShareMsg("⚠️ Bild konnte nicht erstellt werden");
+            setShareMsg(tr("⚠️ Bild konnte nicht erstellt werden"));
         } finally {
             setShareBusy(false);
             window.setTimeout(() => setShareMsg(""), 2500);
@@ -72,7 +74,7 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
     if (empty) {
         return (
             <div className="accEmpty">
-                🎧 Noch keine Spiele mit diesem Konto. Spiel eine Runde – danach siehst du hier deinen Verlauf, deine Musik-Werte und deine Gegner.
+                {tr("🎧 Noch keine Spiele mit diesem Konto. Spiel eine Runde – danach siehst du hier deinen Verlauf, deine Musik-Werte und deine Gegner.")}
                 <style>{STYLES}</style>
             </div>
         );
@@ -82,49 +84,49 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
         <div className="acc">
             {/* F: gewertete Zähler, Matches und Runden getrennt */}
             <div className="accGrid">
-                <Tile label="Matches" value={totals.matches} />
-                <Tile label="Match-Siege" value={totals.matchWins} />
-                <Tile label="Runden" value={totals.rounds} />
-                <Tile label="Rundensiege" value={totals.roundWins} />
+                <Tile label={tr("Matches")} value={totals.matches} />
+                <Tile label={tr("Match-Siege")} value={totals.matchWins} />
+                <Tile label={tr("Runden")} value={totals.rounds} />
+                <Tile label={tr("Rundensiege")} value={totals.roundWins} />
             </div>
             {totals.practiceMatches > 0 ? (
-                <div className="accNote">+ {totals.practiceMatches} Übungsspiel{totals.practiceMatches === 1 ? "" : "e"} (nur ein Mensch, nicht gewertet)</div>
+                <div className="accNote">{totals.practiceMatches === 1 ? tr("+ 1 Übungsspiel (nur ein Mensch, nicht gewertet)") : tr("+ {n} Übungsspiele (nur ein Mensch, nicht gewertet)", { n: totals.practiceMatches })}</div>
             ) : null}
 
             {/* B: Musik */}
             <section className="accBox" aria-labelledby="accMusic">
                 <h2 className="accH2" id="accMusic">
-                    🎵 Musik <small>inkl. Übungsspiele</small>
+                    🎵 {tr("Musik")} <small>{tr("inkl. Übungsspiele")}</small>
                 </h2>
                 <div className="accGrid accGrid3">
-                    <Tile label="Titel erkannt" value={music.titles} />
-                    <Tile label="Nur Interpret" value={music.artists} />
-                    <Tile label="Trefferquote" value={rate != null ? `${rate} %` : "–"} />
-                    <Tile label="Ø Antwortzeit" value={fmtSeconds(music.avgAnswerMs)} />
-                    <Tile label="Schnellster Titel" value={fmtSeconds(music.fastestTitleMs)} />
-                    <Tile label="Beste Serie" value={music.bestCombo ? `${music.bestCombo} in Folge` : "–"} />
+                    <Tile label={tr("Titel erkannt")} value={music.titles} />
+                    <Tile label={tr("Nur Interpret")} value={music.artists} />
+                    <Tile label={tr("Trefferquote")} value={rate != null ? `${rate} %` : "–"} />
+                    <Tile label={tr("Ø Antwortzeit")} value={fmtSeconds(music.avgAnswerMs)} />
+                    <Tile label={tr("Schnellster Titel")} value={fmtSeconds(music.fastestTitleMs)} />
+                    <Tile label={tr("Beste Serie")} value={music.bestCombo ? tr("{n} in Folge", { n: music.bestCombo }) : "–"} />
                 </div>
                 {strongest ? (
                     <div className="accStrong">
-                        💪 Deine Stärke: <b>{strongest}</b>
+                        💪 {tr("Deine Stärke:")} <b>{strongest}</b>
                     </div>
                 ) : null}
                 {playlists.length > 0 ? (
                     <div className="accLists">
                         {playlists.map((p) => {
-                            const tr = titleRate(p.titles, p.artists, p.wrong);
+                            const rateT = titleRate(p.titles, p.artists, p.wrong);
                             return (
                                 <div key={p.playlist} className="accList">
                                     <div className="accListHead">
                                         <b>{p.playlist}</b>
-                                        <span>{tr != null ? `${tr} % Titel` : "–"}</span>
+                                        <span>{rateT != null ? tr("{n} % Titel", { n: rateT }) : "–"}</span>
                                     </div>
-                                    <div className="accBar" role="img" aria-label={`${p.playlist}: ${tr ?? 0} Prozent Titel erkannt`}>
-                                        <span style={{ width: `${tr ?? 0}%` }} />
+                                    <div className="accBar" role="img" aria-label={tr("{name}: {n} Prozent Titel erkannt", { name: p.playlist, n: rateT ?? 0 })}>
+                                        <span style={{ width: `${rateT ?? 0}%` }} />
                                     </div>
                                     <div className="accListSub">
-                                        {p.titles} Titel · {p.artists} Interpret · {p.wrong} falsch · {p.rounds} Runde{p.rounds === 1 ? "" : "n"}
-                                        {p.wins ? ` · ${p.wins}× gewonnen` : ""}
+                                        {tr("{t} Titel · {a} Interpret · {w} falsch · {r} Runden", { t: p.titles, a: p.artists, w: p.wrong, r: p.rounds })}
+                                        {p.wins ? ` · ${tr("{n}× gewonnen", { n: p.wins })}` : ""}
                                     </div>
                                 </div>
                             );
@@ -137,51 +139,51 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
             <section className="accBox accRecap" aria-labelledby="accRecap">
                 <div className="accRecapHead">
                     <h2 className="accH2" id="accRecap">
-                        🗓️ Monats-Rückblick · {seasonLabel(recap.season)}
+                        🗓️ {tr("Monats-Rückblick")} · {seasonLabel(recap.season)}
                     </h2>
-                    <div className="accTabs" role="group" aria-label="Monat wählen">
+                    <div className="accTabs" role="group" aria-label={tr("Monat wählen")}>
                         <button type="button" className={season === thisMonth ? "on" : ""} aria-pressed={season === thisMonth} onClick={() => onSeasonChange(thisMonth)}>
-                            Dieser Monat
+                            {tr("Dieser Monat")}
                         </button>
                         <button type="button" className={season === lastMonth ? "on" : ""} aria-pressed={season === lastMonth} onClick={() => onSeasonChange(lastMonth)}>
-                            Letzter Monat
+                            {tr("Letzter Monat")}
                         </button>
                     </div>
                 </div>
                 {seasonLoading ? (
-                    <Spinner size={18} label="Lade…" />
+                    <Spinner size={18} label={tr("Lade…")} />
                 ) : recap.rounds === 0 ? (
-                    <div className="accNote">In diesem Monat noch keine Runde gespielt.</div>
+                    <div className="accNote">{tr("In diesem Monat noch keine Runde gespielt.")}</div>
                 ) : (
                     <>
                         <div className="accGrid accGrid3">
-                            <Tile label="Saison-Platz" value={recap.rank ? `#${recap.rank}` : "–"} />
-                            <Tile label="Saison-Punkte" value={recap.seasonPoints ?? 0} />
-                            <Tile label="Matches (Siege)" value={`${recap.matches} (${recap.matchWins})`} />
-                            <Tile label="Titel erkannt" value={recap.titles} />
-                            <Tile label="Trefferquote" value={recapRate != null ? `${recapRate} %` : "–"} />
-                            <Tile label="Beste Runde" value={recap.bestRoundPoints != null ? `${recap.bestRoundPoints} P.` : "–"} />
+                            <Tile label={tr("Saison-Platz")} value={recap.rank ? `#${recap.rank}` : "–"} />
+                            <Tile label={tr("Saison-Punkte")} value={recap.seasonPoints ?? 0} />
+                            <Tile label={tr("Matches (Siege)")} value={`${recap.matches} (${recap.matchWins})`} />
+                            <Tile label={tr("Titel erkannt")} value={recap.titles} />
+                            <Tile label={tr("Trefferquote")} value={recapRate != null ? `${recapRate} %` : "–"} />
+                            <Tile label={tr("Beste Runde")} value={recap.bestRoundPoints != null ? tr("{n} P.", { n: recap.bestRoundPoints }) : "–"} />
                         </div>
                         <div className="accRecapLines">
                             {recap.favoritePlaylist ? (
                                 <span>
-                                    ❤️ Lieblings-Playlist: <b>{recap.favoritePlaylist}</b>
+                                    ❤️ {tr("Lieblings-Playlist:")} <b>{recap.favoritePlaylist}</b>
                                 </span>
                             ) : null}
                             {recap.bestPlaylist ? (
                                 <span>
-                                    💪 Stärkste Playlist: <b>{recap.bestPlaylist}</b>
+                                    💪 {tr("Stärkste Playlist:")} <b>{recap.bestPlaylist}</b>
                                 </span>
                             ) : null}
                             {recap.fastestTitleMs != null ? (
                                 <span>
-                                    ⚡ Schnellster Titel: <b>{fmtSeconds(recap.fastestTitleMs)}</b>
+                                    ⚡ {tr("Schnellster Titel:")} <b>{fmtSeconds(recap.fastestTitleMs)}</b>
                                 </span>
                             ) : null}
                         </div>
                         <div className="accShare">
                             <button type="button" className="btn btnSecondary btnSmall" onClick={() => void shareRecap()} disabled={shareBusy}>
-                                {shareBusy ? <Spinner size={14} label="Erstelle Bild…" /> : "📤 Rückblick teilen"}
+                                {shareBusy ? <Spinner size={14} label={tr("Erstelle Bild…")} /> : tr("📤 Rückblick teilen")}
                             </button>
                             <span aria-live="polite">{shareMsg}</span>
                         </div>
@@ -192,17 +194,17 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
             {/* C: Gegner */}
             <section className="accBox" aria-labelledby="accOpp">
                 <h2 className="accH2" id="accOpp">
-                    ⚔️ Deine häufigsten Gegner
+                    ⚔️ {tr("Deine häufigsten Gegner")}
                 </h2>
                 {opponents.length === 0 ? (
-                    <div className="accNote">Noch keine Matches gegen andere Konten.</div>
+                    <div className="accNote">{tr("Noch keine Matches gegen andere Konten.")}</div>
                 ) : (
                     <ul className="accOpp">
                         {opponents.map((o) => (
                             <li key={o.username}>
                                 <b>{o.username}</b>
                                 <span>
-                                    {o.matches} Match{o.matches === 1 ? "" : "es"} · <span className="win">{o.wins} gewonnen</span> · <span className="loss">{o.losses} verloren</span>
+                                    {tr("{n} Matches", { n: o.matches })} · <span className="win">{tr("{n} gewonnen", { n: o.wins })}</span> · <span className="loss">{tr("{n} verloren", { n: o.losses })}</span>
                                 </span>
                             </li>
                         ))}
@@ -213,27 +215,27 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
             {/* A: Verlauf */}
             <section className="accBox" aria-labelledby="accHist">
                 <h2 className="accH2" id="accHist">
-                    🕘 Letzte Matches
+                    🕘 {tr("Letzte Matches")}
                 </h2>
                 <ul className="accHist">
                     {recent.map((m) => (
                         <li key={m.finished_at} className={m.place === 1 ? "first" : ""}>
-                            <div className="accHistPlace" aria-label={`Platz ${m.place} von ${m.players_count}`}>
+                            <div className="accHistPlace" aria-label={tr("Platz {p} von {n}", { p: m.place, n: m.players_count })}>
                                 {m.place === 1 ? "🏆" : `${m.place}.`}
                                 <small>/{m.players_count}</small>
                             </div>
                             <div className="accHistMain">
                                 <div className="accHistTop">
-                                    <b>{(m.playlists ?? []).filter(Boolean).join(" · ") || "Match"}</b>
-                                    {!m.ranked ? <span className="accBadge">Übung</span> : null}
+                                    <b>{(m.playlists ?? []).filter(Boolean).join(" · ") || tr("Match")}</b>
+                                    {!m.ranked ? <span className="accBadge">{tr("Übung")}</span> : null}
                                 </div>
                                 <div className="accHistSub">
-                                    {fmtDate(m.finished_at)} · {m.rounds_total} Runde{m.rounds_total === 1 ? "" : "n"} · {m.humans_count} Mensch{m.humans_count === 1 ? "" : "en"}
-                                    {m.bots_count ? ` + ${m.bots_count} Bot${m.bots_count === 1 ? "" : "s"}` : ""}
+                                    {fmtDate(m.finished_at)} · {tr("{n} Runden", { n: m.rounds_total })} · {tr("{n} Menschen", { n: m.humans_count })}
+                                    {m.bots_count ? ` + ${tr("{n} Bots", { n: m.bots_count })}` : ""}
                                 </div>
                             </div>
                             <div className="accHistRight">
-                                <b>{m.total_points} P.</b>
+                                <b>{tr("{n} P.", { n: m.total_points })}</b>
                                 <small>
                                     🎵 {m.title_hits}
                                     {m.artist_hits ? ` +${m.artist_hits}` : ""}

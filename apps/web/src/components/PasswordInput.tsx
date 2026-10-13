@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, type InputHTMLAttributes } from "react";
+import { useI18n } from "@/lib/i18n";
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { value: string };
 
 /** Passwortfeld mit "anzeigen/verbergen"-Knopf (weniger Tippfehler am Handy). */
 export function PasswordInput({ className, ...rest }: Props) {
+    const { tr } = useI18n();
     const [show, setShow] = useState(false);
     return (
         <div className="pwWrap">
             <input {...rest} type={show ? "text" : "password"} className={className ?? "input"} />
-            <button type="button" className="pwToggle" onClick={() => setShow((v) => !v)} aria-label={show ? "Passwort verbergen" : "Passwort anzeigen"} aria-pressed={show}>
+            <button type="button" className="pwToggle" onClick={() => setShow((v) => !v)} aria-label={show ? tr("Passwort verbergen") : tr("Passwort anzeigen")} aria-pressed={show}>
                 {show ? "🙈" : "👁️"}
             </button>
             <style>{`

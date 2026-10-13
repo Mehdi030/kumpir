@@ -7,6 +7,7 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { Spinner } from "@/components/Spinner";
 import { TIER_STYLE } from "@/lib/achievements";
 import { HomeButton } from "@/components/BackButton";
+import { fmtNum, useI18n } from "@/lib/i18n";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
@@ -23,10 +24,11 @@ function fmtHoldTotal(ms: number) {
 function fmtFastest(ms: number | null) {
     if (ms == null) return "—";
     if (ms < 1000) return `${ms} ms`;
-    return `${(ms / 1000).toFixed(2)} s`;
+    return `${fmtNum(ms / 1000, 2)} s`;
 }
 
 export default function AchievementsPage() {
+    const { tr } = useI18n();
     const { user, loading: authLoading } = useAuth();
     const { catalog, unlocked, stats, loading, error } = useAchievements(user?.id ?? null);
 
@@ -35,13 +37,11 @@ export default function AchievementsPage() {
     if (AUTH_DISABLED) {
         return (
             <main className="container">
-                <section className="card" aria-label="Achievements" style={{ maxWidth: 620, margin: "0 auto" }}>
+                <section className="card" aria-label={tr("Erfolge")} style={{ maxWidth: 620, margin: "0 auto" }}>
                     <HomeButton corner />
-                    <h1 className="h1">Achievements</h1>
-                    <p className="p hostSub">
-                        Achievements gibt&apos;s nur mit Account. Aktuell läuft das Spiel im Gast-Modus.
-                    </p>
-                    <Link href="/" className="btn btnSecondary">← Zur Startseite</Link>
+                    <h1 className="h1">{tr("Erfolge")}</h1>
+                    <p className="p hostSub">{tr("Erfolge gibt es nur mit Konto. Gerade läuft das Spiel im Gast-Modus.")}</p>
+                    <Link href="/" className="btn btnSecondary">← {tr("Zur Startseite")}</Link>
                 </section>
             </main>
         );
@@ -51,7 +51,7 @@ export default function AchievementsPage() {
         return (
             <main className="container">
                 <div style={{ display: "grid", placeItems: "center", padding: 32 }}>
-                    <Spinner size={28} label="Lade…" />
+                    <Spinner size={28} label={tr("Lade…")} />
                 </div>
             </main>
         );
@@ -60,14 +60,12 @@ export default function AchievementsPage() {
     if (!user) {
         return (
             <main className="container">
-                <section className="card" aria-label="Achievements" style={{ maxWidth: 620, margin: "0 auto" }}>
+                <section className="card" aria-label={tr("Erfolge")} style={{ maxWidth: 620, margin: "0 auto" }}>
                     <HomeButton corner />
-                    <h1 className="h1">Achievements</h1>
-                    <p className="p hostSub">
-                        Du musst eingeloggt sein, um deine Achievements zu sehen.
-                    </p>
+                    <h1 className="h1">{tr("Erfolge")}</h1>
+                    <p className="p hostSub">{tr("Melde dich an, um deine Erfolge zu sehen.")}</p>
                     <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-                        <Link href="/login?next=/achievements" className="btn btnPrimary">🔓 Einloggen</Link>
+                        <Link href="/login?next=/achievements" className="btn btnPrimary">{tr("🔓 Einloggen")}</Link>
                     </div>
                 </section>
             </main>
@@ -76,12 +74,12 @@ export default function AchievementsPage() {
 
     return (
         <main className="container">
-            <section className="card" aria-label="Achievements" style={{ maxWidth: 980, margin: "0 auto" }}>
+            <section className="card" aria-label={tr("Erfolge")} style={{ maxWidth: 980, margin: "0 auto" }}>
                 <header className="hostHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                     <div>
-                        <h1 className="h1">🏆 Achievements</h1>
+                        <h1 className="h1">🏆 {tr("Erfolge")}</h1>
                         <p className="p hostSub" style={{ marginTop: 4 }}>
-                            {unlocked.length} von {catalog.length} freigeschaltet
+                            {tr("{n} von {total} freigeschaltet", { n: unlocked.length, total: catalog.length })}
                         </p>
                     </div>
                     <HomeButton />
@@ -92,19 +90,19 @@ export default function AchievementsPage() {
                 {/* Lifetime Stats */}
                 {stats ? (
                     <div className="statsGrid" style={{ marginTop: 14 }}>
-                        <StatBox label="Spiele" value={stats.games_played.toString()} />
-                        <StatBox label="Siege" value={stats.wins.toString()} />
-                        <StatBox label="Pässe" value={stats.total_passes.toString()} />
-                        <StatBox label="Clutch" value={stats.total_clutch_passes.toString()} />
-                        <StatBox label="Schnellster Pass" value={fmtFastest(stats.fastest_pass_ms)} />
-                        <StatBox label="Hold-Time" value={fmtHoldTotal(stats.total_hold_ms)} />
-                        <StatBox label="Beste Streak" value={stats.best_survival_streak.toString()} />
+                        <StatBox label={tr("Spiele")} value={stats.games_played.toString()} />
+                        <StatBox label={tr("Siege")} value={stats.wins.toString()} />
+                        <StatBox label={tr("Weitergaben")} value={stats.total_passes.toString()} />
+                        <StatBox label={tr("In letzter Sekunde")} value={stats.total_clutch_passes.toString()} />
+                        <StatBox label={tr("Schnellste Weitergabe")} value={fmtFastest(stats.fastest_pass_ms)} />
+                        <StatBox label={tr("Haltezeit gesamt")} value={fmtHoldTotal(stats.total_hold_ms)} />
+                        <StatBox label={tr("Beste Serie")} value={stats.best_survival_streak.toString()} />
                     </div>
                 ) : null}
 
                 {loading ? (
                     <div style={{ display: "grid", placeItems: "center", padding: 20 }}>
-                        <Spinner size={20} label="Lade Achievements…" />
+                        <Spinner size={20} label={tr("Lade Erfolge…")} />
                     </div>
                 ) : (
                     <div className="achievementsGrid" style={{ marginTop: 16 }}>
@@ -124,12 +122,12 @@ export default function AchievementsPage() {
                                     }}
                                 >
                                     <div className="achievementIcon" aria-hidden>{a.icon}</div>
-                                    <div className="achievementTitle">{a.title}</div>
-                                    <div className="achievementDesc">{a.description}</div>
+                                    <div className="achievementTitle">{tr(a.title)}</div>
+                                    <div className="achievementDesc">{tr(a.description)}</div>
                                     {got ? (
-                                        <div className="achievementBadge">✅ Freigeschaltet</div>
+                                        <div className="achievementBadge">{tr("✅ Freigeschaltet")}</div>
                                     ) : (
-                                        <div className="achievementBadge muted">🔒 Noch nicht</div>
+                                        <div className="achievementBadge muted">{tr("🔒 Noch nicht")}</div>
                                     )}
                                 </div>
                             );

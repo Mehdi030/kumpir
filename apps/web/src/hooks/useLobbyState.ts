@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLobbyRealtime, type RealtimeStatus } from "@/hooks/useLobbyRealtime";
+import { trNow } from "@/lib/i18n";
 
 export type LobbyRow = {
     id: string;
@@ -76,7 +77,7 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
             // Transient fetch error: keep last known-good lobby/players so callers
             // (e.g. the "removed from lobby" detection) don't misread a network
             // blip as the player having left/been kicked.
-            setError(lobbyRes.error?.message || "Lobby nicht gefunden.");
+            setError(lobbyRes.error?.message || trNow("Lobby nicht gefunden."));
             return;
         }
 
@@ -99,7 +100,7 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
 
         if (playersRes.error) {
             // Keep the last known-good players list on a transient error (see above).
-            setError(playersRes.error.message || "Konnte Spieler nicht laden.");
+            setError(playersRes.error.message || trNow("Spieler konnten nicht geladen werden."));
             return;
         }
 

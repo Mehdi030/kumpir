@@ -5,48 +5,50 @@ import { useLeaderboard, type LeaderboardCategory, type LeaderboardEntry } from 
 import { Spinner } from "@/components/Spinner";
 import { SeasonBoard } from "@/components/SeasonBoard";
 import { HomeButton } from "@/components/BackButton";
+import { tk, useI18n } from "@/lib/i18n";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 const CATEGORIES: Array<{ key: LeaderboardCategory; label: string; icon: string; unit: string; render: (e: LeaderboardEntry) => string }> = [
     {
         key: "wins",
-        label: "Rundensiege",
+        label: tk("Rundensiege"),
         icon: "🏆",
-        unit: "Siege",
+        unit: tk("Siege"),
         render: (e) => `${e.wins} (${e.win_rate_pct}%)`,
     },
     {
         key: "passes",
-        label: "Pässe",
+        label: tk("Weitergaben"),
         icon: "🥔",
-        unit: "Pässe",
+        unit: tk("Weitergaben"),
         render: (e) => e.total_passes.toString(),
     },
     {
         key: "clutch",
-        label: "Clutch-Pässe",
+        label: tk("In letzter Sekunde"),
         icon: "⏱️",
-        unit: "Clutch",
+        unit: tk("Anzahl"),
         render: (e) => e.total_clutch_passes.toString(),
     },
     {
         key: "fastest",
-        label: "Schnellster Pass",
+        label: tk("Schnellste Weitergabe"),
         icon: "⚡",
         unit: "ms",
         render: (e) => (e.fastest_pass_ms == null ? "—" : `${e.fastest_pass_ms} ms`),
     },
     {
         key: "streak",
-        label: "Beste Survival-Streak",
+        label: tk("Beste Überlebens-Serie"),
         icon: "🛡️",
-        unit: "Runden",
+        unit: tk("Runden"),
         render: (e) => e.best_survival_streak.toString(),
     },
 ];
 
 export default function LeaderboardPage() {
+    const { tr } = useI18n();
     const [category, setCategory] = useState<LeaderboardCategory>("wins");
     const { rows, loading, error } = useLeaderboard(category, 25);
 
@@ -55,12 +57,10 @@ export default function LeaderboardPage() {
     if (AUTH_DISABLED) {
         return (
             <main className="container">
-                <section className="card" aria-label="Bestenliste">
+                <section className="card" aria-label={tr("Bestenliste")}>
                     <HomeButton corner />
-                    <h1 className="h1">Bestenliste</h1>
-                    <p className="p hostSub">
-                        Bestenlisten gibt&apos;s nur mit Konto. Aktuell läuft das Spiel im Gast-Modus.
-                    </p>
+                    <h1 className="h1">{tr("Bestenliste")}</h1>
+                    <p className="p hostSub">{tr("Bestenlisten gibt es nur mit Konto. Gerade läuft das Spiel im Gast-Modus.")}</p>
                 </section>
             </main>
         );
@@ -68,12 +68,12 @@ export default function LeaderboardPage() {
 
     return (
         <main className="container">
-            <section className="card" aria-label="Bestenliste" style={{ maxWidth: 880, margin: "0 auto" }}>
+            <section className="card" aria-label={tr("Bestenliste")} style={{ maxWidth: 880, margin: "0 auto" }}>
                 <header className="hostHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                     <div>
-                        <h1 className="h1">🏆 Bestenliste</h1>
+                        <h1 className="h1">🏆 {tr("Bestenliste")}</h1>
                         <p className="p hostSub" style={{ marginTop: 4 }}>
-                            Top {rows.length} weltweit · sortiert nach {cfg.label}
+                            {tr("Top {n} · sortiert nach {what}", { n: rows.length, what: tr(cfg.label) })}
                         </p>
                     </div>
                     <HomeButton />
@@ -90,7 +90,7 @@ export default function LeaderboardPage() {
                             className={`pillSegBtn ${category === c.key ? "pillSegActive" : ""}`}
                             onClick={() => setCategory(c.key)}
                         >
-                            {c.icon} {c.label}
+                            {c.icon} {tr(c.label)}
                         </button>
                     ))}
                 </div>
@@ -99,11 +99,11 @@ export default function LeaderboardPage() {
 
                 {loading ? (
                     <div style={{ display: "grid", placeItems: "center", padding: 24 }}>
-                        <Spinner size={24} label="Lade…" />
+                        <Spinner size={24} label={tr("Lade…")} />
                     </div>
                 ) : rows.length === 0 ? (
                     <div className="fieldHelp" style={{ marginTop: 16, textAlign: "center", padding: 24 }}>
-                        Noch keine Daten. Spiel mit einem Account ein paar Runden — dann tauchst du hier auf.
+                        {tr("Noch keine Daten. Spiel mit einem Konto ein paar Runden – dann tauchst du hier auf.")}
                     </div>
                 ) : (
                     <div style={{ marginTop: 14, overflowX: "auto" }}>
@@ -111,9 +111,9 @@ export default function LeaderboardPage() {
                             <thead>
                                 <tr style={{ textAlign: "left", opacity: 0.7, fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase" }}>
                                     <th style={{ padding: "10px 8px" }}>#</th>
-                                    <th style={{ padding: "10px 8px" }}>Username</th>
-                                    <th style={{ padding: "10px 8px" }}>Runden</th>
-                                    <th style={{ padding: "10px 8px", textAlign: "right" }}>{cfg.unit}</th>
+                                    <th style={{ padding: "10px 8px" }}>{tr("Spieler")}</th>
+                                    <th style={{ padding: "10px 8px" }}>{tr("Runden")}</th>
+                                    <th style={{ padding: "10px 8px", textAlign: "right" }}>{tr(cfg.unit)}</th>
                                 </tr>
                             </thead>
                             <tbody>

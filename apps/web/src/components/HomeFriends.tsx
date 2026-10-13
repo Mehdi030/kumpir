@@ -302,7 +302,7 @@ export function HomeFriends({ inviteCode, withOpenLobbies = false, inModal = fal
 
             {friendsApi.incoming.length ? (
                 <div className="frReqs">
-                    <div className="frReqsTitle">📥 {friendsApi.incoming.length === 1 ? "1 neue Anfrage" : `${friendsApi.incoming.length} neue Anfragen`}</div>
+                    <div className="frReqsTitle">📥 {friendsApi.incoming.length === 1 ? tr("1 neue Anfrage") : tr("{n} neue Anfragen", { n: friendsApi.incoming.length })}</div>
                     {friendsApi.incoming.map((r) => (
                         <div key={r.user_id} className="frReq">
                             <span className="frAvatar sm" style={{ background: colorFor(r.friend_username) }} aria-hidden>
