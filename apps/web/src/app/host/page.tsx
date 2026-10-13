@@ -15,8 +15,9 @@ import { SOLO_SKILL_LABEL } from "@/lib/accountSettings";
 import { HomeButton } from "@/components/BackButton";
 import { AccountNameNote } from "@/components/AccountNameNote";
 import { tk, trNow, useI18n } from "@/lib/i18n";
+import { GAME_MODES, GAME_MODE_BY_KEY, type GameModeKey } from "@/lib/gameModes";
 
-type ModeKey = "original" | "teleport" | "reverse";
+type ModeKey = GameModeKey;
 type RoundSpeed = "fast" | "normal" | "calm";
 const ROUND_SPEEDS: Record<
     RoundSpeed,
@@ -25,43 +26,6 @@ const ROUND_SPEEDS: Record<
     fast: { label: tk("⚡ Blitz"), seconds: 15, hint: tk("Schnell, hoher Druck."), variant: "fast" },
     normal: { label: tk("🎯 Standard"), seconds: 25, hint: tk("Ausgewogenes Tempo."), variant: "normal" },
     calm: { label: tk("🧊 Casual"), seconds: 40, hint: tk("Entspannt, mehr Zeit."), variant: "calm" },
-};
-
-const MODES: Record<
-    ModeKey,
-    {
-        label: string;
-        icon: string;
-        desc: string;
-        featured?: boolean;
-        disabled?: boolean;
-        comingSoon?: boolean;
-        variant: "original" | "teleport" | "reverse";
-    }
-> = {
-    original: {
-        label: "Original",
-        icon: "🥔",
-        desc: tk("Standard-Regeln. Beste Basis für alle."),
-        featured: true,
-        variant: "original",
-    },
-    teleport: {
-        label: "Teleport",
-        icon: "🌀",
-        desc: tk("Die Kartoffel springt bei jedem Pass zu einem zufälligen Spieler."),
-        disabled: true,
-        comingSoon: true,
-        variant: "teleport",
-    },
-    reverse: {
-        label: "Reverse",
-        icon: "🔁",
-        desc: tk("Die Richtung wechselt gelegentlich. Mehr Chaos, mehr Lacher."),
-        disabled: true,
-        comingSoon: true,
-        variant: "reverse",
-    },
 };
 
 function randomHostName() {
@@ -170,7 +134,7 @@ export default function HostPage() {
         if (h.rounds) setSeriesTotal(h.rounds);
     }, [profile?.preferences?.host]);
 
-    const activeMode = mode ? MODES[mode] : null;
+    const activeMode = mode ? GAME_MODE_BY_KEY[mode] : null;
     const activeSpeed = roundSpeed ? ROUND_SPEEDS[roundSpeed] : null;
 
     const [creating, setCreating] = useState(false);
@@ -338,6 +302,7 @@ export default function HostPage() {
                 bots: botCount,
                 skill: botSkill,
                 speed: roundSpeed,
+                mode: mode ?? "original",
                 roundSeconds: ROUND_SPEEDS[roundSpeed].seconds,
                 seriesTotal,
                 topicFilter: allSelected ? [] : playlists,
@@ -354,6 +319,54 @@ export default function HostPage() {
             setBotBusy(false);
         }
     };
+
+    // Modus-Auswahl (auch gegen Bots: Quiz-Modi gehen dort genauso)
+    const modeCard = (
+            <div className="pillCard" style={{ marginTop: 14 }}>
+                <div className="pillCardTop">
+                    <div className="pillCardTitle">{tr("Modus")}</div>
+                    <div className="pillCardHint">{tr("Wähle die Regeln für die Runde")}</div>
+                </div>
+
+                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                    {GAME_MODES.map((m) => {
+                        const key = m.key;
+                        const active = mode === key;
+
+                        return (
+                            <button
+                                key={key}
+                                type="button"
+                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
+                                data-variant={m.kind === "quiz" ? "quiz" : "original"}
+                                onClick={() => setMode(key)}
+                                aria-pressed={active}
+                                disabled={!!m.soon}
+                                title={m.soon ? tr("Kommt bald") : undefined}
+                            >
+                                <span className="segIcon" aria-hidden>{m.icon}</span>
+                                <span className="segLabel">{tr(m.label)}</span>
+                                {m.isNew ? <span className="segBadge">{tr("NEU")}</span> : null}
+                                {m.soon ? <span className="segSoon">{tr("BALD")}</span> : null}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
+                    {activeMode ? (
+                        <>
+      <span style={{ fontWeight: 900 }}>
+        {activeMode.icon} {tr(activeMode.label)}:
+      </span>{" "}
+                            {tr(activeMode.desc)}
+                        </>
+                    ) : (
+                        <span style={{ fontWeight: 900 }}>{tr("Bitte Modus auswählen.")}</span>
+                    )}
+                </div>
+            </div>
+    );
 
     return (
         <main className="container hostMain">
@@ -447,50 +460,7 @@ export default function HostPage() {
                             </div>
 
 
-                            <div className="pillCard" style={{ marginTop: 14 }}>
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">{tr("Modus")}</div>
-                                    <div className="pillCardHint">{tr("Wähle die Regeln für die Runde")}</div>
-                                </div>
-
-                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                    {(Object.keys(MODES) as ModeKey[]).map((key) => {
-                                        const m = MODES[key];
-                                        const active = mode === key;
-
-                                        return (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""} ${m.featured ? "segChoiceFeatured" : ""}`}
-                                                data-variant={m.variant}
-                                                onClick={() => setMode(key)}
-                                                aria-pressed={active}
-                                                disabled={!!m.disabled}
-                                                title={m.comingSoon ? tr("Kommt bald") : undefined}
-                                            >
-                                                <span className="segIcon" aria-hidden>{m.icon}</span>
-                                                <span className="segLabel">{m.label}</span>
-                                                {m.featured ? <span className="segBadge">✨</span> : null}
-                                                {m.comingSoon ? <span className="segSoon">{tr("BALD")}</span> : null}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                    {activeMode ? (
-                                        <>
-                      <span style={{ fontWeight: 900 }}>
-                        {activeMode.icon} {activeMode.label}:
-                      </span>{" "}
-                                            {tr(activeMode.desc)}
-                                        </>
-                                    ) : (
-                                        <span style={{ fontWeight: 900 }}>{tr("Bitte Modus auswählen.")}</span>
-                                    )}
-                                </div>
-                            </div>
+                            {modeCard}
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
@@ -591,6 +561,8 @@ export default function HostPage() {
                             </>
                             ) : (
                             <>
+                                {modeCard}
+                                <div style={{ height: 14 }} />
                                 <div className="pillCard">
                                     <div className="pillCardTop">
                                         <div className="pillCardTitle">{tr("Wie viele Bots?")}</div>

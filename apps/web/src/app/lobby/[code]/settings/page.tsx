@@ -4,10 +4,8 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 /**
- * Die Einstellungen (Max. Spieler, Modus, Thema, ...) leben jetzt direkt im
- * Admin Panel (/lobby/[code]/admin) -- vorher war diese Seite von nirgends
- * verlinkt und damit für den Host praktisch unauffindbar. Alter Link/
- * Lesezeichen landet hier weiterhin, wird aber sofort weitergeleitet.
+ * Früher eigene Einstellungen-Seite. Seit 2026-10-13 ändert der Host alles direkt in der Lobby
+ * (Kacheln oben + Playlists + Spieler-Knöpfe). Alte Links landen hier und werden weitergeleitet.
  */
 export default function LobbySettingsRedirect() {
     const params = useParams<{ code: string }>();
@@ -15,7 +13,7 @@ export default function LobbySettingsRedirect() {
     const code = String(params.code ?? "").toUpperCase();
 
     useEffect(() => {
-        router.replace(`/lobby/${encodeURIComponent(code)}/admin`);
+        router.replace(`/lobby/${encodeURIComponent(code)}`);
     }, [code, router]);
 
     return null;

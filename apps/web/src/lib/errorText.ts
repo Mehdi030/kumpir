@@ -8,6 +8,13 @@ import { tk, trNow } from "@/lib/i18n";
 const TEXT: [RegExp, string][] = [
     [/rate_limited|rate limit|too many/i, tk("Zu viele Anfragen hintereinander. Bitte kurz warten und erneut versuchen.")],
     [/too_fast/, tk("Kurz warten …")],
+    [/quiz_closed/, tk("Zu spät – diese Frage ist schon vorbei.")],
+    [/quiz_not_your_turn/, tk("Du bist gerade nicht dran.")],
+    [/quiz_already_answered/, tk("Du hast schon geantwortet.")],
+    [/quiz_locked_out/, tk("Du bist für diesen Song raus.")],
+    [/quiz_bad_choice|quiz_wrong_action/, tk("Das geht in diesem Modus nicht.")],
+    [/quiz_bad_year/, tk("Bitte ein Jahr zwischen 1900 und 2100 eingeben.")],
+    [/empty_answer/, tk("Bitte erst etwas eingeben.")],
     [/already_friends/, tk("Ihr seid schon befreundet.")],
     [/already_requested/, tk("Die Anfrage läuft schon.")],
     [/user_not_found/, tk("Diesen Benutzernamen gibt es nicht.")],

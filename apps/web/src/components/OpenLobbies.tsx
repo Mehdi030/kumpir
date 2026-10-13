@@ -107,7 +107,7 @@ export function OpenLobbies({ variant = "side" }: { variant?: "side" | "inline" 
             </div>
             {list.length ? (
                 <div className="olList">
-                    {shown.map((l, i) => (
+                    {shown.map((l) => (
                         <LobbyRow key={l.code} l={l} i={list.indexOf(l)} />
                     ))}
                     {list.length > 3 ? (

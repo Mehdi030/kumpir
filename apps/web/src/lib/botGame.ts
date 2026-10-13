@@ -25,6 +25,8 @@ export async function startBotGame(opts: {
     bots: number;
     skill: BotSkill;
     speed: "fast" | "normal" | "calm";
+    /** Spielmodus (Migration 108), Standard "original" */
+    mode?: string;
     roundSeconds: number;
     seriesTotal: 1 | 3 | 5;
     topicFilter: string[]; // leer = alle Playlists
@@ -62,6 +64,10 @@ export async function startBotGame(opts: {
     if (lErr || !lobby?.id) throw new Error(lErr?.message ?? trNow("Lobby nicht gefunden."));
 
     await supabase.rpc("set_lobby_topic_filter", { p_lobby_id: lobby.id, p_me_player_id: me, p_categories: opts.topicFilter });
+    if (opts.mode && opts.mode !== "original") {
+        const m = await supabase.rpc("set_lobby_mode", { p_lobby_id: lobby.id, p_me_player_id: me, p_mode: opts.mode });
+        if (m.error) throw new Error(m.error.message);
+    }
     if (opts.seriesTotal !== 1) {
         await supabase.rpc("set_lobby_series", { p_lobby_id: lobby.id, p_me_player_id: me, p_total: opts.seriesTotal });
     }

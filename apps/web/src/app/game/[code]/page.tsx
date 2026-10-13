@@ -25,6 +25,8 @@ import { LobbyNotFound, isNotFoundError } from "@/components/LobbyNotFound";
 import { Spinner } from "@/components/Spinner";
 import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
+import { QuizStage } from "@/components/game/QuizStage";
+import { isQuizMode } from "@/lib/gameModes";
 import { playFx } from "@/lib/gameFx";
 import type { SeriesRow } from "@/components/game/SeriesTable";
 import { fmtNum, trNow, useI18n } from "@/lib/i18n";
@@ -129,6 +131,19 @@ type LobbyState = {
 
     // Antwort-Modus: "text" (Standard) oder "voice" (Sprache primär)
     answer_mode: string | null;
+
+    // Quiz-Modi (Migration 108)
+    quiz_state: string | null;
+    quiz_index: number;
+    quiz_total: number;
+    quiz_seq: number;
+    quiz_rev: number;
+    quiz_started_at: string | null;
+    quiz_ends_at: string | null;
+    quiz_picker: string | null;
+    quiz_options: Record<string, unknown> | null;
+    quiz_reveal: Record<string, unknown> | null;
+    quiz_locked: string[];
 };
 
 type Player = {
@@ -442,6 +457,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     //    in Bestenlisten ein: Platzierung (1. = 100 ... Letzter = 0, linear)
     //    + Song-Punkte x 15 (Titel 15, Interpret 7.5) + Tempo-Abgaben x 5
     //    (innerhalb von 5 s weitergegeben, nicht erst kurz vor dem Knall; Migration 094).
+    const quizMode = isQuizMode(lobby?.game_mode);
     const ranking = useMemo(() => {
         const base = players.map((p) => {
             const pass = p.pass_count ?? 0;
@@ -466,10 +482,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const n = base.length;
         return base.map((r, i) => {
             const placementPts = n > 1 ? Math.round((100 * (n - 1 - i)) / (n - 1)) : 100;
-            const score = placementPts + Math.round(r.songPoints * 15) + r.tempo * 5;
+            // Quiz-Modi: Songpunkte zählen x5 (Migration 108, wie _finish_round)
+            const score = placementPts + Math.round(r.songPoints * (quizMode ? 5 : 15)) + r.tempo * 5;
             return { ...r, place: i + 1, score };
         });
-    }, [players, lobby?.round_number]);
+    }, [players, lobby?.round_number, quizMode]);
 
     const myRankRow = useMemo(() => {
         if (!mePlayerId) return null;
@@ -699,6 +716,18 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     song_answer_mode: (raw.song_answer_mode as string | null) ?? null,
 
                     answer_mode: (raw.answer_mode as string | null) ?? "text",
+
+                    quiz_state: (raw.quiz_state as string | null) ?? null,
+                    quiz_index: Number(raw.quiz_index ?? 0) || 0,
+                    quiz_total: Number(raw.quiz_total ?? 0) || 0,
+                    quiz_seq: Number(raw.quiz_seq ?? 0) || 0,
+                    quiz_rev: Number(raw.quiz_rev ?? 0) || 0,
+                    quiz_started_at: (raw.quiz_started_at as string | null) ?? null,
+                    quiz_ends_at: (raw.quiz_ends_at as string | null) ?? null,
+                    quiz_picker: (raw.quiz_picker as string | null) ?? null,
+                    quiz_options: (raw.quiz_options as Record<string, unknown> | null) ?? null,
+                    quiz_reveal: (raw.quiz_reveal as Record<string, unknown> | null) ?? null,
+                    quiz_locked: (raw.quiz_locked as string[] | null) ?? [],
                 };
 
                 // Letzten Verlierer merken (einmalig)
@@ -1739,7 +1768,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
                     {/* Nur der Startspieler sieht diesen Hinweis -- alle anderen
                         erfahren es erst, wenn die Runde wirklich losgeht. */}
-                    {mePlayerId && lobby.countdown_starter_player_id === mePlayerId ? (
+                    {mePlayerId && lobby.countdown_starter_player_id === mePlayerId && !quizMode ? (
                         <div className="stageChip" style={{ paddingLeft: 14, background: "rgba(255,214,10,0.16)", borderColor: "rgba(255,214,10,0.45)" }}>
                             {tr("🥔 Du startest mit der Kumpir!")}
                         </div>
@@ -1946,6 +1975,23 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 </div>
 
             </main>
+        );
+    }
+
+    // =========================================================
+    // PHASE: QUIZ (Migration 108) – alle raten gleichzeitig
+    // =========================================================
+    if (lobby.phase === "quiz") {
+        return (
+            <>
+                <QuizStage
+                    lobby={{ ...lobby, code: lobby.code || code }}
+                    players={players.map((p) => ({ ...p, song_points: Number(p.song_points ?? 0) }))}
+                    mePlayerId={mePlayerId && players.some((p) => p.player_id === mePlayerId) ? mePlayerId : null}
+                    onToast={(m, ms) => showToast(m, ms ?? 2200)}
+                />
+                <ToastStack toasts={toasts} />
+            </>
         );
     }
 

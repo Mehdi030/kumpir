@@ -262,7 +262,7 @@ main{ animation: kmPageIn .45s ease backwards; }
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, .11), transparent 55%);
+    background: radial-gradient(150px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, .2), rgba(255, 255, 255, .07) 45%, transparent 75%);
     opacity: 0;
     transition: opacity .4s ease;
     filter: none;
@@ -276,7 +276,7 @@ main{ animation: kmPageIn .45s ease backwards; }
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .13), transparent 62%);
+    background: radial-gradient(120px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .22), rgba(255, 255, 255, .07) 45%, transparent 75%);
     opacity: 0;
     transition: opacity .3s ease;
 }
@@ -300,7 +300,7 @@ main{ animation: kmPageIn .45s ease backwards; }
 @keyframes kmFloat{ 0%, 100%{ transform: translateY(0); } 50%{ transform: translateY(-6px); } }
 .playChoice::before{
     content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s ease;
-    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .16), transparent 62%);
+    background: radial-gradient(120px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .26), rgba(255, 255, 255, .08) 45%, transparent 75%);
 }
 .playChoice:hover::before{ opacity: 1; }
 

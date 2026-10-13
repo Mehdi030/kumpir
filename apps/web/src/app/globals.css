@@ -1286,6 +1286,18 @@ body::after{
 .segChoiceActive[data-variant="teleport"] {
     background: linear-gradient(90deg, rgba(167,139,250,0.22), rgba(34,211,238,0.14));
 }
+.segChoiceActive[data-variant="quiz"] {
+    background: linear-gradient(90deg, rgba(255,210,63,0.26), rgba(167,139,250,0.2));
+}
+.segChoice .segBadge:not(:empty) {
+    font-size: 0.7em;
+    font-weight: 950;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(255,210,63,0.9);
+    color: #2a1200;
+    letter-spacing: 0.5px;
+}
 .segChoiceActive[data-variant="reverse"] {
     background: linear-gradient(90deg, rgba(167,139,250,0.18), rgba(240,138,26,0.14));
 }

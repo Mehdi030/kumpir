@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { startGame, type StartGameResult } from "@/actions/startGame";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,16 +15,14 @@ import { InviteActions } from "@/components/InviteActions";
 import { Spinner } from "@/components/Spinner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { errorText } from "@/lib/errorText";
-import { tk, trNow, useI18n } from "@/lib/i18n";
+import { trNow, useI18n } from "@/lib/i18n";
 import { getSessionToken } from "@/lib/playerSession";
+import { GAME_MODES } from "@/lib/gameModes";
+import { SwipeStat } from "@/components/lobby/SwipeStat";
+import { Collapse } from "@/components/ui/Collapse";
+import { PlaylistPicker, usePlaylists } from "@/components/PlaylistPicker";
+import { kickPlayerAction, setLobbyLockAction, transferHostAction } from "@/actions/hostActions";
 
-type ModeKey = "original" | "teleport" | "reverse";
-
-const MODES: Record<ModeKey, { label: string; icon: string }> = {
-    original: { label: tk("Original"), icon: "🥔" },
-    teleport: { label: tk("Teleport"), icon: "🌀" },
-    reverse: { label: tk("Reverse"), icon: "🔁" },
-};
 
 function getErrorMessage(e: unknown): string {
     if (e instanceof Error) return errorText(e.message);
@@ -46,7 +43,35 @@ function clearMyIdentityStorage() {
     } catch {}
 }
 
-const GAME_PHASES = new Set(["topic_vote", "countdown", "running"]);
+const GAME_PHASES = new Set(["topic_vote", "countdown", "running", "quiz"]);
+
+/**
+ * Einstellung, die der Host in einer Kachel ändert: zeigt sofort den neuen Wert, schickt ihn erst nach
+ * einer kurzen Pause (schnelles Wischen über mehrere Werte = nur eine Anfrage) und übernimmt danach
+ * wieder den Server-Stand.
+ */
+function useLiveSetting<T>(server: T, send: (v: T) => Promise<string | null>, onError: (msg: string) => void, reload: () => unknown) {
+    const [local, setLocal] = useState<{ v: T } | null>(null);
+    const timer = useRef<number | null>(null);
+    const set = useCallback(
+        (v: T) => {
+            setLocal({ v });
+            if (timer.current) window.clearTimeout(timer.current);
+            timer.current = window.setTimeout(async () => {
+                timer.current = null;
+                const err = await send(v);
+                if (err) onError(err);
+                await reload();
+                if (!timer.current) setLocal(null);
+            }, 450);
+        },
+        [send, onError, reload]
+    );
+    useEffect(() => () => {
+        if (timer.current) window.clearTimeout(timer.current);
+    }, []);
+    return [local ? local.v : server, set] as const;
+}
 
 export default function LobbyPage() {
     const params = useParams<{ code: string }>();
@@ -137,25 +162,101 @@ export default function LobbyPage() {
     const [busyReady, setBusyReady] = useState(false);
     const [starting, setStarting] = useState(false);
 
-    const isPublic = lobby?.privacy === "public";
-    const [privacyBusy, setPrivacyBusy] = useState(false);
-    const togglePrivacy = useCallback(async () => {
-        if (!amIHost || !lobbyId || !mePlayerId || privacyBusy) return;
-        setPrivacyBusy(true);
-        const { error: e } = await getSupabaseClient().rpc("set_lobby_privacy", {
-            p_lobby_id: lobbyId,
-            p_me_player_id: mePlayerId,
-            p_privacy: isPublic ? "private" : "public",
-        });
-        setPrivacyBusy(false);
-        if (e) console.error("set_lobby_privacy:", e.message);
-        void reload();
-    }, [amIHost, lobbyId, mePlayerId, privacyBusy, isPublic, reload]);
-
     const showToast = useCallback((msg: string, ms = 1800) => {
         setToast(msg);
         window.setTimeout(() => setToast(""), ms);
     }, []);
+    const showError = useCallback((m: string) => showToast(`❌ ${errorText(m)}`, 2600), [showToast]);
+
+    // ---- Einstellungen direkt in den Kacheln (nur Host, nur vor dem Start) ----
+    const canEdit = amIHost && !isRunning;
+    const rpc = useCallback(
+        async (fn: string, args: Record<string, unknown>) => {
+            if (!lobbyId || !mePlayerId) return "not_a_member";
+            const { error: e } = await getSupabaseClient().rpc(fn, { p_lobby_id: lobbyId, p_me_player_id: mePlayerId, ...args });
+            return e ? e.message : null;
+        },
+        [lobbyId, mePlayerId]
+    );
+    const [maxPlayers, setMaxPlayers] = useLiveSetting(
+        lobby?.max_players ?? 8,
+        useCallback((v: number) => rpc("set_max_players", { p_max_players: v }), [rpc]),
+        showError,
+        reload
+    );
+    const [mode, setMode] = useLiveSetting(
+        lobby?.game_mode ?? "original",
+        useCallback((v: string) => rpc("set_lobby_mode", { p_mode: v }), [rpc]),
+        showError,
+        reload
+    );
+    const [rounds, setRounds] = useLiveSetting(
+        lobby?.series_total ?? 1,
+        useCallback((v: number) => rpc("set_lobby_series", { p_total: v }), [rpc]),
+        showError,
+        reload
+    );
+    // Sichtbarkeit: offen (im Hauptmenü) / privat (nur mit Code) / gesperrt (keiner kommt mehr rein)
+    const serverVisibility: string = lobby?.locked ? "locked" : lobby?.privacy === "public" ? "public" : "private";
+    const sendVisibility = useCallback(
+        async (v: string) => {
+            if (!lobbyId || !mePlayerId) return "not_a_member";
+            const wantLocked = v === "locked";
+            if (!!lobby?.locked !== wantLocked) {
+                const res = await setLobbyLockAction({ lobbyId, mePlayerId, locked: wantLocked, sessionToken: getSessionToken() ?? "" });
+                if (!res.ok) return "error" in res ? res.error : "error";
+            }
+            if (!wantLocked) return rpc("set_lobby_privacy", { p_privacy: v });
+            return null;
+        },
+        [lobbyId, mePlayerId, lobby?.locked, rpc]
+    );
+    const [visibility, setVisibility] = useLiveSetting(serverVisibility, sendVisibility, showError, reload);
+
+    // Playlists (die einzige Stelle, an der man sie ändert)
+    const playlistList = usePlaylists();
+    const [plOpen, setPlOpen] = useState(false);
+    const activePlaylists = useMemo(
+        () => (lobby?.topic_filter && lobby.topic_filter.length ? lobby.topic_filter : (playlistList ?? []).map((p) => p.name)),
+        [lobby?.topic_filter, playlistList]
+    );
+    const setPlaylists = useCallback(
+        async (selected: string[]) => {
+            const all = (playlistList ?? []).map((p) => p.name);
+            const next = all.length && all.every((n) => selected.includes(n)) ? [] : selected;
+            const err = await rpc("set_lobby_topic_filter", { p_categories: next });
+            if (err) showError(err);
+            void reload();
+        },
+        [playlistList, rpc, showError, reload]
+    );
+
+    // Spieler verwalten (Host): kicken / Host übergeben
+    const [manageBusy, setManageBusy] = useState<string | null>(null);
+    const kickPlayer = useCallback(
+        async (id: string, name: string) => {
+            if (!lobbyId || !mePlayerId || !confirm(trNow("{name} wirklich aus der Lobby kicken?", { name }))) return;
+            setManageBusy(id);
+            const res = await kickPlayerAction({ lobbyId, mePlayerId, targetPlayerId: id, sessionToken: getSessionToken() ?? "" });
+            setManageBusy(null);
+            if (!res.ok) showError("error" in res ? res.error : "error");
+            else showToast(trNow("👢 {name} gekickt", { name }), 1400);
+            void reload();
+        },
+        [lobbyId, mePlayerId, showError, showToast, reload]
+    );
+    const makeHost = useCallback(
+        async (id: string, name: string) => {
+            if (!lobbyId || !mePlayerId || !confirm(trNow("Host-Rolle an {name} übertragen?", { name }))) return;
+            setManageBusy(id);
+            const res = await transferHostAction({ lobbyId, mePlayerId, newHostPlayerId: id, sessionToken: getSessionToken() ?? "" });
+            setManageBusy(null);
+            if (!res.ok) showError("error" in res ? res.error : "error");
+            else showToast(trNow("👑 {name} ist jetzt Host", { name }), 1600);
+            void reload();
+        },
+        [lobbyId, mePlayerId, showError, showToast, reload]
+    );
 
     // Code antippen kopiert nur den 4-stelligen Code (z. B. zum Vorlesen/Abtippen).
     // Teilen, Link und QR-Code liegen gesammelt in <InviteActions> darunter.
@@ -316,8 +417,25 @@ export default function LobbyPage() {
     // Unbekannter Code: statt einer leeren Lobby mit Rohfehler eine klare Seite zeigen
     if (!loading && !lobby && isNotFoundError(error)) return <LobbyNotFound code={code} />;
 
-    const maxPlayers = lobby?.max_players ?? 8;
-    const mode = ((lobby?.game_mode ?? "original") as ModeKey) ?? "original";
+    const playerOptions = Array.from({ length: 11 }, (_, i) => i + 2)
+        .filter((n) => n >= players.length || n === maxPlayers)
+        .map((n) => ({
+            value: n,
+            icon: "👥",
+            label: (
+                <>
+                    {players.length}
+                    <small> / {n}</small>
+                </>
+            ),
+        }));
+    const modeOptions = GAME_MODES.filter((m) => !m.soon || m.key === mode).map((m) => ({ value: m.key as string, icon: m.icon, label: tr(m.label), title: tr(m.desc) }));
+    const roundOptions = [1, 3, 5].map((n) => ({ value: n, icon: "🎯", label: String(n) }));
+    const visibilityOptions = [
+        { value: "public", icon: "🌍", label: tr("Offen"), title: tr("Steht im Hauptmenü unter „Offene Lobbys“") },
+        { value: "private", icon: "🔒", label: tr("Privat"), title: tr("Nur mit Code oder Einladung") },
+        { value: "locked", icon: "⛔", label: tr("Gesperrt"), title: tr("Keiner kann mehr beitreten") },
+    ];
 
     return (
         <main className="container">
@@ -332,60 +450,24 @@ export default function LobbyPage() {
                                 <button type="button" className="homeBackBtn" onClick={() => void leaveLobby()} disabled={starting}>
                                     <span aria-hidden>🏠</span> {tr("Hauptmenü")}
                                 </button>
-                                {amIHost ? (
-                                    <Link
-                                        href={`/lobby/${encodeURIComponent(code)}/admin`}
-                                        className={`btn btnSecondary btnSmall ${starting || isRunning ? "btnDisabled" : ""}`}
-                                        aria-disabled={starting || isRunning}
-                                        tabIndex={starting || isRunning ? -1 : 0}
-                                        onClick={(e) => {
-                                            if (starting || isRunning) e.preventDefault();
-                                        }}
-                                        title={tr("Einstellungen öffnen")}
-                                    >
-                                        ⚙️ {tr("Einstellungen")}
-                                    </Link>
-                                ) : null}
                             </div>
                         </div>
 
-                        {/* Spielerzahl, Modus und Runden groß nebeneinander über dem Code */}
+                        {/* Spielerzahl, Modus, Runden und Sichtbarkeit – der Host ändert sie direkt hier (wischen/antippen) */}
                         <div className="lobbyStats">
-                            <div className="lobbyStat">
-                                <span className="lobbyStatIcon" aria-hidden>👥</span>
-                                <span className="lobbyStatValue">
-                                    {players.length}
-                                    <small> / {maxPlayers}</small>
-                                </span>
-                                <span className="lobbyStatLabel">{tr("Spieler")}</span>
-                            </div>
-                            <div className="lobbyStat">
-                                <span className="lobbyStatIcon" aria-hidden>{MODES[mode]?.icon ?? "🥔"}</span>
-                                <span className="lobbyStatValue">{tr(MODES[mode]?.label ?? mode)}</span>
-                                <span className="lobbyStatLabel">{tr("Modus")}</span>
-                            </div>
-                            <div className="lobbyStat">
-                                <span className="lobbyStatIcon" aria-hidden>🎯</span>
-                                <span className="lobbyStatValue">{lobby?.series_total ?? 1}</span>
-                                <span className="lobbyStatLabel">{(lobby?.series_total ?? 1) > 1 ? tr("Runden") : tr("Runde")}</span>
-                            </div>
-                            {/* Öffentlich = im Hauptmenü unter "Offene Lobbys" (Migration 104); der Host kann umschalten */}
-                            <button
-                                type="button"
-                                className={`lobbyStat lobbyStatBtn ${isPublic ? "pub" : ""}`}
-                                onClick={() => void togglePrivacy()}
-                                disabled={!amIHost || isRunning || privacyBusy}
-                                title={amIHost ? tr("Tippen: Öffentlich ↔ nur mit Code") : isPublic ? tr("Steht im Hauptmenü unter „Offene Lobbys“") : tr("Nur mit Code oder Einladung")}
-                            >
-                                <span className="lobbyStatIcon" aria-hidden>
-                                    <span key={String(isPublic)} className="lobbyFlip">{isPublic ? "🌍" : "🔒"}</span>
-                                </span>
-                                <span className="lobbyStatValue">
-                                    <span key={String(isPublic)} className="lobbyFlip">{isPublic ? tr("Offen") : tr("Privat")}</span>
-                                </span>
-                                <span className="lobbyStatLabel">{amIHost && !isRunning ? tr("Tippen = ändern") : tr("Sichtbarkeit")}</span>
-                            </button>
+                            <SwipeStat label={tr("Spieler")} options={playerOptions} value={maxPlayers} onChange={setMaxPlayers} editable={canEdit} />
+                            <SwipeStat label={tr("Modus")} options={modeOptions} value={mode} onChange={setMode} editable={canEdit} />
+                            <SwipeStat label={rounds > 1 ? tr("Runden") : tr("Runde")} options={roundOptions} value={rounds} onChange={setRounds} editable={canEdit} />
+                            <SwipeStat
+                                label={tr("Sichtbarkeit")}
+                                options={visibilityOptions}
+                                value={visibility}
+                                onChange={setVisibility}
+                                editable={canEdit}
+                                className={`vis-${visibility}`}
+                            />
                         </div>
+                        {canEdit ? <div className="lobbyStatsHint">{tr("👆 Wische über eine Kachel oder tippe sie an, um sie zu ändern.")}</div> : null}
 
                         <button
                             type="button"
@@ -401,6 +483,22 @@ export default function LobbyPage() {
                         </button>
 
                         <InviteActions code={code} disabled={isRunning} />
+
+                        <div className="lobbyPl">
+                            <button type="button" className="lobbyPlHead" onClick={() => setPlOpen((v) => !v)} aria-expanded={plOpen}>
+                                <span>🎵 {tr("Playlists")}</span>
+                                <span className="lobbyPlCount">
+                                    {tr("{n} von {total} aktiv", { n: activePlaylists.length, total: playlistList?.length ?? activePlaylists.length })}
+                                </span>
+                                <span aria-hidden className={`lobbyPlArrow ${plOpen ? "open" : ""}`}>▾</span>
+                            </button>
+                            <Collapse open={plOpen}>
+                                <div className="lobbyPlBody">
+                                    {canEdit ? <div className="lobbyPlHint">{tr("Antippen = rausnehmen · gilt ab der nächsten Playlist-Wahl")}</div> : null}
+                                    <PlaylistPicker selected={activePlaylists} onChange={(sel) => void setPlaylists(sel)} disabled={!canEdit} />
+                                </div>
+                            </Collapse>
+                        </div>
 
                         {lobby?.topic ? (
                             <div className="lobbyChips">
@@ -429,11 +527,19 @@ export default function LobbyPage() {
                 .codeValue{ font-family: var(--font-display); font-size: clamp(44px, 12vw, 64px); font-weight: 800; letter-spacing: .18em; padding-left: .18em; line-height: 1.05; color: #ffd23f; text-shadow: 0 4px 0 rgba(120,50,0,.55), 0 10px 26px rgba(0,0,0,.35); }
                 .codeHint{ font-size: 12px; opacity: .72; min-height: 16px; }
                 .lobbyStats{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-                .lobbyStatBtn{ color: inherit; font: inherit; cursor: pointer; }
-                .lobbyStatBtn:disabled{ cursor: default; opacity: 1; }
-                .lobbyStatBtn.pub{ background: rgba(34,197,94,.16); border-color: rgba(134,239,172,.55); }
-                .lobbyStatBtn:not(:disabled):hover{ border-color: rgba(255,255,255,.4); }
-                @media (max-width: 520px){ .lobbyStats{ gap: 6px; } .lobbyStat{ padding: 10px 4px; } .lobbyStatIcon{ font-size: 22px; } .lobbyStatLabel{ font-size: 9.5px; letter-spacing: .4px; } }
+                @media (max-width: 620px){ .lobbyStats{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+                @media (max-width: 520px){ .lobbyStat{ padding: 10px 4px; } .lobbyStatIcon{ font-size: 22px; } .lobbyStatLabel{ font-size: 9.5px; letter-spacing: .4px; } }
+                .lobbyStatsHint{ margin-top: -6px; text-align: center; font-size: 12.5px; font-weight: 700; opacity: .7; }
+                .swStat.vis-public{ box-shadow: inset 0 0 0 1px rgba(255,210,63,.35); }
+                .swStat.vis-locked{ background: rgba(239,68,68,.16); border-color: rgba(252,165,165,.5); }
+                .lobbyPl{ border-radius: 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); overflow: hidden; }
+                .lobbyPlHead{ width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: transparent; border: 0; color: #fff; font: inherit; font-weight: 900; cursor: pointer; text-align: left; }
+                .lobbyPlHead:hover{ background: rgba(255,255,255,.06); }
+                .lobbyPlCount{ margin-left: auto; font-size: 12.5px; font-weight: 800; opacity: .75; }
+                .lobbyPlArrow{ transition: transform .3s ease; }
+                .lobbyPlArrow.open{ transform: rotate(180deg); }
+                .lobbyPlBody{ padding: 0 14px 14px; display: grid; gap: 8px; }
+                .lobbyPlHint{ font-size: 12.5px; font-weight: 700; opacity: .72; }
                 .lobbyStat{ display: grid; justify-items: center; gap: 2px; padding: 12px 8px; border-radius: 20px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); text-align: center; min-width: 0; }
                 .lobbyStatIcon{ font-size: 26px; line-height: 1.1; }
                 .lobbyStatValue{ font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 28px); font-weight: 800; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -493,6 +599,28 @@ export default function LobbyPage() {
                                                 >
                                                     👋
                                                 </button>
+                                            ) : null}
+                                            {!p.is_bot && amIHost && !isMe ? (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btnSecondary btnSmall playerChipKick"
+                                                        onClick={() => void makeHost(p.player_id, p.name)}
+                                                        disabled={!!manageBusy || isRunning}
+                                                        title={tr("Host übertragen")}
+                                                    >
+                                                        👑
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btnReadyOff btnSmall playerChipKick"
+                                                        onClick={() => void kickPlayer(p.player_id, p.name)}
+                                                        disabled={!!manageBusy || isRunning}
+                                                        title={tr("Aus der Lobby kicken")}
+                                                    >
+                                                        👢
+                                                    </button>
+                                                </>
                                             ) : null}
                                         </div>
                                     );
