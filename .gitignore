@@ -105,3 +105,4 @@ db/backups/
 
 .vercel
 .env*
+db/scripts/data/fairness-report.json

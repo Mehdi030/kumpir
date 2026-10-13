@@ -3,6 +3,7 @@
 import { fmtNum, useI18n } from "@/lib/i18n";
 import { KumpirPotato } from "@/components/game/KumpirPotato";
 import { PlayerAvatar, type AvatarConfig } from "@/components/game/PlayerAvatar";
+import { nextHolderId } from "@/lib/nextHolder";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Player = {
@@ -305,9 +306,7 @@ export function PlayerRing({
         const alive = players.filter((p) => p.is_alive);
         const n = alive.length;
         if (n < 2) return null;
-        const hi = alive.findIndex((p) => p.player_id === holderPlayerId);
-        if (hi < 0) return null;
-        return alive[(hi + (direction < 0 ? -1 : 1) + n) % n]?.player_id ?? null;
+        return nextHolderId(alive, holderPlayerId, direction);
     }, [players, holderPlayerId, direction, showNext]);
 
     // Pfeil Halter -> Nächster: Bogen über die Tischplatte (Richtung Mitte gebogen), Enden vor den Figuren
