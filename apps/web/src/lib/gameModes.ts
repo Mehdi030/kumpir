@@ -17,8 +17,8 @@ export type GameModeInfo = {
     isNew?: boolean;
 };
 
-/** Quiz-Modi erst freischalten, wenn die Spielansicht im Browser fertig getestet ist. */
-const QUIZ_LIVE = false;
+/** Quiz-Modi freigeschaltet nach Browser-Test mit Bots (2026-10-13). Auf false = alle Quiz-Modi wieder „BALD“. */
+const QUIZ_LIVE = true;
 
 const ALL_MODES: GameModeInfo[] = [
     { key: "original", icon: "🥔", label: tk("Original"), desc: tk("Standard-Regeln. Beste Basis für alle."), kind: "potato" },

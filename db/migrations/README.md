@@ -135,3 +135,4 @@ Bei Konflikten (z.B. „relation already exists"): die Migrations sind mit `IF N
 | 109 | [`109_title_artist_stats_live_achievements.sql`](109_title_artist_stats_live_achievements.sql) | **Titel + Künstler getrennt**: neue Ereignis-Art `both`, `both_hits` in Konto-Statistik; Song-Erfolge sofort in der Runde; `get_match_answer_stats` für den Endstand | Empfohlen |
 | 110 | [`110_slower_tempo.sql`](110_slower_tempo.sql) | **Langsameres Tempo**: Blitz 14–26 s (= altes Standard), Standard 20–36 s, Casual 28–50 s; Verkürzung -5 %/Ausscheiden bis 55 % | Empfohlen |
 | 111 | [`111_mode_popularity.sql`](111_mode_popularity.sql) | **Meistgespielte Modi**: Tabelle `mode_plays` (Trigger beim Rundenstart), `get_mode_popularity()` für „Lobby hosten“ | Empfohlen |
+| 112 | [`112_quiz_bot_buzzer_slower.sql`](112_quiz_bot_buzzer_slower.sql) | **Quiz-Bots**: buzzern später, damit Menschen eine Chance haben | Empfohlen |

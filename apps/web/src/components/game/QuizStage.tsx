@@ -502,6 +502,20 @@ export function QuizStage({
                     {reveal.year ? ` · ${String(reveal.year)}` : ""}
                 </div>
                 {reveal.word ? <div className="qzSub">{tr("Gesuchtes Wort: {w}", { w: String(reveal.word) })}</div> : null}
+                {mode === "artist" && choices.length ? (
+                    <div className="qzChoices qzChoicesSmall">
+                        {choices.map((c) => {
+                            const right = c === reveal.artist;
+                            const mine = myRes?.answer === c || mySeqStatus?.me.answer === c;
+                            return (
+                                <div key={c} className={`qzChoice ${right ? "ok" : mine ? "bad" : ""}`}>
+                                    {right ? "✓ " : mine ? "✗ " : ""}
+                                    {c}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : null}
                 {reveal.pickerBonus ? <div className="qzSub">{tr("+{n} für {name}: gute Songwahl!", { n: Number(reveal.pickerBonus), name: nameOf(lobby.quiz_picker) })}</div> : null}
                 {reveal.duelDone ? (
                     <div className="qzDuelWin">
@@ -606,6 +620,8 @@ export function QuizStage({
         .qzChoice{ display: flex; align-items: center; gap: 10px; text-align: left; padding: 16px; border-radius: 18px; border: 2px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: white; font-weight: 900; font-size: 17px; cursor: pointer; transition: transform .12s, background .15s, border-color .15s; overflow-wrap: anywhere; }
         .qzChoice:not(:disabled):hover{ transform: translateY(-2px); background: rgba(255,255,255,0.14); border-color: var(--pl, #ffd23f); }
         .qzChoice:disabled{ cursor: default; opacity: .6; }
+        .qzChoicesSmall .qzChoice{ padding: 8px 12px; font-size: 14px; cursor: default; opacity: .55; }
+        .qzChoicesSmall .qzChoice.ok, .qzChoicesSmall .qzChoice.bad{ opacity: 1; }
         .qzChoice.ok{ opacity: 1; background: rgba(60,220,120,0.25); border-color: #3cdc78; }
         .qzChoice.bad{ opacity: 1; background: rgba(255,80,60,0.22); border-color: #ff5a3c; }
         .qzChoiceKey{ flex: none; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: rgba(255,255,255,0.14); font-size: 14px; }
