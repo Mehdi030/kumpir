@@ -47,27 +47,27 @@ export function isPlaceholderEmail(email: string | null | undefined): boolean {
 }
 /** E-Mail für die Anzeige (Konten ohne E-Mail: "ohne E-Mail"). */
 export function emailLabel(email: string | null | undefined): string {
-    if (!email) return "–";
-    return isPlaceholderEmail(email) ? "ohne E-Mail" : email;
+    if (!email) return tk("–");
+    return isPlaceholderEmail(email) ? tk("ohne E-Mail") : email;
 }
 
 /**
  * Passwort-Regel von Supabase (Projekt-Einstellung): mind. 8 Zeichen, Klein- und Großbuchstaben und eine Zahl.
  * Gibt null zurück, wenn alles passt, sonst einen verständlichen Satz.
  */
-export const PASSWORD_HINT = "mind. 8 Zeichen, mit Groß- und Kleinbuchstaben und einer Zahl";
+export const PASSWORD_HINT = tk("mind. 8 Zeichen, mit Groß- und Kleinbuchstaben und einer Zahl");
 export function passwordProblem(pw: string): string | null {
-    if (!pw || pw.length < 8) return "Das Passwort braucht mindestens 8 Zeichen.";
-    if (pw.length > 72) return "Das Passwort ist zu lang (höchstens 72 Zeichen).";
-    if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw)) return "Das Passwort braucht Groß- und Kleinbuchstaben und mindestens eine Zahl.";
+    if (!pw || pw.length < 8) return tk("Das Passwort braucht mindestens 8 Zeichen.");
+    if (pw.length > 72) return tk("Das Passwort ist zu lang (höchstens 72 Zeichen).");
+    if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw)) return tk("Das Passwort braucht Groß- und Kleinbuchstaben und mindestens eine Zahl.");
     return null;
 }
 
 export function validateUsername(raw: string): { ok: true; value: string } | { ok: false; message: string } {
     const v = raw.trim().toLowerCase();
-    if (v.length < 3) return { ok: false, message: "Mindestens 3 Zeichen." };
-    if (v.length > 20) return { ok: false, message: "Höchstens 20 Zeichen." };
-    if (!/^[a-z0-9._-]+$/.test(v)) return { ok: false, message: "Nur a–z, 0–9, Punkt, Unterstrich, Minus." };
+    if (v.length < 3) return { ok: false, message: tk("Mindestens 3 Zeichen.") };
+    if (v.length > 20) return { ok: false, message: tk("Höchstens 20 Zeichen.") };
+    if (!/^[a-z0-9._-]+$/.test(v)) return { ok: false, message: tk("Nur a–z, 0–9, Punkt, Unterstrich, Minus.") };
     return { ok: true, value: v };
 }
 
@@ -79,21 +79,21 @@ export function sanitizeDisplayName(input: string): string {
 export function validateDisplayName(raw: string): { ok: true; value: string | null } | { ok: false; message: string } {
     const v = raw.trim();
     if (!v) return { ok: true, value: null };
-    if (!/^[A-Za-zÄÖÜäöüß]{2,12}$/.test(v)) return { ok: false, message: "2–12 Buchstaben, keine Ziffern oder Leerzeichen." };
+    if (!/^[A-Za-zÄÖÜäöüß]{2,12}$/.test(v)) return { ok: false, message: tk("2–12 Buchstaben, keine Ziffern oder Leerzeichen.") };
     return { ok: true, value: v };
 }
 
 /** Übersetzt Fehlercodes der Konto-RPCs in verständliche Texte. */
 export function settingsErrorText(message: string | undefined | null): string {
     const m = message ?? "";
-    if (m.includes("username_taken")) return "Dieser Benutzername ist schon vergeben.";
-    if (m.includes("username_invalid")) return "Benutzername: 3–20 Zeichen, nur a–z, 0–9, Punkt, Unterstrich, Minus.";
-    if (m.includes("username_profane") || m.includes("display_name_invalid")) return "Bitte einen anderen Namen wählen.";
-    if (m.includes("avatar_invalid")) return "Dieser Avatar geht leider nicht.";
-    if (m.includes("admin_cannot_delete")) return "Admin-Konten können keine Löschung beantragen.";
-    if (m.includes("not_authorized")) return "Dafür fehlen dir die Rechte.";
-    if (m.includes("not_logged_in") || m.includes("JWT")) return "Bitte melde dich erneut an.";
-    return m || "Speichern hat nicht geklappt.";
+    if (m.includes("username_taken")) return tk("Dieser Benutzername ist schon vergeben.");
+    if (m.includes("username_invalid")) return tk("Benutzername: 3–20 Zeichen, nur a–z, 0–9, Punkt, Unterstrich, Minus.");
+    if (m.includes("username_profane") || m.includes("display_name_invalid")) return tk("Bitte einen anderen Namen wählen.");
+    if (m.includes("avatar_invalid")) return tk("Dieser Avatar geht leider nicht.");
+    if (m.includes("admin_cannot_delete")) return tk("Admin-Konten können keine Löschung beantragen.");
+    if (m.includes("not_authorized")) return tk("Dafür fehlen dir die Rechte.");
+    if (m.includes("not_logged_in") || m.includes("JWT")) return tk("Bitte melde dich erneut an.");
+    return m || tk("Speichern hat nicht geklappt.");
 }
 
 /** Tiefe Zusammenführung für host/solo, damit Teil-Updates nichts überschreiben. */

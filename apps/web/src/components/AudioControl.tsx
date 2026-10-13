@@ -2,12 +2,14 @@
 
 import React, { useState } from "react";
 import { getMuted, getVolume, setMuted, setVolume, unlockGameFx } from "@/lib/gameFx";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * Compact audio control: mute toggle + volume slider on hover/focus.
  * Designed to live in the top-right of the game HUD.
  */
 export function AudioControl() {
+    const { tr } = useI18n();
     // Lazy init reads localStorage once on first render — no setState in effect.
     const [muted, setMutedState] = useState<boolean>(() => (typeof window === "undefined" ? false : getMuted()));
     const [volume, setVolumeState] = useState<number>(() => (typeof window === "undefined" ? 0.7 : getVolume()));
@@ -48,8 +50,8 @@ export function AudioControl() {
                 type="button"
                 onClick={toggleMute}
                 className="audioBtn"
-                title={muted ? "Sound an (M)" : "Sound aus (M)"}
-                aria-label={muted ? "Sound einschalten" : "Sound ausschalten"}
+                title={muted ? tr("Sound an (M)") : tr("Sound aus (M)")}
+                aria-label={muted ? tr("Sound einschalten") : tr("Sound ausschalten")}
                 aria-pressed={!muted}
             >
                 {muted || volume === 0 ? "🔇" : volume < 0.4 ? "🔈" : volume < 0.75 ? "🔉" : "🔊"}
@@ -62,7 +64,7 @@ export function AudioControl() {
                 step={0.05}
                 value={muted ? 0 : volume}
                 onChange={onVolumeChange}
-                aria-label="Lautstärke"
+                aria-label={tr("Lautstärke")}
                 className="audioSlider"
                 style={{ width: open ? 96 : 0, opacity: open ? 1 : 0 }}
             />

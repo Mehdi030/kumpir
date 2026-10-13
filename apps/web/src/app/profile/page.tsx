@@ -10,11 +10,13 @@ import { Spinner } from "@/components/Spinner";
 import { AccountSettings, supabaseAccountApi } from "@/components/profile/AccountSettings";
 import { isPlaceholderEmail } from "@/lib/accountSettings";
 import { HomeButton } from "@/components/BackButton";
+import { useI18n } from "@/lib/i18n";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 
 export default function ProfilePage() {
+    const { tr } = useI18n();
     const { profile, user, loading, refresh, savePreferences } = useProfile();
     const accountApi = useMemo(() => supabaseAccountApi(), []);
     const { unlocked, catalog } = useAchievements(user?.id ?? null);
@@ -24,8 +26,8 @@ export default function ProfilePage() {
             <main className="container">
                 <section className="card">
                     <HomeButton corner />
-                    <h1 className="h1">Konto</h1>
-                    <p className="p hostSub">Accounts sind hier gerade deaktiviert – du spielst als Gast.</p>
+                    <h1 className="h1">{tr("Konto")}</h1>
+                    <p className="p hostSub">{tr("Konten sind hier gerade deaktiviert – du spielst als Gast.")}</p>
                 </section>
             </main>
         );
@@ -34,7 +36,7 @@ export default function ProfilePage() {
     if (loading) {
         return (
             <main className="container">
-                <Spinner size={28} label="Lade…" />
+                <Spinner size={28} label={tr("Lade…")} />
             </main>
         );
     }
@@ -46,13 +48,13 @@ export default function ProfilePage() {
                     <section className="card" style={{ textAlign: "center" }}>
                         <HomeButton corner />
                         <div style={{ fontSize: 44 }}>👤</div>
-                        <h1 className="h1" style={{ fontSize: 40 }}>Dein Konto</h1>
+                        <h1 className="h1" style={{ fontSize: 40 }}>{tr("Dein Konto")}</h1>
                         <p className="p hostSub" style={{ margin: "10px auto 0", maxWidth: 420 }}>
-                            Mit einem Konto speichert Kumpir deine Siege, Saison-Punkte und Achievements und du findest deine Freunde wieder.
+                            {tr("Mit einem Konto speichert Kumpir deine Siege, Saison-Punkte und Erfolge und du findest deine Freunde wieder.")}
                         </p>
                         <div className="ctaRow" style={{ marginTop: 20 }}>
-                            <Link href="/login?next=/profile" className="btn btnPrimary btnXL">Anmelden</Link>
-                            <Link href="/register?next=/profile" className="btn btnSecondary btnXL">Konto erstellen</Link>
+                            <Link href="/login?next=/profile" className="btn btnPrimary btnXL">{tr("Anmelden")}</Link>
+                            <Link href="/register?next=/profile" className="btn btnSecondary btnXL">{tr("Konto erstellen")}</Link>
                         </div>
                     </section>
                 </div>
@@ -60,7 +62,7 @@ export default function ProfilePage() {
         );
     }
 
-    const name = profile.displayName || profile.username || "Spieler";
+    const name = profile.displayName || profile.username || tr("Spieler");
 
     return (
         <main className="container">
@@ -73,7 +75,7 @@ export default function ProfilePage() {
                             {profile.username ? <div className="profUser">@{profile.username}</div> : null}
                             {profile.email && !isPlaceholderEmail(profile.email) ? (
                                 <div className="profMail">
-                                    {profile.email} {profile.emailVerified ? <span className="profOk">✓ bestätigt</span> : <span className="profWarn">nicht bestätigt</span>}
+                                    {profile.email} {profile.emailVerified ? <span className="profOk">{tr("✓ bestätigt")}</span> : <span className="profWarn">{tr("nicht bestätigt")}</span>}
                                 </div>
                             ) : null}
                         </div>
@@ -85,30 +87,30 @@ export default function ProfilePage() {
                     <div className="profLinks">
                         <Link href="/stats" className="profLink">
                             <span>📊</span>
-                            <b>Statistik</b>
-                            <small>Verlauf, Musik-Werte, Gegner, Monats-Rückblick</small>
+                            <b>{tr("Statistik")}</b>
+                            <small>{tr("Verlauf, Musik-Werte, Gegner, Monats-Rückblick")}</small>
                         </Link>
                         {profile.isStaff ? (
                             <Link href="/admin" className="profLink">
                                 <span>🛡️</span>
-                                <b>Admin-Panel</b>
-                                <small>{profile.role === "admin" ? "Admin" : "Supporter"} · Nutzer, Löschanträge, Lobbys</small>
+                                <b>{tr("Admin-Panel")}</b>
+                                <small>{profile.role === "admin" ? "Admin" : "Supporter"} · {tr("Nutzer, Löschanträge, Lobbys")}</small>
                             </Link>
                         ) : null}
                         <Link href="/achievements" className="profLink">
                             <span>🏅</span>
-                            <b>Achievements</b>
-                            <small>{unlocked.length} von {catalog.length || "…"} freigeschaltet</small>
+                            <b>{tr("Erfolge")}</b>
+                            <small>{tr("{n} von {total} freigeschaltet", { n: unlocked.length, total: catalog.length || "…" })}</small>
                         </Link>
                         <Link href="/friends" className="profLink">
                             <span>👥</span>
-                            <b>Freunde</b>
-                            <small>Freunde & gemerkte Lobbies</small>
+                            <b>{tr("Freunde")}</b>
+                            <small>{tr("Freunde & gemerkte Lobbys")}</small>
                         </Link>
                         <Link href="/leaderboard" className="profLink">
                             <span>🏆</span>
-                            <b>Bestenliste</b>
-                            <small>Saison & Allzeit</small>
+                            <b>{tr("Bestenliste")}</b>
+                            <small>{tr("Saison & Allzeit")}</small>
                         </Link>
                     </div>
 

@@ -16,14 +16,15 @@ import { InviteActions } from "@/components/InviteActions";
 import { Spinner } from "@/components/Spinner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { errorText } from "@/lib/errorText";
+import { tk, trNow, useI18n } from "@/lib/i18n";
 import { getSessionToken } from "@/lib/playerSession";
 
 type ModeKey = "original" | "teleport" | "reverse";
 
 const MODES: Record<ModeKey, { label: string; icon: string }> = {
-    original: { label: "Original", icon: "🥔" },
-    teleport: { label: "Teleport", icon: "🌀" },
-    reverse: { label: "Reverse", icon: "🔁" },
+    original: { label: tk("Original"), icon: "🥔" },
+    teleport: { label: tk("Teleport"), icon: "🌀" },
+    reverse: { label: tk("Reverse"), icon: "🔁" },
 };
 
 function getErrorMessage(e: unknown): string {
@@ -32,7 +33,7 @@ function getErrorMessage(e: unknown): string {
     try {
         return JSON.stringify(e);
     } catch {
-        return "Unbekannter Fehler";
+        return trNow("Unbekannter Fehler.");
     }
 }
 
@@ -68,6 +69,7 @@ export default function LobbyPage() {
     }, [code, go]);
 
     const { lobby, players, loading, error, reload } = useLobbyState(code, { pollMs: 900 });
+    const { tr } = useI18n();
 
     const lobbyId = lobby?.id ?? null;
 
@@ -160,9 +162,9 @@ export default function LobbyPage() {
     const copyCode = useCallback(async () => {
         try {
             await navigator.clipboard.writeText(code);
-            showToast("✅ Code kopiert", 1200);
+            showToast(trNow("✅ Code kopiert"), 1200);
         } catch {
-            showToast("⚠️ Kopieren nicht möglich", 1600);
+            showToast(trNow("⚠️ Kopieren nicht möglich"), 1600);
         }
     }, [code, showToast]);
 
@@ -214,13 +216,13 @@ export default function LobbyPage() {
             const res: StartGameResult = await startGame(code, mePlayerId, getSessionToken() ?? "");
 
             if (!res.ok) {
-                const msg = "error" in res ? res.error : "Start fehlgeschlagen";
+                const msg = "error" in res ? errorText(res.error) : trNow("Start fehlgeschlagen");
                 showToast(`❌ ${msg}`, 2500);
                 return;
             }
 
             // ✅ No immediate navigation; DB phase triggers redirect
-            showToast("✅ Spiel startet…", 900);
+            showToast(trNow("✅ Spiel startet…"), 900);
         } catch (e: unknown) {
             showToast(`❌ ${getErrorMessage(e)}`, 2500);
         } finally {
@@ -320,15 +322,15 @@ export default function LobbyPage() {
     return (
         <main className="container">
             <div className="landingWrap withSidePanel">
-                <section className="card" aria-label="Lobby" style={{ position: "relative" }}>
+                <section className="card" aria-label={tr("Lobby")} style={{ position: "relative" }}>
                     <div className="lobbyHead">
-                        {isRunning ? <div className="lobbyNotice">🚀 Spiel läuft – Lobby ist read-only</div> : null}
+                        {isRunning ? <div className="lobbyNotice">{tr("🚀 Spiel läuft – die Lobby ist gesperrt")}</div> : null}
 
                         <div className="lobbyHeadTop">
-                            <h1 className="h1 lobbyTitle">Lobby</h1>
+                            <h1 className="h1 lobbyTitle">{tr("Lobby")}</h1>
                             <div className="lobbyActions">
                                 <button type="button" className="homeBackBtn" onClick={() => void leaveLobby()} disabled={starting}>
-                                    <span aria-hidden>🏠</span> Hauptmenü
+                                    <span aria-hidden>🏠</span> {tr("Hauptmenü")}
                                 </button>
                                 {amIHost ? (
                                     <Link
@@ -339,9 +341,9 @@ export default function LobbyPage() {
                                         onClick={(e) => {
                                             if (starting || isRunning) e.preventDefault();
                                         }}
-                                        title="Einstellungen öffnen"
+                                        title={tr("Einstellungen öffnen")}
                                     >
-                                        ⚙️ Einstellungen
+                                        ⚙️ {tr("Einstellungen")}
                                     </Link>
                                 ) : null}
                             </div>
@@ -355,17 +357,17 @@ export default function LobbyPage() {
                                     {players.length}
                                     <small> / {maxPlayers}</small>
                                 </span>
-                                <span className="lobbyStatLabel">Spieler</span>
+                                <span className="lobbyStatLabel">{tr("Spieler")}</span>
                             </div>
                             <div className="lobbyStat">
                                 <span className="lobbyStatIcon" aria-hidden>{MODES[mode]?.icon ?? "🥔"}</span>
-                                <span className="lobbyStatValue">{MODES[mode]?.label ?? mode}</span>
-                                <span className="lobbyStatLabel">Modus</span>
+                                <span className="lobbyStatValue">{tr(MODES[mode]?.label ?? mode)}</span>
+                                <span className="lobbyStatLabel">{tr("Modus")}</span>
                             </div>
                             <div className="lobbyStat">
                                 <span className="lobbyStatIcon" aria-hidden>🎯</span>
                                 <span className="lobbyStatValue">{lobby?.series_total ?? 1}</span>
-                                <span className="lobbyStatLabel">{(lobby?.series_total ?? 1) > 1 ? "Runden" : "Runde"}</span>
+                                <span className="lobbyStatLabel">{(lobby?.series_total ?? 1) > 1 ? tr("Runden") : tr("Runde")}</span>
                             </div>
                             {/* Öffentlich = im Hauptmenü unter "Offene Lobbys" (Migration 104); der Host kann umschalten */}
                             <button
@@ -373,11 +375,11 @@ export default function LobbyPage() {
                                 className={`lobbyStat lobbyStatBtn ${isPublic ? "pub" : ""}`}
                                 onClick={() => void togglePrivacy()}
                                 disabled={!amIHost || isRunning || privacyBusy}
-                                title={amIHost ? "Tippen: Öffentlich ↔ nur mit Code" : isPublic ? "Steht im Hauptmenü unter „Offene Lobbys“" : "Nur mit Code oder Einladung"}
+                                title={amIHost ? tr("Tippen: Öffentlich ↔ nur mit Code") : isPublic ? tr("Steht im Hauptmenü unter „Offene Lobbys“") : tr("Nur mit Code oder Einladung")}
                             >
                                 <span className="lobbyStatIcon" aria-hidden>{isPublic ? "🌍" : "🔒"}</span>
-                                <span className="lobbyStatValue">{isPublic ? "Offen" : "Privat"}</span>
-                                <span className="lobbyStatLabel">{amIHost && !isRunning ? "Tippen = ändern" : "Sichtbarkeit"}</span>
+                                <span className="lobbyStatValue">{isPublic ? tr("Offen") : tr("Privat")}</span>
+                                <span className="lobbyStatLabel">{amIHost && !isRunning ? tr("Tippen = ändern") : tr("Sichtbarkeit")}</span>
                             </button>
                         </div>
 
@@ -385,13 +387,13 @@ export default function LobbyPage() {
                             type="button"
                             className="codeBox"
                             onClick={() => void copyCode()}
-                            title="Klick → Code kopieren"
-                            aria-label={`Lobby-Code ${code} kopieren`}
+                            title={tr("Klick → Code kopieren")}
+                            aria-label={tr("Lobby-Code {code} kopieren", { code })}
                             disabled={isRunning}
                         >
-                            <span className="codeLabel">Lobby-Code</span>
+                            <span className="codeLabel">{tr("Lobby-Code")}</span>
                             <span className="codeValue">{code}</span>
-                            <span className="codeHint">{toast ? toast : "Tippen kopiert den Code"}</span>
+                            <span className="codeHint">{toast ? toast : tr("Tippen kopiert den Code")}</span>
                         </button>
 
                         <InviteActions code={code} disabled={isRunning} />
@@ -440,17 +442,17 @@ export default function LobbyPage() {
 
                     <div className="stepsWrap">
                         <div className="stepsBox">
-                            <div className="stepsTitle">Spieler</div>
+                            <div className="stepsTitle">{tr("Spieler")}</div>
                             {error ? <p className="errorText">{error}</p> : null}
 
                             {loading && players.length === 0 ? (
                                 <div style={{ padding: "12px 8px", opacity: 0.85 }}>
-                                    <Spinner size={16} label="Lade Spieler…" />
+                                    <Spinner size={16} label={tr("Lade Spieler…")} />
                                 </div>
                             ) : null}
 
                             {!loading && players.length === 0 ? (
-                                <div style={{ padding: "12px 8px", opacity: 0.75 }}>Noch niemand beigetreten.</div>
+                                <div style={{ padding: "12px 8px", opacity: 0.75 }}>{tr("Noch niemand beigetreten.")}</div>
                             ) : null}
 
                             <div className="playerGrid">
@@ -469,11 +471,11 @@ export default function LobbyPage() {
                                                 {p.is_bot ? "🤖 " : ""}
                                                 {p.name}
                                                 {p.is_bot && p.bot_skill ? (
-                                                    <span style={{ opacity: 0.8, fontSize: 11, marginLeft: 6 }} title={["", "Anfänger", "Mittel", "Profi"][p.bot_skill]}>
+                                                    <span style={{ opacity: 0.8, fontSize: 11, marginLeft: 6 }} title={tr(["", "Anfänger", "Mittel", "Profi"][p.bot_skill] ?? "")}>
                                                         {"★".repeat(p.bot_skill)}
                                                     </span>
                                                 ) : null}
-                                                {isMe ? <span style={{ opacity: 0.6 }}> (du)</span> : null}
+                                                {isMe ? <span style={{ opacity: 0.6 }}> ({tr("du")})</span> : null}
                                                 {isHostRow ? <span className="playerChipHostBadge">👑</span> : null}
                                             </span>
                                             <span className="playerChipState">{p.ready ? "✅" : "⏳"}</span>
@@ -483,7 +485,7 @@ export default function LobbyPage() {
                                                     className="btn btnReadyOff btnSmall playerChipKick"
                                                     onClick={() => void removeBot(p.player_id)}
                                                     disabled={botBusy || isRunning}
-                                                    title="Bot entfernen"
+                                                    title={tr("Bot entfernen")}
                                                 >
                                                     👋
                                                 </button>
@@ -501,9 +503,9 @@ export default function LobbyPage() {
                                             className="btn btnPrimary lobbyBotBtn"
                                             onClick={() => void addBot()}
                                             disabled={botBusy || players.length >= (lobby?.max_players ?? 8)}
-                                            title="Bot zur Lobby hinzufügen (Practice-Mode)"
+                                            title={tr("Bot zur Lobby hinzufügen (Übungsspiel)")}
                                         >
-                                            🤖 Bot hinzufügen
+                                            {tr("🤖 Bot hinzufügen")}
                                         </button>
                                     ) : null}
                                     {amIHost && !isRunning ? (
@@ -512,13 +514,13 @@ export default function LobbyPage() {
                                             style={{ height: 48, width: "auto", padding: "0 14px", fontSize: 15, fontWeight: 800 }}
                                             value={botSkill}
                                             onChange={(e) => setBotSkill(Number(e.target.value) as 0 | 1 | 2 | 3)}
-                                            aria-label="Stärke des nächsten Bots"
-                                            title="Stärke des nächsten Bots"
+                                            aria-label={tr("Stärke des nächsten Bots")}
+                                            title={tr("Stärke des nächsten Bots")}
                                         >
-                                            <option value={0}>Stärke: gemischt</option>
-                                            <option value={1}>★ Anfänger</option>
-                                            <option value={2}>★★ Mittel</option>
-                                            <option value={3}>★★★ Profi</option>
+                                            <option value={0}>{tr("Stärke: gemischt")}</option>
+                                            <option value={1}>★ {tr("Anfänger")}</option>
+                                            <option value={2}>★★ {tr("Mittel")}</option>
+                                            <option value={3}>★★★ {tr("Profi")}</option>
                                         </select>
                                     ) : null}
                                 </div>
@@ -529,7 +531,7 @@ export default function LobbyPage() {
                                     disabled={busyReady || !mePlayerId || starting || isRunning}
                                     className={`btn btnXL ${busyReady || starting || isRunning ? "btnDisabled" : ""} ${meReady ? "btnReadyOff" : "btnReadyOn"}`}
                                 >
-                                    {isRunning ? "🚀 Läuft" : starting ? "…" : busyReady ? "…" : meReady ? "⛔ Nicht bereit" : "✨ Bereit"}
+                                    {isRunning ? tr("🚀 Läuft") : starting ? "…" : busyReady ? "…" : meReady ? tr("⛔ Nicht bereit") : tr("✨ Bereit")}
                                 </button>
                             </div>
 
@@ -537,14 +539,14 @@ export default function LobbyPage() {
                             {amIHost && allReady && lobby?.phase !== "running" ? (
                                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                                     <button type="button" className="btn btnPrimary btnSmall btnGlow" onClick={() => void startGameClick()} disabled={starting || isRunning}>
-                                        🚀 Spiel starten
+                                        {tr("🚀 Spiel starten")}
                                     </button>
                                 </div>
                             ) : null}
 
                             {!allReady ? (
                                 <div style={{ marginTop: 10, opacity: 0.75, fontWeight: 800, fontSize: 13 }}>
-                                    Mindestens {MIN_PLAYERS} Spieler müssen beitreten und bereit sein.
+                                    {tr("Mindestens {n} Spieler müssen beitreten und bereit sein.", { n: MIN_PLAYERS })}
                                 </div>
                             ) : null}
                         </div>

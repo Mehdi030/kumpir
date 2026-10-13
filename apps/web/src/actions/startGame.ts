@@ -15,7 +15,7 @@ export async function startGame(code: string, mePlayerId: string, sessionToken: 
             .maybeSingle();
 
         if (lobbyErr || !lobby?.id) {
-            return { ok: false, error: lobbyErr?.message ?? "Lobby nicht gefunden." };
+            return { ok: false, error: lobbyErr?.message ?? "lobby_not_found" };
         }
 
         const { error } = await supabase.rpc("rpc_begin_topic_vote", {
@@ -26,6 +26,6 @@ export async function startGame(code: string, mePlayerId: string, sessionToken: 
         if (error) return { ok: false, error: error.message };
         return { ok: true };
     } catch (e: unknown) {
-        return { ok: false, error: e instanceof Error ? e.message : "Unbekannter Fehler" };
+        return { ok: false, error: e instanceof Error ? e.message : "unknown_error" };
     }
 }

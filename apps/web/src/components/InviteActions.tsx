@@ -9,7 +9,7 @@ type Props = { code: string; disabled?: boolean };
 
 /** Einladen mit einem Tipp: Teilen (System-Teilen / WhatsApp) und QR-Code zum Abscannen. */
 export function InviteActions({ code, disabled = false }: Props) {
-    const { t } = useI18n();
+    const { t, tr } = useI18n();
     const [showQr, setShowQr] = useState(false);
 
     const link = () => `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
@@ -20,7 +20,7 @@ export function InviteActions({ code, disabled = false }: Props) {
         const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
         if (typeof nav.share === "function") {
             try {
-                await nav.share({ title: "Kumpir-Lobby", text: text(), url: link() });
+                await nav.share({ title: tr("Kumpir-Lobby"), text: text(), url: link() });
                 return;
             } catch (e) {
                 if (e instanceof Error && e.name === "AbortError") return;
@@ -47,7 +47,7 @@ export function InviteActions({ code, disabled = false }: Props) {
             {showQr ? (
                 <div className="inviteQr">
                     <div className="inviteQrBox">
-                        <QRCodeSVG value={typeof window !== "undefined" ? `${window.location.origin}/join?code=${code}` : ""} size={200} level="M" marginSize={2} bgColor="#ffffff" fgColor="#2b0f04" title={`QR-Code für Lobby ${code}`} />
+                        <QRCodeSVG value={typeof window !== "undefined" ? `${window.location.origin}/join?code=${code}` : ""} size={200} level="M" marginSize={2} bgColor="#ffffff" fgColor="#2b0f04" title={tr("QR-Code für Lobby {code}", { code })} />
                     </div>
                     <div className="inviteQrHint">{t("invite.qrHint")}</div>
                 </div>

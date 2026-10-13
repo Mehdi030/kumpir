@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * Zeigt "Du hast die Lobby verlassen" / "Du wurdest gekickt" auf der
@@ -12,6 +13,7 @@ import { createPortal } from "react-dom";
  * "Lobby erstellen"-Seite statt im eigentlichen Hauptmenü.
  */
 export function LobbyExitNotice() {
+    const { tr } = useI18n();
     const router = useRouter();
     const sp = useSearchParams();
 
@@ -46,7 +48,7 @@ export function LobbyExitNotice() {
         return () => window.clearTimeout(t);
     }, [reason]);
 
-    const topToast = reason === "kicked" ? "⛔ Du wurdest aus der Lobby entfernt." : reason === "left" ? "👋 Du hast die Lobby verlassen." : "";
+    const topToast = reason === "kicked" ? tr("⛔ Du wurdest aus der Lobby entfernt.") : reason === "left" ? tr("👋 Du hast die Lobby verlassen.") : "";
 
     if (!topToast || !mounted) return null;
 

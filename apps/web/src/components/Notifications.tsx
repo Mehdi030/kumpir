@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useFriends } from "@/hooks/useFriends";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useI18n } from "@/lib/i18n";
 
 type Invite = { id: string; lobbyCode: string; fromName: string; fromEmoji: string | null; createdAt: string };
 
@@ -33,6 +34,7 @@ function writeSet(key: string, s: Set<string>) {
  * Im laufenden Spiel wird die Einladung zurückgehalten (stört sonst), Anfragen erscheinen trotzdem klein unten rechts.
  */
 export function Notifications() {
+    const { tr } = useI18n();
     const { user } = useAuth();
     const friends = useFriends(user?.id ?? null);
     const router = useRouter();
@@ -110,7 +112,7 @@ export function Notifications() {
                 <div className="ntStack" aria-live="polite">
                     {requests.slice(0, 3).map((r) => (
                         <div key={r.user_id} className="ntCard" role="status">
-                            <button type="button" className="ntClose" onClick={() => hideReq(r.user_id)} aria-label="Später" title="Später (bleibt in der Freunde-Liste)">
+                            <button type="button" className="ntClose" onClick={() => hideReq(r.user_id)} aria-label={tr("Später")} title={tr("Später (bleibt in der Freunde-Liste)")}>
                                 ✕
                             </button>
                             <div className="ntRow">
@@ -118,18 +120,16 @@ export function Notifications() {
                                     {r.friend_username.slice(0, 1).toUpperCase()}
                                 </span>
                                 <div className="ntText">
-                                    <div className="ntTitle">Freundschaftsanfrage</div>
-                                    <div>
-                                        <b>{r.friend_username}</b> möchte mit dir befreundet sein.
-                                    </div>
+                                    <div className="ntTitle">{tr("Freundschaftsanfrage")}</div>
+                                    <div>{tr("{name} möchte mit dir befreundet sein.", { name: r.friend_username })}</div>
                                 </div>
                             </div>
                             <div className="ntBtns">
                                 <button type="button" className="btn btnPrimary btnSmall" disabled={busy === r.user_id} onClick={() => void answerReq(r.user_id, true)}>
-                                    ✅ Annehmen
+                                    {tr("✅ Annehmen")}
                                 </button>
                                 <button type="button" className="btn btnSecondary btnSmall" disabled={busy === r.user_id} onClick={() => void answerReq(r.user_id, false)}>
-                                    Ablehnen
+                                    {tr("Ablehnen")}
                                 </button>
                             </div>
                         </div>
@@ -139,22 +139,22 @@ export function Notifications() {
 
             {invite ? (
                 <div className="ntInvBack" role="presentation">
-                    <div className="ntInv" role="dialog" aria-modal="true" aria-label="Einladung">
+                    <div className="ntInv" role="dialog" aria-modal="true" aria-label={tr("Einladung")}>
                         <div className="ntInvIcon" aria-hidden>
                             {invite.fromEmoji || "🎮"}
                         </div>
                         <div className="ntInvTitle">
-                            <b>{invite.fromName}</b> hat dich eingeladen!
+                            {tr("{name} hat dich eingeladen!", { name: invite.fromName })}
                         </div>
                         <div className="ntInvSub">
-                            Lobby <span className="ntCode">{invite.lobbyCode}</span> – spiel mit?
+                            {tr("Lobby")} <span className="ntCode">{invite.lobbyCode}</span> – {tr("spiel mit?")}
                         </div>
                         <div className="ntInvBtns">
                             <button type="button" className="btn btnPrimary btnXL" disabled={busy === invite.id} onClick={() => void answerInvite(invite, true)}>
-                                🚀 Ja, beitreten
+                                {tr("🚀 Ja, beitreten")}
                             </button>
                             <button type="button" className="btn btnSecondary" disabled={busy === invite.id} onClick={() => void answerInvite(invite, false)}>
-                                Nicht beitreten
+                                {tr("Nicht beitreten")}
                             </button>
                         </div>
                     </div>

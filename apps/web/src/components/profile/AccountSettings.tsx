@@ -92,29 +92,32 @@ export function AvatarBadge({ emoji, color, name, size = 68 }: { emoji?: string 
 }
 
 function Note({ msg }: { msg: Msg }) {
+    const { tr } = useI18n();
     if (!msg) return null;
+    // Meldungen aus lib/accountSettings sind nur markiert (tk) – hier übersetzen; Fertiges bleibt unverändert
     return (
         <div className={`fieldHelp ${msg.ok ? "setOk" : "fieldHelpError"}`} role={msg.ok ? "status" : "alert"}>
-            {msg.text}
+            {tr(msg.text)}
         </div>
     );
 }
 
 export function AccountSettings({ profile, api, onRefresh, onSavePreferences }: Props) {
+    const { tr } = useI18n();
     const [tab, setTab] = useState<Tab>("profil");
 
     return (
         <section className="setBox" aria-labelledby="setTitle">
             <div className="setHead">
                 <h2 id="setTitle" className="setH2">
-                    ⚙️ Einstellungen
+                    ⚙️ {tr("Einstellungen")}
                 </h2>
-                <div className="setTabs" role="tablist" aria-label="Einstellungen">
+                <div className="setTabs" role="tablist" aria-label={tr("Einstellungen")}>
                     {(
                         [
-                            ["profil", "👤 Profil"],
-                            ["spiel", "🎮 Spiel"],
-                            ["konto", "🔐 Konto"],
+                            ["profil", tr("👤 Profil")],
+                            ["spiel", tr("🎮 Spiel")],
+                            ["konto", tr("🔐 Konto")],
                         ] as [Tab, string][]
                     ).map(([key, label]) => (
                         <button key={key} type="button" role="tab" aria-selected={tab === key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>
@@ -125,7 +128,7 @@ export function AccountSettings({ profile, api, onRefresh, onSavePreferences }: 
             </div>
 
             {!profile.username ? (
-                <div className="setWarn">⚠️ Dein Konto hat noch keinen Benutzernamen. Wähle unten einen – damit kannst du dich auch ohne E-Mail anmelden.</div>
+                <div className="setWarn">{tr("⚠️ Dein Konto hat noch keinen Benutzernamen. Wähle unten einen – damit kannst du dich auch ohne E-Mail anmelden.")}</div>
             ) : null}
 
             {tab === "profil" ? <ProfileTab profile={profile} api={api} onRefresh={onRefresh} /> : null}
@@ -167,6 +170,7 @@ export function AccountSettings({ profile, api, onRefresh, onSavePreferences }: 
 
 // ------------------------------------------------------------------ Profil
 function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: AccountApi; onRefresh: () => Promise<void> }) {
+    const { tr } = useI18n();
     const [displayName, setDisplayName] = useState(profile.displayName ?? "");
     const [emoji, setEmoji] = useState(profile.avatarEmoji ?? "");
     const [color, setColor] = useState(profile.avatarColor ?? DEFAULT_AVATAR.color);
@@ -206,12 +210,12 @@ function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: Accoun
         setBusy(false);
         if (res.error) return setMsg({ ok: false, text: settingsErrorText(res.error) });
         await onRefresh();
-        setMsg({ ok: true, text: "✅ Gespeichert" });
+        setMsg({ ok: true, text: tr("✅ Gespeichert") });
     };
 
     const saveUsername = async () => {
         if (!uCheck.ok) return setUMsg({ ok: false, text: uCheck.message });
-        if (uStatus === "taken") return setUMsg({ ok: false, text: "Dieser Benutzername ist schon vergeben." });
+        if (uStatus === "taken") return setUMsg({ ok: false, text: tr("Dieser Benutzername ist schon vergeben.") });
         setUBusy(true);
         setUMsg(null);
         const res = await api.setUsername(uCheck.value);
@@ -219,7 +223,7 @@ function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: Accoun
         if (res.error) return setUMsg({ ok: false, text: settingsErrorText(res.error) });
         await onRefresh();
         setUStatus("idle");
-        setUMsg({ ok: true, text: `✅ Benutzername geändert. Anmelden geht jetzt mit „${uCheck.value}“.` });
+        setUMsg({ ok: true, text: tr("✅ Benutzername geändert. Anmelden geht jetzt mit „{name}“.", { name: uCheck.value }) });
     };
 
     const previewName = displayName || profile.username || "?";
@@ -227,28 +231,28 @@ function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: Accoun
     return (
         <>
             <div className="setGroup">
-                <h3>Avatar & Spielername</h3>
+                <h3>{tr("Symbol & Spielername")}</h3>
                 <div className="setRow" style={{ gap: 14 }}>
                     <AvatarBadge emoji={emoji} color={color} name={previewName} size={64} />
-                    <div className="setHint">So sehen dich andere in der Bestenliste und du dich oben in der Kopfzeile.</div>
+                    <div className="setHint">{tr("So sehen dich andere in der Bestenliste und du dich oben in der Kopfzeile.")}</div>
                 </div>
-                <div className="setEmojis" role="group" aria-label="Avatar-Symbol">
-                    <button type="button" className={!emoji ? "on" : ""} onClick={() => setEmoji("")} aria-pressed={!emoji} title="Anfangsbuchstabe" style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>
+                <div className="setEmojis" role="group" aria-label={tr("Avatar-Symbol")}>
+                    <button type="button" className={!emoji ? "on" : ""} onClick={() => setEmoji("")} aria-pressed={!emoji} title={tr("Anfangsbuchstabe")} style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>
                         Aa
                     </button>
                     {AVATAR_EMOJIS.map((e) => (
-                        <button key={e} type="button" className={emoji === e ? "on" : ""} onClick={() => setEmoji(e)} aria-pressed={emoji === e} aria-label={`Avatar ${e}`}>
+                        <button key={e} type="button" className={emoji === e ? "on" : ""} onClick={() => setEmoji(e)} aria-pressed={emoji === e} aria-label={`${tr("Symbol")} ${e}`}>
                             {e}
                         </button>
                     ))}
                 </div>
-                <div className="setColors" role="group" aria-label="Avatar-Farbe">
+                <div className="setColors" role="group" aria-label={tr("Avatar-Farbe")}>
                     {AVATAR_COLORS.map((c) => (
-                        <button key={c} type="button" className={color === c ? "on" : ""} style={{ background: c }} onClick={() => setColor(c)} aria-pressed={color === c} aria-label={`Farbe ${c}`} />
+                        <button key={c} type="button" className={color === c ? "on" : ""} style={{ background: c }} onClick={() => setColor(c)} aria-pressed={color === c} aria-label={`${tr("Farbe")} ${c}`} />
                     ))}
                 </div>
                 <label className="setLabel" htmlFor="setDisplayName">
-                    Spielername
+                    {tr("Spielername")}
                 </label>
                 <div className="setRow">
                     <input
@@ -256,22 +260,22 @@ function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: Accoun
                         className="input"
                         value={displayName}
                         onChange={(e) => setDisplayName(sanitizeDisplayName(e.target.value))}
-                        placeholder={profile.username ? `leer = ${profile.username}` : "z. B. Medo"}
+                        placeholder={profile.username ? tr("leer = {name}", { name: profile.username }) : tr("z. B. Medo")}
                         maxLength={12}
                         autoComplete="nickname"
                     />
                 </div>
-                <div className="setHint">Wird beim Hosten, Beitreten und im Solo-Modus automatisch eingetragen. 2–12 Buchstaben.</div>
+                <div className="setHint">{tr("Dein Name in jeder Lobby – nur hier änderbar. 2–12 Buchstaben.")}</div>
                 <div className="setRow">
                     <button type="button" className="btn btnPrimary btnSmall" onClick={() => void saveProfile()} disabled={busy}>
-                        {busy ? "…" : "Speichern"}
+                        {busy ? "…" : tr("Speichern")}
                     </button>
                     <Note msg={msg} />
                 </div>
             </div>
 
             <div className="setGroup">
-                <h3>Benutzername (zum Anmelden)</h3>
+                <h3>{tr("Benutzername (zum Anmelden)")}</h3>
                 <div className="setRow">
                     <input
                         className="input"
@@ -285,26 +289,26 @@ function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: Accoun
                         autoCapitalize="none"
                         autoCorrect="off"
                         spellCheck={false}
-                        aria-label="Benutzername"
-                        placeholder="z. B. medo"
+                        aria-label={tr("Benutzername")}
+                        placeholder={tr("z. B. medo")}
                     />
                     <button type="button" className="btn btnSecondary btnSmall" onClick={() => void saveUsername()} disabled={uBusy || !uChanged || uStatus === "taken" || uStatus === "checking"}>
-                        {uBusy ? "…" : "Ändern"}
+                        {uBusy ? "…" : tr("Ändern")}
                     </button>
                 </div>
                 <div className="setHint">
                     {!uCheck.ok && username
-                        ? uCheck.message
+                        ? tr(uCheck.message)
                         : !uChanged
-                          ? "3–20 Zeichen: a–z, 0–9, Punkt, Unterstrich, Minus."
+                          ? tr("3–20 Zeichen: a–z, 0–9, Punkt, Unterstrich, Minus.")
                           : uStatus === "checking"
-                            ? "Prüfe…"
+                            ? tr("Prüfe…")
                             : uStatus === "free"
-                              ? "✅ frei"
+                              ? tr("✅ frei")
                               : uStatus === "taken"
-                                ? "❌ schon vergeben"
+                                ? tr("❌ schon vergeben")
                                 : uStatus === "error"
-                                  ? "⚠️ Konnte nicht prüfen"
+                                  ? tr("⚠️ Konnte nicht prüfen")
                                   : ""}
                 </div>
                 <Note msg={uMsg} />
@@ -315,7 +319,7 @@ function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: Accoun
 
 // ------------------------------------------------------------------ Spiel
 function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePreferences: Props["onSavePreferences"] }) {
-    const { locale, setLocale } = useI18n();
+    const { locale, setLocale, tr } = useI18n();
     const p = profile.preferences;
     const [muted, setMutedState] = useState(() => getMuted());
     const [volume, setVolumeState] = useState(() => Math.round(getVolume() * 100));
@@ -338,38 +342,38 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
         const excludedPlaylists = allNames.filter((n) => !selectedPlaylists.includes(n));
         const res = await onSavePreferences({ solo: { bots, skill }, host: { maxPlayers, speed, rounds, answerMode, excludedPlaylists } });
         setBusy(false);
-        setMsg(res.ok ? { ok: true, text: "✅ Gespeichert – gilt ab dem nächsten Spiel" } : { ok: false, text: settingsErrorText(res.error) });
+        setMsg(res.ok ? { ok: true, text: tr("✅ Gespeichert – gilt ab dem nächsten Spiel") } : { ok: false, text: settingsErrorText(res.error) });
     };
 
     return (
         <>
             <div className="setGroup">
-                <h3>Sprache & Ton</h3>
-                <div className="setHint">Wird sofort übernommen und gilt auf allen Geräten, auf denen du angemeldet bist.</div>
+                <h3>{tr("Sprache & Ton")}</h3>
+                <div className="setHint">{tr("Wird sofort übernommen und gilt auf allen Geräten, auf denen du angemeldet bist.")}</div>
                 <div className="setRow">
-                    <span className="setLabel">Sprache</span>
-                    <div className="setSeg" role="group" aria-label="Sprache">
-                        {(["de", "en"] as const).map((l) => (
+                    <span className="setLabel">{tr("Sprache")}</span>
+                    <div className="setSeg" role="group" aria-label={tr("Sprache")}>
+                        {(["de", "en", "fr"] as const).map((l) => (
                             <button key={l} type="button" className={locale === l ? "on" : ""} aria-pressed={locale === l} onClick={() => setLocale(l)}>
-                                {l === "de" ? "Deutsch" : "English"}
+                                {l === "de" ? "Deutsch" : l === "en" ? "English" : "Français"}
                             </button>
                         ))}
                     </div>
                 </div>
                 <div className="setRow">
-                    <span className="setLabel">Ton</span>
-                    <div className="setSeg" role="group" aria-label="Ton">
+                    <span className="setLabel">{tr("Ton")}</span>
+                    <div className="setSeg" role="group" aria-label={tr("Ton")}>
                         <button type="button" className={!muted ? "on" : ""} aria-pressed={!muted} onClick={() => (setMuted(false), setMutedState(false))}>
-                            🔊 An
+                            {tr("🔊 An")}
                         </button>
                         <button type="button" className={muted ? "on" : ""} aria-pressed={muted} onClick={() => (setMuted(true), setMutedState(true))}>
-                            🔇 Aus
+                            {tr("🔇 Aus")}
                         </button>
                     </div>
                 </div>
                 <div className="setRow">
                     <label className="setLabel" htmlFor="setVolume">
-                        Lautstärke {volume} %
+                        {tr("Lautstärke")} {volume} %
                     </label>
                     <input
                         id="setVolume"
@@ -391,30 +395,30 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
 
             <div className="setGroup">
                 <h3>🎵 Playlists</h3>
-                <div className="setHint">Rausgenommene Playlists kommen beim Hosten und im Solo-Modus nicht vor. Neue Playlists sind automatisch dabei.</div>
+                <div className="setHint">{tr("Rausgenommene Playlists kommen beim Hosten und im Solo-Modus nicht vor. Neue Playlists sind automatisch dabei.")}</div>
                 <PlaylistPicker selected={selectedPlaylists} onChange={setPlaylistSel} />
             </div>
 
             <div className="setGroup">
-                <h3>🤖 Solo-Gegner</h3>
+                <h3>🤖 {tr("Solo-Gegner")}</h3>
                 <div className="setRow">
-                    <span className="setLabel">Anzahl Bots</span>
+                    <span className="setLabel">{tr("Anzahl Bots")}</span>
                     <div className="setStep">
-                        <button type="button" onClick={() => setBots((b) => Math.max(1, b - 1))} aria-label="Weniger Bots">
+                        <button type="button" onClick={() => setBots((b) => Math.max(1, b - 1))} aria-label={tr("Weniger Bots")}>
                             −
                         </button>
                         <span aria-live="polite">{bots}</span>
-                        <button type="button" onClick={() => setBots((b) => Math.min(5, b + 1))} aria-label="Mehr Bots">
+                        <button type="button" onClick={() => setBots((b) => Math.min(5, b + 1))} aria-label={tr("Mehr Bots")}>
                             +
                         </button>
                     </div>
                 </div>
                 <div className="setRow">
-                    <span className="setLabel">Stärke</span>
-                    <div className="setSeg" role="group" aria-label="Bot-Stärke">
+                    <span className="setLabel">{tr("Stärke")}</span>
+                    <div className="setSeg" role="group" aria-label={tr("Bot-Stärke")}>
                         {(Object.keys(SOLO_SKILL_LABEL) as (keyof typeof SOLO_SKILL_LABEL)[]).map((k) => (
                             <button key={k} type="button" className={skill === k ? "on" : ""} aria-pressed={skill === k} onClick={() => setSkill(k)}>
-                                {SOLO_SKILL_LABEL[k]}
+                                {tr(SOLO_SKILL_LABEL[k])}
                             </button>
                         ))}
                     </div>
@@ -422,23 +426,23 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
             </div>
 
             <div className="setGroup">
-                <h3>🚀 Standard beim Hosten</h3>
-                <div className="setHint">Diese Werte sind auf „Lobby hosten“ schon vorausgewählt (dort weiterhin änderbar).</div>
+                <h3>🚀 {tr("Standard beim Hosten")}</h3>
+                <div className="setHint">{tr("Diese Werte sind auf „Lobby hosten“ schon vorausgewählt (dort weiterhin änderbar).")}</div>
                 <div className="setRow">
-                    <span className="setLabel">Max. Spieler</span>
+                    <span className="setLabel">{tr("Max. Spieler")}</span>
                     <div className="setStep">
-                        <button type="button" onClick={() => setMaxPlayers((n) => Math.max(2, n - 1))} aria-label="Weniger Spieler">
+                        <button type="button" onClick={() => setMaxPlayers((n) => Math.max(2, n - 1))} aria-label={tr("Weniger Spieler")}>
                             −
                         </button>
                         <span aria-live="polite">{maxPlayers}</span>
-                        <button type="button" onClick={() => setMaxPlayers((n) => Math.min(12, n + 1))} aria-label="Mehr Spieler">
+                        <button type="button" onClick={() => setMaxPlayers((n) => Math.min(12, n + 1))} aria-label={tr("Mehr Spieler")}>
                             +
                         </button>
                     </div>
                 </div>
                 <div className="setRow">
-                    <span className="setLabel">Tempo</span>
-                    <div className="setSeg" role="group" aria-label="Tempo">
+                    <span className="setLabel">{tr("Tempo")}</span>
+                    <div className="setSeg" role="group" aria-label={tr("Tempo")}>
                         {(
                             [
                                 ["fast", "⚡ Blitz"],
@@ -447,29 +451,29 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
                             ] as const
                         ).map(([k, label]) => (
                             <button key={k} type="button" className={speed === k ? "on" : ""} aria-pressed={speed === k} onClick={() => setSpeed(k)}>
-                                {label}
+                                {tr(label)}
                             </button>
                         ))}
                     </div>
                 </div>
                 <div className="setRow">
-                    <span className="setLabel">Runden pro Match</span>
-                    <div className="setSeg" role="group" aria-label="Runden pro Match">
+                    <span className="setLabel">{tr("Runden pro Match")}</span>
+                    <div className="setSeg" role="group" aria-label={tr("Runden pro Match")}>
                         {([1, 3, 5] as const).map((r) => (
                             <button key={r} type="button" className={rounds === r ? "on" : ""} aria-pressed={rounds === r} onClick={() => setRounds(r)}>
-                                {r} {r === 1 ? "Runde" : "Runden"}
+                                {r === 1 ? tr("1 Runde") : tr("{n} Runden", { n: r })}
                             </button>
                         ))}
                     </div>
                 </div>
                 <div className="setRow">
-                    <span className="setLabel">Antwort</span>
-                    <div className="setSeg" role="group" aria-label="Antwort-Modus">
+                    <span className="setLabel">{tr("Antwort")}</span>
+                    <div className="setSeg" role="group" aria-label={tr("Antwort-Modus")}>
                         <button type="button" className={answerMode === "text" ? "on" : ""} aria-pressed={answerMode === "text"} onClick={() => setAnswerMode("text")}>
-                            ⌨️ Schreiben
+                            {tr("⌨️ Schreiben")}
                         </button>
                         <button type="button" className={answerMode === "voice" ? "on" : ""} aria-pressed={answerMode === "voice"} onClick={() => setAnswerMode("voice")}>
-                            🎤 Mündlich
+                            {tr("🎤 Mündlich")}
                         </button>
                     </div>
                 </div>
@@ -477,7 +481,7 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
 
             <div className="setRow">
                 <button type="button" className="btn btnPrimary btnSmall" onClick={() => void save()} disabled={busy}>
-                    {busy ? "…" : "Playlists, Solo & Host speichern"}
+                    {busy ? "…" : tr("Playlists, Solo & Host speichern")}
                 </button>
                 <Note msg={msg} />
             </div>
@@ -487,6 +491,7 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
 
 // ------------------------------------------------------------------ Konto
 function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
+    const { tr } = useI18n();
     const [email, setEmail] = useState("");
     const [eMsg, setEMsg] = useState<Msg>(null);
     const [eBusy, setEBusy] = useState(false);
@@ -502,8 +507,8 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
 
     const changeEmail = async () => {
         const e = email.trim().toLowerCase();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return setEMsg({ ok: false, text: "Bitte eine gültige E-Mail-Adresse eingeben." });
-        if (e === (profile.email ?? "").toLowerCase()) return setEMsg({ ok: false, text: "Das ist schon deine Adresse." });
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return setEMsg({ ok: false, text: tr("Bitte eine gültige E-Mail-Adresse eingeben.") });
+        if (e === (profile.email ?? "").toLowerCase()) return setEMsg({ ok: false, text: tr("Das ist schon deine Adresse.") });
         setEBusy(true);
         setEMsg(null);
         const res = await api.changeEmail(e);
@@ -512,31 +517,32 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
             const m = res.error.toLowerCase();
             return setEMsg({
                 ok: false,
-                text: m.includes("already") ? "Diese E-Mail gehört schon zu einem anderen Konto." : m.includes("rate") || m.includes("seconds") ? "Bitte kurz warten und erneut versuchen." : res.error,
+                text: m.includes("already") ? tr("Diese E-Mail gehört schon zu einem anderen Konto.") : m.includes("rate") || m.includes("seconds") ? tr("Bitte kurz warten und erneut versuchen.") : res.error,
             });
         }
         setEmail("");
-        setEMsg({ ok: true, text: `📨 Fast fertig: Bestätige die Änderung über den Link in der Mail an ${e}. Bis dahin gilt die alte Adresse.` });
+        setEMsg({ ok: true, text: tr("📨 Fast fertig: Bestätige die Änderung über den Link in der Mail an {mail}. Bis dahin gilt die alte Adresse.", { mail: e }) });
     };
 
     const changePassword = async () => {
         const pwErr = passwordProblem(pw);
         if (pwErr) return setPMsg({ ok: false, text: pwErr });
-        if (pw !== pw2) return setPMsg({ ok: false, text: "Die beiden Passwörter sind nicht gleich." });
+        if (pw !== pw2) return setPMsg({ ok: false, text: tr("Die beiden Passwörter sind nicht gleich.") });
         setPBusy(true);
         setPMsg(null);
         const res = await api.changePassword(pw);
         setPBusy(false);
         if (res.error) {
-            return setPMsg({ ok: false, text: /different from the old|same password/i.test(res.error) ? "Das neue Passwort muss sich vom alten unterscheiden." : res.error });
+            return setPMsg({ ok: false, text: /different from the old|same password/i.test(res.error) ? tr("Das neue Passwort muss sich vom alten unterscheiden.") : res.error });
         }
         setPw("");
         setPw2("");
-        setPMsg({ ok: true, text: "✅ Passwort geändert." });
+        setPMsg({ ok: true, text: tr("✅ Passwort geändert.") });
     };
 
     const deleteAccount = async () => {
-        if (delText.trim().toUpperCase() !== "LÖSCHEN") return setDMsg({ ok: false, text: "Bitte zur Bestätigung LÖSCHEN eintippen." });
+        const word = delText.trim().toUpperCase();
+        if (word !== "LÖSCHEN" && word !== tr("LÖSCHEN")) return setDMsg({ ok: false, text: tr("Bitte zur Bestätigung {word} eintippen.", { word: tr("LÖSCHEN") }) });
         setDBusy(true);
         setDMsg(null);
         const res = await api.requestDeletion(delReason.trim());
@@ -550,14 +556,14 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
             {/* Konten ohne E-Mail (Registrierung nur mit Benutzername) sehen diesen Teil nicht */}
             {isPlaceholderEmail(profile.email) ? null : (
                 <div className="setGroup">
-                    <h3>E-Mail-Adresse</h3>
+                    <h3>{tr("E-Mail-Adresse")}</h3>
                     <div className="setHint">
-                        Aktuell: <b>{profile.email}</b> {profile.emailVerified ? "✓ bestätigt" : "(noch nicht bestätigt)"}
+                        {tr("Aktuell:")} <b>{profile.email}</b> {profile.emailVerified ? tr("✓ bestätigt") : tr("(noch nicht bestätigt)")}
                     </div>
                     <div className="setRow">
-                        <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="neue@adresse.de" autoComplete="email" aria-label="Neue E-Mail-Adresse" />
+                        <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={tr("neue@adresse.de")} autoComplete="email" aria-label={tr("Neue E-Mail-Adresse")} />
                         <button type="button" className="btn btnSecondary btnSmall" onClick={() => void changeEmail()} disabled={eBusy || !email}>
-                            {eBusy ? "…" : "Ändern"}
+                            {eBusy ? "…" : tr("Ändern")}
                         </button>
                     </div>
                     <Note msg={eMsg} />
@@ -565,28 +571,28 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
             )}
 
             <div className="setGroup">
-                <h3>Passwort ändern</h3>
-                <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} placeholder={`Neues Passwort (${PASSWORD_HINT})`} autoComplete="new-password" aria-label="Neues Passwort" />
+                <h3>{tr("Passwort ändern")}</h3>
+                <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} placeholder={tr("Neues Passwort ({hint})", { hint: tr(PASSWORD_HINT) })} autoComplete="new-password" aria-label={tr("Neues Passwort")} />
                 <PasswordInput
                     value={pw2}
                     onChange={(e) => setPw2(e.target.value)}
                     onKeyDown={(e) => {
                         if (e.key === "Enter") void changePassword();
                     }}
-                    placeholder="Nochmal eingeben"
+                    placeholder={tr("Nochmal eingeben")}
                     autoComplete="new-password"
-                    aria-label="Neues Passwort wiederholen"
+                    aria-label={tr("Neues Passwort wiederholen")}
                 />
                 <div className="setRow">
                     <button type="button" className="btn btnSecondary btnSmall" onClick={() => void changePassword()} disabled={pBusy || !pw}>
-                        {pBusy ? "…" : "Passwort speichern"}
+                        {pBusy ? "…" : tr("Passwort speichern")}
                     </button>
                     <Note msg={pMsg} />
                 </div>
             </div>
 
             <div className="setGroup">
-                <h3>Abmelden</h3>
+                <h3>{tr("Abmelden")}</h3>
                 <div className="setRow">
                     <button
                         type="button"
@@ -596,34 +602,35 @@ function AccountTab({ profile, api }: { profile: Profile; api: AccountApi }) {
                             window.location.assign("/");
                         }}
                     >
-                        Auf diesem Gerät abmelden
+                        {tr("Auf diesem Gerät abmelden")}
                     </button>
                 </div>
             </div>
 
             <div className="setGroup setDanger">
-                <h3>Konto-Löschung beantragen</h3>
+                <h3>{tr("Konto-Löschung beantragen")}</h3>
                 {!delOpen ? (
                     <div className="setRow">
                         <button type="button" className="btn btnSecondary btnSmall" onClick={() => setDelOpen(true)}>
-                            Löschung beantragen …
+                            {tr("Löschung beantragen …")}
                         </button>
                     </div>
                 ) : (
                     <>
                         <div className="setHint">
-                            Dein Zugang wird <b>sofort gesperrt</b> und du wirst überall abgemeldet. Ein Admin löscht das Konto danach endgültig – mit Verlauf, Achievements, Saison-Punkten und Freunden. Bis dahin kann ein Admin es auf Wunsch wiederherstellen. Zum Bestätigen <b>LÖSCHEN</b> eintippen:
+                            {tr("Dein Zugang wird sofort gesperrt und du wirst überall abgemeldet. Ein Admin löscht das Konto danach endgültig – mit Verlauf, Erfolgen, Saison-Punkten und Freunden. Bis dahin kann ein Admin es auf Wunsch wiederherstellen.")}{" "}
+                            {tr("Zum Bestätigen {word} eintippen:", { word: tr("LÖSCHEN") })}
                         </div>
                         <div className="setRow">
-                            <input className="input" value={delReason} onChange={(e) => setDelReason(e.target.value)} placeholder="Grund (optional)" maxLength={300} aria-label="Grund für die Löschung (optional)" />
+                            <input className="input" value={delReason} onChange={(e) => setDelReason(e.target.value)} placeholder={tr("Grund (optional)")} maxLength={300} aria-label={tr("Grund für die Löschung (optional)")} />
                         </div>
                         <div className="setRow">
-                            <input className="input" value={delText} onChange={(e) => setDelText(e.target.value)} placeholder="LÖSCHEN" aria-label="Zur Bestätigung LÖSCHEN eintippen" />
+                            <input className="input" value={delText} onChange={(e) => setDelText(e.target.value)} placeholder={tr("LÖSCHEN")} aria-label={tr("Bitte zur Bestätigung {word} eintippen.", { word: tr("LÖSCHEN") })} />
                             <button type="button" className="btn btnSmall btnDanger" onClick={() => void deleteAccount()} disabled={dBusy}>
-                                {dBusy ? "…" : "Löschung beantragen"}
+                                {dBusy ? "…" : tr("Löschung beantragen")}
                             </button>
                             <button type="button" className="btn btnSecondary btnSmall" onClick={() => (setDelOpen(false), setDelText(""), setDMsg(null))}>
-                                Abbrechen
+                                {tr("Abbrechen")}
                             </button>
                         </div>
                         <Note msg={dMsg} />

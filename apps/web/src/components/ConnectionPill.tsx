@@ -2,13 +2,14 @@
 
 import React from "react";
 import type { RealtimeStatus } from "@/hooks/useLobbyRealtime";
+import { tk, useI18n } from "@/lib/i18n";
 
 const MAP: Record<RealtimeStatus, { label: string; color: string; title: string } | null> = {
     idle: null, // hide
-    connecting: { label: "● Verbinde…", color: "rgba(255,214,10,0.85)", title: "Realtime wird aufgebaut" },
-    live: { label: "● Live", color: "rgba(52,199,89,0.86)", title: "Realtime aktiv" },
-    reconnecting: { label: "● Reconnect", color: "rgba(255,149,0,0.90)", title: "Verbindung verloren – Polling aktiv" },
-    offline: { label: "● Offline", color: "rgba(255,69,58,0.90)", title: "Realtime offline – Polling aktiv" },
+    connecting: { label: tk("● Verbinde…"), color: "rgba(255,214,10,0.85)", title: tk("Live-Verbindung wird aufgebaut") },
+    live: { label: tk("● Live"), color: "rgba(52,199,89,0.86)", title: tk("Live-Verbindung aktiv") },
+    reconnecting: { label: tk("● Verbinde neu"), color: "rgba(255,149,0,0.90)", title: tk("Verbindung verloren – frage regelmäßig nach") },
+    offline: { label: tk("● Offline"), color: "rgba(255,69,58,0.90)", title: tk("Live-Verbindung weg – frage regelmäßig nach") },
 };
 
 type Props = {
@@ -18,6 +19,7 @@ type Props = {
 };
 
 export function ConnectionPill({ status, onlyOnIssue = false }: Props) {
+    const { tr } = useI18n();
     const cfg = MAP[status];
     if (!cfg) return null;
     if (onlyOnIssue && status === "live") return null;
@@ -26,7 +28,7 @@ export function ConnectionPill({ status, onlyOnIssue = false }: Props) {
         <span
             role="status"
             aria-live="polite"
-            title={cfg.title}
+            title={tr(cfg.title)}
             style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -43,7 +45,7 @@ export function ConnectionPill({ status, onlyOnIssue = false }: Props) {
                 userSelect: "none",
             }}
         >
-            {cfg.label}
+            {tr(cfg.label)}
         </span>
     );
 }

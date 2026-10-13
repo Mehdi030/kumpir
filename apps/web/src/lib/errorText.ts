@@ -43,6 +43,7 @@ const TEXT: [RegExp, string][] = [
     [/username_profane/, tk("Dieser Name ist nicht erlaubt.")],
     [/username_taken/, tk("Dieser Name ist schon vergeben.")],
     [/not all players are ready|nicht alle spieler sind bereit/i, tk("Noch nicht alle Spieler sind bereit.")],
+    [/unknown_error|unknown error|unbekannter fehler/i, tk("Unbekannter Fehler.")],
     [/failed to fetch|networkerror|load failed|network request failed/i, tk("Keine Verbindung zum Server. Bitte Internet prüfen und erneut versuchen.")],
 ];
 

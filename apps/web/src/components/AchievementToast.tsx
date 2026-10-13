@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Achievement } from "@/lib/achievements";
 import { TIER_STYLE } from "@/lib/achievements";
+import { useI18n } from "@/lib/i18n";
 
 type Props = {
     achievement: Achievement;
@@ -15,6 +16,7 @@ type Props = {
  * gerendert wenn neue Achievements unlocked werden.
  */
 export function AchievementToast({ achievement, onDismiss, autoDismissMs = 5000 }: Props) {
+    const { tr } = useI18n();
     const style = TIER_STYLE[achievement.tier] ?? TIER_STYLE.bronze;
     const [enter, setEnter] = useState(false);
 
@@ -49,12 +51,12 @@ export function AchievementToast({ achievement, onDismiss, autoDismissMs = 5000 
                 cursor: "pointer",
                 textAlign: "left",
             }}
-            aria-label={`Achievement freigeschaltet: ${achievement.title}`}
+            aria-label={tr("Erfolg freigeschaltet: {title}", { title: achievement.title })}
         >
             <div style={{ fontSize: 38, lineHeight: 1 }}>{achievement.icon}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 950, letterSpacing: 1.2, textTransform: "uppercase", opacity: 0.85 }}>
-                    🎉 Freigeschaltet
+                    {tr("🎉 Freigeschaltet")}
                 </div>
                 <div style={{ fontSize: 17, fontWeight: 900, marginTop: 2 }}>{achievement.title}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.88, marginTop: 2 }}>{achievement.description}</div>

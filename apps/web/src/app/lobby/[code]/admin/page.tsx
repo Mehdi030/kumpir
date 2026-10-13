@@ -15,6 +15,7 @@ import { kickPlayerAction, setLobbyLockAction, transferHostAction } from "@/acti
 import { getSessionToken } from "@/lib/playerSession";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { errorText } from "@/lib/errorText";
+import { tk, trNow, useI18n } from "@/lib/i18n";
 import { PlaylistPicker, usePlaylists } from "@/components/PlaylistPicker";
 import { HomeButton } from "@/components/BackButton";
 
@@ -22,9 +23,9 @@ const GAME_PHASES = new Set(["topic_vote", "countdown", "running"]);
 
 type ModeKey = "original" | "teleport" | "reverse";
 const MODES: Record<ModeKey, { label: string; icon: string }> = {
-    original: { label: "Original", icon: "🥔" },
-    teleport: { label: "Teleport", icon: "🌀" },
-    reverse: { label: "Reverse", icon: "🔁" },
+    original: { label: tk("Original"), icon: "🥔" },
+    teleport: { label: tk("Teleport"), icon: "🌀" },
+    reverse: { label: tk("Reverse"), icon: "🔁" },
 };
 
 function getErrorMessage(e: unknown): string {
@@ -33,11 +34,12 @@ function getErrorMessage(e: unknown): string {
     try {
         return JSON.stringify(e);
     } catch {
-        return "Unbekannter Fehler";
+        return trNow("Unbekannter Fehler.");
     }
 }
 
 export default function LobbyAdminPage() {
+    const { tr } = useI18n();
     const params = useParams<{ code: string }>();
     const router = useRouter();
     const code = String(params.code ?? "").toUpperCase();
@@ -87,16 +89,16 @@ export default function LobbyAdminPage() {
     const onKick = useCallback(
         (targetPlayerId: string, targetName: string) => {
             if (!mePlayerId || !lobbyId) return;
-            if (!confirm(`${targetName} wirklich aus der Lobby kicken?`)) return;
+            if (!confirm(trNow("{name} wirklich aus der Lobby kicken?", { name: targetName }))) return;
 
             setBusyTarget(targetPlayerId);
             startTransition(async () => {
                 try {
                     const res = await kickPlayerAction({ lobbyId, mePlayerId, targetPlayerId, sessionToken: getSessionToken() ?? "" });
                     if (res.ok) {
-                        showToast(`👢 ${targetName} gekickt`, 1400);
+                        showToast(trNow("👢 {name} gekickt", { name: targetName }), 1400);
                     } else if ("error" in res) {
-                        showToast(`❌ ${res.error}`, 2600);
+                        showToast(`❌ ${errorText(res.error)}`, 2600);
                     }
                 } catch (e) {
                     showToast(`❌ ${getErrorMessage(e)}`, 2600);
@@ -111,16 +113,16 @@ export default function LobbyAdminPage() {
     const onTransfer = useCallback(
         (targetPlayerId: string, targetName: string) => {
             if (!mePlayerId || !lobbyId) return;
-            if (!confirm(`Host-Rolle an ${targetName} übertragen?`)) return;
+            if (!confirm(trNow("Host-Rolle an {name} übertragen?", { name: targetName }))) return;
 
             setBusyTarget(targetPlayerId);
             startTransition(async () => {
                 try {
                     const res = await transferHostAction({ lobbyId, mePlayerId, newHostPlayerId: targetPlayerId, sessionToken: getSessionToken() ?? "" });
                     if (res.ok) {
-                        showToast(`👑 ${targetName} ist jetzt Host`, 1600);
+                        showToast(trNow("👑 {name} ist jetzt Host", { name: targetName }), 1600);
                     } else if ("error" in res) {
-                        showToast(`❌ ${res.error}`, 2600);
+                        showToast(`❌ ${errorText(res.error)}`, 2600);
                     }
                 } catch (e) {
                     showToast(`❌ ${getErrorMessage(e)}`, 2600);
@@ -139,9 +141,9 @@ export default function LobbyAdminPage() {
             try {
                 const res = await setLobbyLockAction({ lobbyId, mePlayerId, locked: next, sessionToken: getSessionToken() ?? "" });
                 if (res.ok) {
-                    showToast(next ? "🔒 Lobby gesperrt" : "🔓 Lobby offen", 1400);
+                    showToast(next ? trNow("🔒 Lobby gesperrt") : trNow("🔓 Lobby offen"), 1400);
                 } else if ("error" in res) {
-                    showToast(`❌ ${res.error}`, 2600);
+                    showToast(`❌ ${errorText(res.error)}`, 2600);
                 }
             } catch (e) {
                 showToast(`❌ ${getErrorMessage(e)}`, 2600);
@@ -191,7 +193,7 @@ export default function LobbyAdminPage() {
             const supabase = getSupabaseClient();
             runSetting(
                 () => supabase.rpc("set_max_players", { p_lobby_id: lobbyId, p_me_player_id: mePlayerId, p_max_players: next }),
-                "✅ Max-Spieler gespeichert"
+                trNow("✅ Max. Spieler gespeichert")
             );
         },
         [mePlayerId, lobbyId, runSetting]
@@ -203,7 +205,7 @@ export default function LobbyAdminPage() {
             const supabase = getSupabaseClient();
             runSetting(
                 () => supabase.rpc("set_lobby_mode", { p_lobby_id: lobbyId, p_me_player_id: mePlayerId, p_mode: next }),
-                "✅ Modus gespeichert"
+                trNow("✅ Modus gespeichert")
             );
         },
         [mePlayerId, lobbyId, runSetting]
@@ -217,7 +219,7 @@ export default function LobbyAdminPage() {
             const supabase = getSupabaseClient();
             runSetting(
                 () => supabase.rpc("set_lobby_topic_filter", { p_lobby_id: lobbyId, p_me_player_id: mePlayerId, p_categories: next }),
-                "✅ Playlists gespeichert"
+                trNow("✅ Playlists gespeichert")
             );
         },
         [mePlayerId, lobbyId, playlistList, runSetting]
@@ -227,7 +229,7 @@ export default function LobbyAdminPage() {
         return (
             <main className="container">
                 <div style={{ display: "grid", placeItems: "center", padding: 32 }}>
-                    <Spinner size={28} label="Lade Admin Panel…" />
+                    <Spinner size={28} label={tr("Lade Einstellungen…")} />
                 </div>
             </main>
         );
@@ -239,7 +241,7 @@ export default function LobbyAdminPage() {
         return (
             <main className="container">
                 <div style={{ display: "grid", placeItems: "center", padding: 32, color: "white" }}>
-                    <div style={{ fontWeight: 950 }}>{error || "Lobby nicht gefunden."}</div>
+                    <div style={{ fontWeight: 950 }}>{error || tr("Lobby nicht gefunden.")}</div>
                     <HomeButton className="" />
                 </div>
             </main>
@@ -253,12 +255,12 @@ export default function LobbyAdminPage() {
     return (
         <main className="container">
             <div className="landingWrap">
-                <section className="card" aria-label="Lobby Admin">
+                <section className="card" aria-label={tr("Lobby-Einstellungen")}>
                     <header className="hostHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                         <div>
-                            <h1 className="h1" style={{ marginBottom: 6 }}>⚙️ Admin</h1>
+                            <h1 className="h1" style={{ marginBottom: 6 }}>⚙️ {tr("Einstellungen")}</h1>
                             <p className="p hostSub" style={{ marginTop: 0 }}>
-                                Lobby <b>{code}</b> · {players.length} Spieler
+                                {tr("Lobby")} <b>{code}</b> · {tr("{n} Spieler", { n: players.length })}
                             </p>
                         </div>
 
@@ -268,25 +270,25 @@ export default function LobbyAdminPage() {
                                 onClick={onToggleLock}
                                 className={`btn btnSmall ${isLocked ? "btnReadyOff" : "btnSecondary"}`}
                                 disabled={pending}
-                                title={isLocked ? "Lobby ist gesperrt – klick zum Öffnen" : "Lobby offen – klick zum Sperren"}
+                                title={isLocked ? tr("Lobby ist gesperrt – klick zum Öffnen") : tr("Lobby offen – klick zum Sperren")}
                             >
-                                {pending ? <Spinner size={14} /> : isLocked ? "🔒 Gesperrt" : "🔓 Offen"}
+                                {pending ? <Spinner size={14} /> : isLocked ? tr("🔒 Gesperrt") : tr("🔓 Offen")}
                             </button>
 
                             <Link href={`/lobby/${encodeURIComponent(code)}`} className="btn btnSecondary btnSmall">
-                                ← Zur Lobby
+                                {tr("← Zur Lobby")}
                             </Link>
                         </div>
                     </header>
 
                     <div className="stepsWrap" style={{ marginTop: 14 }}>
                         <div className="stepsBox">
-                            <div className="stepsTitle">Lobby-Einstellungen</div>
+                            <div className="stepsTitle">{tr("Lobby-Einstellungen")}</div>
 
                             <div className="pillCard" style={{ marginTop: 10 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">Max. Spieler</div>
-                                    <div className="pillCardHint">Aktiv: {players.length} · empfohlen 4–8 · max. 12</div>
+                                    <div className="pillCardTitle">{tr("Max. Spieler")}</div>
+                                    <div className="pillCardHint">{tr("Aktiv: {n} · empfohlen 4–8 · max. 12", { n: players.length })}</div>
                                 </div>
                                 <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
                                     <button
@@ -294,7 +296,7 @@ export default function LobbyAdminPage() {
                                         className="btn btnSecondary btnSmall"
                                         onClick={() => setMaxPlayersSetting(Math.max(2, maxPlayers - 1))}
                                         disabled={settingsBusy || maxPlayers <= 2 || maxPlayers - 1 < players.length}
-                                        title={maxPlayers - 1 < players.length ? "Zu klein für aktive Spieler" : "Verringern"}
+                                        title={maxPlayers - 1 < players.length ? tr("Zu klein für die aktiven Spieler") : tr("Verringern")}
                                     >
                                         −
                                     </button>
@@ -312,7 +314,7 @@ export default function LobbyAdminPage() {
 
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
-                                    <div className="pillCardTitle">Modus</div>
+                                    <div className="pillCardTitle">{tr("Modus")}</div>
                                 </div>
                                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                                     {(Object.keys(MODES) as ModeKey[]).map((k) => (
@@ -322,10 +324,10 @@ export default function LobbyAdminPage() {
                                             className={`btn btnSecondary btnSmall ${mode === k ? "btnGlow" : ""}`}
                                             onClick={() => setModeSetting(k)}
                                             disabled={settingsBusy || k !== "original"}
-                                            title={k !== "original" ? "Kommt bald" : undefined}
+                                            title={k !== "original" ? tr("Kommt bald") : undefined}
                                         >
-                                            {MODES[k].icon} {MODES[k].label}
-                                            {k !== "original" ? <span style={{ opacity: 0.7, fontSize: 11, marginLeft: 6 }}>SOON</span> : null}
+                                            {MODES[k].icon} {tr(MODES[k].label)}
+                                            {k !== "original" ? <span style={{ opacity: 0.7, fontSize: 11, marginLeft: 6 }}>{tr("BALD")}</span> : null}
                                         </button>
                                     ))}
                                 </div>
@@ -335,7 +337,7 @@ export default function LobbyAdminPage() {
                             <div className="pillCard" style={{ marginTop: 14 }}>
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">🎵 Playlists</div>
-                                    <div className="pillCardHint">Antippen = rausnehmen · gilt ab der nächsten Themenwahl</div>
+                                    <div className="pillCardHint">{tr("Antippen = rausnehmen · gilt ab der nächsten Playlist-Wahl")}</div>
                                 </div>
                                 <div style={{ marginTop: 10 }}>
                                     <PlaylistPicker selected={musicGenres} onChange={setGenresSetting} disabled={settingsBusy} />
@@ -347,10 +349,10 @@ export default function LobbyAdminPage() {
 
                     <div className="stepsWrap" style={{ marginTop: 14 }}>
                         <div className="stepsBox">
-                            <div className="stepsTitle">Spieler verwalten</div>
+                            <div className="stepsTitle">{tr("Spieler verwalten")}</div>
 
                             {players.length === 0 ? (
-                                <div style={{ padding: "12px 8px", opacity: 0.75 }}>Noch niemand beigetreten.</div>
+                                <div style={{ padding: "12px 8px", opacity: 0.75 }}>{tr("Noch niemand beigetreten.")}</div>
                             ) : (
                                 <div className="playerGrid playerGridAdmin">
                                     {players.map((p, idx) => {
@@ -363,7 +365,7 @@ export default function LobbyAdminPage() {
                                                 <span className="playerChipSeat">{idx + 1}</span>
                                                 <span className="playerChipName">
                                                     {p.name}
-                                                    {isMe ? <span style={{ opacity: 0.6 }}> (du)</span> : null}
+                                                    {isMe ? <span style={{ opacity: 0.6 }}> ({tr("du")})</span> : null}
                                                     {isHostRow ? <span className="playerChipHostBadge">👑</span> : null}
                                                 </span>
                                                 <span className="playerChipState">{p.ready ? "✅" : "⏳"}</span>
@@ -374,7 +376,7 @@ export default function LobbyAdminPage() {
                                                             className="btn btnSecondary btnSmall"
                                                             disabled={pending}
                                                             onClick={() => onTransfer(p.player_id, p.name)}
-                                                            title="Host übertragen"
+                                                            title={tr("Host übertragen")}
                                                         >
                                                             {rowBusy ? <Spinner size={14} /> : "👑"}
                                                         </button>
@@ -385,7 +387,7 @@ export default function LobbyAdminPage() {
                                                             className="btn btnReadyOff btnSmall"
                                                             disabled={pending}
                                                             onClick={() => onKick(p.player_id, p.name)}
-                                                            title="Aus der Lobby kicken"
+                                                            title={tr("Aus der Lobby kicken")}
                                                         >
                                                             {rowBusy ? <Spinner size={14} /> : "👢"}
                                                         </button>
