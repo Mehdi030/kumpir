@@ -2102,7 +2102,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 ) : null}
                 <div className={`mbSeg ${aliveNow === 2 ? "mbDuel" : ""}`} title={aliveNow === 2 ? tr("Nur noch zwei: Duell") : tr("Tempo der Zündschnur")}>
                     <span className="mbLabel">{aliveNow === 2 ? tr("Finale") : tr("Tempo")}</span>
-                    <span className="mbValue">{aliveNow === 2 ? tr("⚔ Duell") : `×${tempoFactor.toFixed(1)}`}</span>
+                    <span className="mbValue">{aliveNow === 2 ? tr("⚔ Duell") : `×${fmtNum(tempoFactor)}`}</span>
                 </div>
                 <div className="mbSeg" title={tr("{n} von {total} Spielern noch im Spiel", { n: aliveNow, total: totalPlayers })}>
                     <span className="mbLabel">{tr("Im Spiel")}</span>

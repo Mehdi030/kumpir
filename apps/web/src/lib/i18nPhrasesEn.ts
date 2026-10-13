@@ -431,7 +431,7 @@ export const PHRASES_EN: Record<string, string> = {
     "Gesamt": "Total",
     "Punkte": "Points",
     "Ergebnis": "Result",
-    "Spieler": "Player",
+    "Spieler": "Players",
     "Schnellste": "Fastest",
     "Langsamste": "Slowest",
     "schnellste Abgabe von allen": "fastest pass of all",
@@ -1168,4 +1168,6 @@ export const PHRASES_EN: Record<string, string> = {
     "Profil & Einstellungen": "Profile & settings",
     "Rollen & Sperren": "Roles & blocks",
     "Songs & Playlists": "Songs & playlists",
+    "Kumpir – Heiße Kartoffel": "Kumpir – Hot potato",
+    "Solo gegen Bots": "Solo vs. bots",
 };
