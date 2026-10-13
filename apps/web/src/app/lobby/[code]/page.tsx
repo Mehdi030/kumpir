@@ -532,7 +532,6 @@ export default function LobbyPage() {
                 @media (max-width: 620px){ .lobbyStats{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
                 @media (max-width: 520px){ .lobbyStat{ padding: 10px 4px; } .lobbyStatIcon{ font-size: 22px; } .lobbyStatLabel{ font-size: 9.5px; letter-spacing: .4px; } }
                 .lobbyStatsHint{ margin-top: -6px; text-align: center; font-size: 12.5px; font-weight: 700; opacity: .7; }
-                .swStat.vis-public{ box-shadow: inset 0 0 0 1px rgba(255,210,63,.35); }
                 .swStat.vis-locked{ background: rgba(239,68,68,.16); border-color: rgba(252,165,165,.5); }
                 .lobbyPl{ border-radius: 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); overflow: hidden; }
                 .lobbyPlHead{ width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: transparent; border: 0; color: #fff; font: inherit; font-weight: 900; cursor: pointer; text-align: left; }

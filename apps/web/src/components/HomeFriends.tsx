@@ -203,7 +203,9 @@ export function HomeFriends({ inviteCode, withOpenLobbies = false, inModal = fal
 
     const onlineCount = status.friends.filter((f) => f.online).length;
     const filtered = useMemo(() => status.friends.filter((f) => filter === "all" || f.online), [status.friends, filter]);
-    const shown = showAll ? filtered : filtered.slice(0, FIRST);
+    // In der Lobby kleiner: erst 2 Freunde, Rest per "Alle anzeigen" (Wunsch Mehdi 2026-10-13)
+    const firstN = inviteCode ? 2 : FIRST;
+    const shown = showAll ? filtered : filtered.slice(0, firstN);
     const hiddenCount = filtered.length - shown.length;
 
     if (GUEST_ONLY || loading) return null;
@@ -251,7 +253,7 @@ export function HomeFriends({ inviteCode, withOpenLobbies = false, inModal = fal
     }
 
     return (
-        <section className={`frSec ${withOpenLobbies ? "frWithLobbies" : ""}`} aria-label={tr("Freunde")}>
+        <section className={`frSec ${withOpenLobbies ? "frWithLobbies" : ""} ${inviteCode ? "frInLobby" : ""}`} aria-label={tr("Freunde")}>
             <div className="frHead">
                 <h2 className="frTitle">
                     👥 {tr("Freunde")} <span className="frCount">{status.friends.length}</span>
@@ -353,7 +355,7 @@ export function HomeFriends({ inviteCode, withOpenLobbies = false, inModal = fal
                     />
                 ))}
             </div>
-            {hiddenCount > 0 || (showAll && filtered.length > FIRST) ? (
+            {hiddenCount > 0 || (showAll && filtered.length > firstN) ? (
                 <button type="button" className="frMore" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
                     {showAll ? tr("Weniger anzeigen ▴") : tr("Alle anzeigen (+{n}) ▾", { n: hiddenCount })}
                 </button>
@@ -428,6 +430,7 @@ function FriendRow({
 }
 
 const STYLES = `
+.frSec.frInLobby{ padding: 12px 14px; gap: 8px; border-radius: 22px; align-self: start; }
 .frSec{ container-type: inline-size; margin-top:6px; padding:18px; border-radius:26px; background:rgba(20,8,4,.5); border:1px solid var(--glass-line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow:0 18px 50px rgba(0,0,0,.25); display:flex; flex-direction:column; gap:12px; }
 /* Ab 1300 px: hohe Leiste rechts neben der Hauptkarte (die Hauptkarte ist dort schmaler, --homeW in globals.css) */
 @media (min-width: 1300px){
