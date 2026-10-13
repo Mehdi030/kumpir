@@ -47,6 +47,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
     const { t, tr } = useI18n();
     const [shareMsg, setShareMsg] = useState("");
     const [shareBusy, setShareBusy] = useState(false);
+    const podium = [...rows].sort((a, b) => a.place - b.place).slice(0, 3);
 
     const shareResult = async () => {
         if (shareBusy) return;
@@ -104,10 +105,34 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
             <div className="finLeft">
                 <header className="finHero">
                     <div className="finKicker">{isSeries ? t("fin.match", { n: totalRounds }) : t("fin.round")}</div>
-                    <div className="finWinnerAvatar" aria-hidden>
-                        <PlayerAvatar seed={winnerName} config={rows.find((r) => r.place === 1)?.avatarConfig} size={96} />
-                        <span className="finTrophy">🏆</span>
-                    </div>
+                    {podium.length >= 2 ? (
+                        <div className="finPodium" aria-hidden>
+                            {[podium[1], podium[0], podium[2]].map((r, i) =>
+                                r ? (
+                                    <div key={r.id} className={`finStep p${r.place}`} style={{ ["--d" as string]: `${[0.25, 0.05, 0.45][i]}s` }}>
+                                        <div className="finStepAvatar">
+                                            <PlayerAvatar seed={r.name} config={r.avatarConfig} size={r.place === 1 ? 84 : 60} />
+                                            {r.place === 1 ? <span className="finCrown">👑</span> : null}
+                                        </div>
+                                        <div className="finStepName" title={r.name}>
+                                            {r.name}
+                                        </div>
+                                        <div className="finStepBlock">
+                                            <span className="finStepNo">{r.place}</span>
+                                            <span className="finStepPts">{tr("{n} P.", { n: r.points })}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div key={`empty${i}`} />
+                                )
+                            )}
+                        </div>
+                    ) : (
+                        <div className="finWinnerAvatar" aria-hidden>
+                            <PlayerAvatar seed={winnerName} config={rows.find((r) => r.place === 1)?.avatarConfig} size={96} />
+                            <span className="finTrophy">🏆</span>
+                        </div>
+                    )}
                     <h1 className="finWinner">{winnerName}</h1>
                     <div className="finSub">{isSeries ? t("fin.winsMatch") : t("fin.winsRound")}</div>
                     {me ? <div className="finMe">{t("fin.me", { place: me.place, score: me.score })}</div> : null}
@@ -193,6 +218,20 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
         .finMe b{ font-weight: 800; }
         .finRight{ animation: finIn .7s .1s cubic-bezier(.16,1,.3,1) both; min-width: 0; }
 
+        .finPodium{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 8px; width: min(420px, 100%); margin: 26px 0 2px; }
+        .finStep{ display: grid; justify-items: center; gap: 4px; min-width: 0; animation: finRise .7s var(--d, 0s) cubic-bezier(.16,1,.3,1) both; }
+        .finStepAvatar{ position: relative; border-radius: 50%; background: radial-gradient(circle at 40% 35%, rgba(255,226,122,.45), rgba(255,178,26,.15) 70%); padding: 3px; }
+        .finStep.p1 .finStepAvatar{ box-shadow: 0 0 0 4px rgba(255,214,10,.45), 0 0 36px rgba(255,214,10,.35); animation: finBob 3s ease-in-out infinite; }
+        .finCrown{ position: absolute; top: -20px; left: 50%; transform: translateX(-50%) rotate(-8deg); font-size: 28px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.4)); }
+        .finStepName{ font-weight: 800; font-size: 13.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .finStepBlock{ width: 100%; display: grid; justify-items: center; align-content: start; gap: 2px; padding-top: 8px; border-radius: 14px 14px 6px 6px;
+          background: linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,.06)); border: 1px solid rgba(255,255,255,.22); }
+        .finStep.p1 .finStepBlock{ height: 92px; background: linear-gradient(180deg, rgba(255,214,10,.5), rgba(255,170,20,.14)); border-color: rgba(255,224,138,.7); }
+        .finStep.p2 .finStepBlock{ height: 66px; background: linear-gradient(180deg, rgba(226,232,240,.42), rgba(226,232,240,.08)); }
+        .finStep.p3 .finStepBlock{ height: 48px; background: linear-gradient(180deg, rgba(217,140,70,.45), rgba(217,140,70,.08)); }
+        .finStepNo{ font-family: var(--font-display); font-size: 26px; font-weight: 900; line-height: 1; }
+        .finStepPts{ font-size: 12px; font-weight: 800; color: #ffe08a; }
+        @keyframes finRise{ from{ opacity: 0; transform: translateY(30px) scale(.9); } }
         .finTiles{ display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; animation: finIn .7s .2s cubic-bezier(.16,1,.3,1) both; }
         .finTile{ border-radius: 16px; padding: 8px; text-align: center; background: rgba(30,8,8,.36); border: 1px solid rgba(255,255,255,.14); display: grid; justify-items: center; min-width: 0; }
         .finTileIcon{ font-size: 20px; }
@@ -212,6 +251,9 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
         @media (max-width: 899px){
           .finWrap{ gap: 10px; }
           .finWinnerAvatar{ width: 72px; height: 72px; }
+          .finStep.p1 .finStepBlock{ height: 70px; } .finStep.p2 .finStepBlock{ height: 50px; } .finStep.p3 .finStepBlock{ height: 36px; }
+          .finStepAvatar img{ width: 48px !important; height: 48px !important; }
+          .finStep.p1 .finStepAvatar img{ width: 64px !important; height: 64px !important; }
           .finWinnerAvatar img{ width: 66px; height: 66px; }
           .finTrophy{ font-size: 24px; }
           .finLeft{ gap: 8px; }

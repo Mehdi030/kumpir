@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { fmtSeconds, hitRate, seasonKey, seasonLabel, strongestPlaylist, titleRate, type ProfileStats } from "@/lib/profileStats";
+import { fmtSeconds, seasonKey, seasonLabel, strongestPlaylist, titleRate, type ProfileStats } from "@/lib/profileStats";
 import { renderRecapCard } from "@/lib/recapCard";
 import { shareOrDownloadPng } from "@/lib/resultCard";
 import { Spinner } from "@/components/Spinner";
@@ -32,9 +32,11 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
 
     const { totals, music, playlists, recent, opponents, recap } = data;
     const empty = totals.matches === 0 && totals.practiceMatches === 0 && recent.length === 0;
-    const rate = hitRate(music.titles, music.artists, music.wrong);
+    // Nur Künstler zählt kaum (viel leichter) – Quote = Titel-Treffer an allen Versuchen
+    const rate = titleRate(music.titles, music.artists, music.wrong);
+    const both = music.both ?? 0;
     const strongest = strongestPlaylist(playlists);
-    const recapRate = hitRate(recap.titles, recap.artists, recap.wrong);
+    const recapRate = titleRate(recap.titles, recap.artists, recap.wrong);
     const thisMonth = seasonKey(0);
     const lastMonth = seasonKey(-1);
 
@@ -56,7 +58,7 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
                     { label: tr("Matches"), value: `${recap.matches}` },
                     { label: tr("Match-Siege"), value: `${recap.matchWins}` },
                     { label: tr("Titel erkannt"), value: String(recap.titles) },
-                    { label: tr("Trefferquote"), value: recapRate != null ? `${recapRate} %` : "–" },
+                    { label: tr("Titel-Quote"), value: recapRate != null ? `${recapRate} %` : "–" },
                 ],
                 lines,
                 siteUrl: window.location.origin,
@@ -99,12 +101,15 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
                     🎵 {tr("Musik")} <small>{tr("inkl. Übungsspiele")}</small>
                 </h2>
                 <div className="accGrid accGrid3">
-                    <Tile label={tr("Titel erkannt")} value={music.titles} />
-                    <Tile label={tr("Nur Interpret")} value={music.artists} />
-                    <Tile label={tr("Trefferquote")} value={rate != null ? `${rate} %` : "–"} />
+                    <Tile label={tr("🎯 Titel + Künstler")} value={both} strong />
+                    <Tile label={tr("🎵 Nur Titel")} value={music.titles - both} strong />
+                    <Tile label={tr("Titel-Quote")} value={rate != null ? `${rate} %` : "–"} />
                     <Tile label={tr("Ø Antwortzeit")} value={fmtSeconds(music.avgAnswerMs)} />
                     <Tile label={tr("Schnellster Titel")} value={fmtSeconds(music.fastestTitleMs)} />
                     <Tile label={tr("Beste Serie")} value={music.bestCombo ? tr("{n} in Folge", { n: music.bestCombo }) : "–"} />
+                </div>
+                <div className="accNote">
+                    {tr("Nur Künstler: {n}× (zählt kaum, weil es viel leichter ist).", { n: music.artists })} {tr("„Titel + Künstler“ wird seit Oktober 2026 getrennt gezählt.")}
                 </div>
                 {strongest ? (
                     <div className="accStrong">
@@ -125,7 +130,7 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
                                         <span style={{ width: `${rateT ?? 0}%` }} />
                                     </div>
                                     <div className="accListSub">
-                                        {tr("{t} Titel · {a} Interpret · {w} falsch · {r} Runden", { t: p.titles, a: p.artists, w: p.wrong, r: p.rounds })}
+                                        {tr("{b} Titel + Künstler · {t} nur Titel · {w} falsch · {r} Runden", { b: p.both ?? 0, t: p.titles - (p.both ?? 0), w: p.wrong, r: p.rounds })}
                                         {p.wins ? ` · ${tr("{n}× gewonnen", { n: p.wins })}` : ""}
                                     </div>
                                 </div>
@@ -160,9 +165,9 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
                             <Tile label={tr("Saison-Platz")} value={recap.rank ? `#${recap.rank}` : "–"} />
                             <Tile label={tr("Saison-Punkte")} value={recap.seasonPoints ?? 0} />
                             <Tile label={tr("Matches (Siege)")} value={`${recap.matches} (${recap.matchWins})`} />
-                            <Tile label={tr("Titel erkannt")} value={recap.titles} />
-                            <Tile label={tr("Trefferquote")} value={recapRate != null ? `${recapRate} %` : "–"} />
-                            <Tile label={tr("Beste Runde")} value={recap.bestRoundPoints != null ? tr("{n} P.", { n: recap.bestRoundPoints }) : "–"} />
+                            <Tile label={tr("🎯 Titel + Künstler")} value={recap.both ?? 0} strong />
+                            <Tile label={tr("🎵 Nur Titel")} value={recap.titles - (recap.both ?? 0)} strong />
+                            <Tile label={tr("Titel-Quote")} value={recapRate != null ? `${recapRate} %` : "–"} />
                         </div>
                         <div className="accRecapLines">
                             {recap.favoritePlaylist ? (
@@ -173,6 +178,11 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
                             {recap.bestPlaylist ? (
                                 <span>
                                     💪 {tr("Stärkste Playlist:")} <b>{recap.bestPlaylist}</b>
+                                </span>
+                            ) : null}
+                            {recap.bestRoundPoints != null ? (
+                                <span>
+                                    🏅 {tr("Beste Runde:")} <b>{tr("{n} P.", { n: recap.bestRoundPoints })}</b>
                                 </span>
                             ) : null}
                             {recap.fastestTitleMs != null ? (
@@ -237,8 +247,7 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
                             <div className="accHistRight">
                                 <b>{tr("{n} P.", { n: m.total_points })}</b>
                                 <small>
-                                    🎵 {m.title_hits}
-                                    {m.artist_hits ? ` +${m.artist_hits}` : ""}
+                                    {m.both_hits ? `🎯 ${m.both_hits} · ` : ""}🎵 {m.title_hits - (m.both_hits ?? 0)}
                                 </small>
                             </div>
                         </li>
@@ -251,9 +260,9 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
     );
 }
 
-function Tile({ label, value }: { label: string; value: string | number }) {
+function Tile({ label, value, strong = false }: { label: string; value: string | number; strong?: boolean }) {
     return (
-        <div className="accTile">
+        <div className={`accTile ${strong ? "strong" : ""}`}>
             <div className="accTileVal">{value}</div>
             <div className="accTileLabel">{label}</div>
         </div>
@@ -267,6 +276,8 @@ const STYLES = `
 .accGrid3{ grid-template-columns: repeat(3, minmax(0,1fr)); }
 .accTile{ padding:12px 8px; border-radius:16px; background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); text-align:center; min-width:0; }
 .accTileVal{ font-size:22px; font-weight:800; font-family: var(--font-display); color:#ffe08a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.accTile.strong{ background: rgba(255,210,63,.14); border-color: rgba(255,210,63,.45); }
+.accTile.strong .accTileVal{ font-size:26px; }
 .accTileLabel{ font-size:11px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; opacity:.75; margin-top:2px; }
 .accNote{ font-size:13px; opacity:.8; }
 .accBox{ padding:16px; border-radius:18px; background: rgba(0,0,0,.18); border:1px solid rgba(255,255,255,.12); display:grid; gap:12px; }

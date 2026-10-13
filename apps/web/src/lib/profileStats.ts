@@ -3,14 +3,17 @@ import { dateLocale, fmtNum } from "@/lib/i18n";
 export type ProfileStats = {
     totals: { matches: number; matchWins: number; rounds: number; roundWins: number; practiceMatches: number };
     music: {
+        /** alle Titel-Treffer (inkl. Titel + Künstler) */
         titles: number;
+        /** davon Titel + Künstler zusammen (Migration 109, ältere Spiele: 0) */
+        both?: number;
         artists: number;
         wrong: number;
         avgAnswerMs: number | null;
         fastestTitleMs: number | null;
         bestCombo: number;
     };
-    playlists: { playlist: string; rounds: number; titles: number; artists: number; wrong: number; wins: number }[];
+    playlists: { playlist: string; rounds: number; titles: number; both?: number; artists: number; wrong: number; wins: number }[];
     recent: {
         finished_at: string;
         rounds_total: number;
@@ -22,6 +25,7 @@ export type ProfileStats = {
         round_wins: number;
         playlists: string[] | null;
         title_hits: number;
+        both_hits?: number;
         artist_hits: number;
         wrong_guesses: number;
         ranked: boolean;
@@ -35,6 +39,7 @@ export type ProfileStats = {
         matchWins: number;
         rounds: number;
         titles: number;
+        both?: number;
         artists: number;
         wrong: number;
         bestRoundPoints: number | null;

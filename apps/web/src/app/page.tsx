@@ -1,5 +1,6 @@
 "use client";
 
+import { AchievementRecap } from "@/components/AchievementRecap";
 import Link from "next/link";
 import { Suspense, useEffect } from "react";
 import { AuthMini } from "@/components/AuthMini";
@@ -31,6 +32,7 @@ export default function Home() {
     ];
     return (
         <main className="container homeMain">
+            <AchievementRecap />
             <div className="landingWrap landingWrapDecor">
                 <div className="potatoBg" aria-hidden="true">
                     <HomePotato />

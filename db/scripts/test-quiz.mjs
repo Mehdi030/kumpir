@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Quiz-Modi mit 4 Bots durchspielen (Server-Takt + Bot-Takt laufen per Cron).
-// Aufruf: node db/scripts/test-quiz.mjs <mode>   (artist|snippet|pick|buzzer|year|gap|duel)
+// Aufruf: node db/scripts/test-quiz.mjs <mode>   (original|artist|snippet|pick|buzzer|year|gap|duel), KEEP=1 = Lobby nicht löschen
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,11 +49,13 @@ for (;;) {
         const extra = l.quiz_state === "reveal" ? JSON.stringify({ t: l.quiz_reveal?.title, a: l.quiz_reveal?.artist, y: l.quiz_reveal?.year, w: l.quiz_reveal?.word, r: (l.quiz_reveal?.results || []).map((x) => x.points), pb: l.quiz_reveal?.pickerBonus, dw: l.quiz_reveal?.duelWinner }) : JSON.stringify(l.quiz_options);
         console.log(((Date.now() - t0) / 1000).toFixed(1).padStart(6), key, extra?.slice(0, 220));
     }
-    if (l.phase !== "quiz") break;
+    if (l.phase === "finished" || l.phase === "set_summary") break;
+    if (l.phase !== "quiz" && l.phase !== "running" && l.phase !== "countdown") break;
     if (Date.now() - t0 > 600000) { console.log("Timeout"); break; }
     await wait(700);
 }
 console.log(await q("select name, song_points, is_alive from public.players where lobby_id = $1 order by song_points desc", [id]));
 console.log(await q("select name, place, arena_points, song_points from public.series_results where lobby_id = $1 order by place", [id]));
-await q("delete from public.lobbies where id = $1", [id]);
+if (process.env.KEEP) console.log("Lobby bleibt:", code);
+else await q("delete from public.lobbies where id = $1", [id]);
 await db.end();

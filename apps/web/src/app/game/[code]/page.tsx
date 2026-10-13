@@ -15,7 +15,7 @@ import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { usePassAttempt } from "@/hooks/usePassAttempt";
 import { useNewAchievements } from "@/hooks/useNewAchievements";
 import { useAuth } from "@/components/AuthProvider";
-import { AchievementToastPortal } from "@/components/AchievementToastPortal";
+import { AchievementBurst, queueAchievementRecap } from "@/components/AchievementBurst";
 import { BackdropFx } from "@/components/game/BackdropFx";
 import { MUSIC_PLAYLISTS, playlistLook } from "@/lib/musicGenres";
 import type { CSSProperties } from "react";
@@ -618,11 +618,38 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // -----------------------------
     // Achievement-Toast — beobachtet neue Unlocks beim Spielende
     // -----------------------------
-    const achievementTrigger = lobby?.phase === "finished" ? `${lobby?.id}:${lobby?.round_number ?? 0}` : null;
+    // Erfolge: am Rundenende und (Migration 109) auch mitten in der Runde, sobald man selbst punktet
+    const myScoreKey = lobby?.phase === "running" ? Number(meRow?.song_points ?? 0) : null;
+    const achievementTrigger =
+        lobby?.phase === "finished" ? `fin:${lobby?.id}:${lobby?.round_number ?? 0}` : myScoreKey != null && myScoreKey > 0 ? `run:${lobby?.id}:${myScoreKey}` : null;
     const { newOnes: newAchievements, dismiss: dismissAchievement } = useNewAchievements(
         user?.id ?? null,
         achievementTrigger
     );
+
+    // Neue Erfolge für Lobby/Hauptmenü merken (dort erscheinen sie nach der Runde unten rechts)
+    useEffect(() => {
+        queueAchievementRecap(newAchievements);
+    }, [newAchievements]);
+    const achBurst = <AchievementBurst achievements={newAchievements} onDone={dismissAchievement} />;
+
+    // Endstand: Song-Treffer pro Spieler im ganzen Match (Migration 109)
+    type AnswerStat = { playerId: string; both: number; titles: number; artists: number; wrong: number; fastestMs: number | null; avgMs: number | null; bestCombo: number; exploded: number };
+    const [answerStats, setAnswerStats] = useState<Record<string, AnswerStat>>({});
+    const finishedKey = lobby?.phase === "finished" ? `${lobby.id}:${lobby.round_number ?? 0}` : null;
+    useEffect(() => {
+        if (!finishedKey) return;
+        let alive = true;
+        const t = window.setTimeout(async () => {
+            const { data } = await supabase.rpc("get_match_answer_stats", { p_code: code });
+            if (!alive || !Array.isArray(data)) return;
+            setAnswerStats(Object.fromEntries((data as AnswerStat[]).map((s) => [s.playerId, s])));
+        }, 400);
+        return () => {
+            alive = false;
+            window.clearTimeout(t);
+        };
+    }, [finishedKey, supabase, code]);
 
     const isHost = !!mePlayerId && lobby?.host_player_id === mePlayerId;
     // Bots laufen serverseitig (pg_cron, Migration 064/070) -- kein Client-Bot-Motor mehr.
@@ -1812,11 +1839,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                   return { id: e.id, name: e.name, place: i + 1, points: e.total, fastestMs: f.length ? Math.min(...f) : null, slowestMs: sl.length ? Math.max(...sl) : null, isMe: e.id === mePlayerId, avatarConfig: players.find((p) => p.player_id === e.id)?.avatar_config ?? null };
               })
             : ranking.map((r) => ({ id: r.player_id, name: r.name, place: r.place, points: r.score, fastestMs: num(r.fastest), slowestMs: num(r.slowest), isMe: r.player_id === mePlayerId, out: !r.is_alive, avatarConfig: r.avatar_config ?? null }));
+        // Song-Treffer (🎯 Titel + Künstler, 🎵 nur Titel) an jede Zeile hängen
+        const finRowsSongs = finRows.map((r) => ({ ...r, both: answerStats[r.id]?.both ?? 0, titlesOnly: answerStats[r.id]?.titles ?? 0 }));
+        const nameOfId = (id: string) => finRows.find((r) => r.id === id)?.name ?? "…";
+        const statList = Object.values(answerStats).filter((s) => finRows.some((r) => r.id === s.playerId));
         const fastRow = [...finRows].filter((r) => r.fastestMs != null).sort((a, b) => a.fastestMs! - b.fastestMs!)[0] ?? null;
         const slowRow = [...finRows].filter((r) => r.slowestMs != null).sort((a, b) => b.slowestMs! - a.slowestMs!)[0] ?? null;
         const bestSong = ranking.filter((r) => !r.is_bot && r.songPoints > 0).sort((a, b) => b.songPoints - a.songPoints)[0] ?? null;
 
         const highlights: FinishHighlight[] = [];
+        const bestKnower = [...statList].filter((s) => s.both > 0).sort((a, b) => b.both - a.both || b.titles - a.titles)[0];
+        if (bestKnower) highlights.push({ icon: "🎯", label: tr("Bester Kenner"), name: nameOfId(bestKnower.playerId), value: tr("{n}× Titel + Künstler", { n: bestKnower.both }) });
+        const bestCombo = [...statList].filter((s) => s.bestCombo >= 2).sort((a, b) => b.bestCombo - a.bestCombo)[0];
+        if (bestCombo) highlights.push({ icon: "🔥", label: tr("Längste Serie"), name: nameOfId(bestCombo.playerId), value: tr("{n} in Folge", { n: bestCombo.bestCombo }) });
+        const quickEar = [...statList].filter((s) => s.fastestMs != null).sort((a, b) => a.fastestMs! - b.fastestMs!)[0];
+        if (quickEar) highlights.push({ icon: "👂", label: tr("Schnellstes Ohr"), name: nameOfId(quickEar.playerId), value: fmtMs(quickEar.fastestMs) });
         if (bestSong) highlights.push({ icon: "🎵", label: tr("Song-Profi"), name: bestSong.name, value: tr("{n} Song-Punkte", { n: fmtNum(Math.round(bestSong.songPoints * 2) / 2, Number.isInteger(bestSong.songPoints) ? 0 : 1) }) });
         if (fastRow) highlights.push({ icon: "⚡", label: tr("Schnellste Abgabe"), name: fastRow.name, value: fmtMs(fastRow.fastestMs) });
         if (slowRow && slowRow.slowestMs !== fastRow?.fastestMs) highlights.push({ icon: "🐢", label: tr("Langsamste Abgabe"), name: slowRow.name, value: fmtMs(slowRow.slowestMs) });
@@ -1862,7 +1899,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     overflow: "hidden",
                 }}
             >
-                <AchievementToastPortal achievements={newAchievements} onDismiss={dismissAchievement} />
+                {achBurst}
                 <Confetti active />
                 <BackdropFx variant="warm" rays vignette />
                 <FinishScreen
@@ -1870,7 +1907,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     totalRounds={lobby.series_total ?? 1}
                     winnerName={winnerName}
                     me={me}
-                    rows={finRows}
+                    rows={finRowsSongs}
                     shareRows={
                         isSeries
                             ? seriesRanked.map((e, i) => ({ place: i + 1, name: e.name, score: e.total, isMe: e.id === mePlayerId }))
@@ -1991,6 +2028,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     onToast={(m, ms) => showToast(m, ms ?? 2200)}
                 />
                 <ToastStack toasts={toasts} />
+                {achBurst}
             </>
         );
     }
@@ -2190,6 +2228,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     </div>
                 </div>
             ) : null}
+
+            {achBurst}
 
             {/* Self-elimination flash overlay */}
             {selfShake ? <div className="selfFlash" aria-hidden /> : null}

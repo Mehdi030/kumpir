@@ -1,5 +1,6 @@
 "use client";
 
+import { AchievementRecap } from "@/components/AchievementRecap";
 import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { startGame, type StartGameResult } from "@/actions/startGame";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -439,6 +440,7 @@ export default function LobbyPage() {
 
     return (
         <main className="container">
+            <AchievementRecap />
             <div className="landingWrap withSidePanel">
                 <section className="card" aria-label={tr("Lobby")} style={{ position: "relative" }}>
                     <div className="lobbyHead">
