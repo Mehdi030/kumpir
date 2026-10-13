@@ -1275,4 +1275,8 @@ export const PHRASES_EN: Record<string, string> = {
     "🔴 Team Rot": "🔴 Team Red",
     "🔵 Team Blau": "🔵 Team Blue",
     "Team Rot gegen Team Blau: Die Kartoffel geht immer ins andere Team. Ist ein Team komplett raus, hat das andere gewonnen.": "Team Red vs. Team Blue: the potato always goes to the other team. When a whole team is out, the other team wins.",
+    "Ein Jahr früher": "One year earlier",
+    "Ein Jahr später": "One year later",
+    "Jahr wählen": "Pick a year",
+    "Tipp abgeben: {y}": "Lock in: {y}",
 };

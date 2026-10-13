@@ -53,6 +53,9 @@ type Status = {
 
 type RevealResult = { playerId: string; points: number; correct: boolean; answer: string | null };
 
+const YEAR_MIN = 2005; // ältester Song der Playlist: 2009 (fetch-release-years.mjs)
+const YEAR_MAX = new Date().getFullYear();
+
 const pts = (n: number) => (Number.isInteger(n) ? String(n) : fmtNum(n, 1));
 
 function secondsLeft(endsAt: string | null): number {
@@ -124,6 +127,8 @@ export function QuizStage({
     }, [lobby.quiz_seq, state]);
 
     const mySeqStatus = status && status.seq === lobby.quiz_seq ? status : null;
+    // Jahr raten: Regler startet in der Mitte der letzten Jahre
+    const yearPick = /^\d{4}$/.test(answer) ? Math.min(YEAR_MAX, Math.max(YEAR_MIN, Number(answer))) : YEAR_MAX - 5;
     const meAnswered = !!mySeqStatus?.me.answered;
     const meCorrect = !!mySeqStatus?.me.correct;
     const answeredSet = useMemo(() => new Set(mySeqStatus?.answered ?? []), [mySeqStatus]);
@@ -391,23 +396,35 @@ export function QuizStage({
                         doneCard(tr("Dein Tipp: {y} – gleich kommt die Auflösung.", { y: mySeqStatus?.me.answer ?? "" }))
                     ) : canPlay ? (
                         <form
-                            className="qzForm"
+                            className="qzYearForm"
                             onSubmit={(e) => {
                                 e.preventDefault();
-                                if (/^\d{4}$/.test(answer.trim())) void choose(answer.trim());
+                                void choose(String(yearPick));
                             }}
                         >
+                            <div className="qzYearRow">
+                                <button type="button" className="qzYearStep" onClick={() => setAnswer(String(Math.max(YEAR_MIN, yearPick - 1)))} aria-label={tr("Ein Jahr früher")}>
+                                    −
+                                </button>
+                                <span className="qzYearBig" key={yearPick}>
+                                    {yearPick}
+                                </span>
+                                <button type="button" className="qzYearStep" onClick={() => setAnswer(String(Math.min(YEAR_MAX, yearPick + 1)))} aria-label={tr("Ein Jahr später")}>
+                                    +
+                                </button>
+                            </div>
                             <input
-                                ref={inputRef}
-                                className="qzInput qzYear"
-                                value={answer}
-                                onChange={(e) => setAnswer(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                                placeholder="2019"
-                                inputMode="numeric"
-                                autoComplete="off"
+                                type="range"
+                                className="qzYearRange"
+                                min={YEAR_MIN}
+                                max={YEAR_MAX}
+                                step={1}
+                                value={yearPick}
+                                onChange={(e) => setAnswer(e.target.value)}
+                                aria-label={tr("Jahr wählen")}
                             />
-                            <button type="submit" className="btn btnPrimary qzSend" disabled={busy || !/^\d{4}$/.test(answer.trim())}>
-                                {tr("Tippen")}
+                            <button type="submit" className="btn btnPrimary" disabled={busy}>
+                                {tr("Tipp abgeben: {y}", { y: yearPick })}
                             </button>
                         </form>
                     ) : null}
@@ -628,7 +645,12 @@ export function QuizStage({
         .qzForm{ width: min(560px, 100%); display: flex; gap: 10px; }
         .qzInput{ flex: 1; min-width: 0; height: 54px; border-radius: 16px; border: 2px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.25); color: white; font-size: 19px; font-weight: 800; padding: 0 16px; outline: none; }
         .qzInput:focus{ border-color: var(--pl, #ffd23f); }
-        .qzYear{ text-align: center; font-size: 26px; letter-spacing: 4px; }
+        .qzYearForm{ width: min(480px, 100%); display: grid; gap: 14px; justify-items: center; }
+        .qzYearRow{ display: flex; align-items: center; gap: 18px; }
+        .qzYearBig{ font-family: var(--font-display); font-size: clamp(46px, 8vw, 68px); font-weight: 900; color: #ffe08a; min-width: 3.2ch; text-align: center; animation: qzPop .25s ease-out; font-variant-numeric: tabular-nums; }
+        .qzYearStep{ width: 48px; height: 48px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); background: rgba(255,255,255,.1); color: #fff; font-size: 26px; font-weight: 900; cursor: pointer; }
+        .qzYearStep:hover{ background: rgba(255,255,255,.2); }
+        .qzYearRange{ width: 100%; accent-color: #ffd23f; }
         .qzSend{ height: 54px; padding: 0 20px; }
         .qzShake{ animation: qzShake .35s; border-color: #ff5a3c; }
         @keyframes qzShake { 20%{ transform: translateX(-6px);} 40%{ transform: translateX(6px);} 60%{ transform: translateX(-4px);} 80%{ transform: translateX(4px);} }
