@@ -8,7 +8,6 @@ import { validatePlayerName } from "@/lib/profanity";
 import { useAuth } from "@/components/AuthProvider";
 import { useProfile } from "@/hooks/useProfile";
 import { PlaylistPicker, loadPlaylists, selectedFromExcluded } from "@/components/PlaylistPicker";
-import { RulesCard } from "@/components/RulesCard";
 import { track } from "@/lib/track";
 import { startBotGame, type BotSkill } from "@/lib/botGame";
 import { SOLO_SKILL_LABEL } from "@/lib/accountSettings";
@@ -362,14 +361,31 @@ export default function HostPage() {
         );
     };
     const modeCard = (
-            <div className="pillCard" style={{ marginTop: 14 }}>
+            <div className="pillCard hcMode">
                 <div className="pillCardTop">
                     <div className="pillCardTitle">{tr("Modus")}</div>
                     <div className="pillCardHint">{tr("Wähle die Regeln für die Runde")}</div>
                 </div>
 
-                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                    {topModes.map(renderMode)}
+                <div className="modeTiles">
+                    {topModes.map((m) => (
+                        <button
+                            key={m.key}
+                            type="button"
+                            className={`modeTile ${mode === m.key ? "on" : ""} ${m.kind === "quiz" ? "quiz" : ""}`}
+                            onClick={() => setMode(m.key)}
+                            aria-pressed={mode === m.key}
+                        >
+                            <span className="modeTileIcon" aria-hidden>
+                                {m.icon}
+                            </span>
+                            <span className="modeTileName">
+                                {tr(m.label)}
+                                {m.isNew ? <span className="modeTileNew">{tr("NEU")}</span> : null}
+                            </span>
+                            <span className="modeTileDesc">{tr(m.desc)}</span>
+                        </button>
+                    ))}
                 </div>
                 {moreModes.length ? (
                     <>
@@ -435,7 +451,7 @@ export default function HostPage() {
                                 <div className="panelHint">{tr("Du kannst das später ändern.")}</div>
                             </div>
 
-                            <div className="fieldBlock">
+                            <div className="fieldBlock hcName">
                                 <div className="fieldTop">
                                     <div className="fieldTitle">{tr("Dein Name")}</div>
                                     <div className="fieldHint">{tr("Mindestens 2 Zeichen")}</div>
@@ -474,7 +490,7 @@ export default function HostPage() {
 
                             {category === "friends" ? (
                             <>
-                            <div className="pillCard">
+                            <div className="pillCard hcMax">
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">{tr("Max. Spieler")}</div>
                                     <div className="pillCardHint">{tr("Empfohlen: 4–8 · max. 12")}</div>
@@ -493,7 +509,7 @@ export default function HostPage() {
 
                             {modeCard}
 
-                            <div className="pillCard" style={{ marginTop: 14 }}>
+                            <div className="pillCard hcTempo">
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">{tr("Tempo")}</div>
                                     <div className="pillCardHint">{activeSpeed ? tr(activeSpeed.hint) : tr("Bitte auswählen.")}</div>
@@ -520,7 +536,7 @@ export default function HostPage() {
                                 </div>
                             </div>
 
-                            <div className="pillCard" style={{ marginTop: 14 }}>
+                            <div className="pillCard hcRounds">
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">{tr("Runden pro Match")}</div>
                                     <div className="pillCardHint">
@@ -545,7 +561,7 @@ export default function HostPage() {
                                 </div>
                             </div>
 
-                            <div className="pillCard" style={{ marginTop: 14 }}>
+                            <div className="pillCard hcPl">
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">🎵 Playlists</div>
                                     <div className="pillCardHint">{tr("Antippen = rausnehmen")}</div>
@@ -563,7 +579,7 @@ export default function HostPage() {
                                 </div>
                             ) : null}
 
-                            <div className="actionsRow" style={{ alignItems: "center", marginTop: 14 }}>
+                            <div className="actionsRow hcAct" style={{ alignItems: "center", marginTop: 14 }}>
                                 <button
                                     type="button"
                                     onClick={onCreate}
@@ -594,7 +610,7 @@ export default function HostPage() {
                             <>
                                 {modeCard}
                                 <div style={{ height: 14 }} />
-                                <div className="pillCard">
+                                <div className="pillCard hcCount">
                                     <div className="pillCardTop">
                                         <div className="pillCardTitle">{tr("Wie viele Bots?")}</div>
                                         <div className="pillCardHint">{tr("1 bis 5 Gegner")}</div>
@@ -614,7 +630,7 @@ export default function HostPage() {
                                     </div>
                                 </div>
 
-                                <div className="pillCard" style={{ marginTop: 14 }}>
+                                <div className="pillCard hcSkill">
                                     <div className="pillCardTop">
                                         <div className="pillCardTitle">{tr("Stärke")}</div>
                                         <div className="pillCardHint">
@@ -638,7 +654,7 @@ export default function HostPage() {
                                     </div>
                                 </div>
 
-                                <div className="pillCard" style={{ marginTop: 14 }}>
+                                <div className="pillCard hcTempo">
                                     <div className="pillCardTop">
                                         <div className="pillCardTitle">{tr("Tempo")}</div>
                                         <div className="pillCardHint">{activeSpeed ? tr(activeSpeed.hint) : tr("Bitte auswählen.")}</div>
@@ -665,7 +681,7 @@ export default function HostPage() {
                                     </div>
                                 ) : null}
 
-                                <div className="actionsRow" style={{ alignItems: "center", marginTop: 14 }}>
+                                <div className="actionsRow hcAct" style={{ alignItems: "center", marginTop: 14 }}>
                                     <button
                                         type="button"
                                         onClick={() => void onStartBots()}
@@ -681,7 +697,6 @@ export default function HostPage() {
                     </div>
                 </section>
 
-                <RulesCard defaultOpen={false} variant="outside" />
             </div>
         </main>
     );

@@ -180,7 +180,7 @@ export default function LobbyPage() {
         [lobbyId, mePlayerId]
     );
     const [maxPlayers, setMaxPlayers] = useLiveSetting(
-        lobby?.max_players ?? 8,
+        lobby?.max_players ?? 6,
         useCallback((v: number) => rpc("set_max_players", { p_max_players: v }), [rpc]),
         showError,
         reload
@@ -636,7 +636,7 @@ export default function LobbyPage() {
                                             type="button"
                                             className="btn btnPrimary lobbyBotBtn"
                                             onClick={() => void addBot()}
-                                            disabled={botBusy || players.length >= (lobby?.max_players ?? 8)}
+                                            disabled={botBusy || players.length >= (lobby?.max_players ?? 6)}
                                             title={tr("Bot zur Lobby hinzufügen (Übungsspiel)")}
                                         >
                                             {tr("🤖 Bot hinzufügen")}

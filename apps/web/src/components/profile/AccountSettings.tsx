@@ -325,7 +325,7 @@ function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePrefe
     const [volume, setVolumeState] = useState(() => Math.round(getVolume() * 100));
     const [bots, setBots] = useState(p.solo?.bots ?? 3);
     const [skill, setSkill] = useState<NonNullable<NonNullable<Preferences["solo"]>["skill"]>>(p.solo?.skill ?? "mixed");
-    const [maxPlayers, setMaxPlayers] = useState(p.host?.maxPlayers ?? 8);
+    const [maxPlayers, setMaxPlayers] = useState(p.host?.maxPlayers ?? 6);
     const [speed, setSpeed] = useState<"fast" | "normal" | "calm">(p.host?.speed ?? "normal");
     const [rounds, setRounds] = useState<1 | 3 | 5>(p.host?.rounds ?? 1);
     const [answerMode, setAnswerMode] = useState<"text" | "voice">(p.host?.answerMode ?? "text");

@@ -4,7 +4,7 @@ import { tk } from "@/lib/i18nMark";
  * Alle Spielmodi (Migration 108). "potato" = heiße Kartoffel (Weitergeben), "quiz" = alle raten gleichzeitig.
  * Labels/Beschreibungen sind deutsche Schlüssel -> im UI mit tr() übersetzen.
  */
-export type GameModeKey = "original" | "teleport" | "reverse" | "teams" | "artist" | "snippet" | "pick" | "buzzer" | "year" | "gap" | "duel";
+export type GameModeKey = "original" | "teams" | "artist" | "snippet" | "pick" | "buzzer" | "year" | "gap" | "duel";
 
 export type GameModeInfo = {
     key: GameModeKey;
@@ -30,8 +30,6 @@ const ALL_MODES: GameModeInfo[] = [
     { key: "duel", icon: "⚔️", label: tk("Duell"), desc: tk("Zwei treten gegeneinander an, wer zuerst zwei Songs errät, gewinnt. Alle anderen wetten auf den Sieger."), kind: "quiz", isNew: true },
     { key: "year", icon: "📅", label: tk("Jahr raten"), desc: tk("In welchem Jahr kam der Song raus? Je näher du dran bist, desto mehr Punkte."), kind: "quiz", isNew: true },
     { key: "teams", icon: "🤝", label: tk("Teams"), desc: tk("Team Rot gegen Team Blau: Die Kartoffel geht immer ins andere Team. Ist ein Team komplett raus, hat das andere gewonnen."), kind: "potato", isNew: true },
-    { key: "teleport", icon: "🌀", label: tk("Teleport"), desc: tk("Die Kartoffel springt bei jedem Pass zu einem zufälligen Spieler."), kind: "potato", soon: true },
-    { key: "reverse", icon: "🔁", label: tk("Reverse"), desc: tk("Die Richtung wechselt gelegentlich. Mehr Chaos, mehr Lacher."), kind: "potato", soon: true },
 ];
 
 export const GAME_MODES: GameModeInfo[] = ALL_MODES.map((m) => (m.kind === "quiz" && !QUIZ_LIVE ? { ...m, soon: true, isNew: false } : m));

@@ -2062,26 +2062,30 @@ textarea:focus-visible{
 .hostMain .pillCard{ padding: 10px 12px; margin-top: 0 !important; }
 .hostMain .pillCardTop{ margin-bottom: 6px; }
 .hostMain .actionsRow{ margin-top: 4px !important; }
+/* Lobby hosten, breit (neu 2026-10-13): ein ruhiges 3-Spalten-Raster statt Mosaik.
+   Name + Spielerzahl oben, Modus groß links (Kacheln), Tempo/Runden rechts daneben, Playlists breit, Knopf breit. */
 @media (min-width: 900px){
-    .hostMain .panel{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; row-gap: 10px; align-items: start; }
-    .hostMain .panel > .panelHead,
-    .hostMain .panel > .fieldBlock,
-    .hostMain .panel > .divider,
-    .hostMain .panel > .fieldHelpError,
-    .hostMain .panel > .actionsRow{ grid-column: 1 / -1; }
-    .hostMain .panel > .divider{ display: none; }
-    /* Name + Spielerzahl nebeneinander sparen eine Zeile */
-    .hostMain .panel > .fieldBlock{ grid-column: 1 / 2; }
-}
-@media (min-height: 760px) and (min-width: 900px){
-    html:has(.hostMain), body:has(.hostMain){ overflow: hidden; }
-}
-/* "So wird gespielt" steht auf breiten Bildschirmen NEBEN der Karte (Wunsch Mehdi 2026-10-12):
-   aufgeklappt braucht es so keinen Platz unter der Karte und nichts muss scrollen. */
-@media (min-width: 1200px){
-    .hostMain .landingWrap{ width: min(1320px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 16px; align-items: start; }
-    .hostMain .rulesOutside{ margin: 0; width: auto; padding: 14px 16px; border-radius: 22px; position: sticky; top: 14px; }
-    .hostMain .rulesOutside .rulesHead{ justify-content: space-between; font-size: 15px; }
+    .hostMain .landingWrap{ width: min(1040px, 100%); margin: 0 auto; }
+    .hostMain .panel{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 12px; align-items: stretch; }
+    .hostMain .panel > *{ grid-column: 1 / -1; }
+    .hostMain .panel > .panelHead, .hostMain .panel > .divider{ display: none; }
+    .hostMain .panel > .hcName{ grid-column: span 2; }
+    .hostMain .panel > .hcMax, .hostMain .panel > .hcTempo, .hostMain .panel > .hcRounds,
+    .hostMain .panel > .hcCount, .hostMain .panel > .hcSkill{ grid-column: span 1; }
+    .hostMain .panel > .hcMode{ grid-column: span 2; grid-row: span 2; }
+    .hostMain .panel > .hcPl, .hostMain .panel > .hcAct, .hostMain .panel > .fieldHelpError{ grid-column: 1 / -1; }
+    .hostMain .panel > .pillCard, .hostMain .panel > .hcName{ display: flex; flex-direction: column; justify-content: space-between; padding: 12px 14px; border-radius: 18px; }
+    .hostMain .panel > .hcName{ background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); }
+    .hostMain .hcAct{ display: flex; gap: 12px; align-items: stretch !important; }
+    .hostMain .hcAct > .btn{ flex: 1 1 auto; justify-content: center; }
+    /* kompakter, damit alles ohne Scrollen passt */
+    .hostMain .card{ padding-top: 16px; padding-bottom: 16px; }
+    .hostMain .hostCats{ margin: 10px 0; }
+    .hostMain .hostCat{ padding-top: 10px; padding-bottom: 10px; }
+    .hostMain .hcTempo .pillSeg, .hostMain .hcRounds .pillSeg{ flex-wrap: nowrap !important; gap: 6px; }
+    .hostMain .hcTempo .pillSegBtn, .hostMain .hcRounds .pillSegBtn{ flex: 1 1 0; justify-content: center; padding-left: 6px; padding-right: 6px; min-width: 0; white-space: nowrap; }
+    .hostMain .hcPl .fieldHelp{ display: none; }
+    .modeTileDesc{ -webkit-line-clamp: 2; }
 }
 /* Schmaler und niedrig: Regel-Leiste unter der Karte weglassen (steht auch in der Lobby) */
 @media (max-height: 820px) and (min-width: 900px) and (max-width: 1199px){
@@ -2163,3 +2167,25 @@ textarea:focus-visible{
 .moreModesBtn{ margin-top: 10px; padding: 6px 12px; border-radius: 999px; border: 1px dashed rgba(255,255,255,.35); background: rgba(255,255,255,.06); color: #fff; font-weight: 850; font-size: 13px; cursor: pointer; }
 .moreModesBtn:hover{ background: rgba(255,255,255,.14); border-style: solid; }
 .authMiniAvatar{ width: 22px; height: 22px; border-radius: 50%; vertical-align: -5px; margin-right: 4px; background: rgba(255,255,255,.14); }
+
+/* Modus-Kacheln (Lobby hosten) */
+.modeTiles{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; flex: 1; }
+.modeTile{ display: grid; align-content: start; justify-items: start; gap: 4px; text-align: left; padding: 12px; border-radius: 16px; cursor: pointer; color: #fff;
+  background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.14); transition: transform .2s cubic-bezier(.22,1,.36,1), border-color .2s ease, background .2s ease; }
+.modeTile:hover{ transform: translateY(-3px); border-color: rgba(255,255,255,.32); }
+.modeTile.on{ border-color: #ffd23f; background: linear-gradient(160deg, rgba(255,210,63,.24), rgba(255,140,40,.1)); box-shadow: 0 10px 26px rgba(0,0,0,.22); }
+.modeTile.quiz.on{ background: linear-gradient(160deg, rgba(255,210,63,.2), rgba(167,139,250,.18)); }
+.modeTileIcon{ font-size: 28px; line-height: 1; }
+.modeTileName{ display: flex; align-items: center; gap: 6px; font-weight: 900; font-size: 15px; }
+.modeTileNew{ font-size: 9.5px; font-weight: 950; padding: 2px 6px; border-radius: 999px; background: #ffd23f; color: #2a1200; letter-spacing: .5px; }
+.modeTileDesc{ font-size: 12px; font-weight: 600; opacity: .78; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 640px){
+  .modeTiles{ grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%; }
+  .modeTile{ padding: 8px; justify-items: center; text-align: center; }
+  .modeTileIcon{ font-size: 22px; }
+  .modeTileName{ font-size: 12.5px; flex-direction: column; gap: 2px; }
+  .modeTileDesc{ display: none; }
+  .hostMain .hcMode{ flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+  .hostMain .hcMode .pillCardTop{ display: none; }
+  .hostMain .hcMode .moreModesBtn{ margin-top: 2px; align-self: center; }
+}
