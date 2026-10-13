@@ -138,3 +138,6 @@ Bei Konflikten (z.B. „relation already exists"): die Migrations sind mit `IF N
 | 112 | [`112_quiz_bot_buzzer_slower.sql`](112_quiz_bot_buzzer_slower.sql) | **Quiz-Bots**: buzzern später, damit Menschen eine Chance haben | Empfohlen |
 | 113 | [`113_teams_mode.sql`](113_teams_mode.sql) | **Modus Teams**: Team Rot/Blau beim Start (`players.team`), Kartoffel geht immer ins andere Team (`_next_alive`), Runde endet, wenn ein Team raus ist; Siegerteam im Endstand vorn | Empfohlen |
 | 114 | [`114_drop_teleport_reverse.sql`](114_drop_teleport_reverse.sql) | **Teleport/Reverse entfernt** (set_lobby_mode nimmt sie nicht mehr an), Standard max. 6 Spieler | Empfohlen |
+| 115 | [`115_lifetime_wins_fix.sql`](115_lifetime_wins_fix.sql) | **Lebenszeit-Siege zählen jede gewonnene Runde** (vorher nur die letzte Runde eines Matches; Quiz/Teams richtig); Bestenliste „Rundensiege“ + Erfolge hängen daran | Wichtig |
+| 116 | [`116_cron_log_cleanup.sql`](116_cron_log_cleanup.sql) | **Zeitgeber-Protokoll aufräumen**: `cron.job_run_details` war 171 MB (85 % der DB); leert einmal, danach alle 30 Min nur die letzten 60.000 Einträge | Wichtig |
+| 117 | [`117_quiz_song_stats_humans_only.sql`](117_quiz_song_stats_humans_only.sql) | **Quiz zählt Song-Statistik nur für Menschen** (Schnipsel/Songwahl/Buzzer/Duell), damit Bots die Schwierigkeit nicht verfälschen | Empfohlen |

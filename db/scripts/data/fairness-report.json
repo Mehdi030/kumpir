@@ -1,0 +1,607 @@
+{
+  "summary": {
+    "weitergaben": 34,
+    "mitSchutzzeit": 13,
+    "empfaengerZeit": {
+      "min": 6,
+      "p10": 6,
+      "median": 9.31
+    },
+    "abgabenInLetzterSekunde": 3,
+    "empfaengerNachLetzterSekunde": {
+      "min": 6,
+      "median": 7
+    },
+    "explosionen": 14,
+    "explosionenUnter4s": 0,
+    "explosionenUnter6s": 0,
+    "laengsteKette": 5,
+    "nachspielzeitInterpretAbgelehnt": "abgelehnt",
+    "menschAntwortzeit": {
+      "n": 125,
+      "median": 5.98,
+      "p75": 7.37,
+      "p90": 10.17
+    },
+    "menschenSchaffenIn": {
+      "4s": "19%",
+      "5s": "34%",
+      "6s": "50%",
+      "7s": "70%",
+      "8s": "80%",
+      "10s": "90%"
+    }
+  },
+  "played": [
+    {
+      "plan": "Standard, 3 Bots, Claude gibt in letzter Sekunde ab",
+      "speed": "normal",
+      "strat": "lastsecond",
+      "passes": [
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "normal",
+          "from": "Bot Anna",
+          "to": "Bot Ben",
+          "passerLeft": 20.72,
+          "receiverHas": 22.72,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "normal",
+          "from": "Bot Ben",
+          "to": "Bot Cleo",
+          "passerLeft": 17.64,
+          "receiverHas": 19.64,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "normal",
+          "from": "Bot Cleo",
+          "to": "Bot Anna",
+          "passerLeft": 12.42,
+          "receiverHas": 14.42,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "normal",
+          "from": "Bot Anna",
+          "to": "Bot Ben",
+          "passerLeft": 7.31,
+          "receiverHas": 9.31,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "normal",
+          "from": "Bot Ben",
+          "to": "Bot Cleo",
+          "passerLeft": 2.19,
+          "receiverHas": 8,
+          "grace": 8
+        },
+        {
+          "round": "1/2",
+          "alive": 2,
+          "speed": "normal",
+          "from": "Bot Anna",
+          "to": "Bot Ben",
+          "passerLeft": 12.32,
+          "receiverHas": 12.32,
+          "grace": 0
+        },
+        {
+          "round": "1/2",
+          "alive": 2,
+          "speed": "normal",
+          "from": "Bot Ben",
+          "to": "Bot Anna",
+          "passerLeft": 6.23,
+          "receiverHas": 8,
+          "grace": 8
+        }
+      ],
+      "rounds": [
+        {
+          "round": "1/0",
+          "alive": 4,
+          "fuse": 21.5
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "fuse": 25.5
+        },
+        {
+          "round": "1/2",
+          "alive": 2,
+          "fuse": 17.5
+        }
+      ],
+      "overtimeChecks": [],
+      "explosions": [
+        {
+          "round": "1/0",
+          "name": "Claude",
+          "ms": 22175,
+          "alive_count": 3,
+          "s": 22.175
+        },
+        {
+          "round": "1/1",
+          "name": "Bot Cleo",
+          "ms": 9043,
+          "alive_count": 2,
+          "s": 9.043
+        },
+        {
+          "round": "1/2",
+          "name": "Bot Anna",
+          "ms": 8882,
+          "alive_count": 1,
+          "s": 8.882
+        }
+      ]
+    },
+    {
+      "plan": "Blitz, 3 schnelle Bots, letzte Sekunde",
+      "speed": "fast",
+      "strat": "lastsecond",
+      "passes": [
+        {
+          "round": "1/0",
+          "alive": 4,
+          "speed": "fast",
+          "from": "Bot Cleo",
+          "to": "Claude",
+          "passerLeft": 8.29,
+          "receiverHas": 10.29,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Ben",
+          "to": "Bot Anna",
+          "passerLeft": 7.21,
+          "receiverHas": 9.21,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Anna",
+          "to": "Bot Cleo",
+          "passerLeft": 7.18,
+          "receiverHas": 9.18,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Cleo",
+          "to": "Bot Ben",
+          "passerLeft": 2.07,
+          "receiverHas": 7,
+          "grace": 7
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Ben",
+          "to": "Bot Anna",
+          "passerLeft": 5.98,
+          "receiverHas": 9.98,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Anna",
+          "to": "Bot Cleo",
+          "passerLeft": 7.95,
+          "receiverHas": 9.95,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Cleo",
+          "to": "Bot Ben",
+          "passerLeft": 4.87,
+          "receiverHas": 6,
+          "grace": 6
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Ben",
+          "to": "Bot Anna",
+          "passerLeft": 3.97,
+          "receiverHas": 6,
+          "grace": 6
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Anna",
+          "to": "Bot Cleo",
+          "passerLeft": 3.97,
+          "receiverHas": 6,
+          "grace": 6
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Cleo",
+          "to": "Bot Ben",
+          "passerLeft": 0.92,
+          "receiverHas": 6,
+          "grace": 6
+        },
+        {
+          "round": "1/2",
+          "alive": 2,
+          "speed": "fast",
+          "from": "Bot Anna",
+          "to": "Bot Cleo",
+          "passerLeft": 5.94,
+          "receiverHas": 7,
+          "grace": 7
+        }
+      ],
+      "rounds": [
+        {
+          "round": "1/0",
+          "alive": 4,
+          "fuse": 13.5
+        },
+        {
+          "round": "1/1",
+          "alive": 3,
+          "fuse": 9.5
+        },
+        {
+          "round": "1/2",
+          "alive": 2,
+          "fuse": 7.5
+        }
+      ],
+      "overtimeChecks": [],
+      "explosions": [
+        {
+          "round": "1/0",
+          "name": "Claude",
+          "ms": 10918,
+          "alive_count": 3,
+          "s": 10.918
+        },
+        {
+          "round": "1/1",
+          "name": "Bot Ben",
+          "ms": 7581,
+          "alive_count": 2,
+          "s": 7.581
+        },
+        {
+          "round": "1/2",
+          "name": "Bot Cleo",
+          "ms": 8579,
+          "alive_count": 1,
+          "s": 8.579
+        }
+      ]
+    },
+    {
+      "plan": "Duell gegen 1 Bot, letzte Sekunde",
+      "speed": "normal",
+      "strat": "lastsecond",
+      "passes": [
+        {
+          "round": "1/0",
+          "alive": 2,
+          "speed": "normal",
+          "from": "Bot Anna",
+          "to": "Claude",
+          "passerLeft": 12.74,
+          "receiverHas": 12.74,
+          "grace": 0
+        }
+      ],
+      "rounds": [
+        {
+          "round": "1/0",
+          "alive": 2,
+          "fuse": 18
+        }
+      ],
+      "overtimeChecks": [],
+      "explosions": [
+        {
+          "round": "1/0",
+          "name": "Claude",
+          "ms": 14900,
+          "alive_count": 1,
+          "s": 14.9
+        }
+      ]
+    },
+    {
+      "plan": "Casual, 2 Bots, Claude spielt wie ein Mensch",
+      "speed": "calm",
+      "strat": "human",
+      "passes": [
+        {
+          "round": "1/0",
+          "alive": 3,
+          "speed": "calm",
+          "from": "Bot Anna",
+          "to": "Claude",
+          "passerLeft": 26.65,
+          "receiverHas": 30.65,
+          "grace": 0
+        },
+        {
+          "round": "1/0",
+          "alive": 3,
+          "speed": "calm",
+          "from": "Claude",
+          "to": "Bot Ben",
+          "passerLeft": 22.98,
+          "receiverHas": 26.98,
+          "grace": 0
+        },
+        {
+          "round": "1/0",
+          "alive": 3,
+          "speed": "calm",
+          "from": "Bot Ben",
+          "to": "Bot Anna",
+          "passerLeft": 20.45,
+          "receiverHas": 24.45,
+          "grace": 0
+        },
+        {
+          "round": "1/0",
+          "alive": 3,
+          "speed": "calm",
+          "from": "Bot Anna",
+          "to": "Claude",
+          "passerLeft": 17.34,
+          "receiverHas": 17.34,
+          "grace": 0
+        },
+        {
+          "round": "1/0",
+          "alive": 3,
+          "speed": "calm",
+          "from": "Claude",
+          "to": "Bot Ben",
+          "passerLeft": 15.39,
+          "receiverHas": 15.39,
+          "grace": 0
+        },
+        {
+          "round": "1/0",
+          "alive": 3,
+          "speed": "calm",
+          "from": "Bot Ben",
+          "to": "Bot Anna",
+          "passerLeft": 9.2,
+          "receiverHas": 9.2,
+          "grace": 0
+        },
+        {
+          "round": "1/0",
+          "alive": 3,
+          "speed": "calm",
+          "from": "Bot Anna",
+          "to": "Claude",
+          "passerLeft": 2.09,
+          "receiverHas": 9,
+          "grace": 9
+        },
+        {
+          "round": "1/0",
+          "alive": 3,
+          "speed": "calm",
+          "from": "Claude",
+          "to": "Bot Ben",
+          "passerLeft": 3.88,
+          "receiverHas": 8,
+          "grace": 8
+        },
+        {
+          "round": "1/1",
+          "alive": 2,
+          "speed": "calm",
+          "from": "Bot Anna",
+          "to": "Claude",
+          "passerLeft": 23.71,
+          "receiverHas": 23.71,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 2,
+          "speed": "calm",
+          "from": "Claude",
+          "to": "Bot Anna",
+          "passerLeft": 18.01,
+          "receiverHas": 18.01,
+          "grace": 0
+        }
+      ],
+      "rounds": [
+        {
+          "round": "1/0",
+          "alive": 3,
+          "fuse": 32.5
+        },
+        {
+          "round": "1/1",
+          "alive": 2,
+          "fuse": 29
+        }
+      ],
+      "overtimeChecks": [
+        "abgelehnt"
+      ],
+      "explosions": [
+        {
+          "round": "1/0",
+          "name": "Bot Ben",
+          "ms": 8910,
+          "alive_count": 2,
+          "s": 8.91
+        },
+        {
+          "round": "1/1",
+          "name": "Bot Anna",
+          "ms": 19240,
+          "alive_count": 1,
+          "s": 19.24
+        }
+      ]
+    },
+    {
+      "plan": "Blitz, 5 Bots, Claude spielt wie ein Mensch",
+      "speed": "fast",
+      "strat": "human",
+      "passes": [
+        {
+          "round": "1/1",
+          "alive": 5,
+          "speed": "fast",
+          "from": "Bot Ben",
+          "to": "Bot Emma",
+          "passerLeft": 7.82,
+          "receiverHas": 9.82,
+          "grace": 0
+        },
+        {
+          "round": "1/1",
+          "alive": 5,
+          "speed": "fast",
+          "from": "Bot Emma",
+          "to": "Bot Cleo",
+          "passerLeft": 2.69,
+          "receiverHas": 7,
+          "grace": 7
+        },
+        {
+          "round": "1/2",
+          "alive": 4,
+          "speed": "fast",
+          "from": "Claude",
+          "to": "Bot Anna",
+          "passerLeft": -0.07,
+          "receiverHas": 7,
+          "grace": 7
+        },
+        {
+          "round": "1/3",
+          "alive": 3,
+          "speed": "fast",
+          "from": "Bot Ben",
+          "to": "Bot Emma",
+          "passerLeft": 5.85,
+          "receiverHas": 8.25,
+          "grace": 0
+        },
+        {
+          "round": "1/4",
+          "alive": 2,
+          "speed": "fast",
+          "from": "Claude",
+          "to": "Bot Ben",
+          "passerLeft": 1.21,
+          "receiverHas": 7,
+          "grace": 7
+        }
+      ],
+      "rounds": [
+        {
+          "round": "1/0",
+          "alive": 6,
+          "fuse": 11.5
+        },
+        {
+          "round": "1/1",
+          "alive": 5,
+          "fuse": 13.5
+        },
+        {
+          "round": "1/2",
+          "alive": 4,
+          "fuse": 11.5
+        },
+        {
+          "round": "1/3",
+          "alive": 3,
+          "fuse": 12
+        },
+        {
+          "round": "1/4",
+          "alive": 2,
+          "fuse": 7
+        }
+      ],
+      "overtimeChecks": [],
+      "explosions": [
+        {
+          "round": "1/0",
+          "name": "Bot Dino",
+          "ms": 12096,
+          "alive_count": 5,
+          "s": 12.096
+        },
+        {
+          "round": "1/1",
+          "name": "Bot Cleo",
+          "ms": 9375,
+          "alive_count": 4,
+          "s": 9.375
+        },
+        {
+          "round": "1/2",
+          "name": "Bot Anna",
+          "ms": 8589,
+          "alive_count": 3,
+          "s": 8.589
+        },
+        {
+          "round": "1/3",
+          "name": "Bot Emma",
+          "ms": 10098,
+          "alive_count": 2,
+          "s": 10.098
+        },
+        {
+          "round": "1/4",
+          "name": "Bot Ben",
+          "ms": 8321,
+          "alive_count": 1,
+          "s": 8.321
+        }
+      ]
+    }
+  ]
+}
