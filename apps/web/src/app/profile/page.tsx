@@ -97,7 +97,7 @@ export default function ProfilePage() {
                         </div>
 
                         {/* 2. Avatar */}
-                        <AvatarEditor name={name} initial={profile.avatarConfig} onSaved={() => void refresh()} allowGoatee={profile.username?.toLowerCase() === "achi"} />
+                        <AvatarEditor name={name} initial={profile.avatarConfig} onSaved={() => void refresh()} allowGoatee={profile.username?.toLowerCase() === "achi"} allowKippa={profile.username?.toLowerCase() === "valentino"} />
 
                         {/* 3. Einstellungen */}
                         <AccountSettings profile={profile} api={accountApi} onRefresh={refresh} onSavePreferences={savePreferences} />

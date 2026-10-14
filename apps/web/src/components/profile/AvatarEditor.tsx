@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PlayerAvatar, AVATAR_OPTIONS, GOATEE_OPTION, TOPS_FEMALE, TOPS_HEADWEAR, topValues, type AvatarConfig } from "@/components/game/PlayerAvatar";
+import { PlayerAvatar, AVATAR_OPTIONS, GOATEE_OPTION, KIPPA_OPTIONS, TOPS_FEMALE, TOPS_HEADWEAR, TOPS_KIPPA, topValues, type AvatarConfig } from "@/components/game/PlayerAvatar";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { tk, useI18n } from "@/lib/i18n";
 
@@ -26,12 +26,15 @@ export function AvatarEditor({
     initial,
     onSaved,
     allowGoatee = false,
+    allowKippa = false,
 }: {
     name: string;
     initial: AvatarConfig | null;
     onSaved: () => void;
     /** Ziegenbart ist für Achi reserviert (Migration 103) */
     allowGoatee?: boolean;
+    /** Kippa + Schläfenlocken sind für Valentino reserviert (Migration 119) */
+    allowKippa?: boolean;
 }) {
     const { tr } = useI18n();
     const [cfg, setCfg] = useState<AvatarConfig>(initial ?? {});
@@ -41,7 +44,7 @@ export function AvatarEditor({
     const dirty = JSON.stringify(cfg) !== JSON.stringify(initial ?? {});
 
     const valuesFor = (key: Key, base: Opt[]): Opt[] =>
-        key === "top" ? topValues(cfg.gender) : key === "facialHair" && allowGoatee ? [...base, GOATEE_OPTION] : base;
+        key === "top" ? [...topValues(cfg.gender), ...(allowKippa ? KIPPA_OPTIONS : [])] : key === "facialHair" && allowGoatee ? [...base, GOATEE_OPTION] : base;
 
     const set = (key: Key, val: string | null) => {
         setCfg((c) => {
@@ -52,7 +55,7 @@ export function AvatarEditor({
             if (key === "gender" && val === "f") {
                 delete n.facialHair;
                 delete n.facialHairColor;
-                if (n.top && !TOPS_FEMALE.includes(n.top) && !TOPS_HEADWEAR.includes(n.top)) delete n.top;
+                if (n.top && !TOPS_FEMALE.includes(n.top) && !TOPS_HEADWEAR.includes(n.top) && !TOPS_KIPPA.includes(n.top)) delete n.top;
             }
             if (key === "gender" && val === "m" && n.top && !topValues("m").some((t) => t.v === n.top)) delete n.top;
             return n;
@@ -71,6 +74,7 @@ export function AvatarEditor({
             next[o.key] = pick(vals).v;
         }
         if (cfg.facialHair === "goatee") next.facialHair = "goatee";
+        if (cfg.top && TOPS_KIPPA.includes(cfg.top)) next.top = cfg.top;
         setCfg(next);
         setMsg(null);
     };
@@ -80,7 +84,14 @@ export function AvatarEditor({
         const { error } = await getSupabaseClient().rpc("update_my_avatar", { p_config: Object.keys(cfg).length ? cfg : null });
         setBusy(false);
         if (error)
-            return setMsg({ ok: false, text: error.message.includes("avatar_reserved") ? tr("Der Ziegenbart ist für Achi reserviert.") : tr("Speichern hat nicht geklappt. Bitte nochmal.") });
+            return setMsg({
+                ok: false,
+                text: error.message.includes("avatar_reserved")
+                    ? cfg.top && TOPS_KIPPA.includes(cfg.top)
+                        ? tr("Die Kippa ist für Valentino reserviert.")
+                        : tr("Der Ziegenbart ist für Achi reserviert.")
+                    : tr("Speichern hat nicht geklappt. Bitte nochmal."),
+            });
         setMsg({ ok: true, text: tr("✅ Gespeichert – so siehst du jetzt im Spiel aus.") });
         onSaved();
     };

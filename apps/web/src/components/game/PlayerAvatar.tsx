@@ -69,6 +69,8 @@ const HAIR_COLORS: Opt[] = [
 export const TOPS_MALE = ["shortFlat", "shortRound", "shortWaved", "shortCurly", "theCaesar", "theCaesarAndSidePart", "sides", "shavedSides", "fro", "froBand", "dreads01", "dreads02", "frizzle", "shaggy", "shaggyMullet", "none"];
 export const TOPS_FEMALE = ["straight01", "straight02", "straightAndStrand", "longButNotTooLong", "curly", "curvy", "bob", "bun", "bigHair", "miaWallace", "frida", "fro", "froBand", "dreads02", "hijab"];
 export const TOPS_HEADWEAR = ["hat", "winterHat1", "winterHat02", "winterHat03", "winterHat04", "turban"];
+/** Kippa (+ Schläfenlocken) – nur für das Konto "valentino" (Migration 119 prüft das auch auf dem Server). */
+export const TOPS_KIPPA = ["kippa", "kippaPayot"];
 
 const TOP_LABEL: Record<string, string> = {
     shortFlat: tk("Kurz glatt"),
@@ -105,6 +107,8 @@ const TOP_LABEL: Record<string, string> = {
     winterHat03: tk("🧢 Mütze mit Ohrenklappen"),
     winterHat04: tk("🧢 Strickmütze"),
     turban: tk("Turban"),
+    kippa: tk("✡️ Kippa (nur Valentino)"),
+    kippaPayot: tk("✡️ Kippa + Schläfenlocken (nur Valentino)"),
 };
 
 /** Frisuren passend zum Typ + alle Kopfbedeckungen */
@@ -112,6 +116,9 @@ export function topValues(gender?: string): Opt[] {
     const hair = gender === "f" ? TOPS_FEMALE : TOPS_MALE;
     return [...hair, ...TOPS_HEADWEAR].map((v) => ({ v, label: TOP_LABEL[v] ?? v }));
 }
+
+/** Die reservierten Kopf-Optionen für Valentino (im Profil nur für sein Konto sichtbar). */
+export const KIPPA_OPTIONS: Opt[] = TOPS_KIPPA.map((v) => ({ v, label: TOP_LABEL[v] ?? v }));
 
 /** Auswahl im Profil. `when` blendet Felder aus, die gerade nicht passen (z. B. Bart bei "weiblich"). */
 export const AVATAR_OPTIONS: { key: keyof AvatarConfig; label: string; values: Opt[]; when?: (c: AvatarConfig) => boolean }[] = [
@@ -153,7 +160,7 @@ export const AVATAR_OPTIONS: { key: keyof AvatarConfig; label: string; values: O
         key: "hatColor",
         label: tk("Farbe der Kopfbedeckung"),
         values: colorValues(["262e33", "3c4f5c", "929598", "e6e6e6", "ffffff", "25557c", "5199e4", "65c9ff", "b1e2ff", "a7ffc4", "ffffb1", "ffdeb5", "ffafb9", "ff5c5c", "ff488e"]),
-        when: (c) => !!c.top && (TOPS_HEADWEAR.includes(c.top) || c.top === "hijab"),
+        when: (c) => !!c.top && (TOPS_HEADWEAR.includes(c.top) || TOPS_KIPPA.includes(c.top) || c.top === "hijab"),
     },
     {
         key: "facialHair",
@@ -256,7 +263,11 @@ function configOptions(c: AvatarConfig): Record<string, unknown> {
     if (c.clothesColor) o.clothesColor = [c.clothesColor];
     if (c.clothing) o.clothing = [c.clothing];
     if (c.top) {
-        if (c.top === "none") o.topProbability = 0;
+        if (TOPS_KIPPA.includes(c.top)) {
+            // Kippa/Locken zeichnen wir selbst (decorate); darunter: kahler Scheitel mit Haar an den Seiten
+            o.top = ["sides"];
+            o.topProbability = 100;
+        } else if (c.top === "none") o.topProbability = 0;
         else {
             o.top = [c.top];
             o.topProbability = 100;
@@ -320,6 +331,26 @@ function decorate(svg: string, c: AvatarConfig | null, mood: AvatarMood): string
     if (c.facialHair === "goatee" && c.gender !== "f") {
         const hc = `#${c.facialHairColor ?? c.hairColor ?? "2c1b18"}`;
         extra.push(`<g fill="${hc}"><path d="M125 167c5 5 25 5 30 0 2 10-3 21-15 25-12-4-17-15-15-25Z"/><path d="M135 159h10c0 3-2 4-5 4s-5-1-5-4Z" opacity=".9"/></g>`);
+    }
+    if (c.top && TOPS_KIPPA.includes(c.top)) {
+        const hair = `#${c.hairColor ?? "2c1b18"}`;
+        const cap = `#${c.hatColor ?? "25557c"}`;
+        if (c.top === "kippaPayot") {
+            // Geflochtene Schläfenlocken: gedrehte Strähne vor jedem Ohr, am Ende eine Spirale
+            const lock = (x: number, d: number) =>
+                `<g transform="translate(${x} 0) scale(${d} 1)" stroke-linecap="round" stroke-linejoin="round" fill="none">` +
+                `<path d="M0 100c-9 9 8 15 0 24s8 15 0 24 8 15 0 24c-2 6 7 9 6 15" stroke="${hair}" stroke-width="10"/>` +
+                `<path d="M0 100c-9 9 8 15 0 24s8 15 0 24 8 15 0 24c-2 6 7 9 6 15" stroke="#fff" stroke-opacity=".22" stroke-width="3" stroke-dasharray="2.5 6"/>` +
+                `<circle cx="6" cy="170" r="4.5" fill="${hair}" stroke="none"/></g>`;
+            extra.push(lock(92, 1) + lock(188, -1));
+        }
+        // Kippa: flache Kappe auf dem Scheitel, heller Rand + kleines Muster
+        extra.push(
+            `<g><path d="M103 51C105 22 175 22 177 51 160 60 120 60 103 51Z" fill="${cap}"/>` +
+                `<path d="M103 51C120 60 160 60 177 51" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/>` +
+                `<path d="M113 38C125 29 155 29 167 38" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width="2.4" stroke-linecap="round"/>` +
+                `<g fill="#fff" fill-opacity=".6"><circle cx="140" cy="42" r="2.6"/><circle cx="127" cy="46" r="1.8"/><circle cx="153" cy="46" r="1.8"/></g></g>`
+        );
     }
     if (extra.length) {
         const end = out.lastIndexOf("</svg>");
