@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useAchievements } from "@/hooks/useAchievements";
 import { Spinner } from "@/components/Spinner";
 import { TIER_STYLE } from "@/lib/achievements";
+import { ProfileFolder } from "@/components/profile/ProfileFolder";
 import { HomeButton } from "@/components/BackButton";
 import { fmtNum, useI18n } from "@/lib/i18n";
 
@@ -74,7 +75,7 @@ export default function AchievementsPage() {
 
     return (
         <main className="container">
-            <section className="card" aria-label={tr("Erfolge")} style={{ maxWidth: 980, margin: "0 auto" }}>
+            <ProfileFolder active="achievements" label={tr("Erfolge")}>
                 <header className="hostHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                     <div>
                         <h1 className="h1">🏆 {tr("Erfolge")}</h1>
@@ -134,7 +135,7 @@ export default function AchievementsPage() {
                         })}
                     </div>
                 )}
-            </section>
+            </ProfileFolder>
 
             <style>{`
                 .statsGrid {

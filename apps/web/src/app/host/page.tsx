@@ -131,6 +131,7 @@ export default function HostPage() {
         if (h.maxPlayers) setMaxPlayers(h.maxPlayers);
         if (h.speed) setRoundSpeed(h.speed);
         if (h.rounds) setSeriesTotal(h.rounds);
+        if (h.mode) setMode(h.mode);
     }, [profile?.preferences?.host]);
 
     const activeMode = mode ? GAME_MODE_BY_KEY[mode] : null;
@@ -154,6 +155,15 @@ export default function HostPage() {
         if (s.bots) setBotCount(Math.max(1, Math.min(5, s.bots)));
         if (s.skill) setBotSkill(s.skill);
     }, [profile?.preferences?.solo]);
+    // Modus + Tempo gegen Bots: beim ersten Wechsel auf den Reiter "Gegen Bots" die zuletzt dort gewählten Werte nehmen
+    const appliedSoloModeSpeed = useRef(false);
+    useEffect(() => {
+        const s = profile?.preferences?.solo;
+        if (category !== "bots" || !s || appliedSoloModeSpeed.current) return;
+        appliedSoloModeSpeed.current = true;
+        if (s.mode) setMode(s.mode);
+        if (s.speed) setRoundSpeed(s.speed);
+    }, [category, profile?.preferences?.solo]);
     const [botBusy, setBotBusy] = useState(false);
     const [botError, setBotError] = useState("");
 
@@ -266,12 +276,10 @@ export default function HostPage() {
                         p_me_player_id: hostPlayerId,
                         p_categories: allSelected ? [] : playlists,
                     });
-                    if (user?.id && allPlaylists.length) {
+                    // Alles, was hier gewählt wurde, fürs nächste Mal im Konto merken (kein Einstellungs-Reiter im Profil mehr)
+                    if (user?.id) {
                         const excluded = allPlaylists.filter((n) => !playlists.includes(n));
-                        const before = profile?.preferences?.host?.excludedPlaylists ?? [];
-                        if ([...excluded].sort().join("|") !== [...before].sort().join("|")) {
-                            void savePreferences({ host: { excludedPlaylists: excluded } });
-                        }
+                        void savePreferences({ host: { maxPlayers, speed: roundSpeed ?? undefined, rounds: seriesTotal, mode: mode ?? undefined, excludedPlaylists: excluded } });
                     }
                 }
             }
@@ -284,7 +292,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, seriesTotal, isPublic, tr, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, profile?.preferences?.host?.excludedPlaylists, savePreferences]);
+    }, [canCreate, hostName, roundSpeed, mode, seriesTotal, isPublic, tr, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, savePreferences, mode]);
 
     const onStartBots = async () => {
         setBotError("");
@@ -308,8 +316,7 @@ export default function HostPage() {
             });
             // Auswahl fürs nächste Mal im Konto merken
             if (user?.id) {
-                const s = profile?.preferences?.solo;
-                if (s?.bots !== botCount || s?.skill !== botSkill) void savePreferences({ solo: { bots: botCount, skill: botSkill } });
+                void savePreferences({ solo: { bots: botCount, skill: botSkill, mode: mode ?? undefined, speed: roundSpeed ?? undefined } });
             }
             track("solo_game_started");
             router.push(`/game/${code}`);
@@ -344,7 +351,14 @@ export default function HostPage() {
                                 {m.isNew ? <span className="modeTileNew">{tr("NEU")}</span> : null}
                             </span>
                             <span className="modeTileGoal">🎯 {tr(m.goal)}</span>
-                            <span className="modeTileDesc">{tr(m.desc)}</span>
+                            <span className="modeTileSteps">
+                                {m.steps.map((st) => (
+                                    <span key={st.text}>
+                                        <i aria-hidden>{st.icon}</i>
+                                        {tr(st.text)}
+                                    </span>
+                                ))}
+                            </span>
                             <span className="modeTileRules">
                                 {m.rules.map((r) => (
                                     <span key={r.text}>

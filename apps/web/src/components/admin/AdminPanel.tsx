@@ -113,6 +113,19 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
         };
     }, [loadOverview]);
 
+    /** Reiter wechseln; q = Suchbegriff für die Nutzerliste (steht dann in der Adresse, die Liste liest ihn beim Öffnen) */
+    const go = (key: Tab, q?: string) => {
+        try {
+            const url = new URL(window.location.href);
+            if (q) url.searchParams.set("q", q);
+            else url.searchParams.delete("q");
+            window.history.replaceState(null, "", url.toString());
+        } catch {
+            /* egal */
+        }
+        setTab(key);
+    };
+
     if (error) return <div className="admNote err">⛔ {error}</div>;
     if (!overview) return <Spinner size={22} label={tr("Lade Admin-Panel…")} />;
     const role: AdminRole = overview.role;
@@ -136,7 +149,12 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
                     <h1 className="h1 admTitle">{tr("🛡️ Admin-Panel")}</h1>
                     <div className="admRole">{tr("Angemeldet als {role}", { role: tr(ROLE_LABEL[role] ?? role) })}</div>
                 </div>
-                <HomeButton />
+                <div className="admRow">
+                    <Link href="/profile" className="homeBackBtn">
+                        <span aria-hidden>←</span> {tr("Profil")}
+                    </Link>
+                    <HomeButton />
+                </div>
             </div>
 
             <div className="admTabs" role="tablist" aria-label={tr("Bereiche")}>
@@ -150,7 +168,7 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
                             aria-selected={tab === key}
                             className={tab === key ? "on" : ""}
                             onClick={() => {
-                                setTab(key);
+                                go(key);
                                 if (key === "overview") void loadOverview();
                             }}
                         >
@@ -163,10 +181,10 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
                 <div className="admBox">
                     <div className="admTiles">
                         <Tile label={tr("Konten")} value={c.users} sub={tr("+{n} in 7 Tagen", { n: c.newUsers7d })} />
-                        <Tile label={tr("Löschanträge")} value={c.deletionRequests} warn={c.deletionRequests > 0} onClick={() => setTab("deletion")} />
-                        <Tile label={tr("Gesperrt")} value={c.suspended} onClick={() => setTab("users")} />
+                        <Tile label={tr("Löschanträge")} value={c.deletionRequests} warn={c.deletionRequests > 0} onClick={() => go("deletion")} />
+                        <Tile label={tr("Gesperrt")} value={c.suspended} onClick={() => go("users")} />
                         <Tile label={tr("Team")} value={c.staff} />
-                        <Tile label={tr("Aktive Lobbys")} value={c.activeLobbies} sub={tr("{n} Spiele laufen", { n: c.runningGames })} onClick={() => setTab("lobbies")} />
+                        <Tile label={tr("Aktive Lobbys")} value={c.activeLobbies} sub={tr("{n} Spiele laufen", { n: c.runningGames })} onClick={() => go("lobbies")} />
                     </div>
                     <div className="admHint">
                         <b>{tr("Deine Rechte:")}</b>{" "}
@@ -174,6 +192,7 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
                             ? tr("alles – inkl. endgültig löschen, Rollen vergeben, Songs archivieren und Statistik.")
                             : tr("Nutzer ansehen, sperren/entsperren, Namen/Avatar zurücksetzen, Passwort-Reset senden, Löschanträge ablehnen, Lobbys schließen, Protokoll ansehen. Endgültig löschen und Rollen vergeben dürfen nur Admins.")}
                     </div>
+                    <OverviewLists api={api} isAdmin={isAdmin} go={go} />
                 </div>
             ) : null}
             {tab === "users" ? <UsersTab api={api} role={role} meId={meId} initialFilter="all" onChanged={loadOverview} /> : null}
@@ -191,6 +210,143 @@ export function AdminPanel({ api, meId }: { api: AdminApi; meId: string | null }
             {tab === "audit" ? <AuditTab api={api} /> : null}
 
             <style>{STYLES}</style>
+        </div>
+    );
+}
+
+/** Unter den Kacheln: aus jeder Kategorie die ersten 5 (z. B. die 5 neuesten Konten), „alle“ springt in den Reiter. */
+function OverviewLists({ api, isAdmin, go }: { api: AdminApi; isAdmin: boolean; go: (tab: Tab, q?: string) => void }) {
+    const { tr } = useI18n();
+    const [data, setData] = useState<{
+        newest: AdminUserRow[];
+        deletion: AdminUserRow[];
+        suspended: AdminUserRow[];
+        staff: AdminUserRow[];
+        lobbies: AdminLobby[];
+        songs: AdminSong[];
+        audit: AuditEntry[];
+    } | null>(null);
+
+    useEffect(() => {
+        let alive = true;
+        void (async () => {
+            const [all, del, sus, staff, lob, songs, audit] = await Promise.all([
+                api.listUsers("", "all"),
+                api.listUsers("", "deletion"),
+                api.listUsers("", "suspended"),
+                api.listUsers("", "staff"),
+                api.listLobbies(),
+                isAdmin ? api.listSongs(null, "") : Promise.resolve({ data: [] as AdminSong[] }),
+                api.listAudit(5),
+            ]);
+            if (!alive) return;
+            setData({
+                newest: [...(all.data ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5),
+                deletion: (del.data ?? []).slice(0, 5),
+                suspended: (sus.data ?? []).slice(0, 5),
+                staff: (staff.data ?? []).slice(0, 5),
+                lobbies: (lob.data ?? []).slice(0, 5),
+                songs: [...(songs.data ?? [])].sort((a, b) => b.plays - a.plays).slice(0, 5),
+                audit: (audit.data?.rows ?? []).slice(0, 5),
+            });
+        })();
+        return () => {
+            alive = false;
+        };
+    }, [api, isAdmin]);
+
+    if (!data) return <Spinner size={18} label={tr("Lade Übersicht…")} />;
+
+    const userRow = (u: AdminUserRow, extra?: string) => (
+        <li key={u.id}>
+            <button type="button" className="admMini" onClick={() => go("users", u.username || u.displayName || undefined)}>
+                <AvatarBadge emoji={u.avatarEmoji} color={u.avatarColor} name={u.displayName || u.username || "?"} size={28} />
+                <span className="admMiniMain">
+                    <b>{u.displayName || u.username || tr("(ohne Namen)")}</b>
+                    <small>{extra ?? tr("seit {date}", { date: new Date(u.createdAt).toLocaleDateString(dateLocale()) })}</small>
+                </span>
+                {u.role !== "user" ? <span className="admBadge staff">{tr(ROLE_LABEL[u.role] ?? u.role)}</span> : null}
+            </button>
+        </li>
+    );
+
+    const card = (key: string, title: string, tab: Tab, rows: React.ReactNode[], empty: string) => (
+        <section key={key} className="admPrev">
+            <header>
+                <h3>{title}</h3>
+                <button type="button" className="admMore" onClick={() => go(tab)}>
+                    {tr("alle")} →
+                </button>
+            </header>
+            {rows.length ? <ul className="admMiniList">{rows}</ul> : <div className="admSmall">{empty}</div>}
+        </section>
+    );
+
+    return (
+        <div className="admPrevGrid">
+            {card("new", tr("🆕 Neueste Konten"), "users", data.newest.map((u) => userRow(u)), tr("Noch keine Konten."))}
+            {card("del", tr("🗑️ Löschanträge"), "deletion", data.deletion.map((u) => userRow(u, tr("beantragt"))), tr("Keine offenen Löschanträge. 🎉"))}
+            {card("sus", tr("⛔ Gesperrt"), "users", data.suspended.map((u) => userRow(u, tr("gesperrt"))), tr("Niemand gesperrt."))}
+            {card("staff", tr("🛡️ Team"), "users", data.staff.map((u) => userRow(u)), tr("Noch kein Team."))}
+            {card(
+                "lob",
+                tr("🎮 Lobbys"),
+                "lobbies",
+                data.lobbies.map((l) => (
+                    <li key={l.id}>
+                        <Link href={`/game/${l.code}`} target="_blank" className="admMini">
+                            <b className="admCode admCodeSm">{l.code}</b>
+                            <span className="admMiniMain">
+                                <b>{tr(PHASE_LABEL[l.phase] ?? l.phase)}</b>
+                                <small>
+                                    {tr("{n} Menschen", { n: l.humans })}
+                                    {l.bots ? ` + ${tr("{n} Bots", { n: l.bots })}` : ""} · {l.host ?? "?"}
+                                </small>
+                            </span>
+                        </Link>
+                    </li>
+                )),
+                tr("Gerade keine Lobbys.")
+            )}
+            {isAdmin
+                ? card(
+                      "songs",
+                      tr("🎵 Meistgespielte Songs"),
+                      "songs",
+                      data.songs.map((sg) => (
+                          <li key={sg.id}>
+                              <div className="admMini static">
+                                  <span className="admMiniMain">
+                                      <b>{sg.title}</b>
+                                      <small>
+                                          {sg.artist} · {sg.plays}× · {sg.playlist}
+                                      </small>
+                                  </span>
+                              </div>
+                          </li>
+                      )),
+                      tr("Noch keine Songs gespielt.")
+                  )
+                : null}
+            {card(
+                "audit",
+                tr("📜 Letzte Änderungen"),
+                "audit",
+                data.audit.map((a) => (
+                    <li key={a.id}>
+                        <div className="admMini static">
+                            <span className="admMiniMain">
+                                <b>{tr(ACTION_LABEL[a.action] ?? a.action)}</b>
+                                <small>
+                                    {a.targetLabel ? `${a.targetLabel} · ` : ""}
+                                    {timeOf(a.createdAt)} · {a.actorName ?? tr("System")}
+                                </small>
+                            </span>
+                        </div>
+                    </li>
+                )),
+                tr("Noch keine Einträge.")
+            )}
         </div>
     );
 }
@@ -890,5 +1046,20 @@ button.admTile:hover{ background: rgba(255,255,255,.14); }
 .admSong.archived{ opacity:.65; }
 .admSong b{ font-size:14px; }
 .admWeak{ color:#ff9b8a; font-weight:800; }
+.admPrevGrid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
+.admPrev{ display:grid; align-content:start; gap:8px; padding:12px; border-radius:16px; background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); min-width:0; }
+.admPrev header{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.admPrev h3{ margin:0; font-size:14.5px; }
+.admMore{ border:0; background:none; color:#ffe08a; font-weight:800; font-size:12px; cursor:pointer; padding:0; white-space:nowrap; }
+.admMore:hover{ text-decoration:underline; }
+.admMiniList{ list-style:none; margin:0; padding:0; display:grid; gap:5px; }
+.admMini{ width:100%; display:flex; align-items:center; gap:9px; text-align:left; padding:7px 9px; border-radius:11px; background: rgba(255,255,255,.07); border:0; color:#fff; font:inherit; text-decoration:none; cursor:pointer; min-width:0; }
+.admMini.static{ cursor:default; }
+button.admMini:hover, a.admMini:hover{ background: rgba(255,255,255,.14); }
+.admMiniMain{ display:grid; min-width:0; flex:1; line-height:1.2; }
+.admMiniMain b, .admMiniMain small{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.admMiniMain b{ font-size:13.5px; }
+.admMiniMain small{ font-size:11.5px; opacity:.72; }
+.admCodeSm{ font-size:15px; }
 @media (max-width:560px){ .admUser{ grid-template-columns: 38px 1fr; } .admUserMeta{ grid-column: 2; justify-items:start; } }
 `;

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLeaderboard, type LeaderboardCategory, type LeaderboardEntry } from "@/hooks/useLeaderboard";
 import { Spinner } from "@/components/Spinner";
 import { SeasonBoard } from "@/components/SeasonBoard";
+import { ProfileFolder } from "@/components/profile/ProfileFolder";
 import { HomeButton } from "@/components/BackButton";
 import { tk, useI18n } from "@/lib/i18n";
 
@@ -68,7 +69,7 @@ export default function LeaderboardPage() {
 
     return (
         <main className="container">
-            <section className="card" aria-label={tr("Bestenliste")} style={{ maxWidth: 880, margin: "0 auto" }}>
+            <ProfileFolder active="leaderboard" label={tr("Bestenliste")}>
                 <header className="hostHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                     <div>
                         <h1 className="h1">🏆 {tr("Bestenliste")}</h1>
@@ -137,7 +138,7 @@ export default function LeaderboardPage() {
                         </table>
                     </div>
                 )}
-            </section>
+            </ProfileFolder>
         </main>
     );
 }

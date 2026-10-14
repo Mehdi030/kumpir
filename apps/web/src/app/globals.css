@@ -2208,7 +2208,11 @@ textarea:focus-visible{
 .modeTileGoal{ font-size: 12px; font-weight: 900; color: #ffe08a; line-height: 1.25; margin-top: 2px; }
 .modeTileDesc{ font-size: 12px; font-weight: 600; opacity: .78; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .modeTileRules{ display: none; }
+.modeTileSteps{ display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.modeTileSteps span{ display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; padding: 4px 10px 4px 7px; border-radius: 999px; background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.14); line-height: 1.2; }
+.modeTileSteps i{ font-style: normal; }
 @media (max-width: 640px){
+  .modeTileSteps{ display: none; }
   .modeTiles{ grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%; }
   .modeTile{ padding: 8px; justify-items: center; text-align: center; }
   .modeTileIcon{ font-size: 22px; }
@@ -2227,21 +2231,29 @@ textarea:focus-visible{
   .hostMain .modeTileName{ font-size: clamp(16px, 2.8vh, 28px); }
   .hostMain .modeTileNew{ font-size: clamp(9.5px, 1.3vh, 12px); }
   .hostMain .modeTileGoal{ font-size: clamp(12px, 2vh, 18px); }
-  .hostMain .modeTileDesc{ font-size: clamp(12px, 1.8vh, 16px); -webkit-line-clamp: 5; }
+  .hostMain .modeTileSteps{ gap: clamp(5px, .9vh, 9px); margin-top: clamp(4px, 1vh, 12px); }
+  .hostMain .modeTileSteps span{ font-size: clamp(12px, 1.8vh, 16px); padding: clamp(4px, .8vh, 8px) clamp(10px, 1.2vh, 14px) clamp(4px, .8vh, 8px) clamp(7px, 1vh, 10px); }
+  .hostMain .modeTileGoal{ font-size: clamp(13px, 2.2vh, 20px); }
 }
-/* niedrige Fenster: Kurzbeschreibung weglassen (das Ziel steht weiter da) */
-@media (min-width: 900px) and (max-height: 760px){
-  .hostMain .modeTileDesc{ display: none; }
+/* niedrige Fenster: Stichpunkte weglassen (das Ziel steht weiter da) */
+@media (min-width: 900px) and (max-height: 700px){
+  .hostMain .modeTileSteps{ display: none; }
 }
 /* Hohe Kacheln (ab ca. 500 px Höhe, z. B. großer Monitor): zusätzlich die Spielregeln – nur wenn wirklich Platz ist */
 @media (min-width: 900px){
   .hostMain .modeTile{ container-type: size; }
 }
+/* Kachel zu niedrig für die Stichpunkte: weglassen, damit nichts abgeschnitten wird */
+@container (max-height: 285px){
+  .hostMain .modeTileSteps{ display: none; }
+}
+@container (max-height: 175px){
+  .hostMain .modeTileIcon{ display: none; }
+}
 @container (min-height: 500px){
   .hostMain .modeTileRules{ display: grid; gap: 7px; margin-top: clamp(4px, 1.2vh, 14px); padding-top: clamp(6px, 1.4vh, 14px); border-top: 1px solid rgba(255,255,255,.16); width: 100%; }
   .hostMain .modeTileRules span{ display: grid; grid-template-columns: 22px 1fr; gap: 6px; align-items: start; font-size: clamp(12px, 1.5vh, 14.5px); font-weight: 600; line-height: 1.3; opacity: .86; }
   .hostMain .modeTileRules i{ font-style: normal; }
-  .hostMain .modeTileDesc{ -webkit-line-clamp: 3; }
 }
 
 /* Sichtbarkeits-Schalter in der unteren Reihe: gleiche Höhe wie die anderen Kästen, Text links, Schalter rechts */

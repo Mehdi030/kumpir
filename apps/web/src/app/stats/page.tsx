@@ -8,6 +8,7 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/Spinner";
 import { AccountStats } from "@/components/profile/AccountStats";
+import { ProfileFolder } from "@/components/profile/ProfileFolder";
 import { HomeButton } from "@/components/BackButton";
 import { seasonKey, type ProfileStats } from "@/lib/profileStats";
 import { fmtNum, trNow, useI18n } from "@/lib/i18n";
@@ -88,8 +89,7 @@ export default function StatsPage() {
 
     return (
         <main className="container">
-            <div className="landingWrap">
-                <section className="card" aria-label={tr("Deine Statistik")}>
+            <ProfileFolder active="stats" label={tr("Deine Statistik")}>
                     <HomeButton corner />
                     <header className="hostHeader">
                         <h1 className="h1">📊 {tr("Deine Statistik")}</h1>
@@ -111,8 +111,7 @@ export default function StatsPage() {
                             <Spinner size={24} label={tr("Lade Statistik…")} />
                         </div>
                     ) : null}
-                </section>
-            </div>
+            </ProfileFolder>
             <style>{`
                 .stQuick{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 8px; }
                 .stQuickBox{ padding: 12px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); display: grid; gap: 4px; text-align: center; }

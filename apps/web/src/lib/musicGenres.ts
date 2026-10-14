@@ -9,43 +9,12 @@
 export const MUSIC_PLAYLISTS: Record<string, { title: string; id: string; icon: string }> = {
     // Migration 079: aktuelle Deutschrap-Hits der letzten 4 Jahre (Deezer-Beliebtheit + iTunes-Vorschau,
     // gebaut mit db/scripts/build-deutschrap.mjs aus db/scripts/data/deutschrap-rapper.json)
-    "Deutschrap aktuell": {
-        title: "Deutschrap aktuell",
-        id: "",
-        icon: "🔥",
-    },
-    "Deutschrap-Songs": {
-        title: "German Hip Hop Mix",
-        id: "37i9dQZF1EIhtg5PfzSFt2",
-        icon: "🇩🇪",
-    },
-    "2000er Old School": {
-        title: "2000s Hip Hop R&B",
-        id: "5pk7cWIp56YkrwyWU7eMTr",
-        icon: "📼",
-    },
-    "Shisha Club": {
-        title: "Shisha Club",
-        id: "37i9dQZF1DX2lUf1uE6Mre",
-        icon: "💨",
-    },
-    // Playlists 4-6 (Migration 067): Songs liegen in song_pool (iTunes-Previews),
-    // die Spotify-ID ist rein informativ.
-    "80er Hits": {
-        title: "All Out 80s",
-        id: "37i9dQZF1DX4UtSsGT1Sbe",
-        icon: "🕺",
-    },
-    "Deutsch-Pop": {
-        title: "Deutsch-Pop Hits",
-        id: "",
-        icon: "🎤",
-    },
-    "Rock-Klassiker": {
-        title: "Rock Classics",
-        id: "37i9dQZF1DWXRqgorJj26U",
-        icon: "🎸",
-    },
+    "Deutschrap aktuell": { title: "Deutschrap aktuell", id: "", icon: "🔥" },
+    // Migration 121: aus Spotify-Playlists von Mehdi (db/scripts/build-spotify-playlists.mjs, Hörproben von Spotify)
+    "Top 50 Deutschrap": { title: "Top 50 Deutschrap 2026", id: "36BS72kjzt0c8BIkwOvQUB", icon: "🏆" },
+    "Deutschrap Asphalt": { title: "Deutschrap Asphalt", id: "37i9dQZF1DXbWS0mKtnghU", icon: "🇩🇪" },
+    Nostalgie: { title: "Alte Deutschrap banger", id: "3EIC2YmoiAYlfyCyV9vtHD", icon: "📼" },
+    "ICON 5": { title: "ICON 5", id: "4dp1B9ShVkftIC65qV8sne", icon: "🎤" },
 };
 
 export const MUSIC_GENRE_KEYS = Object.keys(MUSIC_PLAYLISTS);
@@ -53,12 +22,10 @@ export const MUSIC_GENRE_KEYS = Object.keys(MUSIC_PLAYLISTS);
 /** Akzentfarbe je Playlist (Abstimmung, Countdown). Unbekannte Playlists bekommen Sonnengelb. */
 const PLAYLIST_COLORS: Record<string, string> = {
     "Deutschrap aktuell": "#ef4444",
-    "Deutschrap-Songs": "#f59e0b",
-    "2000er Old School": "#8b5cf6",
-    "Shisha Club": "#06b6d4",
-    "80er Hits": "#ec4899",
-    "Deutsch-Pop": "#22c55e",
-    "Rock-Klassiker": "#3b82f6",
+    "Top 50 Deutschrap": "#f59e0b",
+    "Deutschrap Asphalt": "#06b6d4",
+    Nostalgie: "#8b5cf6",
+    "ICON 5": "#ec4899",
 };
 
 export function playlistLook(name: string | null | undefined): { icon: string; color: string } {

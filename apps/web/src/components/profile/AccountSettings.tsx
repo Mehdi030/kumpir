@@ -3,18 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile } from "@/components/ProfileProvider";
 import { PasswordInput } from "@/components/PasswordInput";
-import { PlaylistPicker, selectedFromExcluded, usePlaylists } from "@/components/PlaylistPicker";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useI18n } from "@/lib/i18n";
-import { getMuted, getVolume, setMuted, setVolume } from "@/lib/gameFx";
 import {
     DEFAULT_AVATAR,
-    SOLO_SKILL_LABEL,
     sanitizeDisplayName,
     settingsErrorText,
     validateDisplayName,
     validateUsername,
-    type Preferences,
     isPlaceholderEmail,
     passwordProblem,
     PASSWORD_HINT,
@@ -69,10 +65,8 @@ type Props = {
     profile: Profile;
     api: AccountApi;
     onRefresh: () => Promise<void>;
-    onSavePreferences: (p: Preferences) => Promise<{ ok: boolean; error?: string }>;
 };
 
-type Tab = "profil" | "spiel" | "konto";
 type Msg = { ok: boolean; text: string } | null;
 
 /** Avatar-Kreis: Emoji auf Farbe, sonst Anfangsbuchstabe. */
@@ -100,39 +94,24 @@ function Note({ msg }: { msg: Msg }) {
     );
 }
 
-export function AccountSettings({ profile, api, onRefresh, onSavePreferences }: Props) {
+export function AccountSettings({ profile, api, onRefresh }: Props) {
     const { tr } = useI18n();
-    const [tab, setTab] = useState<Tab>("profil");
 
     return (
         <section className="setBox" aria-labelledby="setTitle">
             <div className="setHead">
                 <h2 id="setTitle" className="setH2">
-                    ⚙️ {tr("Einstellungen")}
+                    ⚙️ {tr("Konto")}
                 </h2>
-                <div className="setTabs" role="tablist" aria-label={tr("Einstellungen")}>
-                    {(
-                        [
-                            ["profil", tr("👤 Profil")],
-                            ["spiel", tr("🎮 Spiel")],
-                            ["konto", tr("🔐 Konto")],
-                        ] as [Tab, string][]
-                    ).map(([key, label]) => (
-                        <button key={key} type="button" role="tab" aria-selected={tab === key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>
-                            {label}
-                        </button>
-                    ))}
-                </div>
             </div>
 
             {!profile.username ? (
                 <div className="setWarn">{tr("⚠️ Dein Konto hat noch keinen Benutzernamen. Wähle unten einen – damit kannst du dich auch ohne E-Mail anmelden.")}</div>
             ) : null}
 
-            <div className="setTabPane" key={tab}>
-                {tab === "profil" ? <ProfileTab profile={profile} api={api} onRefresh={onRefresh} /> : null}
-                {tab === "spiel" ? <GameTab profile={profile} onSavePreferences={onSavePreferences} /> : null}
-                {tab === "konto" ? <AccountTab profile={profile} api={api} /> : null}
+            <div className="setTabPane">
+                <ProfileTab profile={profile} api={api} onRefresh={onRefresh} />
+                <AccountTab profile={profile} api={api} />
             </div>
 
             <style>{`
@@ -312,178 +291,6 @@ function ProfileTab({ profile, api, onRefresh }: { profile: Profile; api: Accoun
                                   : ""}
                 </div>
                 <Note msg={uMsg} />
-            </div>
-        </>
-    );
-}
-
-// ------------------------------------------------------------------ Spiel
-function GameTab({ profile, onSavePreferences }: { profile: Profile; onSavePreferences: Props["onSavePreferences"] }) {
-    const { locale, setLocale, tr } = useI18n();
-    const p = profile.preferences;
-    const [muted, setMutedState] = useState(() => getMuted());
-    const [volume, setVolumeState] = useState(() => Math.round(getVolume() * 100));
-    const [bots, setBots] = useState(p.solo?.bots ?? 3);
-    const [skill, setSkill] = useState<NonNullable<NonNullable<Preferences["solo"]>["skill"]>>(p.solo?.skill ?? "mixed");
-    const [maxPlayers, setMaxPlayers] = useState(p.host?.maxPlayers ?? 6);
-    const [speed, setSpeed] = useState<"fast" | "normal" | "calm">(p.host?.speed ?? "normal");
-    const [rounds, setRounds] = useState<1 | 3 | 5>(p.host?.rounds ?? 1);
-    const [answerMode, setAnswerMode] = useState<"text" | "voice">(p.host?.answerMode ?? "text");
-    const playlistList = usePlaylists();
-    const allNames = (playlistList ?? []).map((x) => x.name);
-    const [playlistSel, setPlaylistSel] = useState<string[] | null>(null);
-    const selectedPlaylists = playlistSel ?? selectedFromExcluded(allNames, p.host?.excludedPlaylists);
-    const [msg, setMsg] = useState<Msg>(null);
-    const [busy, setBusy] = useState(false);
-
-    const save = async () => {
-        setBusy(true);
-        setMsg(null);
-        const excludedPlaylists = allNames.filter((n) => !selectedPlaylists.includes(n));
-        const res = await onSavePreferences({ solo: { bots, skill }, host: { maxPlayers, speed, rounds, answerMode, excludedPlaylists } });
-        setBusy(false);
-        setMsg(res.ok ? { ok: true, text: tr("✅ Gespeichert – gilt ab dem nächsten Spiel") } : { ok: false, text: settingsErrorText(res.error) });
-    };
-
-    return (
-        <>
-            <div className="setGroup">
-                <h3>{tr("Sprache & Ton")}</h3>
-                <div className="setHint">{tr("Wird sofort übernommen und gilt auf allen Geräten, auf denen du angemeldet bist.")}</div>
-                <div className="setRow">
-                    <span className="setLabel">{tr("Sprache")}</span>
-                    <div className="setSeg" role="group" aria-label={tr("Sprache")}>
-                        {(["de", "en", "fr"] as const).map((l) => (
-                            <button key={l} type="button" className={locale === l ? "on" : ""} aria-pressed={locale === l} onClick={() => setLocale(l)}>
-                                {l === "de" ? "Deutsch" : l === "en" ? "English" : "Français"}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div className="setRow">
-                    <span className="setLabel">{tr("Ton")}</span>
-                    <div className="setSeg" role="group" aria-label={tr("Ton")}>
-                        <button type="button" className={!muted ? "on" : ""} aria-pressed={!muted} onClick={() => (setMuted(false), setMutedState(false))}>
-                            {tr("🔊 An")}
-                        </button>
-                        <button type="button" className={muted ? "on" : ""} aria-pressed={muted} onClick={() => (setMuted(true), setMutedState(true))}>
-                            {tr("🔇 Aus")}
-                        </button>
-                    </div>
-                </div>
-                <div className="setRow">
-                    <label className="setLabel" htmlFor="setVolume">
-                        {tr("Lautstärke")} {volume} %
-                    </label>
-                    <input
-                        id="setVolume"
-                        type="range"
-                        className="slider"
-                        min={0}
-                        max={100}
-                        step={5}
-                        value={volume}
-                        onChange={(e) => {
-                            const v = Number(e.target.value);
-                            setVolumeState(v);
-                            setVolume(v / 100);
-                        }}
-                        style={{ flex: "1 1 160px" }}
-                    />
-                </div>
-            </div>
-
-            <div className="setGroup">
-                <h3>🎵 Playlists</h3>
-                <div className="setHint">{tr("Rausgenommene Playlists kommen beim Hosten und im Solo-Modus nicht vor. Neue Playlists sind automatisch dabei.")}</div>
-                <PlaylistPicker selected={selectedPlaylists} onChange={setPlaylistSel} />
-            </div>
-
-            <div className="setGroup">
-                <h3>🤖 {tr("Solo-Gegner")}</h3>
-                <div className="setRow">
-                    <span className="setLabel">{tr("Anzahl Bots")}</span>
-                    <div className="setStep">
-                        <button type="button" onClick={() => setBots((b) => Math.max(1, b - 1))} aria-label={tr("Weniger Bots")}>
-                            −
-                        </button>
-                        <span aria-live="polite">{bots}</span>
-                        <button type="button" onClick={() => setBots((b) => Math.min(5, b + 1))} aria-label={tr("Mehr Bots")}>
-                            +
-                        </button>
-                    </div>
-                </div>
-                <div className="setRow">
-                    <span className="setLabel">{tr("Stärke")}</span>
-                    <div className="setSeg" role="group" aria-label={tr("Bot-Stärke")}>
-                        {(Object.keys(SOLO_SKILL_LABEL) as (keyof typeof SOLO_SKILL_LABEL)[]).map((k) => (
-                            <button key={k} type="button" className={skill === k ? "on" : ""} aria-pressed={skill === k} onClick={() => setSkill(k)}>
-                                {tr(SOLO_SKILL_LABEL[k])}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            <div className="setGroup">
-                <h3>🚀 {tr("Standard beim Hosten")}</h3>
-                <div className="setHint">{tr("Diese Werte sind auf „Lobby hosten“ schon vorausgewählt (dort weiterhin änderbar).")}</div>
-                <div className="setRow">
-                    <span className="setLabel">{tr("Max. Spieler")}</span>
-                    <div className="setStep">
-                        <button type="button" onClick={() => setMaxPlayers((n) => Math.max(2, n - 1))} aria-label={tr("Weniger Spieler")}>
-                            −
-                        </button>
-                        <span aria-live="polite">{maxPlayers}</span>
-                        <button type="button" onClick={() => setMaxPlayers((n) => Math.min(12, n + 1))} aria-label={tr("Mehr Spieler")}>
-                            +
-                        </button>
-                    </div>
-                </div>
-                <div className="setRow">
-                    <span className="setLabel">{tr("Tempo")}</span>
-                    <div className="setSeg" role="group" aria-label={tr("Tempo")}>
-                        {(
-                            [
-                                ["fast", "⚡ Blitz"],
-                                ["normal", "🎯 Standard"],
-                                ["calm", "🧊 Casual"],
-                            ] as const
-                        ).map(([k, label]) => (
-                            <button key={k} type="button" className={speed === k ? "on" : ""} aria-pressed={speed === k} onClick={() => setSpeed(k)}>
-                                {tr(label)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div className="setRow">
-                    <span className="setLabel">{tr("Runden pro Match")}</span>
-                    <div className="setSeg" role="group" aria-label={tr("Runden pro Match")}>
-                        {([1, 3, 5] as const).map((r) => (
-                            <button key={r} type="button" className={rounds === r ? "on" : ""} aria-pressed={rounds === r} onClick={() => setRounds(r)}>
-                                {r === 1 ? tr("1 Runde") : tr("{n} Runden", { n: r })}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div className="setRow">
-                    <span className="setLabel">{tr("Antwort")}</span>
-                    <div className="setSeg" role="group" aria-label={tr("Antwort-Modus")}>
-                        <button type="button" className={answerMode === "text" ? "on" : ""} aria-pressed={answerMode === "text"} onClick={() => setAnswerMode("text")}>
-                            {tr("⌨️ Schreiben")}
-                        </button>
-                        <button type="button" className={answerMode === "voice" ? "on" : ""} aria-pressed={answerMode === "voice"} onClick={() => setAnswerMode("voice")}>
-                            {tr("🎤 Mündlich")}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="setRow">
-                <button type="button" className="btn btnPrimary btnSmall" onClick={() => void save()} disabled={busy}>
-                    {busy ? "…" : tr("Playlists, Solo & Host speichern")}
-                </button>
-                <Note msg={msg} />
             </div>
         </>
     );

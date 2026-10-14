@@ -27,7 +27,7 @@ const CSP = [
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "media-src 'self' data: blob: https://*.itunes.apple.com https://*.mzstatic.com",
+    "media-src 'self' data: blob: https://*.itunes.apple.com https://*.mzstatic.com https://p.scdn.co",
     `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com https://vitals.vercel-insights.com${isDev ? " ws: http://localhost:*" : ""}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",

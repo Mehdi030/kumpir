@@ -20,6 +20,8 @@ export type GameModeInfo = {
     goal: string;
     /** "potato" = Kumpir wird weitergegeben, "quiz" = alle raten gleichzeitig */
     kind: "potato" | "quiz";
+    /** Drei kurze Stichpunkte für die Kacheln beim Hosten (statt langer Beschreibung) */
+    steps: { icon: string; text: string }[];
     /** Regeln für „So wird gespielt“ */
     rules: { icon: string; text: string }[];
     soon?: boolean;
@@ -34,6 +36,11 @@ export const GAME_MODES: GameModeInfo[] = [
         desc: tk("Heiße Kartoffel: Song erkennen, Kumpir weitergeben, nicht erwischen lassen. Alle sitzen am runden Tisch."),
         goal: tk("Als Letzter noch im Spiel sein"),
         kind: "potato",
+        steps: [
+            { icon: "🎧", text: tk("Song erkennen") },
+            { icon: "🥔", text: tk("Kumpir weitergeben") },
+            { icon: "💥", text: tk("Wer sie beim Knall hält, fliegt") },
+        ],
         rules: [
             { icon: "🎧", text: tk("Ein Song läuft: Titel (1 Punkt), Künstler (½) oder beides zusammen (1,5 Punkte) tippen und die Kumpir weitergeben. Feature-Partner zählen auch.") },
             { icon: "🔥", text: tk("Wer sie beim Knall hält, fliegt raus – die Zündschnur wird jede Runde kürzer.") },
@@ -51,6 +58,11 @@ export const GAME_MODES: GameModeInfo[] = [
         goal: tk("Wer zuerst 10 Punkte hat, gewinnt"),
         kind: "quiz",
         isNew: true,
+        steps: [
+            { icon: "🔔", text: tk("Als Erster buzzern") },
+            { icon: "✍️", text: tk("Titel oder Künstler tippen") },
+            { icon: "🔒", text: tk("Falsch = für den Song gesperrt") },
+        ],
         rules: [
             { icon: "🔔", text: tk("Ein Song läuft. Wer ihn erkennt, drückt den Buzzer (Leertaste) – wer zuerst drückt, darf antworten.") },
             { icon: "✍️", text: tk("Titel richtig: 2 Punkte. Nur der Künstler richtig: 1 Punkt. Du hast 7 Sekunden zum Tippen.") },
@@ -66,6 +78,11 @@ export const GAME_MODES: GameModeInfo[] = [
         goal: tk("Nach 8 Songs gewinnt, wer die meisten Punkte hat"),
         kind: "quiz",
         isNew: true,
+        steps: [
+            { icon: "🎧", text: tk("Song hören") },
+            { icon: "📅", text: tk("Figur aufs Jahr ziehen") },
+            { icon: "🎯", text: tk("Je näher, desto mehr Punkte") },
+        ],
         rules: [
             { icon: "🎧", text: tk("Ein Song läuft. Zieh deine Figur auf der Zeitleiste auf das Jahr, in dem er erschienen ist, und gib deinen Tipp ab.") },
             { icon: "🎯", text: tk("Genau richtig: 5 Punkte. Ein Jahr daneben: 3. Zwei Jahre: 2. Bis fünf Jahre: 1.") },

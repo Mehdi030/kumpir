@@ -1,0 +1,492 @@
+[
+  {
+    "rapper": "Samy Deluxe",
+    "usable": 151,
+    "lead": 147,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Prinz Pi",
+    "usable": 148,
+    "lead": 144,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Ardian Bujupi",
+    "usable": 146,
+    "lead": 127,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Eko Fresh",
+    "usable": 145,
+    "lead": 131,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Kontra K",
+    "usable": 140,
+    "lead": 133,
+    "capped": false,
+    "found": 188
+  },
+  {
+    "rapper": "Pa Sports",
+    "usable": 138,
+    "lead": 118,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Luciano",
+    "usable": 137,
+    "lead": 114,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Fler",
+    "usable": 136,
+    "lead": 135,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Kool Savas",
+    "usable": 124,
+    "lead": 106,
+    "capped": false,
+    "found": 198
+  },
+  {
+    "rapper": "Dardan",
+    "usable": 118,
+    "lead": 91,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Sido",
+    "usable": 117,
+    "lead": 84,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "RAF Camora",
+    "usable": 117,
+    "lead": 85,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Massiv",
+    "usable": 115,
+    "lead": 113,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Samra",
+    "usable": 113,
+    "lead": 90,
+    "capped": false,
+    "found": 198
+  },
+  {
+    "rapper": "Capital Bra",
+    "usable": 104,
+    "lead": 90,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Nimo",
+    "usable": 101,
+    "lead": 83,
+    "capped": false,
+    "found": 198
+  },
+  {
+    "rapper": "Ufo361",
+    "usable": 98,
+    "lead": 76,
+    "capped": false,
+    "found": 157
+  },
+  {
+    "rapper": "Maxwell",
+    "usable": 93,
+    "lead": 65,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Alpa Gun",
+    "usable": 92,
+    "lead": 81,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Marteria",
+    "usable": 91,
+    "lead": 81,
+    "capped": false,
+    "found": 198
+  },
+  {
+    "rapper": "Jamule",
+    "usable": 91,
+    "lead": 76,
+    "capped": false,
+    "found": 139
+  },
+  {
+    "rapper": "Majoe",
+    "usable": 88,
+    "lead": 82,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "KC Rebell",
+    "usable": 86,
+    "lead": 77,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Cro",
+    "usable": 86,
+    "lead": 78,
+    "capped": false,
+    "found": 193
+  },
+  {
+    "rapper": "Disarstar",
+    "usable": 86,
+    "lead": 83,
+    "capped": false,
+    "found": 147
+  },
+  {
+    "rapper": "Summer Cem",
+    "usable": 78,
+    "lead": 33,
+    "capped": false,
+    "found": 196
+  },
+  {
+    "rapper": "Mero",
+    "usable": 77,
+    "lead": 61,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Casper",
+    "usable": 77,
+    "lead": 63,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Reezy",
+    "usable": 68,
+    "lead": 55,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Trettmann",
+    "usable": 67,
+    "lead": 16,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Bonez MC",
+    "usable": 66,
+    "lead": 29,
+    "capped": false,
+    "found": 196
+  },
+  {
+    "rapper": "Loredana",
+    "usable": 66,
+    "lead": 50,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Bozza",
+    "usable": 65,
+    "lead": 41,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Azet",
+    "usable": 64,
+    "lead": 39,
+    "capped": false,
+    "found": 91
+  },
+  {
+    "rapper": "Azad",
+    "usable": 62,
+    "lead": 50,
+    "capped": false,
+    "found": 197
+  },
+  {
+    "rapper": "Bushido",
+    "usable": 60,
+    "lead": 59,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Animus",
+    "usable": 60,
+    "lead": 52,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Haftbefehl",
+    "usable": 59,
+    "lead": 45,
+    "capped": false,
+    "found": 198
+  },
+  {
+    "rapper": "Toni der Assi",
+    "usable": 59,
+    "lead": 51,
+    "capped": false,
+    "found": 94
+  },
+  {
+    "rapper": "Gzuz",
+    "usable": 58,
+    "lead": 41,
+    "capped": false,
+    "found": 181
+  },
+  {
+    "rapper": "Farid Bang",
+    "usable": 56,
+    "lead": 48,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Olexesh",
+    "usable": 55,
+    "lead": 38,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Apache 207",
+    "usable": 47,
+    "lead": 44,
+    "capped": false,
+    "found": 75
+  },
+  {
+    "rapper": "Genetikk",
+    "usable": 47,
+    "lead": 46,
+    "capped": false,
+    "found": 99
+  },
+  {
+    "rapper": "Jalil",
+    "usable": 37,
+    "lead": 31,
+    "capped": false,
+    "found": 198
+  },
+  {
+    "rapper": "Nura",
+    "usable": 37,
+    "lead": 31,
+    "capped": false,
+    "found": 198
+  },
+  {
+    "rapper": "Fard",
+    "usable": 35,
+    "lead": 32,
+    "capped": false,
+    "found": 198
+  },
+  {
+    "rapper": "18 Karat",
+    "usable": 35,
+    "lead": 35,
+    "capped": false,
+    "found": 186
+  },
+  {
+    "rapper": "LX",
+    "usable": 32,
+    "lead": 27,
+    "capped": false,
+    "found": 198
+  },
+  {
+    "rapper": "Zuna",
+    "usable": 30,
+    "lead": 23,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Kollegah",
+    "usable": 29,
+    "lead": 22,
+    "capped": false,
+    "found": 138
+  },
+  {
+    "rapper": "Eno",
+    "usable": 29,
+    "lead": 21,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Lil Lano",
+    "usable": 29,
+    "lead": 26,
+    "capped": false,
+    "found": 77
+  },
+  {
+    "rapper": "Veysel",
+    "usable": 22,
+    "lead": 17,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Frank White",
+    "usable": 19,
+    "lead": 19,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Mois",
+    "usable": 18,
+    "lead": 17,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Gringo",
+    "usable": 18,
+    "lead": 13,
+    "capped": false,
+    "found": 199
+  },
+  {
+    "rapper": "Sonny Black",
+    "usable": 17,
+    "lead": 15,
+    "capped": true,
+    "found": 200
+  },
+  {
+    "rapper": "Miami Yacine",
+    "usable": 16,
+    "lead": 11,
+    "capped": false,
+    "found": 24
+  },
+  {
+    "rapper": "Shirin David",
+    "usable": 14,
+    "lead": 10,
+    "capped": false,
+    "found": 43
+  },
+  {
+    "rapper": "Hanybal",
+    "usable": 11,
+    "lead": 6,
+    "capped": false,
+    "found": 32
+  },
+  {
+    "rapper": "Bass Sultan Hengzt",
+    "usable": 11,
+    "lead": 6,
+    "capped": false,
+    "found": 104
+  },
+  {
+    "rapper": "Ali Bumaye",
+    "usable": 10,
+    "lead": 9,
+    "capped": false,
+    "found": 81
+  },
+  {
+    "rapper": "Sero El Mero",
+    "usable": 10,
+    "lead": 7,
+    "capped": false,
+    "found": 24
+  },
+  {
+    "rapper": "Shindy",
+    "usable": 5,
+    "lead": 3,
+    "capped": false,
+    "found": 189
+  },
+  {
+    "rapper": "Ssio",
+    "usable": 2,
+    "lead": 0,
+    "capped": false,
+    "found": 154
+  },
+  {
+    "rapper": "SSIO",
+    "usable": 2,
+    "lead": 0,
+    "capped": false,
+    "found": 154
+  },
+  {
+    "rapper": "Celo & Abdi",
+    "usable": 0,
+    "lead": 0,
+    "capped": false,
+    "found": 66
+  },
+  {
+    "rapper": "Hamad 45",
+    "usable": 0,
+    "lead": 0,
+    "capped": false,
+    "found": 15
+  },
+  {
+    "rapper": "Content",
+    "usable": 0,
+    "lead": 0,
+    "capped": true,
+    "found": 200
+  }
+]

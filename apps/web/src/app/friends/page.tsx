@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useFriends } from "@/hooks/useFriends";
 import { Spinner } from "@/components/Spinner";
+import { ProfileFolder } from "@/components/profile/ProfileFolder";
 import { HomeButton } from "@/components/BackButton";
 import { useI18n } from "@/lib/i18n";
 import { errorText } from "@/lib/errorText";
@@ -81,7 +82,7 @@ export default function FriendsPage() {
 
     return (
         <main className="container">
-            <section className="card" style={{ maxWidth: 820, margin: "0 auto" }}>
+            <ProfileFolder active="friends" label={tr("Freunde")}>
                 <header className="hostHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                     <h1 className="h1">👥 {tr("Freunde")}</h1>
                     <HomeButton />
@@ -175,7 +176,7 @@ export default function FriendsPage() {
                         </div>
                     </div>
                 ) : null}
-            </section>
+            </ProfileFolder>
         </main>
     );
 }

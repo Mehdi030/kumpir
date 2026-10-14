@@ -12,10 +12,15 @@ export type Preferences = {
         speed?: "fast" | "normal" | "calm";
         rounds?: 1 | 3 | 5;
         answerMode?: "text" | "voice";
+        /** zuletzt gewählter Modus (wird beim Erstellen gemerkt, Migration 122) */
+        mode?: "original" | "buzzer" | "year";
     };
     solo?: {
         bots?: number;
         skill?: "mixed" | "1" | "2" | "3";
+        /** zuletzt gewählter Modus / Tempo gegen Bots (Migration 122) */
+        mode?: "original" | "buzzer" | "year";
+        speed?: "fast" | "normal" | "calm";
     };
 };
 
