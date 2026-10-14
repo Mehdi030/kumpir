@@ -27,6 +27,7 @@ import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
 import { QuizStage } from "@/components/game/QuizStage";
 import { HeartbeatEdge, StageBar } from "@/components/game/StageBar";
+import { TableStylePicker } from "@/components/game/TableStylePicker";
 import { isQuizMode } from "@/lib/gameModes";
 import { playFx } from "@/lib/gameFx";
 import type { SeriesRow } from "@/components/game/SeriesTable";
@@ -2204,6 +2205,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
             <HeartbeatEdge heat={explodeMsLeft != null && roundTotalMsRef.current > 0 ? heatRatio : 0} strong={isMeHolder} />
 
             <div className="topRight">
+                <TableStylePicker />
                 <AudioControl />
             </div>
 

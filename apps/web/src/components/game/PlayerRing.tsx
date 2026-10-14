@@ -4,6 +4,7 @@ import { fmtNum, useI18n } from "@/lib/i18n";
 import { KumpirPotato } from "@/components/game/KumpirPotato";
 import { PlayerAvatar, type AvatarConfig } from "@/components/game/PlayerAvatar";
 import { nextHolderId } from "@/lib/nextHolder";
+import { useTableStyle } from "@/lib/tableStyle";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Player = {
@@ -44,8 +45,7 @@ type Props = {
     showPulse?: boolean;
 };
 
-// Bühne statt Tisch (Wunsch Mehdi 2026-10-13: "nicht wie am Roulette-Tisch") – keine Neigung mehr
-const TILT_DEG = 0;
+const TILT_DEG = 48;
 
 /** Stable hue per player_id so avatar colors stay consistent across renders. */
 function hueFor(id: string): number {
@@ -86,6 +86,7 @@ export function PlayerRing({
     showPulse = false,
 }: Props) {
     const { tr } = useI18n();
+    const tableStyle = useTableStyle();
     const isDisconnected = useCallback(
         (id: string) => (disconnectedIds instanceof Set ? disconnectedIds.has(id) : (disconnectedIds ?? []).includes(id)),
         [disconnectedIds]
@@ -98,22 +99,16 @@ export function PlayerRing({
     // Tischdurchmesser: wächst mit dem Bildschirm, aber nie so groß, dass die
     // Namensschilder an den Seiten abgeschnitten werden.
     const narrow = size.w > 0 && size.w < 520;
-    // Auf dem Handy: kleinere Figuren und Schilder.
+    const tableSize = Math.max(narrow ? 200 : 240, Math.min(Math.min(size.w, size.h) * (narrow ? 0.7 : 0.66), size.h * 0.56, 520));
+    // Tischmitte: unter der Info-Leiste oben (+ Platz für Sitz und "AM ZUG"-Schild am hinteren Rand).
+    // Projizierte halbe Tischtiefe ~ 0.455 * Größe * cos(Neigung) ≈ 0.305 * Größe.
+    // Platz oben für die große Leiste (StageBar: ~95 px, auf dem Handy zweizeilig ~170 px) + Name des hinteren Sitzes
+    const topReserve = narrow ? 262 : 204;
+    const cyPx = Math.max(size.h * 0.26, topReserve + tableSize * 0.305);
+    // Unterkante (vorderer Sitz + Name) -> Antwort-Box der Spielseite beginnt darunter (CSS-Variable --ringBottom)
+    const ringBottom = Math.round(cyPx + tableSize * 0.305 + (narrow ? 66 : 92));
+    // Auf dem Handy: kleinere Sitze und Schilder, sonst überlappen sie sich am kleinen Tisch.
     const seatPx = narrow ? 46 : 68;
-    // Bühne: alle stehen nebeneinander in einem leichten Bogen unter der großen Leiste oben,
-    // die Mitte (du) etwas weiter vorn. Bei vielen Spielern auf schmalen Bildschirmen im Zickzack.
-    const seatCount = players.filter((p) => p.is_alive).length;
-    const maxGap = narrow ? 150 : 200;
-    // Namensschilder sind ~110–180 px breit: darunter kommt jede zweite Figur eine Reihe nach hinten
-    const minGap = narrow ? 130 : 180;
-    // Hintere Reihe so weit nach oben, dass die Namensschilder vorn nicht über den Figuren hinten liegen
-    const zigOffset = seatPx * (narrow ? 2.2 : 1.8);
-    const halfSpan = Math.min(size.w / 2 - (narrow ? 76 : 100), (Math.max(0, seatCount - 1) * maxGap) / 2);
-    const zigNeeded = seatCount > 2 && (halfSpan * 2) / (seatCount - 1) < minGap;
-    const rowY = Math.max(narrow ? 210 : 240, Math.min(size.h * 0.36, 320)) + (zigNeeded ? zigOffset : 0);
-    const curve = narrow ? 16 : 30;
-    // Unterkante (Figuren + Schilder) -> Antwort-Box der Spielseite beginnt darunter (CSS-Variable --ringBottom)
-    const ringBottom = Math.round(rowY + curve + seatPx * 0.5 + (narrow ? 70 : 92));
 
     useEffect(() => {
         const el = containerRef.current;
@@ -173,14 +168,15 @@ export function PlayerRing({
         const map = new Map<string, Pt>();
         if (n === 0) return map;
 
-        // Reihenfolge bleibt die Weitergabe-Reihenfolge; die Liste wird nur so gedreht, dass du in der Mitte stehst.
+        const step = (Math.PI * 2) / n;
+        // Jeder sieht sich selbst unten (Winkel 90°), alle anderen in
+        // derselben Reihenfolge um ihn herum -- für alle Spieler identisch.
         const meIdx = mePlayerId ? seatedPlayers.findIndex((p) => p.player_id === mePlayerId) : -1;
-        const mid = Math.floor((n - 1) / 2);
-        const shift = meIdx >= 0 ? (meIdx - mid + n) % n : 0;
+        const startAngle = Math.PI / 2 - Math.max(0, meIdx) * step;
+
         for (let i = 0; i < n; i++) {
-            const p = seatedPlayers[(i + shift) % n]!;
-            // x: -1 (links) .. 1 (rechts); y: Index (für Zickzack)
-            map.set(p.player_id, { x: n === 1 ? 0 : (i / (n - 1)) * 2 - 1, y: i });
+            const a = startAngle + i * step;
+            map.set(seatedPlayers[i]!.player_id, { x: Math.cos(a), y: Math.sin(a) });
         }
         return map;
     }, [seatedPlayers, mePlayerId]);
@@ -192,15 +188,15 @@ export function PlayerRing({
             if (!rel) return null;
             if (size.w <= 0 || size.h <= 0) return null;
 
-            const n = positions.size;
             const cx = size.w / 2;
-            const half = Math.min(size.w / 2 - (narrow ? 76 : 100), ((n - 1) * maxGap) / 2);
-            const gap = n > 1 ? (half * 2) / (n - 1) : 0;
-            // Zu eng? Jede zweite Figur eine Reihe nach hinten (Zickzack)
-            const zig = n > 2 && gap < minGap && rel.y % 2 === 1 ? -zigOffset : 0;
-            return { x: cx + rel.x * half, y: rowY + (1 - rel.x * rel.x) * curve + zig };
+            // Oberhalb der Antwort-Box (.hud) statt exakt Bildschirmmitte.
+            const cy = cyPx;
+            // Sitze direkt am Tischrand (wie Spieler, die am Tisch sitzen).
+            const r = tableSize * 0.455;
+
+            return { x: cx + rel.x * r, y: cy + rel.y * r };
         },
-        [positions, size.w, size.h, narrow, maxGap, minGap, zigOffset, rowY, curve]
+        [positions, size.w, size.h, tableSize, cyPx]
     );
 
     // Trigger nicer animation on passEvent
@@ -315,9 +311,9 @@ export function PlayerRing({
         const a = getPx(holderPlayerId);
         const b = getPx(nextId);
         if (!a || !b) return null;
-        // Bogen über den Köpfen von Halter zum Nächsten
+        const c = { x: size.w / 2, y: cyPx };
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        const ctrl = { x: mid.x, y: Math.min(a.y, b.y) - Math.min(110, 30 + Math.abs(b.x - a.x) * 0.25) };
+        const ctrl = { x: mid.x + (c.x - mid.x) * 0.55, y: mid.y + (c.y - mid.y) * 0.55 };
         const pull = (p: Pt, toward: Pt, d: number): Pt => {
             const dx = toward.x - p.x, dy = toward.y - p.y;
             const len = Math.max(1, Math.hypot(dx, dy));
@@ -327,7 +323,7 @@ export function PlayerRing({
         const p0 = pull(a, ctrl, off);
         const p2 = pull(b, ctrl, off + 8);
         return `M ${p0.x} ${p0.y} Q ${ctrl.x} ${ctrl.y} ${p2.x} ${p2.y}`;
-    }, [holderPlayerId, nextId, fly, getPx, seatPx]);
+    }, [holderPlayerId, nextId, fly, getPx, size.w, cyPx, seatPx]);
 
     const popRender = useMemo(() => {
         if (!popPlayerId) return null;
@@ -346,7 +342,7 @@ export function PlayerRing({
     return (
         <div
             ref={containerRef}
-            className={`ringWrap ${hot ? "ringHot" : ""} ${narrow ? "ringNarrow" : ""}`}
+            className={`ringWrap tbl-${tableStyle} ${hot ? "ringHot" : ""} ${narrow ? "ringNarrow" : ""}`}
             style={{
                 ["--seat" as string]: `${seatPx}px`,
                 ["--potatoPx" as string]: `${potatoPx}px`,
@@ -356,8 +352,18 @@ export function PlayerRing({
             }}
         >
             <div className="tableTilt">
-                {/* ---------- Bühne: weicher Lichtstreifen unter den Figuren (kein Tisch mehr) ---------- */}
-                <div className={`stageFloor ${showPulse ? "hot" : ""}`} aria-hidden style={{ top: rowY + curve * 0.6 + seatPx * 0.62 }} />
+                {/* ---------- Tisch: ruhige dunkle Platte, feiner Metallrand, Glut am Rand = Zündschnur ---------- */}
+                <div className="tableBase" aria-hidden style={{ top: cyPx, width: tableSize, height: tableSize }}>
+                    <div className="tShadow" />
+                    <div className="tEdge tEdge2" />
+                    <div className="tEdge tEdge1" />
+                    <div className="tRim" />
+                    <div className="tTop" />
+                    <div className="tInlay" />
+                    <div className="tInlay2" />
+                    <div className="tGloss" />
+                    {showPulse ? <div className="tPulse" /> : null}
+                </div>
 
                 {/* Kontakt-Schatten der Sitze */}
                 {seatedPlayers.map((p) => {
@@ -497,17 +503,7 @@ export function PlayerRing({
           transform: rotateX(var(--tilt));
         }
 
-        /* ===== Bühne ===== */
-        .stageFloor{
-          position: absolute; left: 50%; transform: translate(-50%, -50%);
-          width: min(92vw, 1100px); height: 70px; border-radius: 50%;
-          background: radial-gradient(ellipse at center, rgba(255,200,120,.22), rgba(255,140,60,.08) 45%, transparent 70%);
-          filter: blur(2px);
-        }
-        .stageFloor.hot{ animation: stageHot var(--pulse) ease-in-out infinite; }
-        @keyframes stageHot{ 0%,100%{ opacity: .7; } 50%{ opacity: calc(.7 + var(--amp) * .5); filter: blur(2px) saturate(1.6); } }
-
-        /* ===== (alt) Tisch (Ebenen gestapelt in Z) – nicht mehr gerendert ===== */
+        /* ===== Tisch (Ebenen gestapelt in Z) ===== */
         .tableBase{
           position:absolute;
           left:50%;
@@ -568,6 +564,62 @@ export function PlayerRing({
           50%{ box-shadow: 0 0 calc(18px + 50px * var(--amp, .1)) calc(4px + 10px * var(--amp, .1)) rgba(255,80,25, calc(.18 + .6 * var(--amp, .1))); }
         }
         .ringHot .tRim{ background: conic-gradient(from 210deg, #ffb27a, #fff1e0 14%, #d9692b 30%, #ffd2a8 46%, #b5481c 62%, #ffe2c4 78%, #ffb27a); }
+
+        /* ===== Tisch-Stile (Wunsch Mehdi 2026-10-14) – "felt" ist der bisherige Look oben ===== */
+        /* Holz: warmer Stammtisch */
+        .tbl-wood .tEdge1{ background: linear-gradient(180deg, #3b210e, #1e1008); }
+        .tbl-wood .tEdge2{ background: #140a05; }
+        .tbl-wood .tRim{ background: conic-gradient(from 200deg, #4a2a12, #7d4d24 18%, #3b210e 38%, #6e431e 58%, #4a2a12 78%, #4a2a12); box-shadow: inset 0 0 0 1px rgba(255,220,170,.22), 0 0 30px rgba(0,0,0,.45); }
+        .tbl-wood .tTop{ background:
+            radial-gradient(ellipse 70% 60% at 50% 38%, rgba(255,230,180,.26), transparent 64%),
+            repeating-linear-gradient(94deg, rgba(55,26,8,.20) 0 2px, transparent 2px 10px, rgba(255,215,160,.08) 10px 12px, transparent 12px 22px),
+            radial-gradient(circle at 50% 50%, #a1703d 0%, #835629 55%, #5e3a1a 100%);
+          box-shadow: inset 0 0 0 2px rgba(40,20,8,.55), inset 0 22px 50px rgba(30,14,4,.4), inset 0 -10px 30px rgba(30,14,4,.3); }
+        .tbl-wood .tInlay{ border: 2px solid rgba(45,22,8,.45); box-shadow: none; }
+        .tbl-wood .tInlay2{ display: none; }
+        /* Mitternacht: dunkles Blau, ruhiger Lichtring */
+        .tbl-midnight .tEdge1{ background: linear-gradient(180deg, #16294a, #0a1426); }
+        .tbl-midnight .tEdge2{ background: #050a16; }
+        .tbl-midnight .tRim{ background: linear-gradient(135deg, rgba(205,230,255,.95), rgba(90,140,205,.55) 45%, rgba(205,230,255,.85) 70%, rgba(90,140,205,.5)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.4), 0 0 30px rgba(20,60,140,.5); }
+        .tbl-midnight .tTop{ background:
+            radial-gradient(ellipse 70% 60% at 50% 38%, rgba(140,200,255,.18), transparent 62%),
+            radial-gradient(circle at 50% 50%, #234c86 0%, #12294d 55%, #070f24 100%);
+          box-shadow: inset 0 0 0 2px rgba(0,0,0,.5), inset 0 22px 50px rgba(0,0,20,.45); }
+        .tbl-midnight .tInlay{ border: 2px solid rgba(120,200,255,.5); box-shadow: 0 0 16px rgba(80,170,255,.35); }
+        .tbl-midnight .tInlay2{ border: 1px solid rgba(120,200,255,.22); }
+        /* Glut: schwarz, glühender Ring (passt zur Zündschnur) */
+        .tbl-ember .tEdge1{ background: linear-gradient(180deg, #2b1a14, #120a08); }
+        .tbl-ember .tEdge2{ background: #080403; }
+        .tbl-ember .tRim{ background: conic-gradient(from 210deg, #6a6e78, #b5b8c0 14%, #3a3d44 30%, #8d9097 46%, #2a2d33 62%, #a0a3aa 78%, #6a6e78); }
+        .tbl-ember .tTop{ background:
+            radial-gradient(ellipse 60% 50% at 50% 50%, rgba(255,120,40,.22), transparent 66%),
+            radial-gradient(circle at 50% 50%, #3b1708 0%, #1e0b05 55%, #0a0403 100%);
+          box-shadow: inset 0 0 0 2px rgba(0,0,0,.6), inset 0 22px 50px rgba(0,0,0,.5); }
+        .tbl-ember .tInlay{ border: 3px solid rgba(255,140,50,.7); box-shadow: 0 0 22px rgba(255,110,30,.55), inset 0 0 22px rgba(255,110,30,.3); }
+        .tbl-ember .tInlay2{ border: 1px solid rgba(255,190,110,.4); }
+        /* Picknick: rot-weiß karierte Decke */
+        .tbl-picnic .tEdge1{ background: linear-gradient(180deg, #a8793f, #6b4620); }
+        .tbl-picnic .tEdge2{ background: #3d2610; }
+        .tbl-picnic .tRim{ background: conic-gradient(from 200deg, #c99a5b, #f0d3a0 18%, #a8793f 38%, #e4c28a 58%, #b88a4c 78%, #c99a5b); box-shadow: inset 0 0 0 1px rgba(255,255,255,.4), 0 0 30px rgba(0,0,0,.4); }
+        .tbl-picnic .tTop{ background:
+            repeating-linear-gradient(0deg, rgba(205,35,45,.55) 0 5.5%, transparent 5.5% 11%),
+            repeating-linear-gradient(90deg, rgba(205,35,45,.55) 0 5.5%, transparent 5.5% 11%),
+            radial-gradient(ellipse 70% 60% at 50% 38%, rgba(255,255,255,.35), transparent 62%),
+            #fbf3e6;
+          box-shadow: inset 0 0 0 2px rgba(120,70,30,.35), inset 0 22px 50px rgba(90,50,20,.28), inset 0 -10px 30px rgba(90,50,20,.2); }
+        .tbl-picnic .tInlay{ display: none; }
+        .tbl-picnic .tInlay2{ display: none; }
+        .tbl-picnic .nextArrowPath{ stroke: #c4161c; }
+        /* Neon: schwarz mit Leuchtringen */
+        .tbl-neon .tEdge1{ background: linear-gradient(180deg, #1a1226, #0a0612); }
+        .tbl-neon .tEdge2{ background: #04020a; }
+        .tbl-neon .tRim{ background: #14101c; box-shadow: inset 0 0 0 3px rgba(255,60,200,.85), 0 0 26px rgba(255,60,200,.5); }
+        .tbl-neon .tTop{ background: radial-gradient(ellipse 60% 50% at 50% 40%, rgba(120,60,200,.25), transparent 66%), radial-gradient(circle at 50% 50%, #170825 0%, #0a0412 65%, #04020a 100%);
+          box-shadow: inset 0 0 0 2px rgba(0,0,0,.6), inset 0 22px 50px rgba(0,0,0,.5); }
+        .tbl-neon .tInlay{ border: 2px solid rgba(60,240,255,.85); box-shadow: 0 0 18px rgba(60,240,255,.6), inset 0 0 18px rgba(60,240,255,.25); }
+        .tbl-neon .tInlay2{ border: 1px solid rgba(255,60,200,.6); box-shadow: 0 0 10px rgba(255,60,200,.4); }
+        /* Glut-Rand bei Hitze (alle Stile außer Filz nutzen ihren eigenen Rand, nur heller) */
+        .ringHot[class*="tbl-"]:not(.tbl-felt) .tRim{ filter: saturate(1.4) brightness(1.15); box-shadow: 0 0 26px rgba(255,110,40,.7); }
 
         /* ===== Sitze ===== */
         .seatShadow{
@@ -655,7 +707,7 @@ export function PlayerRing({
         /* Du: türkiser Lichtfleck + Rahmen am Namen */
         .seat.me .seatDisc::before{ background: radial-gradient(ellipse at center, rgba(63,224,245,.75), rgba(34,211,238,.22) 55%, transparent 72%); }
         .seat.me .seatName{ border-color: rgba(63,224,245,.75); }
-        /* Teams: Namensschild in Teamfarbe */
+        /* Teams: Namensschild und Ring in Teamfarbe */
         .seat.team0 .seatName{ background: rgba(120,16,16,.9); border-color: rgba(255,110,100,.85); }
         .seat.team1 .seatName{ background: rgba(14,40,120,.9); border-color: rgba(110,160,255,.85); }
         .seat.team0 .seatDisc::after, .seat.team1 .seatDisc::after{ content: ""; position: absolute; inset: -5px; border-radius: 50%; pointer-events: none; }
