@@ -159,7 +159,16 @@ export default function JoinClient({ initialCode }: { initialCode: string }) {
                     .maybeSingle();
                 ownPlayerId = (own?.player_id as string | undefined) ?? null;
             }
+            // Wer das laufende Match verlassen hat (status "left"), darf zurück (Migration 123) – Neue nicht
+            let canRejoin = false;
             if (lobbyRow.locked) {
+                const sid = ownPlayerId ?? getStoredPlayerId();
+                if (sid) {
+                    const { data: prev } = await supabase.from("players").select("status").eq("lobby_id", lobbyRow.id).eq("player_id", sid).maybeSingle();
+                    canRejoin = prev?.status === "left";
+                }
+            }
+            if (lobbyRow.locked && !canRejoin) {
                 const inLobbyPhase = lobbyRow.phase === "waiting" || lobbyRow.phase === "lobby";
 
                 // Wiedereinstieg: Wer schon mitspielt (z. B. nach Absturz/Neustart den Einladungslink

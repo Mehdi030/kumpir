@@ -14,6 +14,12 @@ export type StageNote = { key: string; text: string; title?: string; tone?: "due
  */
 const PACKS = 4;
 
+/** Farbton der Zündschnur / Stimmung: frisch hellgrün-gelb (0) -> orange -> rot (1), stufenlos. Wird auch im Spiel für Hintergrund und Rahmen genutzt. */
+export function heatHue(heat: number): number {
+    const h = Math.max(0, Math.min(1, heat));
+    return Math.round(88 * (1 - Math.pow(h, 0.85)));
+}
+
 export function StageBar({
     holderIsMe,
     heat,
@@ -46,7 +52,7 @@ export function StageBar({
     const stage = packs <= 1 ? "crit" : packs === 2 ? "hot" : packs === 3 ? "warm" : "calm";
 
     return (
-        <div className={`stageBar ${stage} ${holderIsMe ? "mine" : ""}`} role="group" aria-label={tr("Spielstand")}>
+        <div className={`stageBar ${stage} ${holderIsMe ? "mine" : ""}`} style={{ ["--hh" as string]: fuseActive ? heatHue(h) : 88 }} role="group" aria-label={tr("Spielstand")}>
             <div className="sbBig sbRound" title={tr("Runde des Matches")}>
                 <span className="sbLabel">{tr("Runde")}</span>
                 <span className="sbNum">
@@ -104,9 +110,10 @@ export function StageBar({
           border-radius: 24px; background: linear-gradient(180deg, rgba(28,24,40,.88), rgba(14,12,24,.88)); border: 1px solid rgba(255,255,255,.14);
           box-shadow: 0 16px 44px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
           transition: border-color .4s ease, box-shadow .4s ease; }
-        .stageBar.hot{ border-color: rgba(255,140,60,.55); }
-        .stageBar.crit{ border-color: rgba(255,70,50,.85); box-shadow: 0 16px 44px rgba(0,0,0,.42), 0 0 34px rgba(255,60,40,.35); animation: sbShake .35s linear infinite; }
-        .stageBar.mine{ background: linear-gradient(180deg, rgba(70,30,14,.9), rgba(36,14,8,.9)); }
+        .stageBar{ border-color: hsl(var(--hh, 88) 60% 55% / .35); }
+        .stageBar.hot{ border-color: hsl(var(--hh) 85% 55% / .6); }
+        .stageBar.crit{ border-color: hsl(var(--hh) 90% 55% / .9); box-shadow: 0 16px 44px rgba(0,0,0,.42), 0 0 34px rgba(255,60,40,.35); animation: sbShake .35s linear infinite; }
+        .stageBar.mine{ background: linear-gradient(180deg, hsl(var(--hh, 88) 45% 17% / .92), hsl(var(--hh, 88) 45% 9% / .92)); }
         @keyframes sbShake{ 0%,100%{ transform: translateX(-50%); } 25%{ transform: translateX(calc(-50% - 1.5px)); } 75%{ transform: translateX(calc(-50% + 1.5px)); } }
 
         .sbBig{ display: grid; justify-items: center; gap: 0; line-height: 1; min-width: 96px; }
@@ -121,10 +128,7 @@ export function StageBar({
         .sbFuse{ display: grid; gap: 8px; min-width: 0; }
         .sbPacks{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .sbPack{ position: relative; height: 20px; border-radius: 8px; transition: background .5s ease, opacity .5s ease, transform .4s ease, box-shadow .4s ease; }
-        .sbPack.on{ background: repeating-linear-gradient(-45deg, #c98a3c 0 7px, #a86a28 7px 14px); box-shadow: inset 0 2px 0 rgba(255,255,255,.22), 0 2px 6px rgba(0,0,0,.35); }
-        .stageBar.warm .sbPack.on{ background: repeating-linear-gradient(-45deg, #e09a3a 0 7px, #c4761f 7px 14px); }
-        .stageBar.hot .sbPack.on{ background: repeating-linear-gradient(-45deg, #f07a2a 0 7px, #d35418 7px 14px); }
-        .stageBar.crit .sbPack.on{ background: repeating-linear-gradient(-45deg, #ff4a3a 0 7px, #d02018 7px 14px); }
+        .sbPack.on{ background: repeating-linear-gradient(-45deg, hsl(var(--hh) 82% 54%) 0 7px, hsl(var(--hh) 82% 43%) 7px 14px); box-shadow: inset 0 2px 0 rgba(255,255,255,.22), 0 2px 6px rgba(0,0,0,.35); }
         .sbPack.gone{ background: rgba(255,255,255,.06); border: 1.5px dashed rgba(255,255,255,.18); opacity: .8; transform: scale(.94); }
         .sbPack.burning{ animation: sbBurn .5s ease-in-out infinite alternate; }
         @keyframes sbBurn{ from{ filter: brightness(1); } to{ filter: brightness(1.35); } }
@@ -141,8 +145,8 @@ export function StageBar({
         .sbFuseFoot{ display: flex; align-items: baseline; justify-content: center; gap: 4px 12px; flex-wrap: wrap; text-align: center; }
         .sbGoal{ font-size: 11.5px; font-weight: 850; color: #ffe08a; opacity: .95; }
         .sbFuseLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; opacity: .7; }
-        .stageBar.hot .sbFuseLabel{ color: #ffb37a; opacity: 1; }
-        .stageBar.crit .sbFuseLabel{ color: #ff8a7a; opacity: 1; }
+        .stageBar.hot .sbFuseLabel{ color: hsl(var(--hh) 90% 72%); opacity: 1; }
+        .stageBar.crit .sbFuseLabel{ color: hsl(var(--hh) 95% 74%); opacity: 1; }
         .sbNote{ font-size: 11px; font-weight: 900; padding: 1px 9px; border-radius: 999px; background: rgba(255,255,255,.12); }
         .sbNote.duel{ background: rgba(150,20,20,.55); color: #ffc2b8; }
         .sbNote.overtime{ background: rgba(180,90,10,.55); color: #ffd9a8; }

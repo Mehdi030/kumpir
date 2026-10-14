@@ -78,6 +78,22 @@ export type OnlinePlayer = {
     lastSeen: string;
 };
 
+/** Ein abgeschlossenes Match eines Kontos (Schnellmenü > Verlauf) */
+export type AdminMatchRow = {
+    finishedAt: string;
+    lobbyCode: string | null;
+    place: number | null;
+    players: number | null;
+    humans: number | null;
+    points: number | null;
+    titles: number | null;
+    artists: number | null;
+    wrong: number | null;
+    rounds: number | null;
+    ranked: boolean;
+    playlists: string[] | null;
+};
+
 export type AuditPage = { total: number; rows: AuditEntry[] };
 
 export type AuditEntry = {
@@ -108,6 +124,7 @@ export type AdminApi = {
     listAudit: (limit?: number) => R<AuditPage>;
     onlinePlayers: () => R<OnlinePlayer[]>;
     kickPlayer: (lobbyId: string, playerId: string) => R<null>;
+    userHistory: (userId: string) => R<{ matches: AdminMatchRow[] }>;
 };
 
 export function supabaseAdminApi(): AdminApi {
@@ -145,6 +162,7 @@ export function supabaseAdminApi(): AdminApi {
         listAudit: (limit = 300) => call("admin_list_audit", { p_limit: limit }),
         onlinePlayers: () => call("admin_online_players"),
         kickPlayer: (lobbyId, playerId) => call("admin_kick_player", { p_lobby_id: lobbyId, p_player_id: playerId }),
+        userHistory: (userId) => call("admin_user_history", { p_user_id: userId }),
     };
 }
 

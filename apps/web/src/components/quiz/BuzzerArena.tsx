@@ -103,11 +103,21 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
     const submit = useCallback(
         async (a: string) => {
             const res = await q.answer(a);
-            if (res && !res.correct) setFeedback({ text: tr("Leider falsch – du bist für diesen Song raus."), nonce: Date.now(), seq: lobby.quiz_seq });
+            if (res && !res.correct)
+                setFeedback({
+                    text: Number(res.points) < 0 ? tr("Leider falsch: −1 Punkt, und du bist für diesen Song raus.") : tr("Leider falsch – du bist für diesen Song raus."),
+                    nonce: Date.now(),
+                    seq: lobby.quiz_seq,
+                });
             return res !== null;
         },
         [q, tr, lobby.quiz_seq]
     );
+
+    // Protokoll: wer hat gebuzzert, richtig (grün) oder falsch (rot) – neueste zuerst
+    const log = useMemo(() => [...(lobby.quiz_log ?? [])].reverse().slice(0, 8), [lobby.quiz_log]);
+    const logNote = (e: { a: string | null; ok: boolean; pts: number }) =>
+        e.ok ? `+${pts(e.pts)}` : e.pts < 0 ? "−1" : "±0";
 
     const songPlaying = state === "question" || state === "buzzed" || state === "reveal";
     const ringState = state === "buzzed" ? "answer" : state === "reveal" ? "reveal" : "ask";
@@ -217,6 +227,24 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
                 </div>
             </section>
 
+            {/* ---------- Protokoll der Buzzer-Versuche ---------- */}
+            {log.length ? (
+                <aside className="bzLog" aria-label={tr("Wer hat gebuzzert")}>
+                    <div className="bzLogHead">🔔 {tr("Gebuzzert")}</div>
+                    <ul>
+                        {log.map((e, i) => (
+                            <li key={`${e.seq}:${e.p}:${i}:${log.length}`} className={`${e.ok ? "ok" : "bad"} ${i === 0 ? "new" : ""}`}>
+                                <span className="bzLogMain">
+                                    <b>{nameOf(e.p)}</b>
+                                    <small>{e.a ? `„${e.a}“` : tr("keine Eingabe")}</small>
+                                </span>
+                                <span className="bzLogPts">{logNote(e)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </aside>
+            ) : null}
+
             {/* ---------- Pulte: wachsen mit den Punkten ---------- */}
             <section className={`bzPodia ${phone ? "phone" : ""}`} style={{ ["--H" as string]: `${H}px`, ["--base" as string]: `${BASE}px` }} aria-label={tr("Punktestand")}>
                 <div className="bzFinish" style={{ bottom: `${BASE + H}px` }} aria-hidden>
@@ -257,7 +285,27 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
           background: radial-gradient(ellipse 55% 45% at 50% -5%, rgba(255,214,120,.22), transparent 70%), radial-gradient(ellipse 40% 60% at 12% 30%, rgba(255,70,140,.10), transparent 70%),
                       radial-gradient(ellipse 40% 60% at 88% 30%, rgba(90,120,255,.12), transparent 70%), linear-gradient(180deg, #1f1033 0%, #120a22 55%, #0a0614 100%); }
         .bzTopRight{ position: fixed; top: 14px; right: 14px; z-index: 30; }
-        .bzHead{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-right: 64px; }
+        .bzHead{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 64px 0 128px; min-height: 40px; }
+        @media (max-width: 640px){ .bzHead{ padding-left: 52px; } }
+        /* Protokoll: breit links neben der Bühne, schmal als kleine Liste unter der Bühne */
+        .bzLog{ display: grid; gap: 6px; width: min(520px, 100%); margin: 0 auto; }
+        .bzLogHead{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; opacity: .7; }
+        .bzLog ul{ list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+        .bzLog li{ display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 12px; border: 1px solid; animation: bzLogIn .4s cubic-bezier(.16,1,.3,1); }
+        .bzLog li.ok{ background: rgba(20,110,64,.5); border-color: rgba(90,230,150,.6); }
+        .bzLog li.bad{ background: rgba(130,24,20,.5); border-color: rgba(255,100,88,.6); }
+        .bzLogMain{ display: grid; min-width: 0; line-height: 1.2; }
+        .bzLogMain b{ font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bzLogMain small{ font-size: 12px; opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bzLogPts{ font-family: var(--font-display); font-weight: 900; font-size: 18px; flex: none; }
+        .bzLog li.ok .bzLogPts{ color: #8dffb8; }
+        .bzLog li.bad .bzLogPts{ color: #ff9d94; }
+        @keyframes bzLogIn{ from{ opacity: 0; transform: translateX(-14px); } }
+        .bzLog li:nth-child(n+4){ display: none; }
+        @media (min-width: 1100px) and (min-height: 700px){
+          .bzLog{ position: fixed; left: 18px; top: 120px; width: clamp(190px, 19vw, 280px); margin: 0; z-index: 20; }
+          .bzLog li:nth-child(n+4){ display: flex; }
+        }
         .bzMode{ font-family: var(--font-display); font-weight: 900; font-size: clamp(20px, 3vw, 28px); }
         .bzGoal{ padding: 6px 12px; border-radius: 999px; font-weight: 900; font-size: 13.5px; background: rgba(255,210,63,.16); border: 1px solid rgba(255,210,63,.5); color: #ffe08a; }
         .bzCount{ margin-left: auto; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16); font-weight: 850; font-size: 13px; }

@@ -292,7 +292,7 @@ export default function HostPage() {
             setCreating(false);
             inFlightRef.current = false;
         }
-    }, [canCreate, hostName, roundSpeed, mode, seriesTotal, isPublic, tr, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, savePreferences, mode]);
+    }, [canCreate, hostName, roundSpeed, mode, seriesTotal, isPublic, tr, supabase, maxPlayers, router, user?.id, allPlaylists, playlists, savePreferences]);
 
     const onStartBots = async () => {
         setBotError("");

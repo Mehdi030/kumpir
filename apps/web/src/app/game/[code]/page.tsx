@@ -26,8 +26,9 @@ import { Spinner } from "@/components/Spinner";
 import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
 import { QuizStage } from "@/components/game/QuizStage";
-import { HeartbeatEdge, StageBar } from "@/components/game/StageBar";
+import { HeartbeatEdge, StageBar, heatHue } from "@/components/game/StageBar";
 import { SongRails } from "@/components/game/SongRails";
+import { GameMenuButton } from "@/components/game/GameMenuButton";
 import { TableStylePicker } from "@/components/game/TableStylePicker";
 import { gameModeInfo, isQuizMode } from "@/lib/gameModes";
 import { playFx } from "@/lib/gameFx";
@@ -150,6 +151,7 @@ type LobbyState = {
     quiz_options: Record<string, unknown> | null;
     quiz_reveal: Record<string, unknown> | null;
     quiz_locked: string[];
+    quiz_log: { seq: number; p: string; a: string | null; ok: boolean; pts: number }[];
 };
 
 type Player = {
@@ -763,6 +765,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     quiz_options: (raw.quiz_options as Record<string, unknown> | null) ?? null,
                     quiz_reveal: (raw.quiz_reveal as Record<string, unknown> | null) ?? null,
                     quiz_locked: (raw.quiz_locked as string[] | null) ?? [],
+                    quiz_log: (raw.quiz_log as { seq: number; p: string; a: string | null; ok: boolean; pts: number }[] | null) ?? [],
                 };
 
                 // Letzten Verlierer merken (einmalig)
@@ -1304,6 +1307,20 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         [mePlayerId, lobby, kickBusyId, code, rpcHostKickDuringRound, showToast]
     );
 
+    // Wer das Spiel verlässt oder zurückkommt, wird allen kurz gemeldet (Wunsch Mehdi 2026-10-14)
+    const seenPlayersRef = useRef<{ phase: string; names: Map<string, string> } | null>(null);
+    useEffect(() => {
+        if (!lobby || !players.length) return;
+        const cur = new Map(players.filter((p) => !p.is_bot).map((p) => [p.player_id, p.name]));
+        const prev = seenPlayersRef.current;
+        seenPlayersRef.current = { phase: lobby.phase, names: cur };
+        // beim ersten Laden und bei Phasenwechseln (Endstand zeigt auch Gegangene) nichts melden
+        if (!prev || prev.phase !== lobby.phase) return;
+        if (lobby.phase !== "running" && lobby.phase !== "quiz" && lobby.phase !== "countdown") return;
+        for (const [id, name] of prev.names) if (!cur.has(id) && id !== mePlayerId) showToast(trNow("👋 {name} hat das Spiel verlassen", { name }), 3200);
+        for (const [id, name] of cur) if (!prev.names.has(id) && id !== mePlayerId) showToast(trNow("➕ {name} ist wieder dabei", { name }), 3200);
+    }, [players, lobby, mePlayerId, showToast]);
+
     // Host hat nach dem Spiel "Zur Lobby" gedrückt (Phase wieder waiting/lobby): alle Mitspieler automatisch
     // mit zurück in die Lobby ziehen, statt sie auf dem Endbildschirm stehen zu lassen (Wunsch Mehdi).
     const backToLobbyPhase = !!lobby && (lobby.phase === "waiting" || lobby.phase === "lobby") && !!meRow;
@@ -1501,41 +1518,10 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // =========================================================
     // PHASE: TOPIC VOTE  (NO blinking)
     // =========================================================
-    // Nur eine Playlist zur Auswahl: keine Abstimmung zeigen, sondern die Playlist direkt enthüllen.
-    // (Der Server beendet die Abstimmung in dem Fall sofort; ab 2 Playlists läuft sie ganz normal.)
+    // Nur eine Playlist zur Auswahl: gar nichts zeigen (Wunsch Mehdi 2026-10-14: den Abstimmungs-Bildschirm nur bei
+    // mehreren Playlists). Der Server beendet die Abstimmung in dem Fall sofort; ab 2 Playlists läuft sie ganz normal.
     if (lobby.phase === "topic_vote" && voteCards === 1) {
-        return (
-            <main className="fullH gameStage plReveal" style={plStyle(lookA.color)}>
-                <div className="plRevealInner">
-                    <div className="plKicker">{tr("Playlist dieser Runde")}</div>
-                    <div className="plCard">
-                        <span className="plIcon" aria-hidden>
-                            {lookA.icon}
-                        </span>
-                        <span className="plName">{aLabel}</span>
-                    </div>
-                    <div className="plSub">{tr("Gleich geht’s los …")}</div>
-                </div>
-                <style>{`
-          .plReveal{ display:grid; place-items:center; padding:24px; color:#fff; text-align:center; }
-          .plRevealInner{ display:grid; justify-items:center; gap:18px; }
-          .plKicker{ font-size:13px; font-weight:950; letter-spacing:2.4px; text-transform:uppercase; opacity:.78; }
-          .plCard{
-            display:flex; align-items:center; gap:18px; padding:22px 34px; border-radius:30px;
-            background: linear-gradient(160deg, color-mix(in srgb, var(--pl) 30%, rgba(30,10,6,.6)), rgba(20,8,6,.55));
-            border: 2px solid color-mix(in srgb, var(--pl) 70%, white);
-            box-shadow: 0 0 0 6px color-mix(in srgb, var(--pl) 22%, transparent), 0 30px 90px rgba(0,0,0,.4), 0 0 80px color-mix(in srgb, var(--pl) 35%, transparent);
-            animation: plIn .7s cubic-bezier(.16,1,.3,1) both;
-          }
-          .plIcon{ font-size: clamp(54px, 8vw, 84px); line-height:1; animation: plPop .8s cubic-bezier(.34,1.56,.64,1) .15s both; }
-          .plName{ font-family: var(--font-display); font-size: clamp(30px, 5vw, 58px); font-weight:800; letter-spacing:-.4px; }
-          .plSub{ font-size:15px; font-weight:850; opacity:.8; }
-          @keyframes plIn{ from{ opacity:0; transform: translateY(16px) scale(.96); } to{ opacity:1; transform:none; } }
-          @keyframes plPop{ from{ opacity:0; transform: scale(.4) rotate(-20deg); } to{ opacity:1; transform:none; } }
-          @media (prefers-reduced-motion: reduce){ .plCard, .plIcon{ animation:none; } }
-        `}</style>
-            </main>
-        );
+        return <main className="fullH" aria-busy />;
     }
 
     if (lobby.phase === "topic_vote") {
@@ -1756,7 +1742,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         const cdLeft = Math.max(0, countdownSecondsLeft ?? 5);
         const cdTotal = Math.max(1, Math.round(((Date.parse(lobby.countdown_ends_at ?? "") || 0) - (Date.parse(lobby.countdown_started_at ?? "") || 0)) / 1000) || 5);
         return (
-            <main className="fullH gameStage" style={{ display: "grid", placeItems: "center", padding: 24 }}>
+            <main className="fullH" style={{ display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(1100px, calc(100vw - 48px))", textAlign: "center", display: "grid", justifyItems: "center", gap: 14 }}>
                     <div className="stageKicker">{voteCards === 1 ? tr("Playlist dieser Runde") : tr("Playlist gewählt")}</div>
 
@@ -1997,7 +1983,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
     if (lobby.phase === "rematch_wait") {
         return (
-            <main className="fullH gameStage" style={{ display: "grid", placeItems: "center", padding: 24 }}>
+            <main className="fullH" style={{ display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(680px, calc(100vw - 48px))", textAlign: "center", display: "grid", justifyItems: "center", gap: 12 }}>
                     <div className="stageKicker">{tr("Revanche")}</div>
                     <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px, 4.4vw, 46px)", fontWeight: 800 }}>{tr("🔁 Nächstes Match startet gleich")}</div>
@@ -2122,7 +2108,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     return (
         <main
             className={`fullH${selfShake ? " kumpirSelfShake" : ""}`}
-            style={{ width: "100%", position: "relative", overflow: "hidden", background: runningBg, color: "white" }}
+            style={{ width: "100%", position: "relative", overflow: "hidden", background: runningBg, color: "white", ["--hh" as string]: heatHue(explodeMsLeft != null && roundTotalMsRef.current > 0 ? heatRatio : 0) }}
         >
             {/* Feuerwellen am Bildschirmrand -- Intensität/Pulstempo skalieren
                 kontinuierlich mit heatRatio, statt in 3 groben Sprüngen, damit
@@ -2384,19 +2370,20 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           color: rgba(255,255,255,0.92);
         }
         /* ===== Eigener Zug vs. Zuschauen (Wunsch Mehdi 2026-10-12) ===== */
+        /* Farbe folgt der Hitze: frisch hellgrün/gelb, mit jedem Paket wärmer, am Ende rot (--hh = Farbton, kommt von heatHue) */
         .myTurnBg{
           position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .45s ease;
           background:
-            radial-gradient(circle at 50% 30%, rgba(255,160,50,.55) 0%, rgba(160,50,10,0) 64%),
-            linear-gradient(180deg, #6a240a 0%, #461508 55%, #260a05 100%);
+            radial-gradient(circle at 50% 30%, hsl(var(--hh, 88) 90% 52% / .5) 0%, hsl(var(--hh, 88) 80% 30% / 0) 64%),
+            linear-gradient(180deg, hsl(var(--hh, 88) 58% 20%) 0%, hsl(var(--hh, 88) 62% 12%) 55%, hsl(var(--hh, 88) 60% 6%) 100%);
         }
         .myTurnBg.on{ opacity: 1; }
         .myTurnFrame{
           position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: 0; transition: opacity .3s ease;
-          box-shadow: inset 0 0 0 3px rgba(255,190,60,.85), inset 0 0 70px rgba(255,120,30,.5);
+          box-shadow: inset 0 0 0 3px hsl(var(--hh, 88) 90% 58% / .85), inset 0 0 70px hsl(var(--hh, 88) 90% 50% / .45);
         }
         .myTurnFrame.on{ opacity: 1; animation: myTurnBeat var(--beat, 1.5s) ease-in-out infinite; }
-        @keyframes myTurnBeat{ 50%{ box-shadow: inset 0 0 0 6px rgba(255,214,10,.95), inset 0 0 130px rgba(255,90,20,.7); } }
+        @keyframes myTurnBeat{ 50%{ box-shadow: inset 0 0 0 6px hsl(var(--hh, 88) 95% 62% / .95), inset 0 0 130px hsl(var(--hh, 88) 95% 50% / .65); } }
         .myTurnTitle{
           font-size: clamp(24px, 3.4vw, 34px) !important; text-transform: uppercase; letter-spacing: .02em !important;
           background: linear-gradient(180deg, #fff6d6, #ffc23a 55%, #ff8a1c); -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -2780,7 +2767,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
         .hostKickPanel{
           position: fixed;
-          top: 18px;
+          top: 66px;
           left: 18px;
           z-index: 60;
           max-width: min(52vw, 320px);
@@ -2828,7 +2815,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           pointer-events: none;
           --heat: 0;
           opacity: var(--heat);
-          box-shadow: inset 0 0 calc(30px + var(--heat) * 80px) calc(0px + var(--heat) * 8px) rgba(255,130,50,0.28);
+          box-shadow: inset 0 0 calc(30px + var(--heat) * 80px) calc(0px + var(--heat) * 8px) hsl(var(--hh, 88) 95% 55% / 0.3);
           animation: edgeFirePulse calc(3.2s - var(--heat) * 2.2s) ease-in-out infinite;
           transition: opacity 400ms ease, box-shadow 400ms ease;
         }
@@ -2891,6 +2878,7 @@ export default function GamePage() {
                 </div>
             ) : null}
             <GamePageInner onSpectator={setSpectator} />
+            <GameMenuButton />
         </>
     );
 }

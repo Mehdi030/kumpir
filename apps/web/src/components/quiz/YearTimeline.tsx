@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { gameModeInfo } from "@/lib/gameModes";
 import { SongRound } from "@/components/game/SongRound";
 import { PlayerAvatar } from "@/components/game/PlayerAvatar";
@@ -30,6 +30,13 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
     const reveal = lobby.quiz_reveal;
     const trueYear = reveal?.year != null ? Number(reveal.year) : null;
     const results = useMemo(() => ((reveal?.results as RevealResult[] | undefined) ?? []).filter((r) => r.answer != null), [reveal]);
+    // Gleichstand beim besten Abstand: nur die Gleichstehenden tippen den Monat, alle anderen schauen zu
+    const tie = useMemo(() => ((opts.tie as { players?: string[] } | undefined)?.players ?? []) as string[], [opts.tie]);
+    const iAmTied = !!me && tie.includes(me.player_id);
+    const canMonth = state === "month" && iAmTied && !q.meAnswered;
+    const monthName = useCallback((m: number, long = false) => new Date(2000, m - 1, 1).toLocaleString(dateLocale(), { month: long ? "long" : "short" }), []);
+    const [monthPickState, setMonthPickState] = useState<{ seq: number; m: number } | null>(null);
+    const monthPick = monthPickState && monthPickState.seq === lobby.quiz_seq ? monthPickState.m : null;
     const canGuess = state === "question" && !!me && !q.meAnswered;
     const myLocked = state === "question" && !!me && q.meAnswered;
 
@@ -72,6 +79,11 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
         },
         [yMin, span, setPick]
     );
+
+    const submitMonth = useCallback(async () => {
+        if (!canMonth || monthPick == null) return;
+        await q.guessMonth(monthPick);
+    }, [canMonth, q, monthPick]);
 
     const submit = useCallback(async () => {
         if (!canGuess) return;
@@ -137,6 +149,11 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
     const gainOf = (id: string) => (state === "reveal" ? results.find((r) => r.playerId === id) : undefined);
     const closest = state === "reveal" && trueYear != null && results.length ? [...results].sort((a, b) => Math.abs(Number(a.answer) - trueYear) - Math.abs(Number(b.answer) - trueYear))[0] : null;
     const trackH = 78 + lanesUsed * LANE + 56;
+    const tieInfo = useMemo(() => {
+        const t = reveal?.tie as { players?: string[]; picks?: Record<string, number>; winners?: string[] } | undefined;
+        if (!t || !t.players?.length) return null;
+        return { players: t.players, picks: t.picks ?? {}, winners: t.winners ?? [] };
+    }, [reveal]);
 
     return (
         <main className="fullH ytMain">
@@ -165,7 +182,8 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
                         <div className="ytKick">{tr("Auflösung")}</div>
                         <div className="ytSong">{String(reveal.title ?? "")}</div>
                         <div className="ytArtist">
-                            {String(reveal.artist ?? "")} · {tr("erschienen {y}", { y: trueYear ?? "?" })}
+                            {String(reveal.artist ?? "")} ·{" "}
+                            {tr("erschienen {y}", { y: reveal.month ? `${monthName(Number(reveal.month), true)} ${trueYear ?? "?"}` : (trueYear ?? "?") })}
                         </div>
                         {closest ? (
                             <div className="ytClosest">
@@ -176,6 +194,34 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
                         ) : (
                             <div className="ytClosest">{tr("Diesmal hat keiner getippt.")}</div>
                         )}
+                        {tieInfo ? (
+                            <div className="ytTie">
+                                <b>{tr("⚖️ Monats-Entscheid")}</b>
+                                {tieInfo.players.map((id) => {
+                                    const m = tieInfo.picks[id];
+                                    const win = tieInfo.winners.includes(id);
+                                    const off = m != null && reveal?.month != null ? Math.abs(m - Number(reveal.month)) : null;
+                                    return (
+                                        <span key={id} className={win ? "win" : ""}>
+                                            {nameOf(id)}: {m != null ? monthName(m) : "–"}
+                                            {off != null ? (off === 0 ? " 🎯" : ` (±${off})`) : ""}
+                                            {win ? " 🏅 +1" : ""}
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        ) : null}
+                    </>
+                ) : state === "month" ? (
+                    <>
+                        <div className="ytQ">{tr("⚖️ Gleichstand! Jetzt zählt der Monat")}</div>
+                        <div className="ytHint">
+                            {iAmTied
+                                ? q.meAnswered
+                                    ? tr("Dein Monat steht – warte kurz …")
+                                    : tr("Du und {names} liegen gleich weit weg – in welchem Monat ist der Song erschienen?", { names: tie.filter((id) => id !== mePlayerId).map(nameOf).join(", ") })
+                                : tr("{names} entscheiden den Monat – schau kurz zu …", { names: tie.map(nameOf).join(" & ") })}
+                        </div>
                     </>
                 ) : state === "question" ? (
                     <>
@@ -206,10 +252,58 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
                     </div>
                 ) : null}
 
+                {state === "month" ? (
+                    <div className="ytMonth">
+                        <div className="ytMonthWho">
+                            {tie.map((id) => {
+                                const p = players.find((x) => x.player_id === id);
+                                if (!p) return null;
+                                const done = q.answeredSet.has(id) || (id === mePlayerId && q.meAnswered);
+                                return (
+                                    <span key={id} className={`ytChip ${done ? "done" : ""}`}>
+                                        <PlayerAvatar seed={p.name} config={p.avatar_config ?? null} size={30} />
+                                        <span className="ytChipName">{p.name}</span>
+                                        <span aria-hidden>{done ? "✓" : "…"}</span>
+                                    </span>
+                                );
+                            })}
+                        </div>
+                        {iAmTied ? (
+                            <>
+                                <div className="ytMonths" role="radiogroup" aria-label={tr("Monat")}>
+                                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
+                                        const mine = q.meAnswered && q.status?.me.answer != null ? Number(q.status.me.answer) === m : monthPick === m;
+                                        return (
+                                            <button
+                                                key={m}
+                                                type="button"
+                                                role="radio"
+                                                aria-checked={mine}
+                                                className={`ytMonthBtn ${mine ? "on" : ""}`}
+                                                disabled={!canMonth}
+                                                onClick={() => setMonthPickState({ seq: lobby.quiz_seq, m })}
+                                            >
+                                                {monthName(m)}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {canMonth ? (
+                                    <button type="button" className="btn btnPrimary ytSend" onClick={() => void submitMonth()} disabled={q.busy || monthPick == null}>
+                                        {monthPick == null ? tr("Monat wählen") : tr("Monat abgeben: {m}", { m: monthName(monthPick, true) })}
+                                    </button>
+                                ) : null}
+                            </>
+                        ) : (
+                            <div className="ytWatch">{tr("👀 Du schaust kurz zu …")}</div>
+                        )}
+                    </div>
+                ) : null}
+
                 <div
                     ref={trackRef}
                     className={`ytTrack ${canGuess ? "active" : ""}`}
-                    style={{ height: trackH }}
+                    style={{ height: trackH, display: state === "month" ? "none" : undefined }}
                     onPointerDown={(e) => {
                         if (!canGuess) return;
                         dragging.current = true;
@@ -320,7 +414,20 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
           background: radial-gradient(ellipse 60% 40% at 50% -5%, rgba(91,231,196,.20), transparent 70%), repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 1px, transparent 1px 60px),
                       linear-gradient(180deg, #0d2b36 0%, #0a1c27 55%, #07121a 100%); }
         .ytTopRight{ position: fixed; top: 14px; right: 14px; z-index: 30; }
-        .ytHead{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-right: 64px; }
+        .ytHead{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 64px 0 128px; min-height: 40px; }
+        @media (max-width: 640px){ .ytHead{ padding-left: 52px; } }
+        .ytTie{ display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: center; align-items: center; margin-top: 4px; padding: 6px 12px; border-radius: 14px; background: rgba(255,255,255,.08); font-size: 13px; font-weight: 700; }
+        .ytTie b{ font-size: 12px; letter-spacing: .6px; text-transform: uppercase; opacity: .8; }
+        .ytTie span.win{ color: #ffe08a; font-weight: 900; }
+        .ytMonth{ display: grid; gap: 14px; justify-items: center; padding: 14px 6px 10px; animation: ytIn .35s cubic-bezier(.16,1,.3,1); }
+        .ytMonthWho{ display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .ytMonths{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; width: min(560px, 100%); }
+        .ytMonthBtn{ padding: 12px 4px; border-radius: 14px; border: 2px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: #fff; font: inherit; font-weight: 900; font-size: 15px; cursor: pointer; transition: transform .15s ease, background .15s ease, border-color .15s ease; }
+        .ytMonthBtn:hover:not(:disabled){ transform: translateY(-2px); background: rgba(255,255,255,.16); }
+        .ytMonthBtn.on{ border-color: #ffd23f; background: rgba(255,210,63,.25); }
+        .ytMonthBtn:disabled{ cursor: default; opacity: .75; }
+        .ytWatch{ font-weight: 800; opacity: .85; padding: 8px 0; }
+        @media (max-width: 640px){ .ytMonths{ grid-template-columns: repeat(4, minmax(0, 1fr)); } }
         .ytMode{ font-family: var(--font-display); font-weight: 900; font-size: clamp(20px, 3vw, 28px); }
         .ytGoal{ padding: 6px 12px; border-radius: 999px; font-weight: 900; font-size: 13.5px; background: rgba(91,231,196,.14); border: 1px solid rgba(91,231,196,.5); color: #9ff3dc; }
         .ytCount{ margin-left: auto; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16); font-weight: 850; font-size: 13px; }

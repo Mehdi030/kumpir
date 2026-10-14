@@ -23117,3 +23117,525 @@ end;
 $function$;
 
 COMMIT;
+
+-- >>> 123_rejoin_running_match.sql <<<
+-- ============================================================
+-- 123: Zurück ins laufende Spiel (Wunsch Mehdi, 2026-10-14)
+-- ============================================================
+-- Wer ein Match verlassen hat (Hauptmenü-Knopf im Spiel, Verbindung weg), kommt über den Code/Einladung wieder rein,
+-- auch wenn die Lobby wegen des laufenden Matches gesperrt ist. Neue Spieler bleiben draußen, Rausgeworfene auch.
+-- Er schaut dann zu, bis die nächste Runde beginnt (is_alive bleibt false); in den Quiz-Modi spielt er sofort mit.
+-- ============================================================
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.rpc_join_lobby(p_code text, p_player_id uuid, p_name text, p_user_id uuid DEFAULT NULL::uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lobby_id uuid;
+  v_locked boolean;
+  v_max_players int;
+  v_active_count int;
+  v_next_seat int;
+  v_headers text;
+  v_token uuid;
+  v_existing uuid;
+  v_own boolean;
+  v_account_name text;
+begin
+  -- (107) Mit Konto steht der Name fest: Anzeigename, sonst Benutzername (ändern nur in den Einstellungen)
+  if auth.uid() is not null then
+    select coalesce(nullif(btrim(display_name), ''), username) into v_account_name from public.profiles where id = auth.uid();
+  end if;
+  select id, locked, max_players into v_lobby_id, v_locked, v_max_players
+  from public.lobbies where upper(code) = upper(p_code) limit 1;
+
+  if v_lobby_id is null then raise exception 'lobby_not_found'; end if;
+  -- 123: Wer schon mal dabei war (verlassen, Verbindung weg), darf auch in ein laufendes Match zurück – nur Neue nicht; Rausgeworfene (kicked_at) auch nicht
+  if v_locked and not exists (select 1 from public.players where lobby_id = v_lobby_id and kicked_at is null and (player_id = p_player_id or (p_user_id is not null and user_id = p_user_id))) then
+    raise exception 'lobby_locked';
+  end if;
+  if p_user_id is not null and p_user_id is distinct from auth.uid() then raise exception 'user_mismatch'; end if;
+  perform public._rate_limit('join:' || public._client_ip(), 120, 600);
+
+  v_headers := current_setting('request.headers', true);
+  if v_headers is not null and v_headers <> '' then
+    begin
+      v_token := nullif(v_headers::json ->> 'x-kumpir-session', '')::uuid;
+    exception when others then
+      v_token := null;
+    end;
+  end if;
+
+  -- Fremdübernahme eines belegten Platzes verhindern (der eigene Platz eines angemeldeten Kontos ist erlaubt)
+  select session_token, (auth.uid() is not null and user_id = auth.uid()) into v_existing, v_own
+  from public.players where lobby_id = v_lobby_id and player_id = p_player_id;
+
+  if v_existing is null and exists (select 1 from public.players where lobby_id = v_lobby_id and player_id = p_player_id and user_id is not null and user_id is distinct from auth.uid()) then
+    raise exception 'identity_taken';
+  end if;
+  if v_existing is not null and v_token is distinct from v_existing and not coalesce(v_own, false) then
+    raise exception 'identity_taken';
+  end if;
+
+  select count(*) into v_active_count from public.players
+  where lobby_id = v_lobby_id and status = 'active';
+
+  if v_active_count >= v_max_players
+     and not exists (select 1 from public.players where lobby_id = v_lobby_id and status = 'active'
+                     and (player_id = p_player_id or (p_user_id is not null and user_id = p_user_id))) then
+    raise exception 'lobby_full';
+  end if;
+
+  if p_user_id is not null then
+    update public.players
+    set name = left(trim(coalesce(v_account_name, p_name)), 24),
+        status = 'active',
+        left_at = null,
+        kicked_at = null,
+        last_seen_at = now(),
+        session_token = coalesce(v_token, session_token)
+    where lobby_id = v_lobby_id and user_id = p_user_id;
+
+    if found then return; end if;
+  end if;
+
+  select coalesce(min(s.i), 0) into v_next_seat
+  from generate_series(0, v_max_players - 1) as s(i)
+  left join public.players p
+    on p.lobby_id = v_lobby_id and p.seat_index = s.i and p.status = 'active'
+  where p.id is null;
+
+  insert into public.players (lobby_id, player_id, name, status, seat_index, joined_at, last_seen_at, user_id, session_token)
+  values (v_lobby_id, p_player_id, left(trim(coalesce(v_account_name, p_name)), 24), 'active', v_next_seat, now(), now(), p_user_id, v_token)
+  on conflict (lobby_id, player_id) do update set
+    name = excluded.name,
+    status = 'active',
+    left_at = null,
+    kicked_at = null,
+    last_seen_at = now(),
+    seat_index = coalesce(public.players.seat_index, excluded.seat_index),
+    user_id = coalesce(public.players.user_id, excluded.user_id),
+    session_token = coalesce(public.players.session_token, excluded.session_token);
+end;
+$function$
+;
+
+COMMIT;
+
+-- >>> 124_buzzer_log_penalty.sql <<<
+-- ============================================================
+-- 124: Buzzer – Protokoll aller Buzzer-Versuche + Minuspunkt (Wunsch Mehdi, 2026-10-14)
+-- ============================================================
+-- Wer buzzert und falsch liegt ODER nichts eingibt (Zeit um), bekommt -1 Punkt – außer er steht bei 0.
+-- lobbies.quiz_log (jsonb, letzte 40 Einträge): [{seq, p = Spieler, a = Eingabe oder null, ok, pts}] – das Spiel zeigt
+-- daraus die Liste "wer hat gebuzzert" farbig (grün richtig / rot falsch). Wird bei jedem Start geleert.
+-- ============================================================
+BEGIN;
+
+ALTER TABLE public.lobbies ADD COLUMN IF NOT EXISTS quiz_log jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE OR REPLACE FUNCTION public._quiz_log_add(p_lobby_id uuid, p_seq int, p_player uuid, p_answer text, p_ok boolean, p_pts numeric) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+BEGIN
+  UPDATE public.lobbies
+     SET quiz_log = (
+       SELECT coalesce(jsonb_agg(e ORDER BY i), '[]'::jsonb) FROM (
+         SELECT e, i FROM jsonb_array_elements(coalesce(quiz_log, '[]'::jsonb) || jsonb_build_array(
+                  jsonb_build_object('seq', p_seq, 'p', p_player, 'a', p_answer, 'ok', p_ok, 'pts', p_pts))) WITH ORDINALITY t(e, i)
+          ORDER BY i DESC LIMIT 40) x)
+   WHERE id = p_lobby_id;
+END $$;
+
+-- -1 Punkt, aber nie unter 0; liefert -1 (abgezogen) oder 0 (stand schon bei 0)
+CREATE OR REPLACE FUNCTION public._quiz_penalty(p_lobby_id uuid, p_player uuid) RETURNS numeric
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE v_n int;
+BEGIN
+  UPDATE public.players SET song_points = song_points - 1
+   WHERE lobby_id = p_lobby_id AND player_id = p_player AND coalesce(song_points, 0) >= 1;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RETURN CASE WHEN v_n > 0 THEN -1 ELSE 0 END;
+END $$;
+
+CREATE OR REPLACE FUNCTION public._quiz_tick(p_lobby_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE l public.lobbies%ROWTYPE; v_end timestamptz; v_pen numeric;
+BEGIN
+  SELECT * INTO l FROM public.lobbies WHERE id = p_lobby_id FOR UPDATE;
+  IF l.phase <> 'quiz' OR l.quiz_ends_at IS NULL OR l.quiz_ends_at > now() THEN RETURN; END IF;
+  IF l.quiz_state = 'buzzed' THEN
+    -- Zeit zum Antworten abgelaufen: dieser Spieler ist für den Song raus, die anderen dürfen weiter buzzern
+    v_end := greatest(coalesce((l.quiz_options ->> 'qend')::timestamptz, now()), now() + interval '5 seconds');
+    -- 124: keine Eingabe = wie falsch: -1 Punkt (nicht unter 0) und Eintrag im Protokoll
+    v_pen := public._quiz_penalty(p_lobby_id, l.quiz_picker);
+    PERFORM public._quiz_log_add(p_lobby_id, l.quiz_seq, l.quiz_picker, NULL, false, v_pen);
+    UPDATE public.lobbies SET quiz_state = 'question', quiz_locked = array_append(quiz_locked, quiz_picker), quiz_picker = NULL,
+                              quiz_ends_at = v_end, quiz_rev = quiz_rev + 1 WHERE id = p_lobby_id;
+    IF coalesce(array_length(public._quiz_eligible(p_lobby_id), 1), 0) = 0 THEN PERFORM public._quiz_reveal(p_lobby_id); END IF;
+  ELSIF l.quiz_state = 'question' THEN
+    PERFORM public._quiz_reveal(p_lobby_id);
+  ELSIF l.quiz_state = 'reveal' THEN
+    PERFORM public._quiz_next(p_lobby_id);
+  END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION public._quiz_do_answer(p_lobby_id uuid, p_player_id uuid, p_answer text) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE l public.lobbies%ROWTYPE; s public.quiz_secret%ROWTYPE;
+        v_score numeric; v_title text; v_artist text; v_feat text[]; v_pts numeric := 0; v_clean text; v_pen numeric;
+BEGIN
+  SELECT * INTO l FROM public.lobbies WHERE id = p_lobby_id FOR UPDATE;
+  IF l.phase <> 'quiz' THEN RAISE EXCEPTION 'quiz_not_running'; END IF;
+  IF l.game_mode <> 'buzzer' THEN RAISE EXCEPTION 'quiz_wrong_action'; END IF;
+  IF l.quiz_state <> 'buzzed' OR l.quiz_picker IS DISTINCT FROM p_player_id THEN RAISE EXCEPTION 'quiz_not_your_turn'; END IF;
+  v_clean := left(trim(coalesce(p_answer, '')), 60);
+  IF v_clean = '' THEN RAISE EXCEPTION 'empty_answer'; END IF;
+  SELECT * INTO s FROM public.quiz_secret WHERE lobby_id = p_lobby_id;
+  SELECT title, artist, feat_artists INTO v_title, v_artist, v_feat FROM public.song_pool WHERE id = s.song_id;
+  v_score := public._score_song_answer(v_title, v_artist, v_feat, v_clean);
+
+  IF v_score <= 0 THEN
+    INSERT INTO public.quiz_answers (lobby_id, seq, player_id, answer, tries, answered_at)
+    VALUES (p_lobby_id, l.quiz_seq, p_player_id, v_clean, 1, now())
+    ON CONFLICT (lobby_id, seq, player_id) DO UPDATE SET answer = excluded.answer, tries = quiz_answers.tries + 1, answered_at = now();
+    -- falsch: -1 Punkt (nicht unter 0), für diesen Song raus, die anderen dürfen weiter buzzern
+    v_pen := public._quiz_penalty(p_lobby_id, p_player_id);
+    PERFORM public._quiz_log_add(p_lobby_id, l.quiz_seq, p_player_id, v_clean, false, v_pen);
+    UPDATE public.lobbies SET quiz_state = 'question', quiz_locked = array_append(quiz_locked, p_player_id), quiz_picker = NULL,
+           quiz_ends_at = greatest(coalesce((quiz_options ->> 'qend')::timestamptz, now()), now() + interval '5 seconds'),
+           quiz_rev = quiz_rev + 1 WHERE id = p_lobby_id;
+    IF NOT EXISTS (SELECT 1 FROM public.players WHERE lobby_id = p_lobby_id AND player_id = p_player_id AND is_bot) THEN
+      INSERT INTO public.answer_misses (lobby_id, song_id, player_id, answer) VALUES (p_lobby_id, s.song_id, p_player_id, v_clean);
+    END IF;
+    IF coalesce(array_length(public._quiz_eligible(p_lobby_id), 1), 0) = 0 THEN PERFORM public._quiz_reveal(p_lobby_id); END IF;
+    RETURN jsonb_build_object('correct', false, 'points', v_pen);
+  END IF;
+
+  v_pts := CASE WHEN v_score >= 1 THEN 2 ELSE 1 END;
+  INSERT INTO public.quiz_answers (lobby_id, seq, player_id, answer, correct, points, tries, answered_at)
+  VALUES (p_lobby_id, l.quiz_seq, p_player_id, v_clean, true, v_pts, 1, now())
+  ON CONFLICT (lobby_id, seq, player_id) DO UPDATE SET answer = excluded.answer, correct = true, points = excluded.points,
+     tries = quiz_answers.tries + 1, answered_at = now();
+  UPDATE public.players SET song_points = coalesce(song_points, 0) + v_pts WHERE lobby_id = p_lobby_id AND player_id = p_player_id;
+  PERFORM public._quiz_log_add(p_lobby_id, l.quiz_seq, p_player_id, v_clean, true, v_pts);
+  -- Treffer für die Song-Statistik: nur Menschen
+  IF v_score >= 1 AND s.song_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM public.players WHERE lobby_id = p_lobby_id AND player_id = p_player_id AND coalesce(is_bot, false)) THEN
+    UPDATE public.song_pool SET hits = hits + 1 WHERE id = s.song_id;
+  END IF;
+  PERFORM public._quiz_reveal(p_lobby_id);
+  RETURN jsonb_build_object('correct', true, 'points', v_pts, 'half', v_score < 1);
+END $$;
+
+CREATE OR REPLACE FUNCTION public._quiz_begin(p_lobby_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE v_mode text; v_min int; v_max int; v_opts jsonb;
+BEGIN
+  SELECT game_mode INTO v_mode FROM public.lobbies WHERE id = p_lobby_id;
+  -- Jahr raten: Zeitleiste = ältester bis neuester Song der Playlist (mindestens 15 Jahre breit)
+  IF v_mode = 'year' THEN
+    SELECT min(sp.release_year), max(sp.release_year) INTO v_min, v_max
+      FROM public.song_pool sp
+      JOIN public.topic_pool tp ON tp.id = sp.topic_pool_id AND tp.is_song_category IS TRUE
+      JOIN public.lobbies l ON l.id = p_lobby_id AND lower(tp.text) = lower(coalesce(l.topic_selected, ''))
+     WHERE sp.archived_from IS NULL AND sp.release_year IS NOT NULL;
+    v_max := coalesce(v_max, extract(year FROM now())::int);
+    v_min := least(coalesce(v_min, v_max - 14) - 1, v_max - 14);
+    v_opts := jsonb_build_object('yearMin', v_min, 'yearMax', v_max);
+  END IF;
+  DELETE FROM public.quiz_answers WHERE lobby_id = p_lobby_id;
+  UPDATE public.players SET song_points = 0, tiebreak = 0, is_alive = true, eliminated_at_round = NULL WHERE lobby_id = p_lobby_id AND status = 'active';
+  UPDATE public.lobbies
+     SET phase = 'quiz', explode_at = NULL, holder_player_id = NULL,
+         quiz_index = 0, quiz_state = NULL, quiz_options = v_opts, quiz_reveal = NULL, quiz_locked = '{}', quiz_picker = NULL, quiz_log = '[]'::jsonb,
+         -- Ziel: Buzzer = zuerst 10 Punkte (höchstens 20 Songs), Jahr raten = nach 8 Songs die meisten Punkte
+         quiz_target = CASE WHEN v_mode = 'buzzer' THEN 10 ELSE NULL END,
+         quiz_total = CASE WHEN v_mode = 'buzzer' THEN 20 ELSE 8 END,
+         used_answers = '{}',
+         used_song_ids = CASE WHEN coalesce(series_index, 1) <= 1 THEN '{}' ELSE coalesce(used_song_ids, '{}') END,
+         run_started_at = now(), countdown_started_at = NULL, countdown_ends_at = NULL, countdown_starter_player_id = NULL,
+         last_activity_at = now()
+   WHERE id = p_lobby_id;
+  PERFORM public._quiz_next(p_lobby_id);
+END $$;
+
+COMMIT;
+
+-- >>> 125_admin_user_history.sql <<<
+-- ============================================================
+-- 125: Schnellmenü (Alt + A): Verlauf eines Spielers (Wunsch Mehdi, 2026-10-14)
+-- ============================================================
+-- admin_user_history(user): letzte 12 Matches des Kontos (Datum, Lobby, Platz, Punkte, Treffer, falsche Antworten)
+-- und die letzten 12 Runden-Playlists. Nur Team (mind. Supporter), wie admin_get_user.
+-- ============================================================
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.admin_user_history(p_user_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  perform public._require_staff('supporter');
+  return jsonb_build_object(
+    'matches', coalesce((
+      select jsonb_agg(m order by m."finishedAt" desc) from (
+        select finished_at as "finishedAt", lobby_code as "lobbyCode", place, players_count as "players", humans_count as "humans",
+               total_points as "points", title_hits as "titles", artist_hits as "artists", wrong_guesses as "wrong", rounds_total as "rounds", ranked,
+               playlists
+          from public.account_matches where user_id = p_user_id order by finished_at desc limit 12
+      ) m
+    ), '[]'::jsonb)
+  );
+end;
+$function$;
+
+REVOKE ALL ON FUNCTION public.admin_user_history(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_user_history(uuid) TO authenticated;
+
+COMMIT;
+
+-- >>> 126_year_month_tiebreak.sql <<<
+-- ============================================================
+-- 126: Jahr raten – Monats-Entscheid bei Gleichstand (Wunsch Mehdi, 2026-10-14)
+-- ============================================================
+-- Haben beim besten Abstand zwei oder mehr Spieler denselben Abstand (z. B. beide genau das richtige Jahr), tippen NUR diese
+-- den Erscheinungsmonat (12 Sekunden), alle anderen schauen zu. Wer dem echten Monat am nächsten ist, bekommt +1 Punkt
+-- (Gleichstand: alle Nächsten). Nur für Songs, bei denen der Monat bekannt ist (song_pool.release_month, aus
+-- db/scripts/fetch-release-months.mjs); sonst läuft die Auflösung wie bisher.
+-- Neu: song_pool.release_month, quiz_secret.month, quiz_answers.month; Zustand quiz_state = 'month'; quiz_options.tie.
+-- ============================================================
+BEGIN;
+
+ALTER TABLE public.song_pool ADD COLUMN IF NOT EXISTS release_month smallint CHECK (release_month BETWEEN 1 AND 12);
+ALTER TABLE public.quiz_secret ADD COLUMN IF NOT EXISTS month smallint;
+ALTER TABLE public.quiz_answers ADD COLUMN IF NOT EXISTS month smallint;
+
+CREATE OR REPLACE FUNCTION public._quiz_seconds(p_mode text, p_state text) RETURNS numeric
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE p_state
+    WHEN 'reveal' THEN CASE p_mode WHEN 'year' THEN 8 ELSE 5 END
+    WHEN 'buzzed' THEN 7
+    WHEN 'month' THEN 12
+    ELSE CASE p_mode WHEN 'year' THEN 20 ELSE 30 END
+  END::numeric
+$$;
+
+CREATE OR REPLACE FUNCTION public._quiz_start_question(p_lobby_id uuid, p_song_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE v_mode text; v_year int; v_month int; v_seq int;
+BEGIN
+  SELECT game_mode, quiz_seq + 1 INTO v_mode, v_seq FROM public.lobbies WHERE id = p_lobby_id;
+  SELECT release_year, release_month INTO v_year, v_month FROM public.song_pool WHERE id = p_song_id;
+  PERFORM public._quiz_take_song(p_lobby_id, p_song_id);
+  INSERT INTO public.quiz_secret (lobby_id, seq, song_id, answer, year, month)
+  VALUES (p_lobby_id, v_seq, p_song_id, NULL, v_year, v_month)
+  ON CONFLICT (lobby_id) DO UPDATE SET seq = excluded.seq, song_id = excluded.song_id, answer = NULL, year = excluded.year, month = excluded.month, pick_options = NULL;
+  UPDATE public.lobbies
+     SET quiz_state = 'question', quiz_seq = v_seq, quiz_started_at = now(),
+         quiz_ends_at = now() + public._quiz_seconds(v_mode, 'question') * interval '1 second',
+         quiz_options = CASE WHEN v_mode = 'year' THEN quiz_options - 'tie' ELSE NULL END, quiz_reveal = NULL, quiz_locked = '{}', quiz_picker = NULL,
+         quiz_rev = quiz_rev + 1, last_activity_at = now()
+   WHERE id = p_lobby_id;
+END $$;
+
+CREATE OR REPLACE FUNCTION public._quiz_tick(p_lobby_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE l public.lobbies%ROWTYPE; v_end timestamptz; v_pen numeric;
+BEGIN
+  SELECT * INTO l FROM public.lobbies WHERE id = p_lobby_id FOR UPDATE;
+  IF l.phase <> 'quiz' OR l.quiz_ends_at IS NULL OR l.quiz_ends_at > now() THEN RETURN; END IF;
+  IF l.quiz_state = 'buzzed' THEN
+    -- Zeit zum Antworten abgelaufen: dieser Spieler ist für den Song raus, die anderen dürfen weiter buzzern
+    v_end := greatest(coalesce((l.quiz_options ->> 'qend')::timestamptz, now()), now() + interval '5 seconds');
+    -- 124: keine Eingabe = wie falsch: -1 Punkt (nicht unter 0) und Eintrag im Protokoll
+    v_pen := public._quiz_penalty(p_lobby_id, l.quiz_picker);
+    PERFORM public._quiz_log_add(p_lobby_id, l.quiz_seq, l.quiz_picker, NULL, false, v_pen);
+    UPDATE public.lobbies SET quiz_state = 'question', quiz_locked = array_append(quiz_locked, quiz_picker), quiz_picker = NULL,
+                              quiz_ends_at = v_end, quiz_rev = quiz_rev + 1 WHERE id = p_lobby_id;
+    IF coalesce(array_length(public._quiz_eligible(p_lobby_id), 1), 0) = 0 THEN PERFORM public._quiz_reveal(p_lobby_id); END IF;
+  ELSIF l.quiz_state IN ('question', 'month') THEN
+    PERFORM public._quiz_reveal(p_lobby_id);
+  ELSIF l.quiz_state = 'reveal' THEN
+    PERFORM public._quiz_next(p_lobby_id);
+  END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION public._quiz_reveal(p_lobby_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE l public.lobbies%ROWTYPE; s public.quiz_secret%ROWTYPE; v_title text; v_artist text; v_results jsonb; v_goal uuid;
+        v_tie uuid[]; v_mind int; v_picks jsonb := '{}'::jsonb; v_winners uuid[] := '{}'; v_best int; v_extra jsonb := '{}'::jsonb;
+BEGIN
+  SELECT * INTO l FROM public.lobbies WHERE id = p_lobby_id FOR UPDATE;
+  SELECT * INTO s FROM public.quiz_secret WHERE lobby_id = p_lobby_id;
+  SELECT title, artist INTO v_title, v_artist FROM public.song_pool WHERE id = s.song_id;
+
+  -- 126: Jahr raten – Gleichstand beim besten Abstand (z. B. zweimal dasselbe Jahr): erst die Gleichstehenden tippen den Monat,
+  -- alle anderen schauen kurz zu. Nur wenn wir den Monat des Songs kennen.
+  IF l.game_mode = 'year' AND s.year IS NOT NULL AND s.month IS NOT NULL AND l.quiz_state = 'question' THEN
+    SELECT min(abs(a.num - s.year)) INTO v_mind FROM public.quiz_answers a WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq AND a.num IS NOT NULL;
+    SELECT array_agg(a.player_id) INTO v_tie FROM public.quiz_answers a
+     WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq AND a.num IS NOT NULL AND abs(a.num - s.year) = v_mind
+       AND EXISTS (SELECT 1 FROM public.players p WHERE p.lobby_id = p_lobby_id AND p.player_id = a.player_id AND p.status = 'active');
+    IF coalesce(array_length(v_tie, 1), 0) >= 2 THEN
+      UPDATE public.lobbies
+         SET quiz_state = 'month', quiz_started_at = now(), quiz_ends_at = now() + public._quiz_seconds('year', 'month') * interval '1 second',
+             quiz_options = coalesce(quiz_options, '{}'::jsonb) || jsonb_build_object('tie', jsonb_build_object('players', to_jsonb(v_tie), 'diff', v_mind)),
+             quiz_rev = quiz_rev + 1, last_activity_at = now()
+       WHERE id = p_lobby_id;
+      RETURN;
+    END IF;
+  END IF;
+
+  IF l.game_mode = 'year' AND s.year IS NOT NULL THEN
+    UPDATE public.quiz_answers a
+       SET points = CASE abs(a.num - s.year) WHEN 0 THEN 5 WHEN 1 THEN 3 WHEN 2 THEN 2 ELSE CASE WHEN abs(a.num - s.year) <= 5 THEN 1 ELSE 0 END END,
+           correct = abs(a.num - s.year) <= 2
+     WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq AND a.num IS NOT NULL;
+    UPDATE public.players p SET song_points = coalesce(p.song_points, 0) + a.points
+      FROM public.quiz_answers a WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq AND p.lobby_id = p_lobby_id AND p.player_id = a.player_id;
+  END IF;
+
+  -- Monats-Entscheid auswerten: wer dem echten Monat am nächsten ist, bekommt +1 (Gleichstand: alle Nächsten)
+  IF l.game_mode = 'year' AND l.quiz_state = 'month' AND s.month IS NOT NULL THEN
+    SELECT coalesce(jsonb_object_agg(a.player_id::text, a.month), '{}'::jsonb) INTO v_picks
+      FROM public.quiz_answers a WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq AND a.month IS NOT NULL;
+    SELECT min(abs(a.month - s.month)) INTO v_best FROM public.quiz_answers a WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq AND a.month IS NOT NULL;
+    IF v_best IS NOT NULL THEN
+      SELECT array_agg(a.player_id) INTO v_winners FROM public.quiz_answers a
+       WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq AND a.month IS NOT NULL AND abs(a.month - s.month) = v_best;
+      UPDATE public.quiz_answers a SET points = coalesce(a.points, 0) + 1 WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq AND a.player_id = ANY (v_winners);
+      UPDATE public.players p SET song_points = coalesce(p.song_points, 0) + 1 WHERE p.lobby_id = p_lobby_id AND p.player_id = ANY (v_winners);
+    END IF;
+    v_extra := jsonb_build_object('month', s.month, 'tie', jsonb_build_object('players', coalesce(l.quiz_options -> 'tie' -> 'players', '[]'::jsonb), 'picks', v_picks, 'winners', to_jsonb(coalesce(v_winners, '{}'::uuid[]))));
+  ELSIF s.month IS NOT NULL THEN
+    v_extra := jsonb_build_object('month', s.month);
+  END IF;
+
+  IF l.quiz_target IS NOT NULL THEN
+    SELECT player_id INTO v_goal FROM public.players
+     WHERE lobby_id = p_lobby_id AND status = 'active' AND coalesce(song_points, 0) >= l.quiz_target
+     ORDER BY song_points DESC LIMIT 1;
+  END IF;
+
+  SELECT coalesce(jsonb_agg(jsonb_build_object('playerId', a.player_id, 'points', a.points, 'correct', a.correct,
+           'answer', CASE WHEN l.game_mode = 'year' THEN a.num::text ELSE NULL END) ORDER BY a.points DESC, a.answered_at), '[]')
+    INTO v_results FROM public.quiz_answers a WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq;
+
+  UPDATE public.lobbies
+     SET quiz_state = 'reveal',
+         quiz_reveal = jsonb_build_object('title', v_title, 'artist', v_artist, 'year', s.year, 'results', v_results, 'goal', v_goal) || v_extra,
+         quiz_started_at = now(), quiz_ends_at = now() + public._quiz_seconds(l.game_mode, 'reveal') * interval '1 second',
+         quiz_rev = quiz_rev + 1, last_activity_at = now()
+   WHERE id = p_lobby_id;
+END $$;
+
+CREATE OR REPLACE FUNCTION public._quiz_do_choose(p_lobby_id uuid, p_player_id uuid, p_choice text) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE l public.lobbies%ROWTYPE; v_num int; v_tie uuid[]; v_left int;
+BEGIN
+  SELECT * INTO l FROM public.lobbies WHERE id = p_lobby_id FOR UPDATE;
+  IF l.phase <> 'quiz' OR l.quiz_state NOT IN ('question', 'month') THEN RAISE EXCEPTION 'quiz_closed'; END IF;
+  IF l.game_mode <> 'year' THEN RAISE EXCEPTION 'quiz_wrong_action'; END IF;
+  -- 126: Monats-Entscheid – nur die Gleichstehenden dürfen, einmal, Monat 1..12
+  IF l.quiz_state = 'month' THEN
+    SELECT array_agg(x::uuid) INTO v_tie FROM jsonb_array_elements_text(coalesce(l.quiz_options -> 'tie' -> 'players', '[]'::jsonb)) x;
+    IF NOT (p_player_id = ANY (coalesce(v_tie, '{}'))) THEN RAISE EXCEPTION 'quiz_not_in_tie'; END IF;
+    BEGIN v_num := trim(p_choice)::int; EXCEPTION WHEN others THEN RAISE EXCEPTION 'quiz_bad_month'; END;
+    IF v_num < 1 OR v_num > 12 THEN RAISE EXCEPTION 'quiz_bad_month'; END IF;
+    IF EXISTS (SELECT 1 FROM public.quiz_answers WHERE lobby_id = p_lobby_id AND seq = l.quiz_seq AND player_id = p_player_id AND month IS NOT NULL) THEN
+      RAISE EXCEPTION 'quiz_already_answered';
+    END IF;
+    UPDATE public.quiz_answers SET month = v_num WHERE lobby_id = p_lobby_id AND seq = l.quiz_seq AND player_id = p_player_id;
+    UPDATE public.lobbies SET quiz_rev = quiz_rev + 1 WHERE id = p_lobby_id;
+    SELECT count(*) INTO v_left FROM public.quiz_answers a WHERE a.lobby_id = p_lobby_id AND a.seq = l.quiz_seq AND a.player_id = ANY (v_tie) AND a.month IS NULL;
+    IF v_left = 0 THEN
+      UPDATE public.lobbies SET quiz_ends_at = least(quiz_ends_at, now() + interval '800 milliseconds') WHERE id = p_lobby_id;
+    END IF;
+    RETURN jsonb_build_object('points', 0);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.players WHERE lobby_id = p_lobby_id AND player_id = p_player_id AND status = 'active') THEN RAISE EXCEPTION 'not_a_member'; END IF;
+  IF EXISTS (SELECT 1 FROM public.quiz_answers WHERE lobby_id = p_lobby_id AND seq = l.quiz_seq AND player_id = p_player_id) THEN
+    RAISE EXCEPTION 'quiz_already_answered';
+  END IF;
+  BEGIN v_num := trim(p_choice)::int; EXCEPTION WHEN others THEN RAISE EXCEPTION 'quiz_bad_year'; END;
+  IF v_num < coalesce((l.quiz_options ->> 'yearMin')::int, 1900) OR v_num > coalesce((l.quiz_options ->> 'yearMax')::int, 2100) THEN RAISE EXCEPTION 'quiz_bad_year'; END IF;
+  INSERT INTO public.quiz_answers (lobby_id, seq, player_id, answer, num, correct, points, tries, answered_at)
+  VALUES (p_lobby_id, l.quiz_seq, p_player_id, left(p_choice, 80), v_num, false, 0, 1, now());
+  UPDATE public.lobbies SET quiz_rev = quiz_rev + 1 WHERE id = p_lobby_id;
+  PERFORM public._quiz_maybe_early(p_lobby_id);
+  RETURN jsonb_build_object('points', 0);
+END $$;
+
+CREATE OR REPLACE FUNCTION public.rpc_quiz_status(p_code text, p_player_id uuid) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE v_id uuid; l public.lobbies%ROWTYPE; v_me jsonb;
+BEGIN
+  v_id := public._quiz_lobby_for(p_code, p_player_id);
+  SELECT * INTO l FROM public.lobbies WHERE id = v_id;
+  SELECT jsonb_build_object('answered', CASE WHEN l.quiz_state = 'month' THEN a.month IS NOT NULL ELSE true END, 'correct', a.correct, 'points', a.points, 'tries', a.tries,
+                            'answer', CASE WHEN l.quiz_state = 'month' THEN a.month::text ELSE a.num::text END)
+    INTO v_me FROM public.quiz_answers a WHERE a.lobby_id = v_id AND a.seq = l.quiz_seq AND a.player_id = p_player_id;
+  RETURN jsonb_build_object(
+    'seq', l.quiz_seq,
+    'me', coalesce(v_me, jsonb_build_object('answered', false)),
+    -- Jahr raten: wer schon getippt hat (ohne die Jahre selbst – die sieht man erst bei der Auflösung)
+    'answered', CASE WHEN l.game_mode = 'year'
+                     THEN (SELECT coalesce(jsonb_agg(player_id), '[]') FROM public.quiz_answers WHERE lobby_id = v_id AND seq = l.quiz_seq AND (l.quiz_state <> 'month' OR month IS NOT NULL))
+                     ELSE '[]'::jsonb END
+  );
+END $$;
+
+CREATE OR REPLACE FUNCTION public._quiz_bot_tick() RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE r record; v_m int; v_seed text; v_delay numeric; v_ok boolean; v_el numeric; s public.quiz_secret%ROWTYPE; v_answer text; v_year int; v_range int;
+BEGIN
+  FOR r IN
+    SELECT l.id AS lobby_id, l.game_mode, l.quiz_state, l.quiz_seq, l.quiz_index, l.quiz_started_at, l.quiz_picker, l.quiz_locked, l.quiz_options,
+           p.player_id, coalesce(p.bot_skill, 2) AS skill
+    FROM public.lobbies l JOIN public.players p ON p.lobby_id = l.id AND p.is_bot AND p.status = 'active'
+    WHERE l.phase = 'quiz' AND l.quiz_state IN ('question', 'buzzed', 'month')
+  LOOP
+    BEGIN
+      v_seed := r.player_id::text || ':' || r.quiz_seq || ':' || r.quiz_state || ':' || r.quiz_index;
+      v_el := extract(epoch FROM now() - r.quiz_started_at);
+      v_ok := (abs(hashtext('ok' || v_seed)) % 1000) / 1000.0 < (CASE r.skill WHEN 1 THEN 0.45 WHEN 3 THEN 0.85 ELSE 0.65 END);
+      v_delay := CASE r.skill WHEN 1 THEN 6 WHEN 3 THEN 1.5 ELSE 3.5 END + (abs(hashtext('d' || v_seed)) % 1000) / 1000.0 * CASE r.skill WHEN 1 THEN 5 WHEN 3 THEN 2.5 ELSE 4.5 END;
+      IF r.game_mode = 'buzzer' THEN v_delay := v_delay * 2.2 + 2; END IF;
+
+      IF r.quiz_state = 'buzzed' THEN
+        IF r.quiz_picker = r.player_id AND v_el > 1.5 THEN
+          SELECT * INTO s FROM public.quiz_secret WHERE lobby_id = r.lobby_id;
+          SELECT CASE WHEN abs(hashtext('t' || v_seed)) % 2 = 0 THEN title ELSE trim(split_part(split_part(artist, ',', 1), '&', 1)) END
+            INTO v_answer FROM public.song_pool WHERE id = s.song_id;
+          PERFORM public._quiz_do_answer(r.lobby_id, r.player_id, v_answer);
+        END IF;
+      ELSIF r.quiz_state = 'month' AND r.game_mode = 'year' AND v_el >= 1.5 + (abs(hashtext('m' || v_seed)) % 1000) / 1000.0 * 4
+            AND (r.quiz_options -> 'tie' -> 'players') ? r.player_id::text
+            AND NOT EXISTS (SELECT 1 FROM public.quiz_answers WHERE lobby_id = r.lobby_id AND seq = r.quiz_seq AND player_id = r.player_id AND month IS NOT NULL) THEN
+        SELECT * INTO s FROM public.quiz_secret WHERE lobby_id = r.lobby_id;
+        v_m := ((coalesce(s.month, 6) - 1 + (abs(hashtext('mo' || v_seed)) % (2 * (CASE r.skill WHEN 1 THEN 5 WHEN 3 THEN 1 ELSE 3 END) + 1)) - (CASE r.skill WHEN 1 THEN 5 WHEN 3 THEN 1 ELSE 3 END) + 24) % 12) + 1;
+        PERFORM public._quiz_do_choose(r.lobby_id, r.player_id, v_m::text);
+      ELSIF r.quiz_state = 'question' AND v_el >= v_delay THEN
+        IF r.game_mode = 'buzzer' THEN
+          IF v_ok AND NOT (r.player_id = ANY (r.quiz_locked)) THEN PERFORM public._quiz_do_buzz(r.lobby_id, r.player_id); END IF;
+        ELSIF r.game_mode = 'year'
+              AND NOT EXISTS (SELECT 1 FROM public.quiz_answers WHERE lobby_id = r.lobby_id AND seq = r.quiz_seq AND player_id = r.player_id) THEN
+          SELECT * INTO s FROM public.quiz_secret WHERE lobby_id = r.lobby_id;
+          v_range := CASE r.skill WHEN 1 THEN 7 WHEN 3 THEN 2 ELSE 4 END;
+          v_year := coalesce(s.year, 2020) + (abs(hashtext('y' || v_seed)) % (2 * v_range + 1)) - v_range;
+          v_year := greatest(coalesce((r.quiz_options ->> 'yearMin')::int, 1900), least(coalesce((r.quiz_options ->> 'yearMax')::int, 2100), v_year));
+          PERFORM public._quiz_do_choose(r.lobby_id, r.player_id, v_year::text);
+        END IF;
+      END IF;
+    EXCEPTION WHEN others THEN NULL;
+    END;
+  END LOOP;
+END $$;
+
+COMMIT;

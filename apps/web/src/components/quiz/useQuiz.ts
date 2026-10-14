@@ -29,7 +29,12 @@ export type QuizLobby = {
     quiz_picker: string | null;
     quiz_reveal: Record<string, unknown> | null;
     quiz_locked: string[];
+    /** Buzzer: Protokoll der Versuche (Migration 124) */
+    quiz_log?: QuizLogEntry[] | null;
 };
+
+/** Ein Buzzer-Versuch: p = Spieler, a = Eingabe (null = keine Eingabe), ok = richtig, pts = Punkte (+2/+1 oder -1/0) */
+export type QuizLogEntry = { seq: number; p: string; a: string | null; ok: boolean; pts: number };
 
 export type QuizPlayer = {
     player_id: string;
@@ -154,5 +159,19 @@ export function useQuiz({ lobby, mePlayerId, onToast }: { lobby: QuizLobby; mePl
         [mePlayerId, run, supabase, lobby.code]
     );
 
-    return { status: mine, meAnswered, answeredSet, busy, left, total, ratio, buzz, answer, guessYear };
+    /** Jahr raten, Gleichstand: Monat (1–12) tippen */
+    const guessMonth = useCallback(
+        async (month: number) => {
+            if (!mePlayerId) return false;
+            const res = await run(() => supabase.rpc("rpc_quiz_choose", { p_code: lobby.code, p_player_id: mePlayerId, p_choice: String(month) }));
+            if (res) {
+                playFx("vote");
+                setStatus((s) => (s ? { ...s, me: { answered: true, correct: null, points: 0, answer: String(month) } } : s));
+            }
+            return res !== null;
+        },
+        [mePlayerId, run, supabase, lobby.code]
+    );
+
+    return { status: mine, meAnswered, answeredSet, busy, left, total, ratio, buzz, answer, guessYear, guessMonth };
 }
