@@ -321,7 +321,7 @@ export default function HostPage() {
 
     // Modus-Auswahl: drei Modi als große Kacheln (Original, Buzzer, Jahr raten) – jede mit Ziel und Kurzbeschreibung.
     const modeCard = (
-            <div className="pillCard hcMode">
+            <div className="pillCard hcBox hcMode">
                 <div className="pillCardTop">
                     <div className="pillCardTitle">{tr("Modus")}</div>
                     <div className="pillCardHint">{tr("Wähle die Regeln für die Runde")}</div>
@@ -345,6 +345,14 @@ export default function HostPage() {
                             </span>
                             <span className="modeTileGoal">🎯 {tr(m.goal)}</span>
                             <span className="modeTileDesc">{tr(m.desc)}</span>
+                            <span className="modeTileRules">
+                                {m.rules.map((r) => (
+                                    <span key={r.text}>
+                                        <i aria-hidden>{r.icon}</i>
+                                        {tr(r.text)}
+                                    </span>
+                                ))}
+                            </span>
                         </button>
                     ))}
                 </div>
@@ -392,259 +400,223 @@ export default function HostPage() {
                     </div>
 
                     <div className="hostGrid" style={{ gridTemplateColumns: "1fr" }}>
-                        <div className="panel">
-                            {nameFromAccount ? (hostName ? <AccountNameNote name={hostName} /> : null) : (
-                            <>
-                            <div className="panelHead">
-                                <div className="panelTitle">{tr("Spieler-Details")}</div>
-                                <div className="panelHint">{tr("Du kannst das später ändern.")}</div>
-                            </div>
-
-                            <div className="fieldBlock hcName">
-                                <div className="fieldTop">
-                                    <div className="fieldTitle">{tr("Dein Name")}</div>
-                                    <div className="fieldHint">{tr("Mindestens 2 Zeichen")}</div>
-                                </div>
-
-                                <div className="pillInputWrap">
-                                    <span className="pillIcon" aria-hidden>👤</span>
-                                    <input
-                                        className="pillInput"
-                                        value={hostName}
-                                        onChange={(e) => setHostName(e.target.value)}
-                                        placeholder={tr("z. B. Steve")}
-                                        autoComplete="nickname"
-                                        maxLength={24}
-                                        aria-label={tr("Dein Name")}
-                                    />
-                                    <div className="pillRight" aria-hidden>
-                                        <button
-                                            type="button"
-                                            className="pillIconBtn"
-                                            onClick={() => setHostName(randomHostName())}
-                                            title={tr("Zufälliger Name")}
-                                        >
-                                            🎲
-                                        </button>
-                                        <span className="pillChip">{Math.min(hostName.trim().length, 24)}/24</span>
-                                    </div>
-                                </div>
-
-                                {nameError ? <div className="fieldHelp fieldHelpError">{nameError}</div> : null}
-                            </div>
-
-                            <div className="divider" />
-                            </>
-                            )}
-
-                            {category === "friends" ? (
-                            <>
-                            <div className="pillCard hcMax">
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">{tr("Max. Spieler")}</div>
-                                    <div className="pillCardHint">{tr("Empfohlen: 4–8 · max. 12")}</div>
-                                </div>
-                                <div className="pillStepper">
-                                    <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>
-                                        −
-                                    </button>
-                                    <div className="pillStepValue">{maxPlayers}</div>
-                                    <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>
-                                        +
-                                    </button>
-                                </div>
-                            </div>
-
-
-                            {modeCard}
-
-                            {mode === "original" ? (
-                            <div className="pillCard hcTempo">
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">{tr("Tempo")}</div>
-                                    <div className="pillCardHint">{activeSpeed ? tr(activeSpeed.hint) : tr("Bitte auswählen.")}</div>
-                                </div>
-
-                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                    {(Object.keys(ROUND_SPEEDS) as RoundSpeed[]).map((key) => {
-                                        const s = ROUND_SPEEDS[key];
-                                        const active = roundSpeed === key;
-
-                                        return (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
-                                                data-variant={s.variant}
-                                                onClick={() => setRoundSpeed(key)}
-                                                aria-pressed={active}
-                                            >
-                                                <span className="segLabel">{tr(s.label)}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                            ) : null}
-
-                            <div className="pillCard hcRounds">
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">{tr("Runden pro Match")}</div>
-                                    <div className="pillCardHint">
-                                        {seriesTotal === 1 ? tr("Eine einzelne Runde") : tr("{n} Runden mit Zwischenstand und Gesamtwertung", { n: seriesTotal })}
-                                    </div>
-                                </div>
-                                <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                    {([1, 3, 5] as const).map((n) => (
-                                        <button
-                                            key={n}
-                                            type="button"
-                                            className={`pillSegBtn segChoice ${seriesTotal === n ? "segChoiceActive" : ""}`}
-                                            onClick={() => setSeriesTotal(n)}
-                                            aria-pressed={seriesTotal === n}
-                                        >
-                                            <span className="segLabel">{n === 1 ? tr("1 Runde") : tr("{n} Runden", { n })}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
-                                    {tr("Nach jeder Runde (bis nur noch einer übrig ist) wird der Zwischenstand gespeichert und es geht wieder ins Themen-Voting.")}
-                                </div>
-                            </div>
-
-                            <div className="pillCard hcPl">
-                                <div className="pillCardTop">
-                                    <div className="pillCardTitle">🎵 Playlists</div>
-                                    <div className="pillCardHint">{tr("Antippen = rausnehmen")}</div>
-                                </div>
-                                <div className="fieldHelp" style={{ opacity: 0.9, marginBottom: 8 }}>
-                                    {tr("Jede Runde wird eine der ausgewählten Playlists gespielt – der Halter hört einen Song-Schnipsel und muss Titel oder Interpret erraten.")}
-                                </div>
-                                <PlaylistPicker selected={playlists} onChange={setPlaylists} />
-                            </div>
-
-
-                            {createError ? (
-                                <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
-                                    {createError}
-                                </div>
-                            ) : null}
-
-                            <div className="actionsRow hcAct" style={{ alignItems: "center", marginTop: 14 }}>
-                                <button
-                                    type="button"
-                                    onClick={onCreate}
-                                    disabled={!canCreate}
-                                    className={`btn btnPrimary btnXL ${canCreate ? "btnGlow" : "btnDisabled"}`}
-                                >
-                                    {creating ? tr("⏳ Lobby wird erstellt…") : tr("🚀 Lobby erstellen")}
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`publicToggle ${isPublic ? "on" : ""}`}
-                                    role="switch"
-                                    aria-checked={isPublic}
-                                    onClick={togglePublic}
-                                >
-                                    <span className="publicToggleText">
-                                        <b>{isPublic ? tr("🌍 Öffentlich") : tr("🔒 Nur mit Code")}</b>
-                                        <span>{isPublic ? tr("Alle sehen die Lobby im Hauptmenü und können direkt beitreten") : tr("Nur wer den Code oder eine Einladung hat, kommt rein")}</span>
-                                    </span>
-                                    <span className="publicSwitch" aria-hidden>
-                                        <span />
-                                    </span>
-                                </button>
-
-                            </div>
-                            </>
-                            ) : (
-                            <>
-                                {modeCard}
-                                <div style={{ height: 14 }} />
-                                <div className="pillCard hcCount">
-                                    <div className="pillCardTop">
-                                        <div className="pillCardTitle">{tr("Wie viele Bots?")}</div>
-                                        <div className="pillCardHint">{tr("1 bis 5 Gegner")}</div>
-                                    </div>
-                                    <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                        {[1, 2, 3, 4, 5].map((n) => (
-                                            <button
-                                                key={n}
-                                                type="button"
-                                                className={`pillSegBtn segChoice ${botCount === n ? "segChoiceActive" : ""}`}
-                                                onClick={() => setBotCount(n)}
-                                                aria-pressed={botCount === n}
-                                            >
-                                                <span className="segLabel">{"🤖".repeat(Math.min(n, 3))}{n > 3 ? "+" : ""} {n}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="pillCard hcSkill">
-                                    <div className="pillCardTop">
-                                        <div className="pillCardTitle">{tr("Stärke")}</div>
-                                        <div className="pillCardHint">
-                                            {botSkill === "1" ? tr("Raten oft daneben, lassen sich Zeit") : botSkill === "2" ? tr("Kennen viele Songs") : botSkill === "3" ? tr("Schnell und treffsicher") : tr("Bunt gemischt – vom Anfänger bis zum Profi")}
+                        <div className="panel hostPanel">
+                            {/* Obere Reihe: lauter gleich große Kästen (Name, Spieler/Bots, Runden bzw. Stärke, Tempo) */}
+                            <div className="hostRow hostTop">
+                                {nameFromAccount ? (
+                                    hostName ? <AccountNameNote name={hostName} /> : null
+                                ) : (
+                                    <div className="fieldBlock hcName hcBox">
+                                        <div className="fieldTop">
+                                            <div className="fieldTitle">{tr("Dein Name")}</div>
+                                            <div className="fieldHint">{tr("Mindestens 2 Zeichen")}</div>
                                         </div>
+
+                                        <div className="pillInputWrap">
+                                            <span className="pillIcon" aria-hidden>👤</span>
+                                            <input
+                                                className="pillInput"
+                                                value={hostName}
+                                                onChange={(e) => setHostName(e.target.value)}
+                                                placeholder={tr("z. B. Steve")}
+                                                autoComplete="nickname"
+                                                maxLength={24}
+                                                aria-label={tr("Dein Name")}
+                                            />
+                                            <div className="pillRight" aria-hidden>
+                                                <button type="button" className="pillIconBtn" onClick={() => setHostName(randomHostName())} title={tr("Zufälliger Name")}>
+                                                    🎲
+                                                </button>
+                                                <span className="pillChip">{Math.min(hostName.trim().length, 24)}/24</span>
+                                            </div>
+                                        </div>
+
+                                        {nameError ? <div className="fieldHelp fieldHelpError">{nameError}</div> : null}
                                     </div>
-                                    <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                        {(["1", "2", "3", "mixed"] as BotSkill[]).map((k) => (
-                                            <button
-                                                key={k}
-                                                type="button"
-                                                className={`pillSegBtn segChoice ${botSkill === k ? "segChoiceActive" : ""}`}
-                                                onClick={() => setBotSkill(k)}
-                                                aria-pressed={botSkill === k}
-                                            >
-                                                <span className="segLabel">
-                                                    {k === "1" ? "🌱" : k === "2" ? "🎧" : k === "3" ? "🔥" : "🎲"} {tr(SOLO_SKILL_LABEL[k])}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                                )}
+
+                                {category === "friends" ? (
+                                    <>
+                                        <div className="pillCard hcBox hcMax">
+                                            <div className="pillCardTop">
+                                                <div className="pillCardTitle">{tr("Max. Spieler")}</div>
+                                                <div className="pillCardHint">{tr("Empfohlen: 4–8 · max. 12")}</div>
+                                            </div>
+                                            <div className="pillStepper">
+                                                <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.max(2, p - 1))}>
+                                                    −
+                                                </button>
+                                                <div className="pillStepValue">{maxPlayers}</div>
+                                                <button type="button" className="pillStepBtn" onClick={() => setMaxPlayers((p) => Math.min(12, p + 1))}>
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="pillCard hcBox hcRounds">
+                                            <div className="pillCardTop">
+                                                <div className="pillCardTitle">{tr("Runden pro Match")}</div>
+                                                <div className="pillCardHint">
+                                                    {seriesTotal === 1 ? tr("Eine einzelne Runde") : tr("{n} Runden mit Zwischenstand und Gesamtwertung", { n: seriesTotal })}
+                                                </div>
+                                            </div>
+                                            <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                                {([1, 3, 5] as const).map((n) => (
+                                                    <button
+                                                        key={n}
+                                                        type="button"
+                                                        className={`pillSegBtn segChoice ${seriesTotal === n ? "segChoiceActive" : ""}`}
+                                                        onClick={() => setSeriesTotal(n)}
+                                                        aria-pressed={seriesTotal === n}
+                                                    >
+                                                        <span className="segLabel">{n === 1 ? tr("1 Runde") : tr("{n} Runden", { n })}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="pillCard hcBox hcCount">
+                                            <div className="pillCardTop">
+                                                <div className="pillCardTitle">{tr("Wie viele Bots?")}</div>
+                                                <div className="pillCardHint">{tr("1 bis 5 Gegner")}</div>
+                                            </div>
+                                            <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                                {[1, 2, 3, 4, 5].map((n) => (
+                                                    <button
+                                                        key={n}
+                                                        type="button"
+                                                        className={`pillSegBtn segChoice ${botCount === n ? "segChoiceActive" : ""}`}
+                                                        onClick={() => setBotCount(n)}
+                                                        aria-pressed={botCount === n}
+                                                    >
+                                                        <span className="segLabel">
+                                                            {"🤖".repeat(Math.min(n, 3))}
+                                                            {n > 3 ? "+" : ""} {n}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="pillCard hcBox hcSkill">
+                                            <div className="pillCardTop">
+                                                <div className="pillCardTitle">{tr("Stärke")}</div>
+                                                <div className="pillCardHint">
+                                                    {botSkill === "1"
+                                                        ? tr("Raten oft daneben, lassen sich Zeit")
+                                                        : botSkill === "2"
+                                                          ? tr("Kennen viele Songs")
+                                                          : botSkill === "3"
+                                                            ? tr("Schnell und treffsicher")
+                                                            : tr("Bunt gemischt – vom Anfänger bis zum Profi")}
+                                                </div>
+                                            </div>
+                                            <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                                {(["1", "2", "3", "mixed"] as BotSkill[]).map((k) => (
+                                                    <button
+                                                        key={k}
+                                                        type="button"
+                                                        className={`pillSegBtn segChoice ${botSkill === k ? "segChoiceActive" : ""}`}
+                                                        onClick={() => setBotSkill(k)}
+                                                        aria-pressed={botSkill === k}
+                                                    >
+                                                        <span className="segLabel">
+                                                            {k === "1" ? "🌱" : k === "2" ? "🎧" : k === "3" ? "🔥" : "🎲"} {tr(SOLO_SKILL_LABEL[k])}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
 
                                 {mode === "original" ? (
-                                <div className="pillCard hcTempo">
-                                    <div className="pillCardTop">
-                                        <div className="pillCardTitle">{tr("Tempo")}</div>
-                                        <div className="pillCardHint">{activeSpeed ? tr(activeSpeed.hint) : tr("Bitte auswählen.")}</div>
-                                    </div>
-                                    <div className="pillSeg" style={{ flexWrap: "wrap" }}>
-                                        {(Object.keys(ROUND_SPEEDS) as RoundSpeed[]).map((key) => (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                className={`pillSegBtn segChoice ${roundSpeed === key ? "segChoiceActive" : ""}`}
-                                                data-variant={ROUND_SPEEDS[key].variant}
-                                                onClick={() => setRoundSpeed(key)}
-                                                aria-pressed={roundSpeed === key}
-                                            >
-                                                <span className="segLabel">{tr(ROUND_SPEEDS[key].label)}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                ) : null}
-
-                                {botError ? (
-                                    <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>
-                                        {botError}
+                                    <div className="pillCard hcBox hcTempo">
+                                        <div className="pillCardTop">
+                                            <div className="pillCardTitle">{tr("Tempo")}</div>
+                                            <div className="pillCardHint">{activeSpeed ? tr(activeSpeed.hint) : tr("Bitte auswählen.")}</div>
+                                        </div>
+                                        <div className="pillSeg" style={{ flexWrap: "wrap" }}>
+                                            {(Object.keys(ROUND_SPEEDS) as RoundSpeed[]).map((key) => {
+                                                const s = ROUND_SPEEDS[key];
+                                                const active = roundSpeed === key;
+                                                return (
+                                                    <button
+                                                        key={key}
+                                                        type="button"
+                                                        className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
+                                                        data-variant={s.variant}
+                                                        onClick={() => setRoundSpeed(key)}
+                                                        aria-pressed={active}
+                                                    >
+                                                        <span className="segLabel">{tr(s.label)}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 ) : null}
+                            </div>
 
-                                <div className="actionsRow hcAct" style={{ alignItems: "center", marginTop: 14 }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => void onStartBots()}
-                                        disabled={!isNameValid || botBusy || !roundSpeed}
-                                        className={`btn btnPrimary btnXL ${isNameValid && !botBusy ? "btnGlow" : "btnDisabled"}`}
-                                    >
-                                        {botBusy ? tr("⏳ Bots machen sich bereit…") : botCount === 1 ? tr("🤖 Gegen 1 Bot spielen") : tr("🤖 Gegen {n} Bots spielen", { n: botCount })}
-                                    </button>
-                                </div>
-                            </>
+                            {/* Mitte: die drei Modi, füllt den restlichen Platz */}
+                            {modeCard}
+
+                            {category === "friends" ? (
+                                <>
+                                    {createError ? <div className="fieldHelp fieldHelpError hostErr">{createError}</div> : null}
+
+                                    {/* Untere Reihe: Playlists, Sichtbarkeit, Erstellen – wieder gleich hohe Kästen */}
+                                    <div className="hostRow hostBottom">
+                                        <div className="pillCard hcBox hcPl">
+                                            <div className="pillCardTop">
+                                                <div className="pillCardTitle">🎵 Playlists</div>
+                                                <div className="pillCardHint">{tr("Antippen = rausnehmen")}</div>
+                                            </div>
+                                            <PlaylistPicker selected={playlists} onChange={setPlaylists} />
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className={`publicToggle hcBox hcPublic ${isPublic ? "on" : ""}`}
+                                            role="switch"
+                                            aria-checked={isPublic}
+                                            onClick={togglePublic}
+                                        >
+                                            <span className="publicToggleText">
+                                                <b>{isPublic ? tr("🌍 Öffentlich") : tr("🔒 Nur mit Code")}</b>
+                                                <span>{isPublic ? tr("Alle sehen die Lobby im Hauptmenü und können direkt beitreten") : tr("Nur wer den Code oder eine Einladung hat, kommt rein")}</span>
+                                            </span>
+                                            <span className="publicSwitch" aria-hidden>
+                                                <span />
+                                            </span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={onCreate}
+                                            disabled={!canCreate}
+                                            className={`btn btnPrimary btnXL hcCreate ${canCreate ? "btnGlow" : "btnDisabled"}`}
+                                        >
+                                            {creating ? tr("⏳ Lobby wird erstellt…") : tr("🚀 Lobby erstellen")}
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {botError ? <div className="fieldHelp fieldHelpError hostErr">{botError}</div> : null}
+                                    <div className="hostRow hostBottom">
+                                        <button
+                                            type="button"
+                                            onClick={() => void onStartBots()}
+                                            disabled={!isNameValid || botBusy || !roundSpeed}
+                                            className={`btn btnPrimary btnXL hcCreate ${isNameValid && !botBusy ? "btnGlow" : "btnDisabled"}`}
+                                        >
+                                            {botBusy ? tr("⏳ Bots machen sich bereit…") : botCount === 1 ? tr("🤖 Gegen 1 Bot spielen") : tr("🤖 Gegen {n} Bots spielen", { n: botCount })}
+                                        </button>
+                                    </div>
+                                </>
                             )}
                         </div>
                     </div>

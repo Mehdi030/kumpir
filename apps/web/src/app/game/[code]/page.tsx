@@ -27,6 +27,7 @@ import { Confetti } from "@/components/Confetti";
 import { AudioControl } from "@/components/AudioControl";
 import { QuizStage } from "@/components/game/QuizStage";
 import { HeartbeatEdge, StageBar } from "@/components/game/StageBar";
+import { SongRails } from "@/components/game/SongRails";
 import { TableStylePicker } from "@/components/game/TableStylePicker";
 import { gameModeInfo, isQuizMode } from "@/lib/gameModes";
 import { playFx } from "@/lib/gameFx";
@@ -109,6 +110,8 @@ type LobbyState = {
     // Topic-Mechanik B: Antwort-Validierung
     current_attempt_id: string | null;
     used_answers: string[];
+    /** Nicht erratene Songs dieser Runde (Migration 120) */
+    missed_songs: string[];
 
     // Modus-Anzeige
     game_mode: string | null;
@@ -731,6 +734,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
 
                     current_attempt_id: (raw.current_attempt_id as string | null) ?? null,
                     used_answers: (raw.used_answers as string[] | null) ?? [],
+                    missed_songs: (raw.missed_songs as string[] | null) ?? [],
 
                     game_mode: (raw.game_mode as string | null) ?? "original",
                     pass_direction: (raw.pass_direction as number | null) ?? 1,
@@ -2115,11 +2119,6 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         1
     );
 
-    // Tempo-Anzeige: spiegelt calc_explode_seconds (-5 % Schnurlänge pro
-    // Eliminierung, Boden 55 %, Migration 110) und im Duell nochmal 20 % kürzer.
-    const tempoFactor =
-        (1 / Math.max(0.55, 1 - (Math.max(1, lobby.round_number ?? 1) - 1) * 0.05)) * (aliveNow === 2 ? 1.25 : 1);
-
     return (
         <main
             className={`fullH${selfShake ? " kumpirSelfShake" : ""}`}
@@ -2163,28 +2162,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 </div>
             ) : null}
 
-            {/* Große Leiste oben: wer dran ist, brennende Zündschnur, Spielstand (ersetzt die kleine Info-Leiste) */}
+            {/* Große Leiste oben: Runde, Zündschnur in vier Paketen, wie viele noch im Spiel sind */}
             <StageBar
-                holderId={lobby.holder_player_id}
-                holderName={holderName}
-                holderAvatar={holderRow?.avatar_config ?? null}
                 holderIsMe={isMeHolder}
                 heat={heatRatio}
                 fuseActive={!!lobby.explode_at && explodeMsLeft != null && roundTotalMsRef.current > 0}
                 goal={tr(gameModeInfo("original").goal)}
-                stats={[
-                    { key: "pl", label: tr("Playlist"), value: `${playlistLook(selectedTopic).icon} ${selectedTopic}`, title: tr("Playlist"), tone: "opt" as const },
-                    ...((lobby.series_total ?? 1) > 1
-                        ? [{ key: "set", label: tr("Runde"), value: `${lobby.series_index}/${lobby.series_total}`, title: tr("Runde des Matches") }]
-                        : []),
-                    { key: "zug", label: tr("Zug"), value: String(Math.max(1, lobby.round_number ?? 1)), title: tr("Zug in dieser Runde (steigt mit jedem Ausscheiden)") },
+                round={Math.max(1, lobby.series_index ?? 1)}
+                roundTotal={Math.max(1, lobby.series_total ?? 1)}
+                alive={aliveNow}
+                total={totalPlayers}
+                notes={[
                     ...(overtime
-                        ? [{ key: "ot", label: tr("Nachspielzeit"), value: `⏱️ ${tr("schnell!")}`, title: tr("Die Zündschnur ist eigentlich abgelaufen – jetzt schnell abgeben!"), tone: "overtime" as const }]
+                        ? [{ key: "ot", text: `⏱️ ${tr("Nachspielzeit")}`, title: tr("Die Zündschnur ist eigentlich abgelaufen – jetzt schnell abgeben!"), tone: "overtime" as const }]
                         : []),
-                    aliveNow === 2
-                        ? { key: "tempo", label: tr("Finale"), value: tr("⚔ Duell"), title: tr("Nur noch zwei: Duell"), tone: "duel" as const }
-                        : { key: "tempo", label: tr("Tempo"), value: `×${fmtNum(tempoFactor)}`, title: tr("Tempo der Zündschnur") },
-                    { key: "alive", label: tr("Im Spiel"), value: `${aliveNow}/${totalPlayers}`, title: tr("{n} von {total} Spielern noch im Spiel", { n: aliveNow, total: totalPlayers }) },
+                    ...(aliveNow === 2 ? [{ key: "duel", text: tr("⚔ Finale: Duell"), title: tr("Nur noch zwei: Duell"), tone: "duel" as const }] : []),
                 ]}
             />
             <HeartbeatEdge heat={explodeMsLeft != null && roundTotalMsRef.current > 0 ? heatRatio : 0} strong={isMeHolder} />
@@ -2345,27 +2337,8 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         </div>
                     )}
 
-                    {/* Used-Answers: bisher genannte Antworten dieser Runde --
-                        zeigt die letzten 10, für lebende wie eliminierte Spieler
-                        gleichermaßen sichtbar (dieser Block hängt nicht an
-                        iAmEliminated). */}
-                    {/* Erratene Songs dieser Runde: der richtige Song ("Titel – Künstler", Migration 092), neuester zuerst */}
-                    {lobby.used_answers && lobby.used_answers.length > 0 ? (
-                        <div className="usedAnswers" aria-label={tr("Erratene Songs")}>
-                            <span className="usedAnswersLabel">🎵 {tr("Erratene Songs")}</span>
-                            <div className="usedAnswerList">
-                                {lobby.used_answers
-                                    .slice(-14)
-                                    .reverse()
-                                    .map((a, i) => (
-                                        <span key={`${(lobby.used_answers ?? []).length - 1 - i}:${a}`} className={`usedAnswerChip ${i === 0 ? "newest" : ""}`}>
-                                            {a}
-                                        </span>
-                                    ))}
-                                {lobby.used_answers.length > 14 ? <span className="usedAnswerChip more">{tr("+{n} weitere", { n: lobby.used_answers.length - 14 })}</span> : null}
-                            </div>
-                        </div>
-                    ) : null}
+                    {/* Songs dieser Runde: links in Rot die NICHT erratenen, rechts die erratenen */}
+                    <SongRails missed={lobby.missed_songs ?? []} guessed={lobby.used_answers ?? []} />
                 </div>
             </div>
 
@@ -2684,56 +2657,6 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         }
         .voteCounter.accept{ color: #34c759; }
         .voteCounter.reject{ color: #ff453a; }
-
-        /* Erratene Songs: unten mittig am Bildschirmrand, neue Zeilen stapeln sich nach oben */
-        .usedAnswers{
-          margin-top: 10px;
-          display: grid;
-          justify-items: center;
-          gap: 8px;
-          width: min(620px, 100%);
-          pointer-events: none;
-        }
-        .usedAnswerList{ display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-        .usedAnswersLabel{
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: 0.5px;
-          text-transform: uppercase;
-          margin-right: 4px;
-          align-self: center;
-        }
-        .usedAnswerChip{
-          font-size: 15px;
-          font-weight: 800;
-          padding: 7px 15px;
-          border-radius: 999px;
-          background: rgba(255,255,255,0.08);
-          border: 1px solid rgba(255,255,255,0.14);
-          opacity: .8;
-          max-width: 100%;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-        .usedAnswerChip.newest{ opacity: 1; background: rgba(255,210,63,0.16); border-color: rgba(255,210,63,0.5); color: #fff3c4; }
-        .usedAnswerChip.more{
-          opacity: .7;
-        }
-        @media (min-width: 760px) and (min-height: 640px){
-          .usedAnswers{
-            position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 2; margin: 0;
-            width: min(980px, calc(100vw - 32px)); max-height: 30vh; overflow: hidden;
-            display: flex; flex-direction: column; align-items: center; gap: 6px;
-          }
-          .usedAnswerList{ flex-wrap: wrap; }
-          .usedAnswerChip{ background: rgba(0,0,0,.32); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-          .usedAnswerChip.newest{ background: rgba(60,45,0,.55); }
-        }
-        /* Handy: in der Spalte unter der Karte, nur die 4 neuesten */
-        @media (max-width: 759px), (max-height: 639px){
-          .usedAnswers{ margin-top: 4px; gap: 6px; }
-          .usedAnswerChip{ font-size: 13px; padding: 5px 12px; }
-          .usedAnswerList > :nth-child(n+5){ display: none; }
-        }
 
         .turnOverlay{
           position: fixed;

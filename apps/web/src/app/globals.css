@@ -2048,48 +2048,76 @@ textarea:focus-visible{
 }
 
 /* ===============================
-   LOBBY HOSTEN OHNE SCROLLEN (Wunsch Mehdi 2026-10-12)
-   Breit: Einstellungs-Kästen zu zweit nebeneinander, lange Erklärtexte weg, alles kompakter.
+   LOBBY HOSTEN (neu 2026-10-14, Wunsch Mehdi: jeder Platz genutzt, Kästen nicht zu unterschiedlich)
+   Breit (ab 900 px): Die Karte füllt den ganzen Bildschirm, nichts scrollt. Drei Reihen:
+     oben   = gleich hohe Kästen (Name, Spieler/Bots, Runden/Stärke, Tempo)
+     Mitte  = die drei Modi als große Kacheln (nehmen den ganzen Rest der Höhe)
+     unten  = gleich hohe Kästen (Playlists, Sichtbarkeit, Erstellen)
+   Schmal: untereinander, auf dem Handy jeder Kasten eine Zeile (siehe unten).
    =============================== */
 .hostMain{ padding-top: 14px; padding-bottom: 14px; }
 .hostMain .landingWrap{ width: min(1080px, 100%); }
 .hostMain .card{ padding-top: 20px; padding-bottom: 20px; }
 .hostMain .hostSub{ margin-top: 4px; font-size: 14px; }
-.hostMain .panel > .fieldHelp:not(.fieldHelpError),
+.hostMain .hostRow{ display: contents; }
+.hostMain .hcBox{ margin-top: 0 !important; }
+.hostMain .panel.hostPanel{ display: grid; gap: 12px; }
 .hostMain .pillCard > .fieldHelp:not(.fieldHelpError){ display: none; }
-.hostMain .panelHead{ margin-bottom: 6px; }
-.hostMain .divider{ margin: 8px 0; }
-.hostMain .pillCard{ padding: 10px 12px; margin-top: 0 !important; }
-.hostMain .pillCardTop{ margin-bottom: 6px; }
-.hostMain .actionsRow{ margin-top: 4px !important; }
-/* Lobby hosten, breit (neu 2026-10-13): ein ruhiges 3-Spalten-Raster statt Mosaik.
-   Name + Spielerzahl oben, Modus groß links (Kacheln), Tempo/Runden rechts daneben, Playlists breit, Knopf breit. */
+.hostMain .hcMode > .fieldHelp{ display: none; }
+.hostMain .modeTileRules{ display: none; }
+
 @media (min-width: 900px){
-    .hostMain .landingWrap{ width: min(1040px, 100%); margin: 0 auto; }
-    .hostMain .panel{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 12px; align-items: stretch; }
-    .hostMain .panel > *{ grid-column: 1 / -1; }
-    .hostMain .panel > .panelHead, .hostMain .panel > .divider{ display: none; }
-    .hostMain .panel > .hcName{ grid-column: span 2; }
-    .hostMain .panel > .hcMax, .hostMain .panel > .hcTempo, .hostMain .panel > .hcRounds,
-    .hostMain .panel > .hcCount, .hostMain .panel > .hcSkill{ grid-column: span 1; }
-    .hostMain .panel > .hcMode{ grid-column: span 2; grid-row: span 2; }
-    .hostMain .panel > .hcPl, .hostMain .panel > .hcAct, .hostMain .panel > .fieldHelpError{ grid-column: 1 / -1; }
-    .hostMain .panel > .pillCard, .hostMain .panel > .hcName{ display: flex; flex-direction: column; justify-content: space-between; padding: 12px 14px; border-radius: 18px; }
-    .hostMain .panel > .hcName{ background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); }
-    .hostMain .hcAct{ display: flex; gap: 12px; align-items: stretch !important; }
-    .hostMain .hcAct > .btn{ flex: 1 1 auto; justify-content: center; }
-    /* kompakter, damit alles ohne Scrollen passt */
-    .hostMain .card{ padding-top: 16px; padding-bottom: 16px; }
-    .hostMain .hostCats{ margin: 10px 0; }
-    .hostMain .hostCat{ padding-top: 10px; padding-bottom: 10px; }
-    .hostMain .hcTempo .pillSeg, .hostMain .hcRounds .pillSeg{ flex-wrap: nowrap !important; gap: 6px; }
-    .hostMain .hcTempo .pillSegBtn, .hostMain .hcRounds .pillSegBtn{ flex: 1 1 0; justify-content: center; padding-left: 6px; padding-right: 6px; min-width: 0; white-space: nowrap; }
-    .hostMain .hcPl .fieldHelp{ display: none; }
-    .modeTileDesc{ -webkit-line-clamp: 2; }
+    html:has(.hostMain), body:has(.hostMain){ overflow: hidden; }
+    .hostMain{ height: 100vh; height: 100dvh; min-height: 0; padding: 14px 20px; }
+    .hostMain .landingWrap{ width: min(1560px, 100%); height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr); gap: 0; }
+    .hostMain .landingWrap > .card{ display: flex; flex-direction: column; min-height: 0; padding: clamp(12px, 2.2vh, 24px) clamp(18px, 2vw, 34px); }
+    .hostMain .hostHeader .h1{ font-size: clamp(28px, 4.4vh, 46px); line-height: 1.05; }
+    .hostMain .hostCats{ margin: clamp(6px, 1.2vh, 12px) 0 0; }
+    .hostMain .hostCat{ padding-top: clamp(6px, 1.2vh, 12px); padding-bottom: clamp(6px, 1.2vh, 12px); }
+    .hostMain .hostGrid{ flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-top: clamp(8px, 1.4vh, 14px); }
+    .hostMain .panel.hostPanel{ flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: clamp(8px, 1.5vh, 16px); padding: clamp(10px, 1.6vh, 18px); }
+    .hostMain .hostRow{ display: flex; gap: clamp(8px, 1.2vw, 16px); align-items: stretch; flex: none; }
+    .hostMain .hostRow > *{ min-width: 0; }
+
+    /* alle Kästen: gleiches Aussehen, Titel oben, Bedienung unten */
+    .hostMain .hcBox, .hostMain .accountName{
+        display: flex; flex-direction: column; justify-content: space-between; gap: clamp(6px, 1.2vh, 12px);
+        padding: clamp(10px, 1.8vh, 18px) clamp(12px, 1.2vw, 18px); border-radius: 18px;
+        background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); box-shadow: 0 10px 28px rgba(0,0,0,.22);
+    }
+    .hostMain .hcBox .pillCardTop, .hostMain .hcBox .fieldTop{ margin: 0; }
+    .hostMain .hcBox .pillCardTitle, .hostMain .hcBox .fieldTitle{ font-size: clamp(14px, 2vh, 18px); }
+    .hostMain .hostTop > *{ flex: 1 1 0; }
+    .hostMain .hostTop > .accountName{ align-items: flex-start; }
+    .hostMain .hostTop .pillSeg{ flex-wrap: wrap; gap: 6px; }
+    .hostMain .hostTop .pillSegBtn{ flex: 1 1 auto; justify-content: center; min-width: 0; white-space: nowrap; padding: clamp(6px, 1.2vh, 11px) 5px; font-size: clamp(12px, 1.6vh, 15px); }
+    .hostMain .hostTop .segLabel{ display: inline-flex; align-items: center; gap: 4px; }
+    .hostMain .hostTop .pillStepBtn{ width: clamp(36px, 5.4vh, 52px); height: clamp(36px, 5.4vh, 52px); min-height: 0; }
+    .hostMain .hostTop .pillStepValue{ height: clamp(36px, 5.4vh, 52px); font-size: clamp(17px, 2.6vh, 24px); }
+    .hostMain .hostTop .pillInputWrap{ min-height: clamp(40px, 5.6vh, 54px); }
+
+    /* Mitte: Modi füllen den Rest */
+    .hostMain .hcMode{ flex: 1 1 0; min-height: 0; }
+    .hostMain .hcMode .modeTiles{ flex: 1 1 0; min-height: 0; }
+
+    /* unten */
+    .hostMain .hostBottom > .hcPl{ flex: 2.4 1 0; }
+    .hostMain .hostBottom > .hcPublic{ flex: 1 1 0; }
+    .hostMain .hostBottom > .hcCreate{ flex: 1.15 1 0; min-height: 0; border-radius: 18px; font-size: clamp(1.05rem, 2.5vh, 1.5rem); padding: 12px 18px; justify-content: center; }
+    .hostMain .hostBottom > .hcCreate:only-child{ flex: 1 1 auto; min-height: clamp(60px, 10vh, 104px); }
+    .hostMain .hcPl .plChips{ max-height: clamp(52px, 12vh, 120px); overflow: auto; }
+    .hostMain .hostErr{ margin: 0; flex: none; }
 }
-/* Schmaler und niedrig: Regel-Leiste unter der Karte weglassen (steht auch in der Lobby) */
-@media (max-height: 820px) and (min-width: 900px) and (max-width: 1199px){
-    .hostMain .rulesOutside{ display: none; }
+/* Niedrig: Untertitel weg, damit nichts gequetscht wird */
+@media (min-width: 900px) and (max-height: 860px){
+    .hostMain .hostSub{ display: none; }
+}
+/* Zu niedrig für die Vollbild-Aufteilung: ganz normal untereinander, Scrollen erlaubt */
+@media (min-width: 900px) and (max-height: 560px){
+    html:has(.hostMain), body:has(.hostMain){ overflow: auto; }
+    .hostMain{ height: auto; min-height: 100dvh; }
+    .hostMain .hostRow{ flex-wrap: wrap; }
+    .hostMain .hcMode{ flex: none; }
 }
 
 /* Lobby hosten auf dem Handy ohne Scrollen (Wunsch Mehdi 2026-10-12):
@@ -2126,8 +2154,7 @@ textarea:focus-visible{
     .hostMain .plPick > :not(.plChips){ display: none; }
     .hostMain .plPick{ margin-left: auto; min-width: 0; }
     .hostMain .plChips{ justify-content: flex-end; }
-    .hostMain .actionsRow{ margin-top: 2px !important; }
-    .hostMain .actionsRow .btnXL{ width: 100%; padding-top: 13px; padding-bottom: 13px; }
+    .hostMain .hcCreate{ width: 100%; padding-top: 13px; padding-bottom: 13px; }
     .hostMain .rulesOutside{ display: none; }
 }
 @media (max-width: 640px) and (min-height: 600px){
@@ -2180,6 +2207,7 @@ textarea:focus-visible{
 .modeTileNew{ font-size: 9.5px; font-weight: 950; padding: 2px 6px; border-radius: 999px; background: #ffd23f; color: #2a1200; letter-spacing: .5px; }
 .modeTileGoal{ font-size: 12px; font-weight: 900; color: #ffe08a; line-height: 1.25; margin-top: 2px; }
 .modeTileDesc{ font-size: 12px; font-weight: 600; opacity: .78; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.modeTileRules{ display: none; }
 @media (max-width: 640px){
   .modeTiles{ grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%; }
   .modeTile{ padding: 8px; justify-items: center; text-align: center; }
@@ -2191,14 +2219,34 @@ textarea:focus-visible{
   .hostMain .hcMode .moreModesBtn{ margin-top: 2px; align-self: center; }
 }
 
-/* Lobby hosten auf niedrigen Bildschirmen: Kurzbeschreibung der Modi weglassen (das Ziel steht weiter da), damit nichts scrollt */
-@media (min-width: 900px) and (max-height: 860px){
-  .modeTileDesc{ display: none; }
-  .modeTile{ padding: 10px; }
-  .hostMain .hcPl .plChips{ max-height: 60px; overflow: auto; }
+/* Breit: die Kacheln wachsen mit dem Bildschirm (Symbol, Schrift, Abstände nach Höhe) und füllen die ganze Mitte */
+@media (min-width: 900px){
+  .hostMain .modeTiles{ gap: clamp(8px, 1.2vw, 16px); align-items: stretch; }
+  .hostMain .modeTile{ align-content: center; gap: clamp(4px, 1vh, 12px); padding: clamp(10px, 2vh, 26px) clamp(12px, 1.4vw, 26px); border-radius: 20px; overflow: hidden; }
+  .hostMain .modeTileIcon{ font-size: clamp(30px, 6.5vh, 72px); }
+  .hostMain .modeTileName{ font-size: clamp(16px, 2.8vh, 28px); }
+  .hostMain .modeTileNew{ font-size: clamp(9.5px, 1.3vh, 12px); }
+  .hostMain .modeTileGoal{ font-size: clamp(12px, 2vh, 18px); }
+  .hostMain .modeTileDesc{ font-size: clamp(12px, 1.8vh, 16px); -webkit-line-clamp: 5; }
 }
-@media (min-width: 900px) and (max-height: 820px){
-  .hostMain .hostSub{ display: none; }
-  .hostMain .hostHeader .h1{ font-size: 36px; }
-  .hostMain .hostCat{ padding-top: 8px; padding-bottom: 8px; }
+/* niedrige Fenster: Kurzbeschreibung weglassen (das Ziel steht weiter da) */
+@media (min-width: 900px) and (max-height: 760px){
+  .hostMain .modeTileDesc{ display: none; }
+}
+/* Hohe Kacheln (ab ca. 500 px Höhe, z. B. großer Monitor): zusätzlich die Spielregeln – nur wenn wirklich Platz ist */
+@media (min-width: 900px){
+  .hostMain .modeTile{ container-type: size; }
+}
+@container (min-height: 500px){
+  .hostMain .modeTileRules{ display: grid; gap: 7px; margin-top: clamp(4px, 1.2vh, 14px); padding-top: clamp(6px, 1.4vh, 14px); border-top: 1px solid rgba(255,255,255,.16); width: 100%; }
+  .hostMain .modeTileRules span{ display: grid; grid-template-columns: 22px 1fr; gap: 6px; align-items: start; font-size: clamp(12px, 1.5vh, 14.5px); font-weight: 600; line-height: 1.3; opacity: .86; }
+  .hostMain .modeTileRules i{ font-style: normal; }
+  .hostMain .modeTileDesc{ -webkit-line-clamp: 3; }
+}
+
+/* Sichtbarkeits-Schalter in der unteren Reihe: gleiche Höhe wie die anderen Kästen, Text links, Schalter rechts */
+@media (min-width: 900px){
+  .hostMain .hostBottom > .publicToggle{ flex-direction: row; justify-content: space-between; align-items: center; max-width: none; gap: 12px; }
+  .hostMain .hostBottom > .publicToggle .publicToggleText b{ font-size: clamp(15px, 2.1vh, 19px); }
+  .hostMain .hostBottom > .publicToggle .publicToggleText span{ font-size: clamp(12px, 1.6vh, 14px); }
 }
