@@ -31,7 +31,7 @@ function fmt(ms: number | null): string {
  * Platz, Spieler, Punkte, schnellste und langsamste Abgabe. Die schnellste Abgabe ALLER Spieler ist grün
  * markiert (⚡), die langsamste rot (🐢) – so sieht man auf einen Blick, wer wie schnell weitergegeben hat.
  */
-export function PassStatsTable({ rows, title, pointsLabel }: { rows: PassStatsRow[]; title?: string; pointsLabel?: string }) {
+export function PassStatsTable({ rows, title, pointsLabel, hideTimes = false }: { rows: PassStatsRow[]; title?: string; pointsLabel?: string; hideTimes?: boolean }) {
     const { tr } = useI18n();
     const sorted = [...rows].sort((a, b) => a.place - b.place);
     const withFast = sorted.filter((r) => r.fastestMs != null);
@@ -46,7 +46,7 @@ export function PassStatsTable({ rows, title, pointsLabel }: { rows: PassStatsRo
     return (
         <section className="pstCard" aria-label={title ?? tr("Ergebnis")}>
             {title ? <h2 className="pstTitle">{title}</h2> : null}
-            <div className={`pstTable ${songs ? "songs" : ""}`} role="table">
+            <div className={`pstTable ${songs ? "songs" : ""} ${hideTimes ? "noTimes" : ""}`} role="table">
                 <div className="pstRow pstHead" role="row">
                     <span>#</span>
                     <span>{tr("Spieler")}</span>
@@ -61,8 +61,12 @@ export function PassStatsTable({ rows, title, pointsLabel }: { rows: PassStatsRo
                             </span>
                         </>
                     ) : null}
-                    <span className="r" title={tr("Schnellste Abgabe")}>⚡ {tr("Schnellste")}</span>
-                    <span className="r" title={tr("Langsamste Abgabe")}>🐢 {tr("Langsamste")}</span>
+                    {hideTimes ? null : (
+                        <>
+                            <span className="r" title={tr("Schnellste Abgabe")}>⚡ {tr("Schnellste")}</span>
+                            <span className="r" title={tr("Langsamste Abgabe")}>🐢 {tr("Langsamste")}</span>
+                        </>
+                    )}
                 </div>
                 {sorted.map((r) => {
                     const isBest = best != null && r.fastestMs === best;
@@ -84,15 +88,19 @@ export function PassStatsTable({ rows, title, pointsLabel }: { rows: PassStatsRo
                                     <span className="r pstSong">{r.titlesOnly ?? 0}</span>
                                 </>
                             ) : null}
-                            <span className={`r pstTime ${isBest ? "best" : ""}`}>{fmt(r.fastestMs)}</span>
-                            <span className={`r pstTime ${isWorst ? "worst" : ""}`}>{fmt(r.slowestMs)}</span>
+                            {hideTimes ? null : (
+                                <>
+                                    <span className={`r pstTime ${isBest ? "best" : ""}`}>{fmt(r.fastestMs)}</span>
+                                    <span className={`r pstTime ${isWorst ? "worst" : ""}`}>{fmt(r.slowestMs)}</span>
+                                </>
+                            )}
                         </div>
                     );
                 })}
             </div>
             <div className="pstLegend">
-                <span className="best">⚡ {tr("schnellste Abgabe von allen")}</span>
-                <span className="worst">🐢 {tr("langsamste Abgabe von allen")}</span>
+                {hideTimes ? null : <span className="best">⚡ {tr("schnellste Abgabe von allen")}</span>}
+                {hideTimes ? null : <span className="worst">🐢 {tr("langsamste Abgabe von allen")}</span>}
                 {songs ? <span>🎯 {tr("Titel + Künstler")} · 🎵 {tr("nur Titel")}</span> : null}
             </div>
             <style>{`
@@ -103,6 +111,7 @@ export function PassStatsTable({ rows, title, pointsLabel }: { rows: PassStatsRo
         .pstTable.songs .pstRow{ grid-template-columns: 30px minmax(0,1fr) 62px 36px 36px 86px 92px; }
         .pstSong{ font-weight: 800; font-variant-numeric: tabular-nums; opacity: .9; }
         .pstSong.top{ color: #ffe08a; opacity: 1; }
+        .pstTable.noTimes .pstRow{ grid-template-columns: 30px minmax(0,1fr) 80px; }
         .pstHead{ background: none; padding-top: 0; padding-bottom: 0; font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; opacity: .65; }
         .pstRow.first{ background: rgba(255,214,10,.14); border: 1px solid rgba(255,214,10,.38); }
         .pstRow.me{ box-shadow: inset 0 0 0 2px rgba(34,211,238,.6); }

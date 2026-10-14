@@ -29,25 +29,21 @@ const newDb = async () => {
 
 const SCENARIOS = [
     { name: "original", mode: "original", players: 4 },
-    { name: "teams (4)", mode: "teams", players: 4, teams: true },
-    { name: "teams (2)", mode: "teams", players: 2, teams: true },
-    { name: "teams (5, ungerade)", mode: "teams", players: 5, teams: true },
-    { name: "artist", mode: "artist", players: 4, quiz: true },
-    { name: "snippet", mode: "snippet", players: 4, quiz: true },
-    { name: "pick", mode: "pick", players: 4, quiz: true },
-    { name: "pick (2)", mode: "pick", players: 2, quiz: true },
-    { name: "buzzer", mode: "buzzer", players: 4, quiz: true },
-    { name: "gap", mode: "gap", players: 4, quiz: true },
+    { name: "original (2)", mode: "original", players: 2 },
+    { name: "buzzer", mode: "buzzer", players: 4, quiz: true, target: 10 },
+    { name: "buzzer (2)", mode: "buzzer", players: 2, quiz: true, target: 10 },
+    { name: "buzzer (12 Spieler)", mode: "buzzer", players: 12, quiz: true, target: 10 },
     { name: "year", mode: "year", players: 4, quiz: true },
-    { name: "duel", mode: "duel", players: 4, quiz: true },
-    { name: "duel (2)", mode: "duel", players: 2, quiz: true },
-    { name: "artist (12 Spieler)", mode: "artist", players: 12, quiz: true },
-    { name: "series artist x3", mode: "artist", players: 4, quiz: true, series: 3 },
+    { name: "year (2)", mode: "year", players: 2, quiz: true },
+    { name: "year (12 Spieler)", mode: "year", players: 12, quiz: true },
+    { name: "series buzzer x3", mode: "buzzer", players: 4, quiz: true, target: 10, series: 3 },
+    { name: "series year x3", mode: "year", players: 4, quiz: true, series: 3 },
     { name: "series original x3", mode: "original", players: 4, series: 3 },
-    { name: "leave mid quiz (artist)", mode: "artist", players: 4, quiz: true, leaveAfter: 2 },
-    { name: "leave picker (pick)", mode: "pick", players: 4, quiz: true, leaveAfter: 2, leavePicker: true },
-    { name: "leave in teams", mode: "teams", players: 4, teams: true, leaveAfter: 1 },
-    { name: "rematch artist", mode: "artist", players: 3, quiz: true, rematch: true },
+    { name: "leave mid buzzer", mode: "buzzer", players: 4, quiz: true, target: 10, leaveAfter: 2 },
+    { name: "leave mid year", mode: "year", players: 4, quiz: true, leaveAfter: 2 },
+    { name: "leave mid original", mode: "original", players: 4, leaveAfter: 1 },
+    { name: "rematch buzzer", mode: "buzzer", players: 3, quiz: true, target: 10, rematch: true },
+    { name: "rematch year", mode: "year", players: 3, quiz: true, rematch: true },
 ].filter((s) => s.name.includes(filter));
 
 async function run(sc) {
@@ -112,7 +108,7 @@ async function run(sc) {
         if (l) {
             if (l.phase !== "finished") note(`Endphase ist ${l.phase}, nicht finished`);
             if (sc.quiz && l.quiz_state !== null) note(`quiz_state nach Ende nicht leer: ${l.quiz_state}`);
-            if (sc.quiz && sc.mode !== "duel" && qSeen < Math.min(l.quiz_total, 4)) note(`nur ${qSeen} Fragen gesehen`);
+            if (sc.quiz && qSeen < (sc.mode === "year" ? l.quiz_total : 3)) note(`nur ${qSeen} Fragen gesehen`);
             const players = await q("select count(*)::int n from public.players where lobby_id = $1 and status = 'active'", [id]);
             const res = await q("select set_index, count(*)::int n, sum(song_points)::numeric pts, min(place)::int pmin, max(place)::int pmax, count(distinct place)::int pd from public.series_results where lobby_id = $1 group by set_index order by set_index", [id]);
             const expectSets = sc.series ?? 1;
@@ -124,13 +120,16 @@ async function run(sc) {
                 if (!(Number(r.pts) >= 0)) note(`Runde ${r.set_index}: negative Punkte`);
             }
             if (sc.series > 1 && !sawSummary) note("Zwischenstand (set_summary) nie gesehen");
+            if (sc.target && !sc.leaveAfter) {
+                const m = await q("select max(song_points)::numeric mx from public.series_results where lobby_id = $1 and set_index = (select max(set_index) from public.series_results where lobby_id = $1)", [id]);
+                const [ql] = await q("select quiz_total, quiz_index from public.lobbies where id = $1", [id]);
+                if (!(Number(m[0].mx) >= sc.target) && ql.quiz_index < ql.quiz_total) note(`Buzzer endete ohne Ziel (${m[0].mx} Punkte nach ${ql.quiz_index} Songs)`);
+                if (Number(m[0].mx) < sc.target) note(`Hinweis: Ziel ${sc.target} nicht erreicht (max ${m[0].mx}) – Songlimit`);
+            }
+            if (sc.mode === "year" && l.quiz_total !== 8) note(`Jahr raten hat quiz_total ${l.quiz_total} statt 8`);
             if (sc.quiz && !sc.leaveAfter && res.length) {
                 const tot = res.reduce((a, r) => a + Number(r.pts), 0);
-                if (tot <= 0 && sc.mode !== "duel") note("alle Quiz-Punkte 0 – niemand hat je gepunktet");
-            }
-            if (sc.teams && !sc.leaveAfter) {
-                const t = await q("select count(*) filter (where team = 0)::int a, count(*) filter (where team = 1)::int b from public.players where lobby_id = $1 and status = 'active'", [id]);
-                if (Math.abs(t[0].a - t[0].b) > 1) note(`Teams ungleich verteilt ${t[0].a}:${t[0].b}`);
+                if (tot <= 0) note("alle Quiz-Punkte 0 – niemand hat je gepunktet");
             }
             void players;
         }

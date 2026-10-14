@@ -2,40 +2,38 @@
 
 import React, { useId, useState } from "react";
 import { Collapse } from "@/components/ui/Collapse";
-import { tk, useI18n } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { gameModeInfo } from "@/lib/gameModes";
 
 type Props = {
     /** Beim Hosten eingeklappt lassen, in der Wartelobby aufgeklappt. */
     defaultOpen?: boolean;
     /** "outside": schlanker Streifen außerhalb der Karte (z. B. unter dem Host-Formular). */
     variant?: "inline" | "outside";
+    /** Spielmodus – bestimmt, welche Regeln und welches Ziel gezeigt werden (Standard: Original) */
+    mode?: string | null;
 };
 
-const RULES: { icon: string; text: string }[] = [
-    { icon: "🎧", text: tk("Ein Song läuft: Titel (1 Punkt), Künstler (½) oder beides zusammen (1,5 Punkte) tippen und die Kumpir weitergeben. Feature-Partner zählen auch.") },
-    { icon: "🔥", text: tk("Wer sie beim Knall hält, fliegt raus – die Zündschnur wird jede Runde kürzer.") },
-    { icon: "⏱️", text: tk("Richtige Antworten, schwere Songs und Treffer in Folge geben Bonuszeit.") },
-    { icon: "🛡️", text: tk("Schutzzeit: Wer die Kumpir bekommt, hat immer mindestens 6–9 Sekunden – auch wenn sie in letzter Sekunde kam.") },
-    { icon: "⚡", text: tk("Schnell abgeben lohnt sich: unter 5 Sekunden gibt es +5 Punkte.") },
-    { icon: "🏆", text: tk("Wer zuletzt übrig bleibt, gewinnt. Bei mehreren Runden zählt die Summe.") },
-];
 
 /** "So wird gespielt": rollt beim Antippen auf (Collapse) statt sofort aufzuspringen. */
-export function RulesCard({ defaultOpen = true, variant = "inline" }: Props) {
+export function RulesCard({ defaultOpen = true, variant = "inline", mode = "original" }: Props) {
     const { tr } = useI18n();
+    const info = gameModeInfo(mode);
     const [open, setOpen] = useState(defaultOpen);
     const id = useId();
     return (
         <section className={`rulesCard ${variant === "outside" ? "rulesOutside" : ""} ${open ? "isOpen" : ""}`}>
             <button type="button" className="rulesHead" aria-expanded={open} aria-controls={id} onClick={() => setOpen((v) => !v)}>
-                <span>📖 {tr("So wird gespielt")}</span>
+                <span>
+                    📖 {tr("So wird gespielt")} · {info.icon} {tr(info.label)}
+                </span>
                 <span className="rulesChevron" aria-hidden>
                     ▾
                 </span>
             </button>
             <Collapse open={open} id={id}>
                 <ul className="rulesList">
-                    {RULES.map((r, i) => (
+                    {info.rules.map((r, i) => (
                         <li key={r.text} className="rollItem" style={{ ["--i" as string]: i }}>
                             <span className="rIcon" aria-hidden>
                                 {r.icon}

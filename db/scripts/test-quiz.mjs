@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Quiz-Modi mit 4 Bots durchspielen (Server-Takt + Bot-Takt laufen per Cron).
-// Aufruf: node db/scripts/test-quiz.mjs <mode>   (original|artist|snippet|pick|buzzer|year|gap|duel), KEEP=1 = Lobby nicht löschen
+// Aufruf: node db/scripts/test-quiz.mjs <mode>   (original|buzzer|year), KEEP=1 = Lobby nicht löschen
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,7 +13,7 @@ const env = Object.fromEntries(
         .filter((l) => l.includes("=") && !l.trim().startsWith("#"))
         .map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1)]),
 );
-const mode = process.argv[2] || "artist";
+const mode = process.argv[2] || "buzzer";
 const db = new pg.Client({
     host: env.SUPABASE_DB_HOST,
     port: Number(env.SUPABASE_DB_PORT || 5432),

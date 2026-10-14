@@ -28,7 +28,7 @@ import { AudioControl } from "@/components/AudioControl";
 import { QuizStage } from "@/components/game/QuizStage";
 import { HeartbeatEdge, StageBar } from "@/components/game/StageBar";
 import { TableStylePicker } from "@/components/game/TableStylePicker";
-import { isQuizMode } from "@/lib/gameModes";
+import { gameModeInfo, isQuizMode } from "@/lib/gameModes";
 import { playFx } from "@/lib/gameFx";
 import type { SeriesRow } from "@/components/game/SeriesTable";
 import { fmtNum, trNow, useI18n } from "@/lib/i18n";
@@ -62,7 +62,6 @@ const PLAYER_COLUMNS = [
     "survival_streak",
     "eliminated_at_round",
     "song_points",
-    "team",
     "skips_left",
     "combo",
     "revenge_used",
@@ -139,6 +138,7 @@ type LobbyState = {
     quiz_state: string | null;
     quiz_index: number;
     quiz_total: number;
+    quiz_target: number | null;
     quiz_seq: number;
     quiz_rev: number;
     quiz_started_at: string | null;
@@ -169,7 +169,6 @@ type Player = {
     eliminated_at_round?: number | null;
     song_points?: number;
     avatar_config?: Record<string, string> | null;
-    team?: number | null;
     skips_left?: number;
     combo?: number;
     revenge_used?: boolean;
@@ -751,6 +750,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     quiz_state: (raw.quiz_state as string | null) ?? null,
                     quiz_index: Number(raw.quiz_index ?? 0) || 0,
                     quiz_total: Number(raw.quiz_total ?? 0) || 0,
+                    quiz_target: raw.quiz_target == null ? null : Number(raw.quiz_target),
                     quiz_seq: Number(raw.quiz_seq ?? 0) || 0,
                     quiz_rev: Number(raw.quiz_rev ?? 0) || 0,
                     quiz_started_at: (raw.quiz_started_at as string | null) ?? null,
@@ -1831,14 +1831,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
     // =========================================================
     if (lobby.phase === "finished") {
         const isSeries = (lobby.series_total ?? 1) > 1;
-        // Teams (Migration 113): das Siegerteam gewinnt (bei mehreren Runden zählt die Gesamtwertung)
-        const winTeam = lobby.game_mode === "teams" ? (players.find((p) => p.is_alive && p.team != null)?.team ?? null) : null;
-        const winnerName =
-            winTeam != null && !isSeries
-                ? winTeam === 0
-                    ? tr("🔴 Team Rot")
-                    : tr("🔵 Team Blau")
-                : ((isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? tr("Unbekannt"));
+        const winnerName = (isSeries ? seriesLeader?.name : null) ?? winnerPlayer?.name ?? tr("Unbekannt");
 
         // Ergebnis-Zeilen mit schnellster/langsamster Abgabe (bei mehreren Runden: beste Werte aller Runden, Migration 101)
         const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
@@ -1851,7 +1844,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
               })
             : ranking.map((r) => ({ id: r.player_id, name: r.name, place: r.place, points: r.score, fastestMs: num(r.fastest), slowestMs: num(r.slowest), isMe: r.player_id === mePlayerId, out: !r.is_alive, avatarConfig: r.avatar_config ?? null }));
         // Song-Treffer (🎯 Titel + Künstler, 🎵 nur Titel) an jede Zeile hängen
-        const finRowsSongs = finRows.map((r) => ({ ...r, both: answerStats[r.id]?.both ?? 0, titlesOnly: answerStats[r.id]?.titles ?? 0 }));
+        const finRowsSongs = quizMode ? finRows : finRows.map((r) => ({ ...r, both: answerStats[r.id]?.both ?? 0, titlesOnly: answerStats[r.id]?.titles ?? 0 }));
         const nameOfId = (id: string) => finRows.find((r) => r.id === id)?.name ?? "…";
         const statList = Object.values(answerStats).filter((s) => finRows.some((r) => r.id === s.playerId));
         const fastRow = [...finRows].filter((r) => r.fastestMs != null).sort((a, b) => a.fastestMs! - b.fastestMs!)[0] ?? null;
@@ -1929,6 +1922,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     loggedIn={!!user}
                     ranked={players.filter((p) => !p.is_bot).length >= 2}
                     spectator={isSpectator}
+                    quizMode={quizMode}
                     busy={endActionBusy}
                     onRematch={() => void doRematch()}
                     onLobby={() => void doLobby()}
@@ -2177,6 +2171,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 holderIsMe={isMeHolder}
                 heat={heatRatio}
                 fuseActive={!!lobby.explode_at && explodeMsLeft != null && roundTotalMsRef.current > 0}
+                goal={tr(gameModeInfo("original").goal)}
                 stats={[
                     { key: "pl", label: tr("Playlist"), value: `${playlistLook(selectedTopic).icon} ${selectedTopic}`, title: tr("Playlist"), tone: "opt" as const },
                     ...((lobby.series_total ?? 1) > 1
@@ -2189,16 +2184,6 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     aliveNow === 2
                         ? { key: "tempo", label: tr("Finale"), value: tr("⚔ Duell"), title: tr("Nur noch zwei: Duell"), tone: "duel" as const }
                         : { key: "tempo", label: tr("Tempo"), value: `×${fmtNum(tempoFactor)}`, title: tr("Tempo der Zündschnur") },
-                    ...(lobby.game_mode === "teams"
-                        ? [
-                              {
-                                  key: "teams",
-                                  label: tr("Teams"),
-                                  value: `🔴 ${players.filter((p) => p.is_alive && p.team === 0).length} : ${players.filter((p) => p.is_alive && p.team === 1).length} 🔵`,
-                                  title: tr("Spieler im Spiel: Team Rot gegen Team Blau"),
-                              },
-                          ]
-                        : []),
                     { key: "alive", label: tr("Im Spiel"), value: `${aliveNow}/${totalPlayers}`, title: tr("{n} von {total} Spielern noch im Spiel", { n: aliveNow, total: totalPlayers }) },
                 ]}
             />

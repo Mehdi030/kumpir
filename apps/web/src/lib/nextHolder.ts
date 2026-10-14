@@ -1,20 +1,11 @@
 /**
- * Wer bekommt die Kumpir als Nächstes? Spiegelt die Server-Regel (_next_alive, Migration 113):
- * Sitzreihenfolge in Weitergaberichtung; im Modus Teams der nächste Lebende aus dem ANDEREN Team.
- * `alive` muss in Sitzreihenfolge (seat_index aufsteigend) stehen und nur Lebende enthalten.
+ * Wer bekommt die Kumpir als Nächstes? Spiegelt die Server-Regel (_next_alive): nächster Lebender in Sitzreihenfolge
+ * in Weitergaberichtung (1 = vorwärts, -1 = rückwärts nach einem Rache-Pass). `alive` muss in Sitzreihenfolge stehen.
  */
-export function nextHolderId<T extends { player_id: string; team?: number | null }>(alive: T[], holderId: string, direction: number): string | null {
+export function nextHolderId<T extends { player_id: string }>(alive: T[], holderId: string, direction: number): string | null {
     const n = alive.length;
     if (n < 2) return null;
     const hi = alive.findIndex((p) => p.player_id === holderId);
     if (hi < 0) return null;
-    const dir = direction < 0 ? -1 : 1;
-    const holder = alive[hi]!;
-    if (holder.team != null) {
-        for (let k = 1; k < n; k++) {
-            const cand = alive[(((hi + dir * k) % n) + n) % n]!;
-            if (cand.team !== holder.team) return cand.player_id;
-        }
-    }
-    return alive[(((hi + dir) % n) + n) % n]?.player_id ?? null;
+    return alive[(((hi + (direction < 0 ? -1 : 1)) % n) + n) % n]?.player_id ?? null;
 }

@@ -18,7 +18,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { errorText } from "@/lib/errorText";
 import { trNow, useI18n } from "@/lib/i18n";
 import { getSessionToken } from "@/lib/playerSession";
-import { GAME_MODES } from "@/lib/gameModes";
+import { GAME_MODES, gameModeInfo } from "@/lib/gameModes";
 import { SwipeStat } from "@/components/lobby/SwipeStat";
 import { Collapse } from "@/components/ui/Collapse";
 import { PlaylistPicker, usePlaylists } from "@/components/PlaylistPicker";
@@ -469,6 +469,7 @@ export default function LobbyPage() {
                                 className={`vis-${visibility}`}
                             />
                         </div>
+                        <div className="lobbyGoal">🎯 {tr("Ziel:")} <b>{tr(gameModeInfo(mode).goal)}</b></div>
                         {canEdit ? <div className="lobbyStatsHint">{tr("👆 Wische über eine Kachel oder tippe sie an, um sie zu ändern.")}</div> : null}
 
                         <button
@@ -531,6 +532,8 @@ export default function LobbyPage() {
                 .lobbyStats{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
                 @media (max-width: 620px){ .lobbyStats{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
                 @media (max-width: 520px){ .lobbyStat{ padding: 10px 4px; } .lobbyStatIcon{ font-size: 22px; } .lobbyStatLabel{ font-size: 9.5px; letter-spacing: .4px; } }
+                .lobbyGoal{ text-align: center; padding: 7px 14px; border-radius: 14px; background: rgba(255,210,63,.12); border: 1px solid rgba(255,210,63,.4); font-size: 14px; font-weight: 750; }
+                .lobbyGoal b{ color: #ffe08a; font-weight: 900; }
                 .lobbyStatsHint{ margin-top: -6px; text-align: center; font-size: 12.5px; font-weight: 700; opacity: .7; }
                 .swStat.vis-locked{ background: rgba(239,68,68,.16); border-color: rgba(252,165,165,.5); }
                 .lobbyPl{ border-radius: 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); overflow: hidden; }
@@ -685,7 +688,7 @@ export default function LobbyPage() {
                         </div>
                     </div>
 
-                    <RulesCard defaultOpen />
+                    <RulesCard defaultOpen mode={mode} />
                 </section>
                 {/* Freunde rechts daneben – online Freunde direkt in diese Lobby einladen */}
                 <HomeFriends inviteCode={code} />

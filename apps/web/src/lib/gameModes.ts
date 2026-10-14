@@ -1,38 +1,79 @@
 import { tk } from "@/lib/i18nMark";
 
 /**
- * Alle Spielmodi (Migration 108). "potato" = heiße Kartoffel (Weitergeben), "quiz" = alle raten gleichzeitig.
- * Labels/Beschreibungen sind deutsche Schlüssel -> im UI mit tr() übersetzen.
+ * Die drei Spielmodi (Wunsch Mehdi 2026-10-14: wenige Modi, jeder mit eigener Oberfläche, eigener Aufstellung
+ * der Spieler und klar festgelegtem Ziel). Labels/Texte sind deutsche Schlüssel -> im UI mit tr() übersetzen.
+ *
+ *  original – Heiße Kartoffel: alle sitzen am runden Tisch, die Kumpir wandert, wer sie beim Knall hält, fliegt.
+ *  buzzer   – Buzzer-Arena: Game-Show-Pulte, die mit den Punkten wachsen; wer zuerst das Ziel erreicht, gewinnt.
+ *  year     – Zeitreise: alle ziehen ihre Figur auf einer Zeitleiste zum Erscheinungsjahr des Songs.
  */
-export type GameModeKey = "original" | "teams" | "artist" | "snippet" | "pick" | "buzzer" | "year" | "gap" | "duel";
+export type GameModeKey = "original" | "buzzer" | "year";
 
 export type GameModeInfo = {
     key: GameModeKey;
     icon: string;
     label: string;
+    /** Kurzbeschreibung (Kacheln beim Hosten, Tooltip in der Lobby) */
     desc: string;
+    /** Das Ziel in einem Satz – steht auch im Spiel oben */
+    goal: string;
+    /** "potato" = Kumpir wird weitergegeben, "quiz" = alle raten gleichzeitig */
     kind: "potato" | "quiz";
-    /** noch nicht spielbar -> "BALD" */
+    /** Regeln für „So wird gespielt“ */
+    rules: { icon: string; text: string }[];
     soon?: boolean;
     isNew?: boolean;
 };
 
-/** Quiz-Modi freigeschaltet nach Browser-Test mit Bots (2026-10-13). Auf false = alle Quiz-Modi wieder „BALD“. */
-const QUIZ_LIVE = true;
-
-const ALL_MODES: GameModeInfo[] = [
-    { key: "original", icon: "🥔", label: tk("Original"), desc: tk("Standard-Regeln. Beste Basis für alle."), kind: "potato" },
-    { key: "artist", icon: "🎤", label: tk("Wer singt das?"), desc: tk("Ein Song läuft, vier Künstler stehen zur Wahl. Wer zuerst richtig tippt, bekommt am meisten Punkte."), kind: "quiz", isNew: true },
-    { key: "snippet", icon: "⚡", label: tk("Blitz-Schnipsel"), desc: tk("Erst 1 Sekunde, dann 2, 4 und 8. Je früher du den Song erkennst, desto mehr Punkte."), kind: "quiz", isNew: true },
-    { key: "pick", icon: "🎯", label: tk("Songwahl"), desc: tk("Reihum sucht einer einen Song aus, alle anderen raten. Der Wähler punktet, wenn manche ihn erkennen, aber nicht alle."), kind: "quiz", isNew: true },
-    { key: "buzzer", icon: "🔔", label: tk("Buzzer"), desc: tk("Wer zuerst buzzert, darf antworten. Falsch? Dann bist du für diesen Song raus."), kind: "quiz", isNew: true },
-    { key: "gap", icon: "🧩", label: tk("Lückentitel"), desc: tk("Der Titel steht da, aber ein Wort fehlt. Tippe das fehlende Wort."), kind: "quiz", isNew: true },
-    { key: "duel", icon: "⚔️", label: tk("Duell"), desc: tk("Zwei treten gegeneinander an, wer zuerst zwei Songs errät, gewinnt. Alle anderen wetten auf den Sieger."), kind: "quiz", isNew: true },
-    { key: "year", icon: "📅", label: tk("Jahr raten"), desc: tk("In welchem Jahr kam der Song raus? Je näher du dran bist, desto mehr Punkte."), kind: "quiz", isNew: true },
-    { key: "teams", icon: "🤝", label: tk("Teams"), desc: tk("Team Rot gegen Team Blau: Die Kartoffel geht immer ins andere Team. Ist ein Team komplett raus, hat das andere gewonnen."), kind: "potato", isNew: true },
+export const GAME_MODES: GameModeInfo[] = [
+    {
+        key: "original",
+        icon: "🥔",
+        label: tk("Original"),
+        desc: tk("Heiße Kartoffel: Song erkennen, Kumpir weitergeben, nicht erwischen lassen. Alle sitzen am runden Tisch."),
+        goal: tk("Als Letzter noch im Spiel sein"),
+        kind: "potato",
+        rules: [
+            { icon: "🎧", text: tk("Ein Song läuft: Titel (1 Punkt), Künstler (½) oder beides zusammen (1,5 Punkte) tippen und die Kumpir weitergeben. Feature-Partner zählen auch.") },
+            { icon: "🔥", text: tk("Wer sie beim Knall hält, fliegt raus – die Zündschnur wird jede Runde kürzer.") },
+            { icon: "⏱️", text: tk("Richtige Antworten, schwere Songs und Treffer in Folge geben Bonuszeit.") },
+            { icon: "🛡️", text: tk("Schutzzeit: Wer die Kumpir bekommt, hat immer mindestens 6–9 Sekunden – auch wenn sie in letzter Sekunde kam.") },
+            { icon: "⚡", text: tk("Schnell abgeben lohnt sich: unter 5 Sekunden gibt es +5 Punkte.") },
+            { icon: "🏆", text: tk("Wer zuletzt übrig bleibt, gewinnt. Bei mehreren Runden zählt die Summe.") },
+        ],
+    },
+    {
+        key: "buzzer",
+        icon: "🔔",
+        label: tk("Buzzer"),
+        desc: tk("Game-Show: Ein Song läuft, wer ihn erkennt, buzzert zuerst. Dein Pult wächst mit jedem Punkt."),
+        goal: tk("Wer zuerst 10 Punkte hat, gewinnt"),
+        kind: "quiz",
+        isNew: true,
+        rules: [
+            { icon: "🔔", text: tk("Ein Song läuft. Wer ihn erkennt, drückt den Buzzer (Leertaste) – wer zuerst drückt, darf antworten.") },
+            { icon: "✍️", text: tk("Titel richtig: 2 Punkte. Nur der Künstler richtig: 1 Punkt. Du hast 7 Sekunden zum Tippen.") },
+            { icon: "🔒", text: tk("Falsch oder zu langsam? Dann bist du für diesen Song raus, die anderen dürfen weiter buzzern.") },
+            { icon: "🏁", text: tk("Wer zuerst 10 Punkte hat, gewinnt sofort. Nach 20 Songs gewinnt, wer vorn liegt.") },
+        ],
+    },
+    {
+        key: "year",
+        icon: "📅",
+        label: tk("Jahr raten"),
+        desc: tk("Zeitreise: Zieh deine Figur auf der Zeitleiste zum Erscheinungsjahr. Je näher, desto mehr Punkte."),
+        goal: tk("Nach 8 Songs gewinnt, wer die meisten Punkte hat"),
+        kind: "quiz",
+        isNew: true,
+        rules: [
+            { icon: "🎧", text: tk("Ein Song läuft. Zieh deine Figur auf der Zeitleiste auf das Jahr, in dem er erschienen ist, und gib deinen Tipp ab.") },
+            { icon: "🎯", text: tk("Genau richtig: 5 Punkte. Ein Jahr daneben: 3. Zwei Jahre: 2. Bis fünf Jahre: 1.") },
+            { icon: "👀", text: tk("Die Tipps der anderen siehst du erst bei der Auflösung – dann springen alle Figuren auf ihr Jahr.") },
+            { icon: "🏆", text: tk("Nach 8 Songs gewinnt, wer die meisten Punkte hat. Bei Gleichstand zählen mehr Volltreffer.") },
+        ],
+    },
 ];
-
-export const GAME_MODES: GameModeInfo[] = ALL_MODES.map((m) => (m.kind === "quiz" && !QUIZ_LIVE ? { ...m, soon: true, isNew: false } : m));
 
 export const GAME_MODE_BY_KEY: Record<string, GameModeInfo> = Object.fromEntries(GAME_MODES.map((m) => [m.key, m]));
 

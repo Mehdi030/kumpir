@@ -15,7 +15,6 @@ import { HomeButton } from "@/components/BackButton";
 import { AccountNameNote } from "@/components/AccountNameNote";
 import { tk, trNow, useI18n } from "@/lib/i18n";
 import { GAME_MODES, GAME_MODE_BY_KEY, type GameModeKey } from "@/lib/gameModes";
-import { Collapse } from "@/components/ui/Collapse";
 
 type ModeKey = GameModeKey;
 type RoundSpeed = "fast" | "normal" | "calm";
@@ -135,23 +134,6 @@ export default function HostPage() {
     }, [profile?.preferences?.host]);
 
     const activeMode = mode ? GAME_MODE_BY_KEY[mode] : null;
-    const [modePlays, setModePlays] = useState<Record<string, number>>({});
-    const [modesOpen, setModesOpen] = useState(false);
-    useEffect(() => {
-        void getSupabaseClient()
-            .rpc("get_mode_popularity")
-            .then(({ data }) => {
-                if (data && typeof data === "object") setModePlays(data as Record<string, number>);
-            });
-    }, []);
-    const topModes = useMemo(() => {
-        const order = new Map(GAME_MODES.map((m, i) => [m.key, i]));
-        return GAME_MODES.filter((m) => !m.soon)
-            .sort((a, b) => Number(modePlays[b.key] ?? 0) - Number(modePlays[a.key] ?? 0) || order.get(a.key)! - order.get(b.key)!)
-            .slice(0, 3);
-    }, [modePlays]);
-    const moreModes = GAME_MODES.filter((m) => !topModes.includes(m));
-    const moreOpen = modesOpen;
     const activeSpeed = roundSpeed ? ROUND_SPEEDS[roundSpeed] : null;
 
     const [creating, setCreating] = useState(false);
@@ -337,29 +319,7 @@ export default function HostPage() {
         }
     };
 
-    // Modus-Auswahl (auch gegen Bots: Quiz-Modi gehen dort genauso).
-    // Nur die 3 meistgespielten spielbaren Modi offen (Migration 111), der Rest eingeklappt.
-    const renderMode = (m: (typeof GAME_MODES)[number]) => {
-        const key = m.key;
-        const active = mode === key;
-        return (
-            <button
-                key={key}
-                type="button"
-                className={`pillSegBtn segChoice ${active ? "segChoiceActive" : ""}`}
-                data-variant={m.kind === "quiz" ? "quiz" : "original"}
-                onClick={() => setMode(key)}
-                aria-pressed={active}
-                disabled={!!m.soon}
-                title={m.soon ? tr("Kommt bald") : undefined}
-            >
-                <span className="segIcon" aria-hidden>{m.icon}</span>
-                <span className="segLabel">{tr(m.label)}</span>
-                {m.isNew ? <span className="segBadge">{tr("NEU")}</span> : null}
-                {m.soon ? <span className="segSoon">{tr("BALD")}</span> : null}
-            </button>
-        );
-    };
+    // Modus-Auswahl: drei Modi als große Kacheln (Original, Buzzer, Jahr raten) – jede mit Ziel und Kurzbeschreibung.
     const modeCard = (
             <div className="pillCard hcMode">
                 <div className="pillCardTop">
@@ -368,7 +328,7 @@ export default function HostPage() {
                 </div>
 
                 <div className="modeTiles">
-                    {topModes.map((m) => (
+                    {GAME_MODES.map((m) => (
                         <button
                             key={m.key}
                             type="button"
@@ -383,22 +343,11 @@ export default function HostPage() {
                                 {tr(m.label)}
                                 {m.isNew ? <span className="modeTileNew">{tr("NEU")}</span> : null}
                             </span>
+                            <span className="modeTileGoal">🎯 {tr(m.goal)}</span>
                             <span className="modeTileDesc">{tr(m.desc)}</span>
                         </button>
                     ))}
                 </div>
-                {moreModes.length ? (
-                    <>
-                        <button type="button" className="moreModesBtn" onClick={() => setModesOpen(!moreOpen)} aria-expanded={moreOpen}>
-                            {moreOpen ? tr("Weniger Modi ▴") : tr("Weitere Modi ({n}) ▾", { n: moreModes.length })}
-                        </button>
-                        <Collapse open={moreOpen}>
-                            <div className="pillSeg" style={{ flexWrap: "wrap", paddingTop: 8 }}>
-                                {moreModes.map(renderMode)}
-                            </div>
-                        </Collapse>
-                    </>
-                ) : null}
 
                 <div className="fieldHelp" style={{ marginTop: 10, opacity: 0.9 }}>
                     {activeMode ? (
@@ -509,6 +458,7 @@ export default function HostPage() {
 
                             {modeCard}
 
+                            {mode === "original" ? (
                             <div className="pillCard hcTempo">
                                 <div className="pillCardTop">
                                     <div className="pillCardTitle">{tr("Tempo")}</div>
@@ -535,6 +485,7 @@ export default function HostPage() {
                                     })}
                                 </div>
                             </div>
+                            ) : null}
 
                             <div className="pillCard hcRounds">
                                 <div className="pillCardTop">
@@ -654,6 +605,7 @@ export default function HostPage() {
                                     </div>
                                 </div>
 
+                                {mode === "original" ? (
                                 <div className="pillCard hcTempo">
                                     <div className="pillCardTop">
                                         <div className="pillCardTitle">{tr("Tempo")}</div>
@@ -674,6 +626,7 @@ export default function HostPage() {
                                         ))}
                                     </div>
                                 </div>
+                                ) : null}
 
                                 {botError ? (
                                     <div className="fieldHelp fieldHelpError" style={{ marginTop: 12 }}>

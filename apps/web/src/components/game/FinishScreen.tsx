@@ -32,6 +32,8 @@ type Props = {
     ranked: boolean;
     /** Nur zugeschaut (nicht mitgespielt): keine Rematch-/Lobby-Knöpfe. */
     spectator: boolean;
+    /** Quiz-Modi (Buzzer, Jahr raten): keine Abgabezeiten und keine Titel-Spalten im Endstand */
+    quizMode?: boolean;
     busy: "reset" | "rematch" | null;
     onRematch: () => void;
     onLobby: () => void;
@@ -43,7 +45,7 @@ type Props = {
  * links Sieger + Highlights + Knöpfe, rechts EINE Wertung mit Punkten und schnellster/langsamster Abgabe
  * (bei mehreren Runden: Gesamtpunkte und die besten Werte über alle Runden). Auf dem Handy untereinander.
  */
-export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shareRows, highlights, loggedIn, ranked, spectator, busy, onRematch, onLobby, toasts }: Props) {
+export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shareRows, highlights, loggedIn, ranked, spectator, quizMode = false, busy, onRematch, onLobby, toasts }: Props) {
     const { t, tr } = useI18n();
     const [shareMsg, setShareMsg] = useState("");
     const [shareBusy, setShareBusy] = useState(false);
@@ -198,7 +200,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
             </div>
 
             <div className="finRight">
-                <PassStatsTable rows={rows} title={isSeries ? `${t("fin.final")} · ${tr("alle {n} Runden", { n: totalRounds })}` : t("fin.final")} pointsLabel={isSeries ? tr("Gesamt") : tr("Punkte")} />
+                <PassStatsTable hideTimes={quizMode} rows={rows} title={isSeries ? `${t("fin.final")} · ${tr("alle {n} Runden", { n: totalRounds })}` : t("fin.final")} pointsLabel={isSeries ? tr("Gesamt") : tr("Punkte")} />
             </div>
 
             <ToastStack toasts={toasts} inline />

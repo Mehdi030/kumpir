@@ -18,6 +18,7 @@ export function StageBar({
     holderIsMe,
     heat,
     fuseActive,
+    goal,
     stats,
 }: {
     holderId: string | null;
@@ -27,6 +28,8 @@ export function StageBar({
     /** 0 = Zündschnur voll, 1 = gleich knallt es */
     heat: number;
     fuseActive: boolean;
+    /** Ziel des Modus in einem Satz (steht unter der Zündschnur) */
+    goal?: string;
     stats: StageStat[];
 }) {
     const { tr } = useI18n();
@@ -61,8 +64,11 @@ export function StageBar({
                         </span>
                     ) : null}
                 </div>
-                <span className="sbFuseLabel">
-                    {!fuseActive ? tr("Zündschnur") : stage === "crit" ? tr("Gleich knallt's!") : stage === "hot" ? tr("Es wird heiß!") : tr("Zündschnur brennt")}
+                <span className="sbFuseFoot">
+                    <span className="sbFuseLabel">
+                        {!fuseActive ? tr("Zündschnur") : stage === "crit" ? tr("Gleich knallt's!") : stage === "hot" ? tr("Es wird heiß!") : tr("Zündschnur brennt")}
+                    </span>
+                    {goal ? <span className="sbGoal">🎯 {goal}</span> : null}
                 </span>
             </div>
 
@@ -115,6 +121,8 @@ export function StageBar({
         .sbSpark i:nth-child(4){ --x: 12px; --y: 10px; animation-delay: .45s; }
         @keyframes sbFly{ from{ opacity: 1; transform: translate(0,0) scale(1); } to{ opacity: 0; transform: translate(var(--x), var(--y)) scale(.3); } }
         @keyframes sbGlow{ from{ transform: scale(.85); } to{ transform: scale(1.2); } }
+        .sbFuseFoot{ display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .sbGoal{ font-size: 11.5px; font-weight: 850; color: #ffe08a; opacity: .95; }
         .sbFuseLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; opacity: .7; }
         .stageBar.hot .sbFuseLabel{ color: #ffb37a; opacity: 1; }
         .stageBar.crit .sbFuseLabel{ color: #ff8a7a; opacity: 1; }
