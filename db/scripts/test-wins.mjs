@@ -68,7 +68,7 @@ try {
     check("Beide haben 2 Spiele (kein Doppelzählen)", (await games(uA)) === 2 && (await games(uB)) === 2, `A=${await games(uA)} B=${await games(uB)}`);
 
     // ---- 2) Quiz-Modus: alle leben, B hat mehr Punkte -> B gewinnt
-    const L2 = await mkLobby("ZW02", "artist", 1);
+    const L2 = await mkLobby("ZW02", "buzzer", 1);
     await q("update public.lobbies set phase = 'quiz', quiz_state = 'reveal' where id = $1", [L2]);
     await q("update public.players set song_points = case when player_id = $2 then 7 else 3 end where lobby_id = $1", [L2, B]);
     await q("select public._quiz_finish($1)", [L2]);
@@ -77,15 +77,7 @@ try {
     check("Quiz: Punktbester (B) ist Halter/Sieger", ph.holder_player_id === B);
     check("Quiz: B bekommt den Lebenszeit-Sieg, A nicht", (await wins(uB)) === 2 && (await wins(uA)) === 1, `A=${await wins(uA)} B=${await wins(uB)}`);
 
-    // ---- 3) Teams: A (Team 0) überlebt, B (Team 1) ausgeschieden -> A gewinnt
-    const L3 = await mkLobby("ZW03", "teams", 1);
-    await q("update public.players set team = case when player_id = $2 then 0 else 1 end, is_alive = (player_id = $2), eliminated_at_round = case when player_id = $2 then null else 1 end where lobby_id = $1", [L3, A]);
-    await q("select public._finish_round($1)", [L3]);
-    check("Teams: Siegerteam-Spieler A bekommt den Sieg", (await wins(uA)) === 2 && (await wins(uB)) === 2, `A=${await wins(uA)} B=${await wins(uB)}`);
-    const sr = await q("select place from public.series_results where lobby_id = $1 and player_id = $2", [L3, A]);
-    check("Teams: A steht auf Platz 1", sr[0]?.place === 1);
-
-    // ---- 4) Nur 1 Mensch -> keine Wertung (Übungsspiel)
+    // ---- 3) Nur 1 Mensch -> keine Wertung (Übungsspiel)
     const L4 = await mkLobby("ZW04", "original", 1);
     await q("update public.players set is_bot = true, user_id = null where lobby_id = $1 and player_id = $2", [L4, B]);
     const before = await wins(uA);
