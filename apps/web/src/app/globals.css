@@ -2196,7 +2196,7 @@ textarea:focus-visible{
 .authMiniAvatar{ width: 22px; height: 22px; border-radius: 50%; vertical-align: -5px; margin-right: 4px; background: rgba(255,255,255,.14); }
 
 /* Modus-Kacheln (Lobby hosten) */
-.modeTiles{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; flex: 1; }
+.modeTiles{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; flex: 1; }
 .modeTile{ display: grid; align-content: start; justify-items: start; gap: 4px; text-align: left; padding: 12px; border-radius: 16px; cursor: pointer; color: #fff;
   background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.14); transition: transform .2s cubic-bezier(.22,1,.36,1), border-color .2s ease, background .2s ease; }
 .modeTile:hover{ transform: translateY(-3px); border-color: rgba(255,255,255,.32); }
@@ -2213,7 +2213,7 @@ textarea:focus-visible{
 .modeTileSteps i{ font-style: normal; }
 @media (max-width: 640px){
   .modeTileSteps{ display: none; }
-  .modeTiles{ grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%; }
+  .modeTiles{ gap: 6px; width: 100%; }
   .modeTile{ padding: 8px; justify-items: center; text-align: center; }
   .modeTileIcon{ font-size: 22px; }
   .modeTileName{ font-size: 12.5px; flex-direction: column; gap: 2px; }
@@ -2255,6 +2255,9 @@ textarea:focus-visible{
   .hostMain .modeTileRules span{ display: grid; grid-template-columns: 22px 1fr; gap: 6px; align-items: start; font-size: clamp(12px, 1.5vh, 14.5px); font-weight: 600; line-height: 1.3; opacity: .86; }
   .hostMain .modeTileRules i{ font-style: normal; }
 }
+
+.hostMain .hcPlOff{ opacity: .5; }
+.hostMain .hcPlOff .plPick, .hostMain .hcPlOff .plChips{ pointer-events: none; }
 
 /* Sichtbarkeits-Schalter in der unteren Reihe: gleiche Höhe wie die anderen Kästen, Text links, Schalter rechts */
 @media (min-width: 900px){

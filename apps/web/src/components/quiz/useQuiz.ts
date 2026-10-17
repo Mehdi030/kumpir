@@ -48,6 +48,9 @@ export type RevealResult = { playerId: string; points: number; correct: boolean;
 
 type Status = {
     seq: number;
+    /** Roulette: meine bisherigen Eingaben und wer schon "fertig" ist */
+    mine?: string[];
+    done?: string[];
     me: { answered: boolean; correct?: boolean | null; points?: number; tries?: number; answer?: string | null };
     answered: string[];
 };
@@ -173,5 +176,26 @@ export function useQuiz({ lobby, mePlayerId, onToast }: { lobby: QuizLobby; mePl
         [mePlayerId, run, supabase, lobby.code]
     );
 
-    return { status: mine, meAnswered, answeredSet, busy, left, total, ratio, buzz, answer, guessYear, guessMonth };
+    /** Roulette: einen Begriff abgeben (ohne Rückmeldung, ob er stimmt). Liefert false, wenn er nicht gespeichert werden konnte. */
+    const submitTerm = useCallback(
+        async (text: string) => {
+            if (!mePlayerId) return false;
+            const { error } = await supabase.rpc("rpc_letters_submit", { p_code: lobby.code, p_player_id: mePlayerId, p_text: text });
+            if (error) {
+                if (/letters_too_many/.test(error.message)) onToast(errorText(error.message), 2200);
+                return false;
+            }
+            return true;
+        },
+        [mePlayerId, supabase, lobby.code, onToast]
+    );
+
+    /** Roulette: "Fertig" – sind alle Menschen fertig, geht es sofort zur Auflösung */
+    const finishTerms = useCallback(async () => {
+        if (!mePlayerId) return;
+        await supabase.rpc("rpc_letters_done", { p_code: lobby.code, p_player_id: mePlayerId });
+        setStatus((s) => (s ? { ...s, done: [...(s.done ?? []), mePlayerId] } : s));
+    }, [mePlayerId, supabase, lobby.code]);
+
+    return { status: mine, meAnswered, answeredSet, busy, left, total, ratio, buzz, answer, guessYear, guessMonth, submitTerm, finishTerms };
 }

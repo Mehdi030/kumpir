@@ -1744,7 +1744,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         return (
             <main className="fullH" style={{ display: "grid", placeItems: "center", padding: 24 }}>
                 <div style={{ width: "min(1100px, calc(100vw - 48px))", textAlign: "center", display: "grid", justifyItems: "center", gap: 14 }}>
-                    <div className="stageKicker">{voteCards === 1 ? tr("Playlist dieser Runde") : tr("Playlist gewählt")}</div>
+                    <div className="stageKicker">{lobby.game_mode === "letters" ? `🎰 ${tr("Roulette")}` : voteCards === 1 ? tr("Playlist dieser Runde") : tr("Playlist gewählt")}</div>
 
                     {/* Abstimmungs-Ergebnis nur, wenn es wirklich eine Abstimmung gab (ab 2 Playlists) */}
                     {voteCards >= 2 ? (
@@ -1766,12 +1766,14 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         </div>
                     ) : null}
 
-                    <div className="stagePlCard" style={plStyle(playlistLook(selectedTopic).color)}>
-                        <span className="stagePlIcon" aria-hidden>
-                            {playlistLook(selectedTopic).icon}
-                        </span>
-                        {selectedTopic}
-                    </div>
+                    {lobby.game_mode === "letters" ? null : (
+                        <div className="stagePlCard" style={plStyle(playlistLook(selectedTopic).color)}>
+                            <span className="stagePlIcon" aria-hidden>
+                                {playlistLook(selectedTopic).icon}
+                            </span>
+                            {selectedTopic}
+                        </div>
+                    )}
 
                     {tie ? (
                         <div style={{ opacity: 0.9, fontWeight: 850 }}>
@@ -1785,7 +1787,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     <div style={{ marginTop: 10 }}>
                         <CountdownRing seconds={cdLeft} total={cdTotal} size={200} />
                     </div>
-                    <div style={{ fontWeight: 850, opacity: 0.8 }}>{tr("Gleich läuft der erste Song – Ohren auf! 🎧")}</div>
+                    <div style={{ fontWeight: 850, opacity: 0.8 }}>
+                        {lobby.game_mode === "letters" ? tr("Gleich dreht sich das Roulette – Finger auf die Tastatur! ⌨️") : tr("Gleich läuft der erste Song – Ohren auf! 🎧")}
+                    </div>
 
                     {/* Nur der Startspieler sieht diesen Hinweis -- alle anderen
                         erfahren es erst, wenn die Runde wirklich losgeht. */}

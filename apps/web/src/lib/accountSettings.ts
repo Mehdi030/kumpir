@@ -13,13 +13,13 @@ export type Preferences = {
         rounds?: 1 | 3 | 5;
         answerMode?: "text" | "voice";
         /** zuletzt gewählter Modus (wird beim Erstellen gemerkt, Migration 122) */
-        mode?: "original" | "buzzer" | "year";
+        mode?: "original" | "buzzer" | "year" | "letters";
     };
     solo?: {
         bots?: number;
         skill?: "mixed" | "1" | "2" | "3";
         /** zuletzt gewählter Modus / Tempo gegen Bots (Migration 122) */
-        mode?: "original" | "buzzer" | "year";
+        mode?: "original" | "buzzer" | "year" | "letters";
         speed?: "fast" | "normal" | "calm";
     };
 };

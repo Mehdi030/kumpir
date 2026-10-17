@@ -15,6 +15,7 @@ const TEXT: [RegExp, string][] = [
     [/quiz_bad_choice|quiz_wrong_action/, tk("Das geht in diesem Modus nicht.")],
     [/quiz_bad_year/, tk("Bitte ein Jahr zwischen 1900 und 2100 eingeben.")],
     [/empty_answer/, tk("Bitte erst etwas eingeben.")],
+    [/letters_too_many/, tk("Mehr als 60 Begriffe pro Kategorie gehen nicht.")],
     [/already_friends/, tk("Ihr seid schon befreundet.")],
     [/already_requested/, tk("Die Anfrage läuft schon.")],
     [/user_not_found/, tk("Diesen Benutzernamen gibt es nicht.")],

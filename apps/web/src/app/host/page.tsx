@@ -583,10 +583,10 @@ export default function HostPage() {
 
                                     {/* Untere Reihe: Playlists, Sichtbarkeit, Erstellen – wieder gleich hohe Kästen */}
                                     <div className="hostRow hostBottom">
-                                        <div className="pillCard hcBox hcPl">
+                                        <div className={`pillCard hcBox hcPl ${mode === "letters" ? "hcPlOff" : ""}`}>
                                             <div className="pillCardTop">
                                                 <div className="pillCardTitle">🎵 Playlists</div>
-                                                <div className="pillCardHint">{tr("Antippen = rausnehmen")}</div>
+                                                <div className="pillCardHint">{mode === "letters" ? tr("Im Roulette ohne Bedeutung") : tr("Antippen = rausnehmen")}</div>
                                             </div>
                                             <PlaylistPicker selected={playlists} onChange={setPlaylists} />
                                         </div>

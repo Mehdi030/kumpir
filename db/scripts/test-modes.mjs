@@ -2,7 +2,7 @@
 // Alle Spielmodi mit Bots durchspielen und Regeln prüfen (Wunsch Mehdi 2026-10-13: "teste alle Features").
 // Jedes Szenario legt eine eigene Lobby an, wartet bis zum Ende (Server-Takt + Bot-Takt laufen per Cron) und
 // prüft: Spiel endet, keine hängende Phase, Wertung vollständig, Quiz-Zustand sauber.
-// Aufruf: node db/scripts/test-modes.mjs [Filter]   z. B. "duel" oder "series"
+// Aufruf: node db/scripts/test-modes.mjs [Filter]   z. B. "letters" oder "series"
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,6 +44,11 @@ const SCENARIOS = [
     { name: "leave mid original", mode: "original", players: 4, leaveAfter: 1 },
     { name: "rematch buzzer", mode: "buzzer", players: 3, quiz: true, target: 10, rematch: true },
     { name: "rematch year", mode: "year", players: 3, quiz: true, rematch: true },
+    { name: "letters", mode: "letters", players: 4, quiz: true },
+    { name: "letters (2)", mode: "letters", players: 2, quiz: true },
+    { name: "series letters x3", mode: "letters", players: 4, quiz: true, series: 3 },
+    { name: "leave mid letters", mode: "letters", players: 4, quiz: true, leaveAfter: 1 },
+    { name: "rematch letters", mode: "letters", players: 3, quiz: true, rematch: true },
 ].filter((s) => s.name.includes(filter));
 
 async function run(sc) {
