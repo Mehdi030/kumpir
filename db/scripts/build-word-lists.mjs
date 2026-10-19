@@ -20,8 +20,8 @@ const WD = [
     { name: "Länder", kind: "thing", min: 60, where: "?item wdt:P31 wd:Q3624078. FILTER NOT EXISTS { ?item wdt:P576 ?end }" },
     { name: "Hauptstädte", kind: "thing", min: 60, where: "?c wdt:P31 wd:Q3624078. FILTER NOT EXISTS { ?c wdt:P576 ?e } ?c wdt:P36 ?item." },
     { name: "Städte", kind: "thing", min: 70, where: "?item wdt:P31 wd:Q1549591." },
-    { name: "Schauspieler", kind: "person", min: 45, where: "?item wdt:P106 wd:Q33999. ?item wdt:P31 wd:Q5.", limit: 3500 },
-    { name: "Sänger", kind: "person", min: 55, where: "?item wdt:P106 wd:Q177220. ?item wdt:P31 wd:Q5.", limit: 2500 },
+    { name: "Schauspieler", kind: "person", min: 45, where: "VALUES ?occ { wd:Q33999 wd:Q10800557 wd:Q10798782 } ?item wdt:P106 ?occ. ?item wdt:P31 wd:Q5.", limit: 3500 },
+    { name: "Sänger", kind: "person", min: 55, where: "VALUES ?occ { wd:Q177220 wd:Q488205 } ?item wdt:P106 ?occ. ?item wdt:P31 wd:Q5.", limit: 2500 },
     { name: "Bands", kind: "thing", min: 45, where: "?item wdt:P31 wd:Q215380.", limit: 1500 },
     { name: "Fußballspieler", kind: "person", min: 60, where: "?item wdt:P106 wd:Q937857. ?item wdt:P31 wd:Q5.", limit: 2500 },
     { name: "Fußballvereine", kind: "thing", min: 55, where: "?item wdt:P31 wd:Q476028.", limit: 1200 },
@@ -56,6 +56,27 @@ const norm = (s) =>
         .replace(/\s+/g, " ")
         .trim();
 
+/** Manche sehr bekannte Einträge (z. B. Lady Gaga, Shakira) haben bei Wikidata gerade kein Label und kämen nur als Q-Nummer – ihr Name wird dann aus dem Titel der deutschen/englischen Wikipedia-Seite geholt */
+async function fixLabels(rows) {
+    const missing = rows.filter((r) => /^Q[0-9]+$/.test(r.label));
+    for (let i = 0; i < missing.length; i += 150) {
+        const part = missing.slice(i, i + 150);
+        const q = `SELECT ?item ?de ?en WHERE { VALUES ?item { ${part.map((x) => "wd:" + x.id).join(" ")} } OPTIONAL { ?a schema:about ?item; schema:isPartOf <https://de.wikipedia.org/>; schema:name ?de } OPTIONAL { ?b schema:about ?item; schema:isPartOf <https://en.wikipedia.org/>; schema:name ?en } }`;
+        try {
+            const r = await fetch("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q), {
+                headers: { "User-Agent": "KumpirGameBot/1.0 (private game; contact via repo owner)", Accept: "application/sparql-results+json" },
+            });
+            const names = new Map();
+            for (const b of (await r.json()).results.bindings) names.set(b.item.value.split("/").pop(), (b.de?.value ?? b.en?.value ?? "").replace(/ ?[(].*[)] ?$/, ""));
+            for (const x of part) if (names.get(x.id)) x.label = names.get(x.id);
+        } catch (e) {
+            console.log("  Label-Fehler", e.message);
+        }
+        await sleep(1500);
+    }
+    return rows;
+}
+
 async function sparql(where, min, limit) {
     const q = `SELECT ?item ?itemLabel ?sl WHERE { ${where} ?item wikibase:sitelinks ?sl. FILTER(?sl >= ${min}) SERVICE wikibase:label { bd:serviceParam wikibase:language "de,en". } } ORDER BY DESC(?sl) ${limit ? `LIMIT ${limit}` : ""}`;
     for (let a = 0; a < 4; a++) {
@@ -63,7 +84,7 @@ async function sparql(where, min, limit) {
             const r = await fetch("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q), {
                 headers: { "User-Agent": "KumpirGameBot/1.0 (private game; contact via repo owner)", Accept: "application/sparql-results+json" },
             });
-            if (r.ok) return (await r.json()).results.bindings.map((b) => ({ label: b.itemLabel.value, sl: Number(b.sl.value), id: b.item.value.split("/").pop() }));
+            if (r.ok) return await fixLabels((await r.json()).results.bindings.map((b) => ({ label: b.itemLabel.value, sl: Number(b.sl.value), id: b.item.value.split("/").pop() })));
             console.log("  HTTP", r.status);
         } catch (e) {
             console.log("  Fehler", e.message);

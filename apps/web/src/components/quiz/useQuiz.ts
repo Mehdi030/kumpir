@@ -51,6 +51,9 @@ type Status = {
     /** Roulette: meine bisherigen Eingaben und wer schon "fertig" ist */
     mine?: string[];
     done?: string[];
+    /** Roulette: meine Stimme (1–3) bei der Kategorie-Abstimmung und wer schon gewählt hat */
+    myvote?: number | null;
+    voted?: string[];
     me: { answered: boolean; correct?: boolean | null; points?: number; tries?: number; answer?: string | null };
     answered: string[];
 };
@@ -190,6 +193,19 @@ export function useQuiz({ lobby, mePlayerId, onToast }: { lobby: QuizLobby; mePl
         [mePlayerId, supabase, lobby.code, onToast]
     );
 
+    /** Roulette: für eine der drei Kategorien stimmen (1–3); umentscheiden ist erlaubt */
+    const voteCategory = useCallback(
+        async (choice: number) => {
+            if (!mePlayerId) return false;
+            const { error } = await supabase.rpc("rpc_letters_vote", { p_code: lobby.code, p_player_id: mePlayerId, p_choice: choice });
+            if (error) return false;
+            playFx("vote");
+            setStatus((s) => (s ? { ...s, myvote: choice, voted: [...new Set([...(s.voted ?? []), mePlayerId])] } : s));
+            return true;
+        },
+        [mePlayerId, supabase, lobby.code]
+    );
+
     /** Roulette: "Fertig" – sind alle Menschen fertig, geht es sofort zur Auflösung */
     const finishTerms = useCallback(async () => {
         if (!mePlayerId) return;
@@ -197,5 +213,5 @@ export function useQuiz({ lobby, mePlayerId, onToast }: { lobby: QuizLobby; mePl
         setStatus((s) => (s ? { ...s, done: [...(s.done ?? []), mePlayerId] } : s));
     }, [mePlayerId, supabase, lobby.code]);
 
-    return { status: mine, meAnswered, answeredSet, busy, left, total, ratio, buzz, answer, guessYear, guessMonth, submitTerm, finishTerms };
+    return { status: mine, meAnswered, answeredSet, busy, left, total, ratio, buzz, answer, guessYear, guessMonth, submitTerm, finishTerms, voteCategory };
 }

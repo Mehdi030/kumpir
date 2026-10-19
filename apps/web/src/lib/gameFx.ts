@@ -222,3 +222,61 @@ export function playFx(kind: FxKind) {
             return;
     }
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Roulette-Wertungs-Show (Wunsch Mehdi 2026-10-19): Trommelwirbel, Treffer je Platz (je weiter oben, desto kräftiger) und eine
+// kleine Erfolgs-Melodie für den Sieger. Alles synthetisiert (keine Audio-Dateien).
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Trommelwirbel über ms Millisekunden (wird lauter und dichter). Gibt eine Funktion zum vorzeitigen Abbrechen zurück. */
+export function playDrumRoll(ms: number): () => void {
+    if (isMuted()) return () => {};
+    unlockGameFx();
+    const timers: number[] = [];
+    const step = 52;
+    const n = Math.max(1, Math.floor(ms / step));
+    for (let i = 0; i < n; i++) {
+        const p = i / n;
+        timers.push(
+            window.setTimeout(() => {
+                noiseBurst(42, { gain: 0.07 + 0.26 * p, lowpass: 1100 + 900 * p });
+                if (i % 2 === 0) tone(95 + 40 * p, 60, { type: "sine", gain: 0.1 + 0.1 * p });
+            }, i * step),
+        );
+    }
+    return () => timers.forEach((t) => window.clearTimeout(t));
+}
+
+/** Treffer für einen Platz in der Wertungs-Show: level 0 (unten, leise) bis 1 (oben, kräftig). */
+export function playRankHit(level: number) {
+    if (isMuted()) return;
+    unlockGameFx();
+    const lv = Math.max(0, Math.min(1, level));
+    noiseBurst(160 + 520 * lv, { gain: 0.14 + 0.4 * lv, lowpass: 1800 + 2400 * lv });
+    const base = 392 * Math.pow(2, lv * 0.75);
+    tone(base, 260 + 200 * lv, { type: "triangle", gain: 0.15 + 0.08 * lv });
+    if (lv > 0.35) tone(base * 1.5, 300, { type: "triangle", gain: 0.12, delayMs: 60 });
+    if (lv > 0.7) tone(base * 2, 380, { type: "sine", gain: 0.12, delayMs: 120 });
+    vibrate(lv > 0.7 ? [30, 40, 60] : 18);
+}
+
+/** Kleine Erfolgs-Melodie (Fanfare) für den ersten Platz. */
+export function playFanfare() {
+    if (isMuted()) return;
+    unlockGameFx();
+    const notes: [number, number][] = [
+        [523, 0],
+        [659, 130],
+        [784, 260],
+        [1047, 400],
+        [784, 640],
+        [1047, 760],
+        [1319, 900],
+    ];
+    for (const [f, d] of notes) tone(f, 260, { type: "triangle", gain: 0.2, delayMs: d, decay: 0.9 });
+    // Schlussakkord + Funkeln
+    for (const f of [1047, 1319, 1568]) tone(f, 1100, { type: "sine", gain: 0.13, delayMs: 1100, decay: 0.95 });
+    tone(131, 700, { type: "sawtooth", gain: 0.1, delayMs: 1100 });
+    for (let i = 0; i < 6; i++) tone(2093 + i * 220, 90, { type: "sine", gain: 0.06, delayMs: 1250 + i * 90 });
+    vibrate([40, 50, 40, 50, 120]);
+}
