@@ -131,6 +131,57 @@ try {
         check("Ergebnisse aufsteigend (Letzter zuerst)", asc, res.map((r) => `${r.name}:${r.points}`).join(" "));
         check("Bots haben Begriffe", res.filter((r) => r.name.startsWith("Bot")).every((r) => r.points >= 1));
         check("Auflösung enthält Schreibweise + Begriff und die Show-Dauer", (me?.valid ?? []).every((v) => v.t && v.l) && l.quiz_reveal?.last === (round === 2), `last=${l.quiz_reveal?.last}`);
+        check("Wörter-Karte steht 13 s (rote Wörter vorhanden) – Einspruch möglich", l.quiz_reveal?.mapSecs === 13, String(l.quiz_reveal?.mapSecs));
+
+        // ---- Einspruch ----
+        const appeal = (t) => q("select public.rpc_letters_appeal($1, $2, $3) r", [code, host, t]);
+        const bots2 = await q("select player_id from public.players where lobby_id = $1 and is_bot order by seat_index", [id]);
+        const vote = (who, owner, t, yes) => q("select public.rpc_letters_appeal_vote($1, $2, $3, $4, $5) r", [code, who, owner, t, yes]);
+        const results = async () => (await q("select quiz_reveal from public.lobbies where id = $1", [id]))[0].quiz_reveal.results.find((r) => r.playerId === host);
+        const pts = async () => Number((await q("select song_points from public.players where lobby_id = $1 and player_id = $2", [id, host]))[0].song_points);
+        if (round === 0) {
+            // allein unter Bots: Einspruch gilt sofort
+            const before = await pts();
+            const w = me.bad[0];
+            await appeal(w);
+            const r = await results();
+            check("Einspruch (nur Bots dabei): sofort angenommen, +1 Punkt", (await pts()) === before + 1 && r.points === me.points + 1 && r.valid.some((v) => v.t === w) && !r.bad.includes(w), JSON.stringify(r.bad));
+            let err = "";
+            try { await appeal(w); } catch (e) { err = e.message; }
+            check("derselbe Einspruch nicht doppelt", !err || /appeal_not_possible/.test(err), err);
+            err = "";
+            try { await appeal(me.valid[0].t); } catch (e) { err = e.message; }
+            check("Einspruch gegen ein richtiges Wort geht nicht", /appeal_not_possible/.test(err), err);
+        }
+        if (round === 1) {
+            // zwei weitere Menschen (Bots kurz als Menschen): Mehrheit der anderen entscheidet
+            await q("update public.players set is_bot = false where lobby_id = $1 and player_id = any($2)", [id, bots2.map((b) => b.player_id)]);
+            const before = await pts();
+            const [w1, w2] = me.bad;
+            await appeal(w1);
+            let err = "";
+            try { await vote(host, host, w1, true); } catch (e) { err = e.message; }
+            check("über den eigenen Einspruch darf man nicht abstimmen", /appeal_own/.test(err), err);
+            await vote(bots2[0].player_id, host, w1, true);
+            let r = await results();
+            check("ein Ja von zwei anderen reicht noch nicht", r.bad.includes(w1) && (await pts()) === before);
+            await vote(bots2[1].player_id, host, w1, true);
+            r = await results();
+            check("zwei Ja von zwei anderen: angenommen, +1 Punkt", r.valid.some((v) => v.t === w1) && (await pts()) === before + 1, JSON.stringify(r.bad));
+            await appeal(w2);
+            await vote(bots2[0].player_id, host, w2, false);
+            const [ap] = await q("select status from public.letters_appeals where lobby_id = $1 and owner_id = $2 and text = $3", [id, host, w2]);
+            check("ein Nein von zwei anderen: abgelehnt, Wort bleibt rot", ap.status === "rejected" && (await results()).bad.includes(w2) && (await pts()) === before + 1, ap.status);
+            const [st] = await q("select public.rpc_quiz_status($1, $2) s", [code, host]);
+            check("rpc_quiz_status zeigt die Einsprüche", (st.s.appeals ?? []).length === 2, JSON.stringify(st.s.appeals).slice(0, 120));
+            await q("update public.players set is_bot = true where lobby_id = $1 and player_id = any($2)", [id, bots2.map((b) => b.player_id)]);
+        }
+        if (round === 2) {
+            await q("update public.lobbies set quiz_started_at = now() - interval '30 seconds' where id = $1", [id]);
+            let err = "";
+            try { await appeal(me.bad[0]); } catch (e) { err = e.message; }
+            check("nach Ende der Wörter-Karte kein Einspruch mehr", /appeal_closed/.test(err), err);
+        }
     }
 
     l = await tick(id); // letzte Auflösung -> Ende
@@ -138,7 +189,7 @@ try {
     const rows = await q("select name, place, song_points from public.series_results where lobby_id = $1 order by place", [id]);
     check("Wertung mit Plätzen vorhanden", rows.length === 3 && rows[0].place === 1, JSON.stringify(rows));
     const [mine] = await q("select song_points from public.players where lobby_id = $1 and player_id = $2", [id, host]);
-    check("Summe der drei Kategorien = 12 Punkte", Number(mine.song_points) === 12, String(mine.song_points));
+    check("Summe der drei Kategorien = 12 Punkte + 2 angenommene Einsprüche", Number(mine.song_points) === 14, String(mine.song_points));
 } catch (e) {
     console.error("FEHLER:", e.message);
     failed++;

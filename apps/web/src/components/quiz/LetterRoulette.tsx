@@ -19,8 +19,8 @@ const SPIN_MS = 5600;
 const MAP_COLS = 4;
 const BASE_ROWS = 8; // Zeilenhöhe steht im CSS (--rh), damit sie auf dem Handy kleiner sein kann
 
-// Wertungs-Show: Wörter-Karte 7 s, dann je Platz 2,2 s (Trommelwirbel 0,9 s + Treffer), Sieger +1,5 s – muss zur Datenbank passen (Migration 128)
-const MAP_S = 7;
+// Wertungs-Show: Wörter-Karte 7 s (13 s, wenn Menschen rote Wörter haben – Zeit für Einsprüche; steht in quiz_reveal.mapSecs), dann je Platz 2,2 s (Trommelwirbel 0,9 s + Treffer), Sieger +1,5 s – muss zur Datenbank passen (Migration 128)
+const MAP_S_DEFAULT = 7;
 const INTRO_S = 1;
 const PLACE_S = 2.2;
 const ROLL_S = 0.9;
@@ -30,6 +30,7 @@ type CatInfo = { id: string; name: string };
 type ValidItem = { t: string; l: string };
 type ResultRow = { playerId: string; name: string; points: number; valid: ValidItem[]; bad: string[]; dup: string[] };
 type Word = { key: string; text: string; pid: string; kind: "plain" | "ok" | "bad" | "dup"; mine: boolean };
+type Appeal = { o: string; t: string; y: string[]; n: string[]; s: "open" | "accepted" | "rejected" };
 
 const CAT_ICON: Record<string, string> = {
     Rapper: "🎤", Schauspieler: "🎬", Länder: "🌍", Städte: "🏙️", Hauptstädte: "🏛️", Sänger: "🎵", Bands: "🎸", Fußballspieler: "⚽",
@@ -112,7 +113,8 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
     const cat = (opts.cat as CatInfo | undefined) ?? null;
     const idx = Math.max(0, lobby.quiz_index);
     const me = players.find((p) => p.player_id === mePlayerId) ?? null;
-    const reveal = lobby.quiz_reveal as { letter?: string; category?: string; index?: number; last?: boolean; results?: ResultRow[] } | null;
+    const reveal = lobby.quiz_reveal as { letter?: string; category?: string; index?: number; last?: boolean; mapSecs?: number; results?: ResultRow[] } | null;
+    const MAP_S = Number(reveal?.mapSecs ?? MAP_S_DEFAULT);
     const rows = useMemo(() => reveal?.results ?? [], [reveal]);
     const humans = players.filter((p) => !p.is_bot).length;
 
@@ -221,11 +223,13 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
         // Schreibweise (key) ist der getippte Text, angezeigt wird der erkannte Begriff
         const mineSorted = [...mineAll].sort((a, b) => orderOf(a) - orderOf(b));
         out.push(...mineSorted);
-        for (const r of rows) {
+        for (const r of [...rows].sort((a, b) => a.playerId.localeCompare(b.playerId))) {
             if (r.playerId === mePlayerId) continue;
-            for (const v of r.valid) out.push({ key: key(r.playerId, v.t), text: v.l, pid: r.playerId, kind: "ok", mine: false });
-            for (const b of r.bad) out.push({ key: key(r.playerId, b), text: b, pid: r.playerId, kind: "bad", mine: false });
-            for (const d of r.dup) out.push({ key: key(r.playerId, d), text: d, pid: r.playerId, kind: "dup", mine: false });
+            const theirs: Word[] = [];
+            for (const v of r.valid) theirs.push({ key: key(r.playerId, v.t), text: v.l, pid: r.playerId, kind: "ok", mine: false });
+            for (const b of r.bad) theirs.push({ key: key(r.playerId, b), text: b, pid: r.playerId, kind: "bad", mine: false });
+            for (const d of r.dup) theirs.push({ key: key(r.playerId, d), text: d, pid: r.playerId, kind: "dup", mine: false });
+            out.push(...theirs.sort((a, b) => a.key.localeCompare(b.key)));
         }
         return out;
     }, [state, typed, rows, mePlayerId]);
@@ -236,6 +240,11 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
     const revealStart = lobby.quiz_started_at ? Date.parse(lobby.quiz_started_at) : serverNow();
     const tReveal = state === "reveal" ? (serverNow() - revealStart) / 1000 : 0;
     const colored = state === "reveal" && tReveal > 0.8;
+    // Einspruch: nur solange die Wörter-Karte steht (Server lässt bis 1 s vorher zu)
+    const appealOpen = state === "reveal" && !!me && !me.is_bot && tReveal < MAP_S - 1.2;
+    const appeals: Appeal[] = q.status?.appeals ?? [];
+    const myBadCount = rows.find((r) => r.playerId === mePlayerId)?.bad.length ?? 0;
+    const openOthers = appeals.filter((a) => a.s === "open" && a.o !== mePlayerId).length;
 
     // ---------------- Wertungs-Show ----------------
     const n = rows.length;
@@ -407,7 +416,23 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                             </div>
                         ) : null}
                     </div>
-                    <WordMap words={words} seed={seed} rows={mapRows} colored={colored} crowded={crowded} players={players} label={tr("Alle Eingaben")} showAuthors />
+                    <WordMap
+                        words={words}
+                        seed={seed}
+                        rows={mapRows}
+                        colored={colored}
+                        crowded={crowded}
+                        players={players}
+                        label={tr("Alle Eingaben")}
+                        showAuthors
+                        appeals={appeals}
+                        appealOpen={appealOpen}
+                        mePlayerId={mePlayerId}
+                        onAppeal={(t) => void q.appeal(t)}
+                        onAppealVote={(o, t, yes) => void q.appealVote(o, t, yes)}
+                    />
+                    {appealOpen && myBadCount > 0 ? <div className="lrAppealHint">⚖️ {tr("Zu Unrecht rot? Tippe auf dein rotes Wort – die anderen stimmen ab.")}</div> : null}
+                    {appealOpen && openOthers > 0 ? <div className="lrAppealHint vote">👍👎 {tr("Gilt das Wort? Stimme bei den Einsprüchen ab.")}</div> : null}
                     <div className="lrLegend">
                         <span className="ok">✓ {tr("erkannt")}</span>
                         <span className="bad">✗ {tr("nicht erkannt")}</span>
@@ -480,7 +505,37 @@ function VoteCards({ cands, tally, myVote, canVote, onVote, votedCount, humans, 
 }
 
 /** Wörter-Karte: jedes Wort steht fest an seinem Platz im Raum; bei der Auflösung färben sie sich (richtig: grün + größer, falsch: rot + kleiner) */
-function WordMap({ words, seed, rows, colored, crowded, players, label, showAuthors = false }: { words: Word[]; seed: number; rows: number; colored: boolean; crowded: boolean; players: QuizPlayer[]; label: string; showAuthors?: boolean }) {
+function WordMap({
+    words,
+    seed,
+    rows,
+    colored,
+    crowded,
+    players,
+    label,
+    showAuthors = false,
+    appeals = [],
+    appealOpen = false,
+    mePlayerId = null,
+    onAppeal,
+    onAppealVote,
+}: {
+    words: Word[];
+    seed: number;
+    rows: number;
+    colored: boolean;
+    crowded: boolean;
+    players: QuizPlayer[];
+    label: string;
+    showAuthors?: boolean;
+    appeals?: Appeal[];
+    appealOpen?: boolean;
+    mePlayerId?: string | null;
+    onAppeal?: (text: string) => void;
+    onAppealVote?: (owner: string, text: string, yes: boolean) => void;
+}) {
+    const { tr } = useI18n();
+    const appealOf = useMemo(() => new Map(appeals.map((a) => [`${a.o}|${a.t.toLowerCase()}`, a])), [appeals]);
     const pos = useMemo(() => words.map((_, k) => slotOf(k, seed)), [words, seed]);
     const byId = useMemo(() => new Map(players.map((p) => [p.player_id, p])), [players]);
     return (
@@ -488,17 +543,55 @@ function WordMap({ words, seed, rows, colored, crowded, players, label, showAuth
             {words.length === 0 ? <div className="lrMapEmpty">{label}</div> : null}
             {words.map((w, i) => {
                 const p = byId.get(w.pid);
+                const ap = w.kind === "bad" ? appealOf.get(w.key) : undefined;
+                const pending = !!ap && ap.s === "open" && appealOpen;
+                const appealable = showAuthors && colored && appealOpen && w.kind === "bad" && w.mine && !ap && !!onAppeal;
+                const iVotedYes = !!mePlayerId && !!ap?.y.includes(mePlayerId);
+                const iVotedNo = !!mePlayerId && !!ap?.n.includes(mePlayerId);
+                const canVote = pending && !w.mine && !!mePlayerId && !!onAppealVote;
                 return (
                     <span
                         key={`${w.key}:${w.kind}`}
-                        className={`lrW ${w.kind} ${w.mine ? "mine" : ""} ${colored ? "go" : ""} ${crowded ? "tiny" : ""}`}
+                        className={`lrW ${w.kind} ${w.mine ? "mine" : ""} ${colored ? "go" : ""} ${crowded ? "tiny" : ""} ${appealable ? "appealable" : ""} ${pending ? "pending" : ""}`}
                         style={{ left: `${pos[i]!.x}%`, top: `calc(var(--rh) * ${pos[i]!.y})`, ["--i" as string]: i % 24 }}
-                        title={p?.name}
+                        title={appealable ? tr("Einspruch einlegen") : p?.name}
+                        role={appealable ? "button" : undefined}
+                        tabIndex={appealable ? 0 : undefined}
+                        onClick={appealable ? () => onAppeal?.(w.text) : undefined}
+                        onKeyDown={
+                            appealable
+                                ? (e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                          e.preventDefault();
+                                          onAppeal?.(w.text);
+                                      }
+                                  }
+                                : undefined
+                        }
                     >
                         {showAuthors && p ? <PlayerAvatar seed={p.name} config={p.avatar_config ?? null} size={crowded ? 16 : 20} /> : null}
                         <span>{w.text}</span>
                         {showAuthors && colored && w.kind === "ok" ? <em aria-hidden>✓</em> : null}
-                        {showAuthors && colored && w.kind === "bad" ? <em aria-hidden>✗</em> : null}
+                        {showAuthors && colored && w.kind === "bad" && !pending ? <em aria-hidden>{appealable ? "⚖️" : ap?.s === "rejected" ? "✗ ⚖️" : "✗"}</em> : null}
+                        {pending ? (
+                            <span className="lrVotesBox">
+                                <em aria-hidden>⚖️</em>
+                                {canVote ? (
+                                    <>
+                                        <button type="button" className={`lrThumb ${iVotedYes ? "on" : ""}`} onClick={() => onAppealVote?.(w.pid, w.text, true)} aria-label={tr("Gilt")}>
+                                            👍 {ap!.y.length}
+                                        </button>
+                                        <button type="button" className={`lrThumb ${iVotedNo ? "on" : ""}`} onClick={() => onAppealVote?.(w.pid, w.text, false)} aria-label={tr("Gilt nicht")}>
+                                            👎 {ap!.n.length}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <small>
+                                        👍 {ap!.y.length} 👎 {ap!.n.length}
+                                    </small>
+                                )}
+                            </span>
+                        ) : null}
                     </span>
                 );
             })}
@@ -735,6 +828,17 @@ const STYLES = `
 .lrRevHead h2{ margin: 0; font-size: clamp(24px, 4vw, 36px); }
 .lrMineHead{ margin-left: auto; font-weight: 800; font-size: 14px; }
 .lrMineHead b{ color: #8dffb8; font-family: var(--font-display); font-size: 22px; }
+.lrW.bad.go.appealable{ transform: translate(-50%, -50%) scale(.98); cursor: pointer; opacity: 1; box-shadow: 0 0 0 2px rgba(255,210,63,.7), 0 0 18px rgba(255,210,63,.35); z-index: 4; }
+.lrW.bad.go.appealable:hover{ transform: translate(-50%, -50%) scale(1.08); }
+.lrW.bad.go.pending{ transform: translate(-50%, -50%) scale(1.06); background: rgba(150,100,20,.7); border-color: #ffd23f; color: #fff2cf; opacity: 1; z-index: 5; animation: lrPulse 1.1s ease-in-out infinite alternate; }
+@keyframes lrPulse{ from{ box-shadow: 0 0 0 0 rgba(255,210,63,.55); } to{ box-shadow: 0 0 0 7px rgba(255,210,63,0); } }
+.lrVotesBox{ display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; }
+.lrVotesBox small{ font-size: 12px; font-weight: 800; }
+.lrThumb{ font: inherit; font-size: 13px; font-weight: 900; color: #fff; padding: 2px 8px; border-radius: 999px; cursor: pointer; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.35); }
+.lrThumb:hover{ background: rgba(255,255,255,.28); }
+.lrThumb.on{ background: #ffd23f; color: #2a1200; border-color: #fff; }
+.lrAppealHint{ text-align: center; font-size: 13px; font-weight: 800; color: #ffe08a; animation: lrIn .4s ease both; }
+.lrAppealHint.vote{ color: #fff; }
 .lrLegend{ display: flex; gap: 14px; justify-content: center; font-size: 12.5px; font-weight: 800; opacity: .85; }
 .lrLegend .ok{ color: #8dffb8; } .lrLegend .bad{ color: #ff9d94; } .lrLegend .dup{ color: #ffd88a; }
 

@@ -54,6 +54,8 @@ type Status = {
     /** Roulette: meine Stimme (1–3) bei der Kategorie-Abstimmung und wer schon gewählt hat */
     myvote?: number | null;
     voted?: string[];
+    /** Roulette: Einsprüche gegen rote Wörter (o = Besitzer, t = Text, y/n = Ja-/Nein-Stimmen, s = Stand) */
+    appeals?: { o: string; t: string; y: string[]; n: string[]; s: "open" | "accepted" | "rejected" }[];
     me: { answered: boolean; correct?: boolean | null; points?: number; tries?: number; answer?: string | null };
     answered: string[];
 };
@@ -213,5 +215,33 @@ export function useQuiz({ lobby, mePlayerId, onToast }: { lobby: QuizLobby; mePl
         setStatus((s) => (s ? { ...s, done: [...(s.done ?? []), mePlayerId] } : s));
     }, [mePlayerId, supabase, lobby.code]);
 
-    return { status: mine, meAnswered, answeredSet, busy, left, total, ratio, buzz, answer, guessYear, guessMonth, submitTerm, finishTerms, voteCategory };
+    /** Roulette: Einspruch gegen ein eigenes rotes Wort */
+    const appeal = useCallback(
+        async (text: string) => {
+            if (!mePlayerId) return false;
+            const { error } = await supabase.rpc("rpc_letters_appeal", { p_code: lobby.code, p_player_id: mePlayerId, p_text: text });
+            if (error) {
+                onToast(`❌ ${errorText(error.message)}`, 2200);
+                return false;
+            }
+            return true;
+        },
+        [mePlayerId, supabase, lobby.code, onToast]
+    );
+
+    /** Roulette: über den Einspruch eines anderen abstimmen (true = Daumen hoch) */
+    const appealVote = useCallback(
+        async (owner: string, text: string, yes: boolean) => {
+            if (!mePlayerId) return false;
+            const { error } = await supabase.rpc("rpc_letters_appeal_vote", { p_code: lobby.code, p_player_id: mePlayerId, p_owner: owner, p_text: text, p_yes: yes });
+            if (error) {
+                onToast(`❌ ${errorText(error.message)}`, 2200);
+                return false;
+            }
+            return true;
+        },
+        [mePlayerId, supabase, lobby.code, onToast]
+    );
+
+    return { status: mine, meAnswered, answeredSet, busy, left, total, ratio, buzz, answer, guessYear, guessMonth, submitTerm, finishTerms, voteCategory, appeal, appealVote };
 }

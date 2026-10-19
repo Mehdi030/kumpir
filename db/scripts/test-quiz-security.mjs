@@ -30,7 +30,7 @@ const check = (name, ok, extra = "") => {
 };
 
 // 1) Geheime Tabellen: weder lesen noch schreiben
-for (const t of ["quiz_secret", "quiz_answers", "quiz_bets", "mode_plays", "answer_misses", "word_terms", "word_categories", "letters_entries", "letters_done", "letters_votes"]) {
+for (const t of ["quiz_secret", "quiz_answers", "quiz_bets", "mode_plays", "answer_misses", "word_terms", "word_categories", "letters_entries", "letters_done", "letters_votes", "letters_appeals"]) {
     const r = await rest(`${t}?select=*&limit=1`);
     check(`Tabelle ${t} nicht lesbar`, r.status >= 400 || (Array.isArray(r.body) && r.body.length === 0), `– HTTP ${r.status}`);
     const w = await rest(t, { method: "POST", body: JSON.stringify({}) });
@@ -68,6 +68,10 @@ const internals = [
     ["_letters_do_vote", { p_lobby_id: fakeId, p_player_id: fakeId, p_choice: 1 }],
     ["_letters_pick_cands", { p_lobby_id: fakeId }],
     ["_letters_start_vote", { p_lobby_id: fakeId }],
+    ["_letters_results", { p_lobby_id: fakeId, p_seq: 1 }],
+    ["_letters_appeal_eval", { p_lobby_id: fakeId, p_seq: 1, p_owner: fakeId, p_norm: "x" }],
+    ["_letters_do_appeal", { p_lobby_id: fakeId, p_player_id: fakeId, p_text: "x" }],
+    ["_letters_do_appeal_vote", { p_lobby_id: fakeId, p_player_id: fakeId, p_owner: fakeId, p_text: "x", p_yes: true }],
 ];
 for (const [fn, args] of internals) {
     const r = await rest(`rpc/${fn}`, { method: "POST", body: JSON.stringify(args) });
@@ -85,6 +89,8 @@ const pub = [
     ["rpc_letters_submit", { p_code: "ZZZZ", p_player_id: fakeId, p_text: "Berlin" }],
     ["rpc_letters_done", { p_code: "ZZZZ", p_player_id: fakeId }],
     ["rpc_letters_vote", { p_code: "ZZZZ", p_player_id: fakeId, p_choice: 1 }],
+    ["rpc_letters_appeal", { p_code: "ZZZZ", p_player_id: fakeId, p_text: "x" }],
+    ["rpc_letters_appeal_vote", { p_code: "ZZZZ", p_player_id: fakeId, p_owner: fakeId, p_text: "x", p_yes: true }],
 ];
 for (const [fn, args] of pub) {
     const r = await rest(`rpc/${fn}`, { method: "POST", body: JSON.stringify(args) });
