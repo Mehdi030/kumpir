@@ -10,15 +10,15 @@ import { ConfettiBurst } from "@/components/quiz/ConfettiBurst";
 import { playDrumRoll, playFanfare, playFx, playRankHit } from "@/lib/gameFx";
 import { useQuiz, type QuizLobby, type QuizPlayer } from "@/components/quiz/useQuiz";
 import { CAT_ICON } from "@/lib/rouletteCats";
+import { ITEM, STYLES } from "@/components/quiz/letterRouletteStyles";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-const ITEM = 104; // Breite eines Buchstabens auf der Walze (px)
 const REPEATS = 7; // Walze = 7x A–Z, der Zielbuchstabe liegt in der vorletzten Wiederholung
 const SPIN_MS = 5600;
 
 // Wörter-Karte: feste Spalten, y in Zeilen (so bleibt jedes Wort an seinem Platz, auch wenn weitere dazukommen)
-const MAP_COLS = 4;
-const BASE_ROWS = 8; // Zeilenhöhe steht im CSS (--rh), damit sie auf dem Handy kleiner sein kann
+const MAP_COL_W = 235; // so breit darf eine Spalte der Wörter-Karte mindestens sein (px) – daraus folgt die Spaltenzahl
+const BASE_ROWS = 7; // Zeilenhöhe steht im CSS (--rh), damit sie auf dem Handy kleiner sein kann
 
 // Wertungs-Show: Wörter-Karte 7 s (13 s, wenn Menschen rote Wörter haben – Zeit für Einsprüche; steht in quiz_reveal.mapSecs), dann je Platz 2,2 s (Trommelwirbel 0,9 s + Treffer), Sieger +1,5 s – muss zur Datenbank passen (Migration 128)
 const MAP_S_DEFAULT = 7;
@@ -46,8 +46,8 @@ function rng(seed: number) {
 }
 
 /** Platz des k-ten Wortes auf der Karte: quer verteilt (zuerst die 35 Felder in zufälliger Reihenfolge, danach weitere Zeilen) */
-function slotOf(k: number, seed: number): { x: number; y: number } {
-    const B = MAP_COLS * BASE_ROWS;
+function slotOf(k: number, seed: number, cols: number): { x: number; y: number } {
+    const B = cols * BASE_ROWS;
     let row: number;
     let col: number;
     if (k < B) {
@@ -60,10 +60,10 @@ function slotOf(k: number, seed: number): { x: number; y: number } {
             let bestD = -1;
             for (let c = 0; c < Math.min(6, free.length); c++) {
                 const cand = free[Math.floor(r() * free.length)]!;
-                const cx = cand % MAP_COLS;
-                const cy = Math.floor(cand / MAP_COLS);
+                const cx = cand % cols;
+                const cy = Math.floor(cand / cols);
                 let d = 99;
-                for (const o of perm) d = Math.min(d, Math.hypot((o % MAP_COLS) - cx, (Math.floor(o / MAP_COLS) - cy) * 0.8));
+                for (const o of perm) d = Math.min(d, Math.hypot((o % cols) - cx, (Math.floor(o / cols) - cy) * 0.8));
                 if (d > bestD) {
                     bestD = d;
                     best = cand;
@@ -73,21 +73,21 @@ function slotOf(k: number, seed: number): { x: number; y: number } {
             free.splice(free.indexOf(best), 1);
         }
         const cell = perm[k]!;
-        row = Math.floor(cell / MAP_COLS);
-        col = cell % MAP_COLS;
+        row = Math.floor(cell / cols);
+        col = cell % cols;
     } else {
         const extra = k - B;
-        row = BASE_ROWS + Math.floor(extra / MAP_COLS);
-        const cols = Array.from({ length: MAP_COLS }, (_, i) => i);
+        row = BASE_ROWS + Math.floor(extra / cols);
+        const order = Array.from({ length: cols }, (_, i) => i);
         const r = rng(seed + row * 131);
-        for (let i = cols.length - 1; i > 0; i--) {
+        for (let i = order.length - 1; i > 0; i--) {
             const j = Math.floor(r() * (i + 1));
-            [cols[i], cols[j]] = [cols[j]!, cols[i]!];
+            [order[i], order[j]] = [order[j]!, order[i]!];
         }
-        col = cols[extra % MAP_COLS]!;
+        col = order[extra % cols]!;
     }
     const j = rng(seed * 7 + k * 977);
-    return { x: 16 + ((col + 0.5) / MAP_COLS) * 68 + (j() - 0.5) * 6, y: row + 0.5 + (j() - 0.5) * 0.26 };
+    return { x: 10 + ((col + 0.5) / cols) * 80 + (j() - 0.5) * 5, y: row + 0.5 + (j() - 0.5) * 0.26 };
 }
 
 /**
@@ -230,7 +230,6 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
         }
         return out;
     }, [state, typed, rows, mePlayerId]);
-    const mapRows = Math.max(BASE_ROWS, Math.ceil(words.length / MAP_COLS) + 1);
     const crowded = words.length > 44;
 
     // Wörter färben sich erst kurz nach der Auflösung (grün/groß bzw. rot/klein)
@@ -274,26 +273,39 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
             </header>
 
             <div className="lrBar" aria-hidden>
-                <div className={`lrBarFill ${q.left < 8 && state === "question" ? "hot" : ""}`} style={{ transform: `scaleX(${state === "spin" || state === "vote" ? q.ratio : q.ratio})` }} />
+                <div className={`lrBarFill ${q.left < 8 && state === "question" ? "hot" : ""}`} style={{ transform: `scaleX(${q.ratio})` }} />
             </div>
 
             {/* ---------- Roulette + Abstimmung ---------- */}
             {state === "spin" || !state ? (
-                <section className="lrSpin" key={`spin:${lobby.quiz_seq}`}>
+                <section className="lrScene" key={`spin:${lobby.quiz_seq}`}>
                     <div className="lrKick">{tr("Das Roulette entscheidet …")}</div>
-                    <div className="lrReelWrap">
-                        <div className="lrPointer" aria-hidden>
-                            ▼
-                        </div>
-                        <div className="lrReel" style={{ transform: reelTransform, transition: reelTransition }}>
-                            {strip.map((c, i) => (
-                                <span key={i} className={`lrCell ${landed && i === target ? "hit" : ""}`}>
-                                    {c}
-                                </span>
+                    <div className={`lrCab ${landed ? "landed" : ""}`}>
+                        <div className="lrLamps top" aria-hidden>
+                            {Array.from({ length: 18 }, (_, k) => (
+                                <i key={k} style={{ ["--k" as string]: k }} />
                             ))}
                         </div>
-                        <div className="lrPointerB" aria-hidden>
-                            ▲
+                        <div className="lrReelWrap">
+                            <div className="lrPointer" aria-hidden>
+                                ▼
+                            </div>
+                            <div className="lrWin" aria-hidden />
+                            <div className="lrReel" style={{ transform: reelTransform, transition: reelTransition }}>
+                                {strip.map((c, i) => (
+                                    <span key={i} className={`lrCell ${landed && i === target ? "hit" : ""}`}>
+                                        {c}
+                                    </span>
+                                ))}
+                            </div>
+                            <div className="lrPointerB" aria-hidden>
+                                ▲
+                            </div>
+                        </div>
+                        <div className="lrLamps bottom" aria-hidden>
+                            {Array.from({ length: 18 }, (_, k) => (
+                                <i key={k} style={{ ["--k" as string]: 17 - k }} />
+                            ))}
                         </div>
                     </div>
                     <VoteCards cands={cands} tally={tally} myVote={myVote} canVote={canVote} onVote={vote} votedCount={votedCount} humans={humans} rise />
@@ -301,46 +313,34 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
             ) : null}
 
             {state === "vote" ? (
-                <section className="lrVote" key={`vote:${lobby.quiz_seq}`}>
-                    <div className="lrVoteTop">
-                        <div className="lrLetter">{letter}</div>
-                        <div>
+                <section className="lrScene" key={`vote:${lobby.quiz_seq}`}>
+                    <div className="lrPanel">
+                        <div className="lrLetter" aria-label={tr("Buchstabe {l}", { l: letter })}>
+                            {letter}
+                        </div>
+                        <div className="lrPanelText">
                             <small>{tr("Kategorie {i} von {n}", { i: Math.min(idx + 1, total), n: total })}</small>
                             <h2>{tr("Wählt die nächste Kategorie")}</h2>
                         </div>
-                        <div className="lrTimer" title={tr("Verbleibende Zeit")}>
-                            {Math.ceil(q.left)}
-                            <small>s</small>
-                        </div>
+                        <TimerRing left={q.left} ratio={q.ratio} hot={false} label={tr("Verbleibende Zeit")} />
                     </div>
                     <VoteCards cands={cands} tally={tally} myVote={myVote} canVote={canVote} onVote={vote} votedCount={votedCount} humans={humans} />
-                    <div className="lrTotal" aria-label={tr("Gesamtstand")}>
-                        <span className="lrTotalLabel">{tr("Gesamt")}</span>
-                        {[...ascTotals].reverse().map((p) => (
-                            <span key={p.playerId} className={`lrTotalChip ${p.playerId === mePlayerId ? "me" : ""}`}>
-                                {p.name} <b>{p.points}</b>
-                            </span>
-                        ))}
-                    </div>
                 </section>
             ) : null}
 
             {/* ---------- Eingabe ---------- */}
             {state === "question" ? (
-                <section className="lrPlay" key={`q:${lobby.quiz_seq}`}>
-                    <div className="lrTask">
+                <section className="lrScene" key={`q:${lobby.quiz_seq}`}>
+                    <div className="lrPanel">
                         <div className="lrLetter" aria-label={tr("Buchstabe {l}", { l: letter })}>
                             {letter}
                         </div>
-                        <div className="lrTaskText">
+                        <div className="lrPanelText">
                             <small>{tr("Kategorie {i} von {n}", { i: idx, n: total })}</small>
                             <h1>{cat?.name ?? "…"}</h1>
                             <span>{tr("Tippe so viele Begriffe wie möglich, die mit „{l}“ anfangen.", { l: letter })}</span>
                         </div>
-                        <div className="lrTimer" title={tr("Verbleibende Zeit")}>
-                            {Math.ceil(q.left)}
-                            <small>s</small>
-                        </div>
+                        <TimerRing left={q.left} ratio={q.ratio} hot={q.left < 8} label={tr("Verbleibende Zeit")} />
                     </div>
 
                     {me ? (
@@ -382,45 +382,36 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                         <div className="lrWatch">{tr("Du schaust zu.")}</div>
                     )}
 
-                    <WordMap words={words} seed={seed} rows={mapRows} colored={false} crowded={false} players={players} label={tr("Deine Eingaben")} />
-
-                    <div className="lrOthers" aria-label={tr("Mitspieler")}>
-                        {players
-                            .filter((p) => p.player_id !== mePlayerId)
-                            .map((p) => (
-                                <span key={p.player_id} className={`lrChip ${p.is_bot || doneSet.has(p.player_id) ? "done" : ""}`} title={p.name}>
-                                    <PlayerAvatar seed={p.name} config={p.avatar_config ?? null} size={22} />
-                                    <span>{p.name}</span>
-                                    <span aria-hidden>{p.is_bot || doneSet.has(p.player_id) ? "✓" : "⌨️"}</span>
-                                </span>
-                            ))}
-                    </div>
+                    <WordMap words={words} seed={seed} colored={false} crowded={false} players={players} label={tr("Deine Eingaben")} tag={`✍️ ${tr("Deine Eingaben")}`} />
                 </section>
             ) : null}
 
             {/* ---------- Auflösung: Wörter-Karte, danach Wertungs-Show ---------- */}
             {state === "reveal" && reveal ? (
-                <section className="lrReveal" key={`r:${lobby.quiz_seq}`}>
-                    <div className="lrRevHead">
-                        <div className="lrLetter small">{String(reveal.letter ?? letter)}</div>
-                        <div>
+                <section className="lrScene" key={`r:${lobby.quiz_seq}`}>
+                    <div className="lrPanel">
+                        <div className="lrLetter" aria-label={tr("Buchstabe {l}", { l: String(reveal.letter ?? letter) })}>
+                            {String(reveal.letter ?? letter)}
+                        </div>
+                        <div className="lrPanelText">
                             <small>{tr("Auflösung")}</small>
                             <h2>{String(reveal.category ?? "")}</h2>
                         </div>
                         {me ? (
                             <div className="lrMineHead">
-                                {tr("Deine Liste")} · <b>{mine?.points ?? 0}</b> {tr("richtig")}
+                                <b>{mine?.points ?? 0}</b>
+                                {tr("richtig")}
                             </div>
                         ) : null}
                     </div>
                     <WordMap
                         words={words}
                         seed={seed}
-                        rows={mapRows}
                         colored={colored}
                         crowded={crowded}
                         players={players}
                         label={tr("Alle Eingaben")}
+                        tag={`👥 ${tr("Alle Eingaben")}`}
                         showAuthors
                         appeals={appeals}
                         appealOpen={appealOpen}
@@ -438,6 +429,18 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                 </section>
             ) : null}
 
+            {/* ---------- Pulte: alle Spieler mit Punktestand ---------- */}
+            <Podia
+                players={players}
+                mePlayerId={mePlayerId}
+                state={state}
+                doneSet={doneSet}
+                votedSet={new Set(q.status?.voted ?? [])}
+                gains={state === "reveal" ? new Map(rows.map((r) => [r.playerId, r.points])) : null}
+                gainKey={lobby.quiz_seq}
+                compact={state === "question" || state === "reveal"}
+            />
+
             {state === "reveal" && showStage > 0 ? (
                 <RankShow
                     key={`show:${lobby.quiz_seq}:${showStage}`}
@@ -453,6 +456,81 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
 
             <style>{STYLES}</style>
         </main>
+    );
+}
+
+/** Fester Farbton je Kategorie (damit jede Karte ihre eigene Farbe hat) */
+function hueOf(name: string): number {
+    let h = 0;
+    for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return h;
+}
+
+/** Zeit-Ring wie bei der Buzzer-Arena: der Ring läuft leer, in der Mitte steht die Restzeit */
+function TimerRing({ left, ratio, hot, label }: { left: number; ratio: number; hot: boolean; label: string }) {
+    const R = 27;
+    const C = 2 * Math.PI * R;
+    return (
+        <div className={`lrRing ${hot ? "hot" : ""}`} role="timer" aria-label={label}>
+            <svg viewBox="0 0 64 64" aria-hidden>
+                <circle cx="32" cy="32" r={R} className="lrRingBg" />
+                <circle cx="32" cy="32" r={R} className="lrRingFg" strokeDasharray={C} strokeDashoffset={C * (1 - Math.max(0, Math.min(1, ratio)))} transform="rotate(-90 32 32)" />
+            </svg>
+            <span className="lrRingNum">{Math.ceil(left)}</span>
+        </div>
+    );
+}
+
+/**
+ * Pulte der Spieler unten (wie in der Buzzer-Arena): Figur auf einem Block, der mit den Punkten wächst. Dazu Zeichen: wer schon
+ * gewählt hat (Abstimmung), wer fertig ist bzw. noch tippt (Eingabe) und +Punkte der Kategorie bei der Auflösung.
+ */
+function Podia({ players, mePlayerId, state, doneSet, votedSet, gains, gainKey, compact }: { players: QuizPlayer[]; mePlayerId: string | null; state: string | null | undefined; doneSet: Set<string>; votedSet: Set<string>; gains: Map<string, number> | null; gainKey: number; compact: boolean }) {
+    const { tr } = useI18n();
+    const [view, setView] = useState(() => (typeof window === "undefined" ? { w: 1024, h: 780 } : { w: window.innerWidth, h: window.innerHeight }));
+    useEffect(() => {
+        const on = () => setView({ w: window.innerWidth, h: window.innerHeight });
+        window.addEventListener("resize", on);
+        return () => window.removeEventListener("resize", on);
+    }, []);
+    const phone = view.w < 640;
+    const narrow = players.length > 8;
+    const H = compact ? (phone ? 40 : Math.max(44, Math.min(90, Math.round(view.h * 0.09)))) : phone ? 60 : Math.max(70, Math.min(150, Math.round(view.h * 0.13)));
+    const BASE = phone || narrow ? 50 : 60;
+    const scores = players.map((p) => Number(p.song_points ?? 0));
+    const top = Math.max(10, ...scores);
+    return (
+        <section className="lrPodia" style={{ ["--H" as string]: `${H}px`, ["--base" as string]: `${BASE}px` }} aria-label={tr("Punktestand")}>
+            {players.map((p) => {
+                const score = Number(p.song_points ?? 0);
+                const h = BASE + Math.min(1, score / top) * H;
+                const done = state === "question" && (p.is_bot || doneSet.has(p.player_id));
+                const typing = state === "question" && !done && p.player_id !== mePlayerId;
+                const voted = (state === "spin" || state === "vote") && votedSet.has(p.player_id);
+                const gain = gains?.get(p.player_id);
+                return (
+                    <div key={p.player_id} className={`lrPod ${p.player_id === mePlayerId ? "me" : ""} ${done ? "done" : ""}`}>
+                        {gain !== undefined && gain > 0 ? (
+                            <span className="lrGain" key={`${gainKey}:${p.player_id}`}>
+                                +{gain}
+                            </span>
+                        ) : null}
+                        {voted ? <span className="lrBadge vote">🗳️</span> : null}
+                        {done ? <span className="lrBadge ok">✓</span> : null}
+                        {typing ? <span className="lrBadge type">⌨️</span> : null}
+                        <div className="lrFigure">
+                            <PlayerAvatar seed={p.name} config={p.avatar_config ?? null} size={narrow || phone ? 40 : 56} />
+                        </div>
+                        <div className="lrBlock" style={{ height: `${h}px` }}>
+                            <span className="lrName" title={p.name}>
+                                {p.name}
+                            </span>
+                            <span className="lrScore">{score}</span>
+                        </div>
+                    </div>
+                );
+            })}
+        </section>
     );
 }
 
@@ -478,11 +556,12 @@ function VoteCards({ cands, tally, myVote, canVote, onVote, votedCount, humans, 
                             role="radio"
                             aria-checked={mineV}
                             className={`lrVoteCard ${mineV ? "on" : ""}`}
-                            style={{ ["--i" as string]: i }}
+                            style={{ ["--h" as string]: hueOf(c.name) }}
                             disabled={!canVote}
                             onClick={() => onVote(i + 1)}
                         >
                             <span className="lrVoteNo">{i + 1}</span>
+                            {mineV ? <span className="lrVoteCheck" aria-hidden>✓</span> : null}
                             <span className="lrVoteIcon" aria-hidden>
                                 {CAT_ICON[c.name] ?? "🎯"}
                             </span>
@@ -505,11 +584,11 @@ function VoteCards({ cands, tally, myVote, canVote, onVote, votedCount, humans, 
 function WordMap({
     words,
     seed,
-    rows,
     colored,
     crowded,
     players,
     label,
+    tag,
     showAuthors = false,
     appeals = [],
     appealOpen = false,
@@ -519,11 +598,11 @@ function WordMap({
 }: {
     words: Word[];
     seed: number;
-    rows: number;
     colored: boolean;
     crowded: boolean;
     players: QuizPlayer[];
     label: string;
+    tag?: string;
     showAuthors?: boolean;
     appeals?: Appeal[];
     appealOpen?: boolean;
@@ -533,10 +612,23 @@ function WordMap({
 }) {
     const { tr } = useI18n();
     const appealOf = useMemo(() => new Map(appeals.map((a) => [`${a.o}|${a.t.toLowerCase()}`, a])), [appeals]);
-    const pos = useMemo(() => words.map((_, k) => slotOf(k, seed)), [words, seed]);
+    // Spaltenzahl nach der Breite der Karte (breit = mehr Spalten, Handy = 2), Zeilen wachsen mit der Wortzahl
+    const boxRef = useRef<HTMLDivElement | null>(null);
+    const [boxW, setBoxW] = useState(() => (typeof window === "undefined" ? 900 : Math.min(980, window.innerWidth - 28)));
+    useEffect(() => {
+        const el = boxRef.current;
+        if (!el || typeof ResizeObserver === "undefined") return;
+        const ro = new ResizeObserver((entries) => setBoxW(Math.round(entries[0]?.contentRect.width ?? 0) || 900));
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+    const cols = Math.max(2, Math.min(5, Math.floor(boxW / MAP_COL_W)));
+    const rows = Math.max(BASE_ROWS, Math.ceil(words.length / cols) + 1);
+    const pos = useMemo(() => words.map((_, k) => slotOf(k, seed, cols)), [words, seed, cols]);
     const byId = useMemo(() => new Map(players.map((p) => [p.player_id, p])), [players]);
     return (
-        <div className="lrMap" style={{ height: `calc(var(--rh) * ${rows})` }} role="group" aria-label={label}>
+        <div ref={boxRef} className="lrMap" style={{ height: `calc(var(--rh) * ${rows})` }} role="group" aria-label={label}>
+            {tag ? <span className="lrBoardTag">{tag}</span> : null}
             {words.length === 0 ? <div className="lrMapEmpty">{label}</div> : null}
             {words.map((w, i) => {
                 const p = byId.get(w.pid);
@@ -723,180 +815,3 @@ function RankShow({ title, subtitle, rows, startMs, players, mePlayerId, ptsLabe
         </div>
     );
 }
-
-const STYLES = `
-.lrMain{ min-height: 100dvh; color: #fff; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 22px; position: relative; overflow-x: hidden;
-  background: radial-gradient(ellipse 60% 45% at 50% -8%, rgba(255,205,90,.28), transparent 70%), radial-gradient(ellipse 50% 60% at 8% 35%, rgba(255,60,120,.16), transparent 70%),
-              radial-gradient(ellipse 50% 60% at 92% 35%, rgba(70,200,255,.14), transparent 70%), linear-gradient(180deg, #2a0f3c 0%, #1a0a2a 55%, #0e0618 100%); }
-.lrTopRight{ position: fixed; top: 14px; right: 14px; z-index: 60; }
-.lrHead{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 64px 0 128px; min-height: 40px; }
-@media (max-width: 640px){ .lrHead{ padding-left: 52px; } }
-.lrMode{ font-family: var(--font-display); font-weight: 900; font-size: clamp(20px, 3vw, 28px); }
-.lrGoal{ font-size: 12.5px; font-weight: 850; color: #ffe08a; padding: 4px 11px; border-radius: 999px; background: rgba(255,210,63,.12); border: 1px solid rgba(255,210,63,.35); }
-.lrCount{ margin-left: auto; font-size: 13px; font-weight: 800; opacity: .8; }
-.lrBar{ height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
-.lrBarFill{ height: 100%; transform-origin: left center; transition: transform .25s linear; background: linear-gradient(90deg, #ffd23f, #ff9d2e); }
-.lrBarFill.hot{ background: linear-gradient(90deg, #ff6a3c, #ff2e4a); }
-
-/* Walze */
-.lrSpin{ display: flex; flex-direction: column; align-items: center; gap: 18px; flex: 1; padding: 10px 0; min-width: 0; }
-.lrKick{ font-size: 13px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; opacity: .75; }
-.lrReelWrap{ position: relative; width: min(900px, 100%); height: 170px; overflow: hidden; border-radius: 26px; background: linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.2)); border: 2px solid rgba(255,210,63,.5);
-  box-shadow: 0 0 0 6px rgba(255,210,63,.1), 0 24px 60px rgba(0,0,0,.45), inset 0 0 40px rgba(0,0,0,.5); }
-.lrReelWrap::before, .lrReelWrap::after{ content: ""; position: absolute; top: 0; bottom: 0; width: 22%; z-index: 2; pointer-events: none; }
-.lrReelWrap::before{ left: 0; background: linear-gradient(90deg, #1a0a2a, transparent); }
-.lrReelWrap::after{ right: 0; background: linear-gradient(270deg, #1a0a2a, transparent); }
-.lrReel{ position: absolute; left: 50%; top: 0; height: 100%; display: flex; align-items: center; will-change: transform; }
-.lrCell{ flex: none; width: ${ITEM}px; text-align: center; font-family: var(--font-display); font-weight: 900; font-size: 96px; line-height: 1; color: rgba(255,255,255,.55); }
-.lrCell.hit{ color: #ffd23f; text-shadow: 0 0 30px rgba(255,210,63,.9); animation: lrHit .5s cubic-bezier(.3,1.6,.5,1) both; }
-@keyframes lrHit{ from{ transform: scale(.8); } to{ transform: scale(1.18); } }
-.lrPointer, .lrPointerB{ position: absolute; left: 50%; transform: translateX(-50%); z-index: 3; color: #ffd23f; font-size: 22px; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
-.lrPointer{ top: 2px; } .lrPointerB{ bottom: 2px; }
-
-/* Abstimmung */
-.lrVotes{ width: min(980px, 100%); display: grid; gap: 8px; margin-top: auto; }
-.lrVotes.rise{ animation: lrRise .8s cubic-bezier(.16,1,.3,1) .5s both; }
-@keyframes lrRise{ from{ opacity: 0; transform: translateY(60px); } }
-.lrVoteHint{ display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 800; opacity: .9; }
-.lrVoteHint b{ color: #ffe08a; font-family: var(--font-display); font-size: 17px; }
-.lrVoteGrid{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.lrVoteCard{ position: relative; display: grid; justify-items: center; align-content: center; gap: 6px; padding: 18px 10px 14px; min-height: 150px; border-radius: 22px; cursor: pointer; color: #fff; font: inherit;
-  background: linear-gradient(160deg, rgba(255,255,255,.1), rgba(255,255,255,.04)); border: 2px solid rgba(255,255,255,.2); transition: transform .18s ease, border-color .18s ease, background .18s ease; }
-.lrVoteCard:hover:not(:disabled){ transform: translateY(-4px); border-color: rgba(255,210,63,.6); }
-.lrVoteCard.on{ border-color: #ffd23f; background: linear-gradient(160deg, rgba(255,210,63,.28), rgba(255,140,40,.1)); box-shadow: 0 0 0 4px rgba(255,210,63,.18), 0 14px 34px rgba(0,0,0,.35); }
-.lrVoteCard:disabled{ cursor: default; opacity: .85; }
-.lrVoteNo{ position: absolute; top: 8px; left: 10px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 13px; background: rgba(255,255,255,.16); }
-.lrVoteCard.on .lrVoteNo{ background: #ffd23f; color: #2a1200; }
-.lrVoteIcon{ font-size: 38px; line-height: 1; }
-.lrVoteName{ font-family: var(--font-display); font-size: clamp(18px, 2.4vw, 26px); line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
-.lrVoteDots{ display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; min-height: 14px; }
-.lrVoteDots i{ width: 14px; height: 14px; border-radius: 50%; background: #ffd23f; box-shadow: 0 0 8px rgba(255,210,63,.7); animation: lrPop .35s cubic-bezier(.2,1.6,.4,1); }
-.lrVoteDots em{ font-style: normal; opacity: .4; }
-.lrVote{ display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-content: start; width: min(980px, 100%); margin: 0 auto; flex: 1; animation: lrIn .4s cubic-bezier(.16,1,.3,1); }
-.lrVoteTop{ display: flex; align-items: center; gap: 14px; }
-.lrVoteTop small{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; opacity: .7; }
-.lrVoteTop h2{ margin: 0; font-size: clamp(22px, 3.4vw, 34px); }
-.lrVoteTop .lrTimer{ margin-left: auto; }
-
-/* Eingabe */
-.lrPlay{ display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; width: min(900px, 100%); margin: 0 auto; flex: 1; animation: lrIn .4s cubic-bezier(.16,1,.3,1); }
-@keyframes lrIn{ from{ opacity: 0; transform: translateY(12px); } }
-.lrTask{ display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-radius: 24px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16); }
-.lrLetter{ flex: none; width: 92px; height: 92px; border-radius: 26px; display: grid; place-items: center; font-family: var(--font-display); font-weight: 900; font-size: 64px; color: #2a1200;
-  background: linear-gradient(160deg, #fff0a8, #ffc22e 60%, #ff9d2e); box-shadow: 0 8px 26px rgba(255,170,30,.45); }
-.lrLetter.small{ width: 56px; height: 56px; border-radius: 16px; font-size: 38px; }
-.lrTaskText{ display: grid; gap: 2px; min-width: 0; flex: 1; }
-.lrTaskText small{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; opacity: .7; }
-.lrTaskText h1{ margin: 0; font-size: clamp(26px, 4.4vw, 40px); line-height: 1.05; overflow-wrap: break-word; hyphens: auto; }
-.lrTaskText span{ font-size: 13px; opacity: .8; }
-.lrTimer{ flex: none; font-family: var(--font-display); font-weight: 900; font-size: 40px; min-width: 70px; text-align: right; color: #ffe08a; }
-.lrTimer small{ font-size: 16px; opacity: .7; margin-left: 2px; }
-.lrForm{ display: flex; gap: 8px; }
-.lrInput{ flex: 1; min-width: 0; padding: 15px 18px; border-radius: 18px; font: inherit; font-size: 20px; font-weight: 800; color: #fff; background: rgba(0,0,0,.4); border: 2px solid rgba(255,210,63,.55); outline: none; }
-.lrInput:focus{ border-color: #ffd23f; box-shadow: 0 0 0 4px rgba(255,210,63,.2); }
-.lrInput::placeholder{ color: rgba(255,255,255,.45); font-weight: 600; }
-.lrInput:disabled{ opacity: .6; }
-.lrAdd{ flex: none; }
-.lrCountRow{ display: flex; align-items: center; gap: 6px; font-weight: 800; }
-.lrCountRow b{ font-family: var(--font-display); font-size: 26px; color: #ffe08a; }
-.lrDone{ margin-left: auto; }
-.lrWatch{ text-align: center; font-weight: 800; opacity: .8; padding: 22px 0; }
-.lrOthers{ display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
-.lrChip{ display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 5px; border-radius: 999px; font-size: 12.5px; font-weight: 800; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); opacity: .85; }
-.lrChip.done{ background: rgba(60,200,120,.2); border-color: rgba(100,230,150,.5); opacity: 1; }
-
-/* Wörter-Karte */
-.lrMap{ --rh: 56px; position: relative; width: 100%; border-radius: 22px; background: radial-gradient(ellipse at 50% 40%, rgba(255,255,255,.07), rgba(255,255,255,.015)); border: 1px dashed rgba(255,255,255,.14); overflow: hidden; }
-.lrMapEmpty{ position: absolute; inset: 0; display: grid; place-items: center; opacity: .3; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; font-size: 13px; }
-.lrW{ position: absolute; transform: translate(-50%, -50%) scale(1); display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-weight: 800; font-size: 15px; white-space: nowrap; max-width: 92%;
-  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.24); animation: lrWPop .45s cubic-bezier(.2,1.6,.4,1) both;
-  transition: transform .7s cubic-bezier(.2,1.5,.4,1), background .6s ease, border-color .6s ease, color .6s ease, opacity .6s ease; transition-delay: calc(var(--i, 0) * 45ms); }
-.lrW > span{ overflow: hidden; text-overflow: ellipsis; }
-.lrW em{ font-style: normal; font-weight: 900; }
-.lrW.mine{ box-shadow: 0 0 0 2px rgba(120,220,255,.45); }
-.lrW.tiny{ font-size: 12px; padding: 3px 9px; }
-.lrW.ok.go{ transform: translate(-50%, -50%) scale(1.22); background: rgba(20,130,72,.7); border-color: rgba(100,240,160,.9); color: #e2ffee; z-index: 3; }
-.lrW.bad.go{ transform: translate(-50%, -50%) scale(.8); background: rgba(140,26,22,.6); border-color: rgba(255,100,88,.8); color: #ffd6d1; opacity: .85; }
-.lrW.dup.go{ transform: translate(-50%, -50%) scale(.85); background: rgba(150,100,20,.55); border-color: rgba(255,200,90,.7); color: #ffe9bd; opacity: .85; }
-@keyframes lrWPop{ from{ opacity: 0; transform: translate(-50%, -50%) scale(.3); } }
-.lrReveal{ display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; width: min(980px, 100%); margin: 0 auto; flex: 1; animation: lrIn .4s cubic-bezier(.16,1,.3,1); }
-.lrRevHead{ display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.lrRevHead small{ font-size: 11px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .7; }
-.lrRevHead h2{ margin: 0; font-size: clamp(24px, 4vw, 36px); }
-.lrMineHead{ margin-left: auto; font-weight: 800; font-size: 14px; }
-.lrMineHead b{ color: #8dffb8; font-family: var(--font-display); font-size: 22px; }
-.lrW.bad.go.appealable{ transform: translate(-50%, -50%) scale(.98); cursor: pointer; opacity: 1; box-shadow: 0 0 0 2px rgba(255,210,63,.7), 0 0 18px rgba(255,210,63,.35); z-index: 4; }
-.lrW.bad.go.appealable:hover{ transform: translate(-50%, -50%) scale(1.08); }
-.lrW.bad.go.pending{ transform: translate(-50%, -50%) scale(1.06); background: rgba(150,100,20,.7); border-color: #ffd23f; color: #fff2cf; opacity: 1; z-index: 5; animation: lrPulse 1.1s ease-in-out infinite alternate; }
-@keyframes lrPulse{ from{ box-shadow: 0 0 0 0 rgba(255,210,63,.55); } to{ box-shadow: 0 0 0 7px rgba(255,210,63,0); } }
-.lrVotesBox{ display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; }
-.lrVotesBox small{ font-size: 12px; font-weight: 800; }
-.lrThumb{ font: inherit; font-size: 13px; font-weight: 900; color: #fff; padding: 2px 8px; border-radius: 999px; cursor: pointer; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.35); }
-.lrThumb:hover{ background: rgba(255,255,255,.28); }
-.lrThumb.on{ background: #ffd23f; color: #2a1200; border-color: #fff; }
-.lrAppealHint{ text-align: center; font-size: 13px; font-weight: 800; color: #ffe08a; animation: lrIn .4s ease both; }
-.lrAppealHint.vote{ color: #fff; }
-.lrLegend{ display: flex; gap: 14px; justify-content: center; font-size: 12.5px; font-weight: 800; opacity: .85; }
-.lrLegend .ok{ color: #8dffb8; } .lrLegend .bad{ color: #ff9d94; } .lrLegend .dup{ color: #ffd88a; }
-
-/* Wertungs-Show */
-.lrShow{ position: fixed; inset: 0; z-index: 50; display: grid; grid-template-rows: auto 1fr auto; padding: 18px 18px 20px; overflow: hidden; animation: lrShowIn .6s ease both;
-  background: radial-gradient(ellipse 60% 45% at 50% -8%, rgba(255,205,90,.28), transparent 70%), radial-gradient(ellipse 50% 60% at 8% 35%, rgba(255,60,120,.16), transparent 70%),
-              radial-gradient(ellipse 50% 60% at 92% 35%, rgba(70,200,255,.14), transparent 70%), linear-gradient(180deg, #2a0f3c 0%, #1a0a2a 55%, #0e0618 100%); }
-.lrShow.win{ animation: lrShowIn .6s ease both, lrFlash 1.4s ease .1s; }
-@keyframes lrShowIn{ from{ opacity: 0; } }
-@keyframes lrFlash{ 0%{ filter: brightness(1); } 12%{ filter: brightness(2.1); } 100%{ filter: brightness(1); } }
-.lrSkip{ position: absolute; top: 14px; right: 80px; z-index: 5; }
-.lrShowHead{ text-align: center; padding-top: 6px; }
-.lrShowHead small{ font-size: 12px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; opacity: .7; }
-.lrShowHead h2{ margin: 2px 0 0; font-size: clamp(26px, 4.4vw, 44px); }
-.lrStage{ display: grid; place-items: center; min-height: 0; }
-.lrRollTitle{ font-family: var(--font-display); font-size: clamp(26px, 5vw, 52px); font-weight: 900; animation: lrRoll .35s ease-in-out infinite alternate; }
-@keyframes lrRoll{ from{ transform: scale(1) rotate(-1.5deg); } to{ transform: scale(1.06) rotate(1.5deg); } }
-.lrBig{ display: grid; justify-items: center; gap: 10px; animation: lrBig .7s cubic-bezier(.2,1.6,.4,1) both; }
-@keyframes lrBig{ from{ opacity: 0; transform: scale(.3) translateY(60px); } }
-.lrBigPlace{ font-size: clamp(18px, 3vw, 28px); font-weight: 900; letter-spacing: 3px; text-transform: uppercase; color: #ffe08a; }
-.lrBigAvatar{ position: relative; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 40% 35%, rgba(255,226,122,.55), rgba(255,170,30,.15) 70%); box-shadow: 0 0 0 5px #ffd23f, 0 0 calc(20px + 60px * var(--lv)) rgba(255,210,63,.6); }
-.lrBigAvatar img{ border-radius: 50%; }
-.lrCrown{ position: absolute; top: -34px; font-size: 52px; animation: lrCrown 1s ease-in-out infinite alternate; }
-@keyframes lrCrown{ from{ transform: rotate(-8deg) translateY(0); } to{ transform: rotate(8deg) translateY(-6px); } }
-.lrBigName{ font-family: var(--font-display); font-weight: 900; font-size: clamp(30px, 6vw, 64px); line-height: 1; text-align: center; overflow-wrap: anywhere; }
-.lrBig.winner .lrBigName{ background: linear-gradient(180deg, #fff6d6, #ffc23a 55%, #ff8a1c); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 4px 16px rgba(255,150,30,.6)); }
-.lrBigPts{ font-family: var(--font-display); font-weight: 900; font-size: clamp(34px, 6vw, 60px); color: #ffe08a; }
-.lrBigPts small{ font-size: .38em; opacity: .75; margin-left: 4px; }
-.lrSoFar{ list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-height: 22vh; overflow: hidden; }
-.lrSoFar li{ padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 800; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
-.lrSoFar li span{ opacity: .6; margin-right: 3px; }
-.lrSoFar li b{ color: #ffe08a; margin-left: 4px; }
-.lrFinal{ list-style: none; margin: 0 auto; padding: 8px 0; display: grid; gap: 8px; width: min(620px, 100%); align-content: center; overflow: auto; }
-.lrFinal li{ display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 18px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); animation: lrWPop .5s cubic-bezier(.2,1.5,.4,1) both; animation-delay: calc(var(--i) * 70ms); }
-.lrFinal li.first{ background: linear-gradient(160deg, rgba(255,210,63,.32), rgba(255,140,40,.14)); border-color: #ffd23f; box-shadow: 0 0 30px rgba(255,210,63,.3); }
-.lrFinal li.me{ outline: 2px solid rgba(120,220,255,.6); }
-.lrFinal b{ flex: 1; font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lrPlace{ flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 14px; background: rgba(255,255,255,.14); }
-.lrFinalPts{ font-family: var(--font-display); font-weight: 900; font-size: 26px; color: #ffe08a; }
-.lrFinalPts small{ font-size: 12px; opacity: .7; margin-left: 3px; font-family: inherit; }
-
-.lrTotal{ display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; padding-top: 4px; }
-.lrTotalLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; opacity: .65; margin-right: 4px; }
-.lrTotalChip{ padding: 4px 11px; border-radius: 999px; font-size: 13px; font-weight: 800; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
-.lrTotalChip b{ color: #ffe08a; margin-left: 4px; }
-.lrTotalChip.me{ border-color: rgba(120,220,255,.6); }
-@keyframes lrPop{ from{ opacity: 0; transform: translateY(-10px) scale(.85); } }
-@media (max-width: 640px){
-  .lrCell{ font-size: 72px; }
-  .lrReelWrap{ height: 130px; }
-  .lrLetter{ width: 70px; height: 70px; font-size: 48px; border-radius: 20px; }
-  .lrTask{ padding: 10px 12px; gap: 12px; }
-  .lrTaskText h1{ font-size: 24px; }
-  .lrTimer{ font-size: 30px; min-width: 52px; }
-  .lrInput{ font-size: 17px; padding: 13px 14px; }
-  .lrVoteGrid{ grid-template-columns: 1fr; gap: 8px; }
-  .lrVoteCard{ min-height: 0; grid-template-columns: auto auto 1fr auto; padding: 12px 14px 12px 40px; justify-items: start; text-align: left; }
-  .lrVoteName{ text-align: left; }
-  .lrMap{ --rh: 42px; }
-  .lrW{ font-size: 13px; padding: 4px 10px; }
-  .lrSkip{ right: 70px; }
-}
-@media (prefers-reduced-motion: reduce){ .lrCell.hit, .lrW, .lrVotes.rise, .lrBig, .lrRollTitle, .lrFinal li, .lrCrown{ animation: none !important; } .lrW.go{ transition: none; } }
-`;
