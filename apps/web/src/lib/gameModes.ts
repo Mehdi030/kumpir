@@ -7,7 +7,7 @@ import { tk } from "@/lib/i18nMark";
  *  original – Heiße Kartoffel: alle sitzen am runden Tisch, die Kumpir wandert, wer sie beim Knall hält, fliegt.
  *  buzzer   – Buzzer-Arena: Game-Show-Pulte, die mit den Punkten wachsen; wer zuerst das Ziel erreicht, gewinnt.
  *  year     – Zeitreise: alle ziehen ihre Figur auf einer Zeitleiste zum Erscheinungsjahr des Songs.
- *  letters  – Roulette: ein Buchstabe + drei Kategorien, jeder tippt in 45 s so viele passende Begriffe wie möglich.
+ *  letters  – Roulette: ein Buchstabe + Kategorien (per Abstimmung), jeder tippt so viele passende Begriffe wie möglich (Anzahl/Zeit/Kategorien stellt der Host ein).
  */
 export type GameModeKey = "original" | "buzzer" | "year" | "letters";
 
@@ -95,8 +95,8 @@ export const GAME_MODES: GameModeInfo[] = [
         key: "letters",
         icon: "🎰",
         label: tk("Roulette"),
-        desc: tk("Buchstaben-Roulette: Ein Buchstabe, drei Kategorien – tippe so viele passende Begriffe wie möglich."),
-        goal: tk("Nach 3 Kategorien gewinnt, wer die meisten richtigen Begriffe hat"),
+        desc: tk("Buchstaben-Roulette: Ein Buchstabe, Kategorien per Abstimmung – tippe so viele passende Begriffe wie möglich."),
+        goal: tk("Nach allen Kategorien gewinnt, wer die meisten richtigen Begriffe hat"),
         kind: "quiz",
         isNew: true,
         steps: [
@@ -105,10 +105,10 @@ export const GAME_MODES: GameModeInfo[] = [
             { icon: "✅", text: tk("Richtige zählen, die Rangliste läuft von unten") },
         ],
         rules: [
-            { icon: "🎰", text: tk("Das Roulette läuft von A bis Z und bleibt bei einem Buchstaben stehen. Dazu kommen drei Kategorien, z. B. Rapper, Schauspieler, Länder.") },
-            { icon: "⌨️", text: tk("Pro Kategorie hast du 45 Sekunden: tippe so viele Begriffe mit diesem Anfangsbuchstaben ein wie möglich (Enter = abgeben). Du siehst nur deine eigenen Eingaben.") },
-            { icon: "✅", text: tk("Danach werden alle Eingaben geprüft: erkannte werden grün, nicht erkannte rot, doppelte zählen nur einmal. Kleine Tippfehler sind okay.") },
-            { icon: "📊", text: tk("Die Rangliste läuft von unten nach oben – wer die meisten richtigen Begriffe hatte, kommt zuletzt. Nach 3 Kategorien gewinnt die Gesamtsumme.") },
+            { icon: "🎰", text: tk("Das Roulette läuft von A bis Z und bleibt bei einem Buchstaben stehen. Gleichzeitig stimmt ihr über eine von drei Kategorien ab – die Mehrheit entscheidet.") },
+            { icon: "⌨️", text: tk("Pro Kategorie hast du begrenzte Zeit (Standard 45 Sekunden, der Host kann sie in der Lobby ändern): tippe so viele Begriffe mit diesem Anfangsbuchstaben ein wie möglich (Enter = abgeben). Du siehst nur deine eigenen Eingaben.") },
+            { icon: "✅", text: tk("Danach werden alle Eingaben geprüft: erkannte werden grün, nicht erkannte rot, doppelte zählen nur einmal. Kleine Tippfehler sind okay. Zu Unrecht rot? Dann legst du Einspruch ein, die anderen stimmen ab.") },
+            { icon: "📊", text: tk("Die Rangliste läuft von unten nach oben – wer die meisten richtigen Begriffe hatte, kommt zuletzt. Nach allen Kategorien gewinnt die Gesamtsumme.") },
         ],
     },
 ];

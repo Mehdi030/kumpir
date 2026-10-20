@@ -195,6 +195,81 @@ try {
     failed++;
 } finally {
     if (id) await q("delete from public.lobbies where id = $1", [id]).catch(() => {});
+}
+
+// ---------- Host-Einstellungen, Statistik, Erfolge (Migration 130) ----------
+let id2 = null;
+try {
+    const [acc] = await q("select id from public.profiles where lower(username) = 'claude'");
+    const [{ code, host_player_id: host }] = await q("select * from public.rpc_create_lobby('Roulette', 'private', 12, 60)");
+    [{ id: id2 }] = await q("select id from public.lobbies where code = $1", [code]);
+    for (let i = 1; i < 3; i++) await q("select public.rpc_add_bot($1, $2, $3, $4::smallint)", [id2, host, `Bot ${i}`, 2]);
+    await q("update public.lobbies set game_mode = 'letters', series_index = 1, series_total = 1 where id = $1", [id2]);
+    const cfg = (c) => q("select public.set_letters_config($1, $2, $3::jsonb)", [id2, host, JSON.stringify(c)]);
+    const fails = async (c) => { try { await cfg(c); return ""; } catch (e) { return e.message; } };
+    check("Einstellungen: 6 Kategorien gibt es nicht", /letters_bad_config/.test(await fails({ cats: 6, secs: 45, off: [] })));
+    check("Einstellungen: 50 Sekunden gibt es nicht", /letters_bad_config/.test(await fails({ cats: 3, secs: 50, off: [] })));
+    const all = (await q("select name from public.word_categories where active order by name")).map((r) => r.name);
+    check("Einstellungen: zu wenige Kategorien übrig wird abgelehnt", /letters_too_few_categories/.test(await fails({ cats: 3, secs: 45, off: all.slice(0, all.length - 3) })));
+    const off = ["Länder", "Hauptstädte", "Städte", "Schauspieler", "Sänger", "Bands"];
+    await cfg({ cats: 2, secs: 30, off: [...off, "Gibtsnicht"] });
+    const [c1] = await q("select letters_cfg from public.lobbies where id = $1", [id2]);
+    check("Einstellungen gespeichert (unbekannte Kategorie verworfen)", c1.letters_cfg.cats === 2 && c1.letters_cfg.secs === 30 && c1.letters_cfg.off.length === 6, JSON.stringify(c1.letters_cfg));
+
+    // zwei Menschen (wegen "gewertet") – der Host mit Konto, ein Bot kurz als Mensch
+    const [bot] = await q("select player_id from public.players where lobby_id = $1 and is_bot order by seat_index limit 1", [id2]);
+    if (acc) await q("update public.players set user_id = $2 where lobby_id = $1 and player_id = $3", [id2, acc.id, host]);
+    await q("update public.players set is_bot = false where lobby_id = $1 and player_id = $2", [id2, bot.player_id]);
+    await q("update public.lobbies set created_at = now() + interval '2 hours', phase = 'countdown', countdown_ends_at = now() where id = $1", [id2]);
+    await q("select public.rpc_advance_from_countdown($1)", [id2]);
+    let l = (await q("select quiz_total, quiz_options, quiz_state from public.lobbies where id = $1", [id2]))[0];
+    check("2 Kategorien eingestellt = 2 Fragen", l.quiz_total === 2, String(l.quiz_total));
+    const offOk = (o) => (o?.cands ?? []).every((c) => !off.includes(c.name));
+    check("ausgeschlossene Kategorien stehen nicht zur Wahl", (l.quiz_options?.cands ?? []).length === 3 && offOk(l.quiz_options), (l.quiz_options?.cands ?? []).map((c) => c.name).join(", "));
+    let maxSub = 0;
+    for (let round = 0; round < 2; round++) {
+        if (round > 0) { l = await tick(id2); check(`Abstimmung ${round + 1} ohne ausgeschlossene Kategorien`, l.quiz_state === "vote" && offOk(l.quiz_options)); }
+        await q("select public._letters_do_vote($1, $2, 1)", [id2, host]);
+        await q("select public._letters_do_vote($1, $2, 1)", [id2, bot.player_id]);
+        l = await tick(id2);
+        const [t] = await q("select extract(epoch from quiz_ends_at - quiz_started_at) as secs from public.lobbies where id = $1", [id2]);
+        check(`Kategorie ${round + 1}: Zeit 30 s`, l.quiz_state === "question" && Math.round(Number(t.secs)) === 30, `${l.quiz_state} ${t.secs}`);
+        const catId = l.quiz_options.cat.id;
+        const terms = await q("select distinct label from public.word_terms where category_id = $1 and initial = lower($2) limit 14", [catId, l.quiz_options.letter]);
+        maxSub = Math.max(maxSub, Math.min(12, terms.length));
+        for (const r of terms.slice(0, 12)) await q("select public._letters_do_submit($1, $2, $3)", [id2, host, r.label]);
+        await q("select public._letters_do_submit($1, $2, 'Qwertzuiop')", [id2, host]);
+        await q("select public.rpc_letters_done($1, $2)", [code, host]);
+        await q("select public.rpc_letters_done($1, $2)", [code, bot.player_id]);
+        l = await tick(id2); // -> Auflösung
+    }
+    l = await tick(id2); // letzte Auflösung -> Ende (+ Statistik)
+    check("nach 2 Kategorien beendet", (await q("select phase from public.lobbies where id = $1", [id2]))[0].phase === "finished");
+    if (acc) {
+        const rr = await q("select * from public.roulette_rounds where lobby_id = $1 and user_id = $2 order by idx", [id2, acc.id]);
+        check("Statistik: 2 Kategorien festgehalten, gewertet (2 Menschen)", rr.length === 2 && rr.every((r) => r.ranked && r.humans === 2 && r.correct >= 1 && r.bad === 1), JSON.stringify(rr.map((r) => [r.category, r.correct, r.bad, r.place])));
+        const [mm] = await q("select * from public.roulette_matches where lobby_id = $1 and user_id = $2", [id2, acc.id]);
+        check("Statistik: Match festgehalten", !!mm && mm.categories === 2 && mm.ranked && mm.place >= 1, JSON.stringify(mm));
+        const ach = await q("select achievement_code from public.player_achievements where user_id = $1 and lobby_id = $2", [acc.id, id2]);
+        check("Erfolg Wörterflut (12 richtige in einer Kategorie)", maxSub < 12 || ach.some((a) => a.achievement_code === "roulette_haul_12"), `${maxSub} Begriffe, ${JSON.stringify(ach)}`);
+        // Auswertung wie ein angemeldeter Client
+        await db.query("begin");
+        await db.query("select set_config('request.jwt.claims', $1, true), set_config('request.jwt.claim.sub', $2, true), set_config('role', 'authenticated', true)", [JSON.stringify({ sub: acc.id, role: "authenticated" }), acc.id]);
+        const st = (await db.query("select public.get_my_roulette_stats() s")).rows[0].s;
+        await db.query("rollback");
+        check("get_my_roulette_stats liefert Runden, Wörter, Lieblingskategorie", st.rounds >= 2 && st.words >= 2 && Array.isArray(st.categories) && st.categories.length >= 1 && st.bestRound?.correct >= 1, JSON.stringify(st).slice(0, 160));
+    } else console.log("(Testkonto 'claude' fehlt – Statistik-Prüfung übersprungen)");
+} catch (e) {
+    console.error("FEHLER (Einstellungen/Statistik):", e.message);
+    failed++;
+    await db.query("rollback").catch(() => {});
+} finally {
+    if (id2) {
+        await q("delete from public.player_achievements where lobby_id = $1", [id2]).catch(() => {});
+        await q("delete from public.roulette_rounds where lobby_id = $1", [id2]).catch(() => {});
+        await q("delete from public.roulette_matches where lobby_id = $1", [id2]).catch(() => {});
+        await q("delete from public.lobbies where id = $1", [id2]).catch(() => {});
+    }
     await db.end();
 }
 console.log(failed ? `\n${failed} Prüfung(en) fehlgeschlagen` : "\nAlle Prüfungen bestanden.");

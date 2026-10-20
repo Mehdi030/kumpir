@@ -19,6 +19,8 @@ export type LobbyRow = {
     topic_filter: string[] | null;
     /** 'public' = im Hauptmenü unter "Offene Lobbys" sichtbar (Migration 104) */
     privacy?: string | null;
+    /** Roulette-Einstellungen des Hosts (Migration 130) */
+    letters_cfg?: { cats?: number; secs?: number; off?: string[] } | null;
 };
 
 export type PlayerRow = {
@@ -68,7 +70,7 @@ export function useLobbyState(code: string, opts?: UseLobbyStateOpts) {
 
         const lobbyRes = await supabase
             .from("lobbies")
-            .select("id,code,host_player_id,phase,locked,max_players,game_mode,topic,series_total,answer_mode,topic_filter,privacy")
+            .select("id,code,host_player_id,phase,locked,max_players,game_mode,topic,series_total,answer_mode,topic_filter,privacy,letters_cfg")
             .eq("code", code)
             .single();
 

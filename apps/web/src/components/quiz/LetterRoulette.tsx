@@ -9,6 +9,7 @@ import { AudioControl } from "@/components/AudioControl";
 import { ConfettiBurst } from "@/components/quiz/ConfettiBurst";
 import { playDrumRoll, playFanfare, playFx, playRankHit } from "@/lib/gameFx";
 import { useQuiz, type QuizLobby, type QuizPlayer } from "@/components/quiz/useQuiz";
+import { CAT_ICON } from "@/lib/rouletteCats";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const ITEM = 104; // Breite eines Buchstabens auf der Walze (px)
@@ -31,11 +32,6 @@ type ValidItem = { t: string; l: string };
 type ResultRow = { playerId: string; name: string; points: number; valid: ValidItem[]; bad: string[]; dup: string[] };
 type Word = { key: string; text: string; pid: string; kind: "plain" | "ok" | "bad" | "dup"; mine: boolean };
 type Appeal = { o: string; t: string; y: string[]; n: string[]; s: "open" | "accepted" | "rejected" };
-
-const CAT_ICON: Record<string, string> = {
-    Rapper: "🎤", Schauspieler: "🎬", Länder: "🌍", Städte: "🏙️", Hauptstädte: "🏛️", Sänger: "🎵", Bands: "🎸", Fußballspieler: "⚽",
-    Fußballvereine: "🏟️", Flüsse: "🌊", Serien: "📺", Tiere: "🐾", "Obst & Gemüse": "🍎", Automarken: "🚗",
-};
 
 /** kleiner Zufallsgenerator (stabil für denselben Startwert) */
 function rng(seed: number) {
@@ -112,6 +108,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
     const tally = useMemo(() => ((opts.tally as number[] | undefined) ?? [0, 0, 0]).slice(0, 3), [opts.tally]);
     const cat = (opts.cat as CatInfo | undefined) ?? null;
     const idx = Math.max(0, lobby.quiz_index);
+    const total = Math.max(1, lobby.quiz_total || 3); // Anzahl Kategorien (Host-Einstellung)
     const me = players.find((p) => p.player_id === mePlayerId) ?? null;
     const reveal = lobby.quiz_reveal as { letter?: string; category?: string; index?: number; last?: boolean; mapSecs?: number; results?: ResultRow[] } | null;
     const MAP_S = Number(reveal?.mapSecs ?? MAP_S_DEFAULT);
@@ -270,7 +267,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                 <span className="lrGoal">🎯 {tr(info.goal)}</span>
                 {idx > 0 || state === "vote" ? (
                     <span className="lrCount">
-                        {tr("Kategorie {i} von {n}", { i: Math.min(state === "vote" ? idx + 1 : Math.max(1, idx), 3), n: 3 })}
+                        {tr("Kategorie {i} von {n}", { i: Math.min(state === "vote" ? idx + 1 : Math.max(1, idx), total), n: total })}
                         {lobby.series_total > 1 ? ` · ${tr("Runde {i}/{n}", { i: lobby.series_index, n: lobby.series_total })}` : ""}
                     </span>
                 ) : null}
@@ -308,7 +305,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                     <div className="lrVoteTop">
                         <div className="lrLetter">{letter}</div>
                         <div>
-                            <small>{tr("Kategorie {i} von {n}", { i: Math.min(idx + 1, 3), n: 3 })}</small>
+                            <small>{tr("Kategorie {i} von {n}", { i: Math.min(idx + 1, total), n: total })}</small>
                             <h2>{tr("Wählt die nächste Kategorie")}</h2>
                         </div>
                         <div className="lrTimer" title={tr("Verbleibende Zeit")}>
@@ -336,7 +333,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                             {letter}
                         </div>
                         <div className="lrTaskText">
-                            <small>{tr("Kategorie {i} von {n}", { i: idx, n: 3 })}</small>
+                            <small>{tr("Kategorie {i} von {n}", { i: idx, n: total })}</small>
                             <h1>{cat?.name ?? "…"}</h1>
                             <span>{tr("Tippe so viele Begriffe wie möglich, die mit „{l}“ anfangen.", { l: letter })}</span>
                         </div>
@@ -445,7 +442,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                 <RankShow
                     key={`show:${lobby.quiz_seq}:${showStage}`}
                     title={showStage === 2 ? tr("Gesamtwertung") : String(reveal?.category ?? "")}
-                    subtitle={showStage === 2 ? tr("Nach 3 Kategorien") : tr("Die Wertung dieser Kategorie")}
+                    subtitle={showStage === 2 ? tr("Nach {n} Kategorien", { n: total }) : tr("Die Wertung dieser Kategorie")}
                     rows={showStage === 2 ? ascTotals : rows.map((r) => ({ playerId: r.playerId, name: r.name, points: r.points }))}
                     startMs={revealStart + (MAP_S + (showStage === 2 ? D : 0)) * 1000}
                     players={players}

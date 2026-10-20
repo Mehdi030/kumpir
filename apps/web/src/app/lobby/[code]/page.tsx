@@ -21,6 +21,8 @@ import { getSessionToken } from "@/lib/playerSession";
 import { GAME_MODES, gameModeInfo } from "@/lib/gameModes";
 import { SwipeStat } from "@/components/lobby/SwipeStat";
 import { Collapse } from "@/components/ui/Collapse";
+import { RouletteSettings } from "@/components/lobby/RouletteSettings";
+import { lettersCfgOf, type LettersCfg } from "@/lib/rouletteCats";
 import { PlaylistPicker, usePlaylists } from "@/components/PlaylistPicker";
 import { kickPlayerAction, setLobbyLockAction, transferHostAction } from "@/actions/hostActions";
 
@@ -213,6 +215,30 @@ export default function LobbyPage() {
         [lobbyId, mePlayerId, lobby?.locked, rpc]
     );
     const [visibility, setVisibility] = useLiveSetting(serverVisibility, sendVisibility, showError, reload);
+
+    // Roulette-Einstellungen (Host): Anzahl Kategorien, Zeit, erlaubte Kategorien
+    const lettersCfg = useMemo(() => lettersCfgOf(lobby?.letters_cfg), [lobby?.letters_cfg]);
+    const [letterCats, setLetterCats] = useState<string[]>([]);
+    useEffect(() => {
+        if (mode !== "letters" || letterCats.length) return;
+        let alive = true;
+        void getSupabaseClient()
+            .rpc("get_letters_categories")
+            .then(({ data }) => {
+                if (alive && Array.isArray(data)) setLetterCats(data as string[]);
+            });
+        return () => {
+            alive = false;
+        };
+    }, [mode, letterCats.length]);
+    const saveLettersCfg = useCallback(
+        async (next: LettersCfg) => {
+            const err = await rpc("set_letters_config", { p_cfg: next });
+            await reload();
+            return err;
+        },
+        [rpc, reload]
+    );
 
     // Playlists (die einzige Stelle, an der man sie ändert)
     const playlistList = usePlaylists();
@@ -487,7 +513,10 @@ export default function LobbyPage() {
 
                         <InviteActions code={code} disabled={isRunning} />
 
-                        <div className="lobbyPl">
+                        {mode === "letters" ? (
+                            <RouletteSettings cfg={lettersCfg} categories={letterCats} canEdit={canEdit} onSave={saveLettersCfg} onError={showError} />
+                        ) : null}
+                        <div className="lobbyPl" hidden={mode === "letters"}>
                             <button type="button" className="lobbyPlHead" onClick={() => setPlOpen((v) => !v)} aria-expanded={plOpen}>
                                 <span>🎵 {tr("Playlists")}</span>
                                 <span className="lobbyPlCount">

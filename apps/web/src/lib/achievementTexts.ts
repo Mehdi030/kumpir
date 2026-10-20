@@ -3,6 +3,9 @@
 import { tk } from "@/lib/i18nMark";
 
 export const ACHIEVEMENT_TEXTS = [
+    [tk("Glückspilz"), tk("Gewinne ein Roulette-Match.")],
+    [tk("Wortakrobat"), tk("Finde insgesamt 100 richtige Begriffe im Roulette.")],
+    [tk("Wörterflut"), tk("Finde 12 richtige Begriffe in einer einzigen Kategorie.")],
     [tk("Clutch-Master"), tk("Mache 10 Pässe weniger als 2 Sek. vor der Explosion.")],
     [tk("Eiskalt"), tk("Mache 50 Clutch-Pässe.")],
     [tk("Erstgeborener"), tk("Gewinne deine erste Runde.")],

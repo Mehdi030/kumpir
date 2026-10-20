@@ -9,6 +9,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/Spinner";
 import { AccountStats } from "@/components/profile/AccountStats";
 import { ProfileFolder } from "@/components/profile/ProfileFolder";
+import { RouletteStats } from "@/components/profile/RouletteStats";
 import { HomeButton } from "@/components/BackButton";
 import { seasonKey, type ProfileStats } from "@/lib/profileStats";
 import { fmtNum, trNow, useI18n } from "@/lib/i18n";
@@ -111,6 +112,7 @@ export default function StatsPage() {
                             <Spinner size={24} label={tr("Lade Statistik…")} />
                         </div>
                     ) : null}
+                    <RouletteStats userId={user.id} />
             </ProfileFolder>
             <style>{`
                 .stQuick{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 8px; }
