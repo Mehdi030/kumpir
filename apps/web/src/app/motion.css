@@ -98,17 +98,8 @@ main{ animation: kmPageIn .45s ease backwards; }
     66%     { transform: rotateY(-.4deg) rotateX(.4deg) rotateZ(-.1deg) translateX(-.2%) scaleY(1); }
     84%     { transform: rotateY(-2.8deg) rotateX(-.5deg) rotateZ(-.35deg) translateX(-.6%) scaleY(1.018); }
 }
-/* Glutbett unten auf der Startseite: dunkle Glut + Flammen hinter der Karte */
-.homeFireBed{
-    position: fixed; left: 0; right: 0; bottom: 0; height: 52vh; z-index: -1; pointer-events: none;
-    background: linear-gradient(0deg, rgba(64, 6, 0, .86) 0%, rgba(120, 22, 0, .55) 38%, rgba(160, 40, 4, .18) 72%, transparent 100%);
-    animation: kmFadeIn 1.2s ease .3s backwards;
-}
-.homeFireCv{ display: block; width: 100%; height: 100%; }
-@media (prefers-reduced-motion: reduce){ .homeFireCv{ display: none; } }
-
 /* Flammen und Glutschein hinter der Kumpir */
-.kpFire{ position: absolute; z-index: 0; left: -12%; width: 124%; top: -45%; height: 145%; pointer-events: none; }
+.kpFire{ position: absolute; z-index: 0; left: -6%; width: 112%; top: -26%; height: 126%; pointer-events: none; }
 .kpGlow{
     position: absolute; z-index: 0; left: 8%; right: 8%; top: 20%; height: 58%; pointer-events: none;
     background: radial-gradient(52% 50% at 50% 62%, rgba(255, 170, 40, .62), rgba(255, 90, 12, .3) 52%, transparent 76%);

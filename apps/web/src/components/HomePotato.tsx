@@ -77,21 +77,21 @@ function Lids({ eye, id, side }: { eye: typeof EYE_R; id: string; side: "R" | "L
     );
 }
 
-// Feuer-Canvas: reicht 12 % links/rechts und 45 % nach oben über das Bild hinaus (Flammen dürfen darüber hinauslodern)
-const FIRE_L = 0.12;
-const FIRE_T = 0.45;
+// Feuer-Canvas: kleine Fläche – 6 % links/rechts und 26 % nach oben über das Bild hinaus, nur oberhalb der Kumpir (Wunsch Mehdi 2026-10-25)
+const FIRE_L = 0.06;
+const FIRE_T = 0.26;
 const fx = (ix: number) => (FIRE_L + ix / W) / (1 + 2 * FIRE_L);
 const fy = (iy: number) => (FIRE_T + iy / H) / (1 + FIRE_T);
 const POTATO_FIRE: FireEmitter[] = [
     // linke Flammenbank hinter der Kumpir
-    { x0: fx(290), x1: fx(540), y: fy(405), rate: 40, size: 0.05, rise: 0.21, life: 1.3, sway: 1, heat: 0.9, sparks: 3 },
-    { x0: fx(268), x1: fx(330), y: fy(415), rate: 14, size: 0.038, rise: 0.17, life: 1.1, sway: 1.3, heat: 0.75 },
+    { x0: fx(290), x1: fx(540), y: fy(405), rate: 40, size: 0.05, rise: 0.2, life: 0.95, sway: 1, heat: 0.9, sparks: 2 },
+    { x0: fx(268), x1: fx(330), y: fy(415), rate: 14, size: 0.038, rise: 0.16, life: 0.8, sway: 1.3, heat: 0.75 },
     // über dem Käsehügel
-    { x0: fx(560), x1: fx(740), y: fy(275), rate: 22, size: 0.04, rise: 0.17, life: 1.1, sway: 1, heat: 0.85, sparks: 2 },
+    { x0: fx(560), x1: fx(740), y: fy(275), rate: 22, size: 0.04, rise: 0.17, life: 0.85, sway: 1, heat: 0.85, sparks: 2 },
     // rechte Flammenbank
-    { x0: fx(835), x1: fx(990), y: fy(425), rate: 34, size: 0.044, rise: 0.21, life: 1.3, sway: 1, heat: 0.9, sparks: 3 },
+    { x0: fx(835), x1: fx(990), y: fy(425), rate: 34, size: 0.044, rise: 0.2, life: 0.95, sway: 1, heat: 0.9, sparks: 2 },
     // Zündschnur: Funkenregen
-    { x0: fx(800), x1: fx(818), y: fy(219), rate: 0, size: 0.028, rise: 0.22, life: 0.55, sway: 0.6, heat: 1, sparks: 24 },
+    { x0: fx(800), x1: fx(818), y: fy(219), rate: 0, size: 0.028, rise: 0.2, life: 0.5, sway: 0.6, heat: 1, sparks: 14 },
 ];
 
 export function HomePotato() {

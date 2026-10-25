@@ -8,7 +8,6 @@ import { LobbyExitNotice } from "@/components/LobbyExitNotice";
 import { OpenLobbies } from "@/components/OpenLobbies";
 import { HomeSideDrawers } from "@/components/HomeSideDrawers";
 import { HomePotato } from "@/components/HomePotato";
-import { HomeFireBed } from "@/components/HomeFireBed";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { PwaSetup } from "@/components/PwaSetup";
 import { useI18n } from "@/lib/i18n";
@@ -33,7 +32,6 @@ export default function Home() {
     return (
         <main className="container homeMain">
             <AchievementRecap />
-            <HomeFireBed />
             <div className="landingWrap landingWrapDecor">
                 <div className="potatoBg" aria-hidden="true">
                     <HomePotato />
