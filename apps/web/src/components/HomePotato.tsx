@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import type { CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { FireCanvas, type FireEmitter } from "@/components/FireCanvas";
 
 /**
  * Die Kumpir über der Startseiten-Karte: wirkt ruhig/statisch, lebt aber durch kleine Gesten.
@@ -11,6 +12,9 @@ import type { CSSProperties } from "react";
  *    gleiche Position wie im Logo) und hebt sich nacheinander kurz an. Gestreckt wird nur vom
  *    Fingeransatz aus, so deckt der angehobene Finger das Original im Logo immer ganz ab.
  *  - 3D: Kante/Tiefe per Schatten und Lichtreflex. Die Maus hat KEINEN Einfluss (Wunsch Mehdi 2026-10-12).
+ *  - Feuer (Wunsch Mehdi 2026-10-25): hinter der Kumpir züngeln echte, animierte Flammen und stieben Funken (FireCanvas), die gemalten
+ *    Flammen flackern im Feuerschein, ein Glutschein pulsiert dahinter und die ganze Kumpir wiegt sich in 3D leicht hin und her
+ *    (schaut mal höher, mal tiefer) – alles ohne Mausbezug.
  * Alle Koordinaten beziehen sich auf HGLogo-v2.webp (1200 x 800; rechte Hand gespiegelt, damit beide Hände 4 Finger haben).
  */
 const W = 1200;
@@ -73,11 +77,39 @@ function Lids({ eye, id, side }: { eye: typeof EYE_R; id: string; side: "R" | "L
     );
 }
 
+// Feuer-Canvas: reicht 12 % links/rechts und 45 % nach oben über das Bild hinaus (Flammen dürfen darüber hinauslodern)
+const FIRE_L = 0.12;
+const FIRE_T = 0.45;
+const fx = (ix: number) => (FIRE_L + ix / W) / (1 + 2 * FIRE_L);
+const fy = (iy: number) => (FIRE_T + iy / H) / (1 + FIRE_T);
+const POTATO_FIRE: FireEmitter[] = [
+    // linke Flammenbank hinter der Kumpir
+    { x0: fx(290), x1: fx(540), y: fy(405), rate: 40, size: 0.05, rise: 0.21, life: 1.3, sway: 1, heat: 0.9, sparks: 3 },
+    { x0: fx(268), x1: fx(330), y: fy(415), rate: 14, size: 0.038, rise: 0.17, life: 1.1, sway: 1.3, heat: 0.75 },
+    // über dem Käsehügel
+    { x0: fx(560), x1: fx(740), y: fy(275), rate: 22, size: 0.04, rise: 0.17, life: 1.1, sway: 1, heat: 0.85, sparks: 2 },
+    // rechte Flammenbank
+    { x0: fx(835), x1: fx(990), y: fy(425), rate: 34, size: 0.044, rise: 0.21, life: 1.3, sway: 1, heat: 0.9, sparks: 3 },
+    // Zündschnur: Funkenregen
+    { x0: fx(800), x1: fx(818), y: fy(219), rate: 0, size: 0.028, rise: 0.22, life: 0.55, sway: 0.6, heat: 1, sparks: 24 },
+];
+
 export function HomePotato() {
     const pct = (v: number, of: number) => `${((v / of) * 100).toFixed(3)}%`;
+    // auf kleinen Bildschirmen weniger Flammen (Akku/Leistung)
+    const [density, setDensity] = useState(1);
+    useEffect(() => {
+        const set = () => setDensity(window.innerWidth < 700 ? 0.6 : 1);
+        set();
+        window.addEventListener("resize", set);
+        return () => window.removeEventListener("resize", set);
+    }, []);
+    const fire = useMemo(() => POTATO_FIRE, []);
 
     return (
         <div className="potatoBgImg kpStage">
+            <div className="kpGlow" aria-hidden />
+            <FireCanvas className="kpFire" emitters={fire} density={density} scale={0.6} fps={36} maxParticles={420} />
             <div className="kpTilt">
                 <Image src="/HGLogo-v2.webp" alt="" width={900} height={600} priority quality={80} className="kpBase" />
 
@@ -129,6 +161,9 @@ export function HomePotato() {
                 {/* Funke an der Zündschnur + Lichtreflex */}
                 <span className="kpSpark" style={{ left: pct(808, W), top: pct(219, H) }} />
                 <span className="kpSheen" />
+                {/* Feuerschein: die gemalten Flammen flackern (zwei Lagen, verschieden schnell) */}
+                <span className="kpFlick" />
+                <span className="kpFlick b" />
             </div>
         </div>
     );

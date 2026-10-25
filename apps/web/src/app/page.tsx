@@ -6,9 +6,9 @@ import { Suspense, useEffect } from "react";
 import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
 import { OpenLobbies } from "@/components/OpenLobbies";
-import { HomeFriends, HomeFriendsButton } from "@/components/HomeFriends";
+import { HomeSideDrawers } from "@/components/HomeSideDrawers";
 import { HomePotato } from "@/components/HomePotato";
-import { HomeStatsSection } from "@/components/HomeStatsSection";
+import { HomeFireBed } from "@/components/HomeFireBed";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { PwaSetup } from "@/components/PwaSetup";
 import { useI18n } from "@/lib/i18n";
@@ -19,9 +19,9 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 export default function Home() {
     const { t, tr } = useI18n();
-    // Breite Bildschirme: Statistik links, Freunde rechts als feste Leisten. Sonst je ein Knopf in der Karte.
-    // So passt das Hauptmenü immer auf einen Bildschirm, ohne Scrollen (Wunsch Mehdi 2026-10-12).
-    const wide = useMediaQuery("(min-width: 1300px)");
+    // Statistik links und Freunde rechts als eingeklappte Laschen am Rand, die sich weich aufklappen (Wunsch Mehdi 2026-10-25) –
+    // auf allen Bildschirmen, so bleibt die Karte frei und das Hauptmenü passt immer auf einen Bildschirm.
+    const wide = useMediaQuery("(min-width: 900px)");
     useEffect(() => {
         track("home_view");
     }, []);
@@ -33,6 +33,7 @@ export default function Home() {
     return (
         <main className="container homeMain">
             <AchievementRecap />
+            <HomeFireBed />
             <div className="landingWrap landingWrapDecor">
                 <div className="potatoBg" aria-hidden="true">
                     <HomePotato />
@@ -80,25 +81,12 @@ export default function Home() {
                         ))}
                     </div>
 
-                    {!wide ? (
-                        <>
-                            <div className="homeQuick">
-                                <HomeStatsSection variant="chip" />
-                                <HomeFriendsButton />
-                            </div>
-                            {/* Schmal: offene Lobbys unter dem Freunde-Knopf, nur wenn es welche gibt */}
-                            <OpenLobbies variant="inline" />
-                        </>
-                    ) : null}
+                    {/* Schmal: offene Lobbys direkt in der Karte, nur wenn es welche gibt (breit stehen sie in der Freunde-Lasche) */}
+                    {!wide ? <OpenLobbies variant="inline" /> : null}
                     <PwaSetup showHint />
                 </section>
 
-                {wide ? (
-                    <>
-                        <HomeStatsSection variant="dock" />
-                        <HomeFriends withOpenLobbies />
-                    </>
-                ) : null}
+                <HomeSideDrawers />
 
                 <footer className="homeFooter">
                     v{process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"} ·{" "}

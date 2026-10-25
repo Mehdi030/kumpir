@@ -22,9 +22,10 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
  * variant (Hauptmenü ohne Scrollen, Wunsch Mehdi 2026-10-12):
  *   dock = feste Leiste links neben der Hauptkarte (breite Bildschirme, gegenüber der Freunde-Leiste)
  *   chip = eine Zeile/Knopf in der Hauptkarte (schmalere Bildschirme), öffnet das Pop-up
+ *   panel = Inhalt der aufklappbaren Seitenlasche links (components/HomeSideDrawers.tsx, Wunsch Mehdi 2026-10-25)
  *   card = Kasten in der Karte (alt)
  */
-export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "dock" | "chip" }) {
+export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "dock" | "chip" | "panel" }) {
     const { tr } = useI18n();
     const { user, loading: authLoading } = useAuth();
     const { stats, unlocked, catalog, loading: statsLoading } = useAchievements(AUTH_DISABLED ? null : user?.id ?? null);
@@ -84,7 +85,7 @@ export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "doc
                     <StatBox label={tr("Rundensiege")} value={String(stats?.wins ?? 0)} />
                     <StatBox label={tr("Beste Serie")} value={String(stats?.best_survival_streak ?? 0)} />
                     <StatBox label={tr("Erfolge")} value={`${unlocked.length}/${catalog.length}`} />
-                    {variant === "dock" ? (
+                    {variant === "dock" || variant === "panel" ? (
                         <>
                             <StatBox label={tr("Weitergaben")} value={String(stats?.total_passes ?? 0)} />
                             <StatBox label={tr("Schnellste")} value={fastest} />
