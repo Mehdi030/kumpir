@@ -122,33 +122,6 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
         return () => window.clearInterval(t);
     }, []);
 
-    // ---------------- Walze ----------------
-    const elapsed = lobby.quiz_started_at ? Math.max(0, serverNow() - Date.parse(lobby.quiz_started_at)) : 0;
-    const [go, setGo] = useState(false);
-    useEffect(() => {
-        if (state !== "spin") return;
-        const t = window.setTimeout(() => setGo(true), 60);
-        return () => window.clearTimeout(t);
-    }, [state, lobby.quiz_seq]);
-    const target = (REPEATS - 2) * LETTERS.length + Math.max(0, LETTERS.indexOf(letter));
-    const strip = useMemo(() => Array.from({ length: REPEATS * LETTERS.length }, (_, i) => LETTERS[i % LETTERS.length]!), []);
-    const landed = state === "spin" && elapsed > SPIN_MS;
-    const reelTransform = go || landed ? `translateX(${-(target + 0.5) * ITEM}px)` : `translateX(${-0.5 * ITEM}px)`;
-    const reelTransition = go && !landed ? `transform ${Math.max(300, SPIN_MS - elapsed)}ms cubic-bezier(.12,.72,.14,1)` : "none";
-    useEffect(() => {
-        if (state !== "spin" || elapsed > 800) return;
-        const timers: number[] = [];
-        let t = 0;
-        for (let i = 0; i < 18; i++) {
-            t += 120 + i * i * 14;
-            if (t > SPIN_MS - 300) break;
-            timers.push(window.setTimeout(() => playFx("tick"), t));
-        }
-        timers.push(window.setTimeout(() => playFx("voteWin"), SPIN_MS));
-        return () => timers.forEach((x) => window.clearTimeout(x));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [state, lobby.quiz_seq]);
-
     // ---------------- Abstimmung ----------------
     const myVote = q.status?.myvote ?? null;
     const votedCount = new Set(q.status?.voted ?? []).size;
@@ -185,7 +158,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
         if (canType) inputRef.current?.focus();
     }, [canType, lobby.quiz_seq]);
 
-    const add = useCallback(async () => {
+    const add = async () => {
         const t = text.trim().replace(/\s+/g, " ");
         if (!canType || iAmDone || t.length < 2) return;
         setText("");
@@ -197,7 +170,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
         playFx("vote");
         const ok = await q.submitTerm(t);
         if (!ok) setLocal((s) => ({ seq: s.seq, list: s.list.filter((x) => x !== t) }));
-    }, [text, canType, iAmDone, typed, lobby.quiz_seq, onToast, tr, q]);
+    };
 
     // ---------------- Wörter der Karte ----------------
     const words: Word[] = useMemo(() => {
@@ -264,9 +237,9 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                     {info.icon} {tr(info.label)}
                 </span>
                 <span className="lrGoal">🎯 {tr(info.goal)}</span>
-                {idx > 0 || state === "vote" ? (
+                {idx > 0 || state === "vote" || state === "spin" ? (
                     <span className="lrCount">
-                        {tr("Kategorie {i} von {n}", { i: Math.min(state === "vote" ? idx + 1 : Math.max(1, idx), total), n: total })}
+                        {tr("Kategorie {i} von {n}", { i: Math.min(state === "vote" || state === "spin" ? idx + 1 : Math.max(1, idx), total), n: total })}
                         {lobby.series_total > 1 ? ` · ${tr("Runde {i}/{n}", { i: lobby.series_index, n: lobby.series_total })}` : ""}
                     </span>
                 ) : null}
@@ -279,36 +252,9 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
             {/* ---------- Roulette + Abstimmung ---------- */}
             {state === "spin" || !state ? (
                 <section className="lrScene" key={`spin:${lobby.quiz_seq}`}>
-                    <div className="lrKick">{tr("Das Roulette entscheidet …")}</div>
-                    <div className={`lrCab ${landed ? "landed" : ""}`}>
-                        <div className="lrLamps top" aria-hidden>
-                            {Array.from({ length: 18 }, (_, k) => (
-                                <i key={k} style={{ ["--k" as string]: k }} />
-                            ))}
-                        </div>
-                        <div className="lrReelWrap">
-                            <div className="lrPointer" aria-hidden>
-                                ▼
-                            </div>
-                            <div className="lrWin" aria-hidden />
-                            <div className="lrReel" style={{ transform: reelTransform, transition: reelTransition }}>
-                                {strip.map((c, i) => (
-                                    <span key={i} className={`lrCell ${landed && i === target ? "hit" : ""}`}>
-                                        {c}
-                                    </span>
-                                ))}
-                            </div>
-                            <div className="lrPointerB" aria-hidden>
-                                ▲
-                            </div>
-                        </div>
-                        <div className="lrLamps bottom" aria-hidden>
-                            {Array.from({ length: 18 }, (_, k) => (
-                                <i key={k} style={{ ["--k" as string]: 17 - k }} />
-                            ))}
-                        </div>
-                    </div>
-                    <VoteCards cands={cands} tally={tally} myVote={myVote} canVote={canVote} onVote={vote} votedCount={votedCount} humans={humans} rise />
+                    <div className="lrKick">{idx > 0 ? tr("Neuer Buchstabe, neue Themen …") : tr("Das Roulette entscheidet …")}</div>
+                    <SlotReel key={lobby.quiz_seq} letter={letter} startedAt={lobby.quiz_started_at} />
+                    <VoteCards key={`vc:${lobby.quiz_seq}`} cands={cands} tally={tally} myVote={myVote} canVote={canVote} onVote={vote} votedCount={votedCount} humans={humans} intro={lobby.quiz_started_at} />
                 </section>
             ) : null}
 
@@ -324,7 +270,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                         </div>
                         <TimerRing left={q.left} ratio={q.ratio} hot={false} label={tr("Verbleibende Zeit")} />
                     </div>
-                    <VoteCards cands={cands} tally={tally} myVote={myVote} canVote={canVote} onVote={vote} votedCount={votedCount} humans={humans} />
+                    <VoteCards key={`vc:${lobby.quiz_seq}`} cands={cands} tally={tally} myVote={myVote} canVote={canVote} onVote={vote} votedCount={votedCount} humans={humans} />
                 </section>
             ) : null}
 
@@ -534,13 +480,93 @@ function Podia({ players, mePlayerId, state, doneSet, votedSet, gains, gainKey, 
     );
 }
 
-/** Drei Kategorien zur Abstimmung (unten beim Roulette bzw. groß zwischen den Kategorien) */
-function VoteCards({ cands, tally, myVote, canVote, onVote, votedCount, humans, rise = false }: { cands: CatInfo[]; tally: number[]; myVote: number | null; canVote: boolean; onVote: (c: number) => void; votedCount: number; humans: number; rise?: boolean }) {
-    const { tr } = useI18n();
+/**
+ * Spielautomat mit Walze (jede Runde NEU, deshalb mit key=quiz_seq aufgerufen): läuft von A durch bis zum gezogenen Buchstaben,
+ * tickt mit und blitzt beim Stehenbleiben auf. Wer später dazukommt, sieht gleich den Stand nach der Server-Uhr.
+ */
+function SlotReel({ letter, startedAt }: { letter: string; startedAt: string | null }) {
+    const [go, setGo] = useState(false);
+    const start = startedAt ? Date.parse(startedAt) : null;
+    const [now, setNow] = useState(() => serverNow());
+    const [t0] = useState(() => (start !== null ? Math.max(0, serverNow() - start) : 0));
+    const elapsed = start !== null ? Math.max(0, now - start) : 0;
+    useEffect(() => {
+        const t = window.setTimeout(() => setGo(true), 60);
+        return () => window.clearTimeout(t);
+    }, []);
+    const target = (REPEATS - 2) * LETTERS.length + Math.max(0, LETTERS.indexOf(letter));
+    const strip = useMemo(() => Array.from({ length: REPEATS * LETTERS.length }, (_, i) => LETTERS[i % LETTERS.length]!), []);
+    const landed = elapsed > SPIN_MS;
+    const transform = go || landed ? `translateX(${-(target + 0.5) * ITEM}px)` : `translateX(${-0.5 * ITEM}px)`;
+    const transition = go && !landed ? `transform ${Math.max(300, SPIN_MS - t0)}ms cubic-bezier(.12,.72,.14,1)` : "none";
+    useEffect(() => {
+        if (t0 > 800) return;
+        const timers: number[] = [];
+        let t = 0;
+        for (let i = 0; i < 18; i++) {
+            t += 120 + i * i * 14;
+            if (t > SPIN_MS - 300) break;
+            timers.push(window.setTimeout(() => playFx("tick"), t));
+        }
+        timers.push(window.setTimeout(() => playFx("voteWin"), SPIN_MS));
+        return () => timers.forEach((x) => window.clearTimeout(x));
+    }, [t0]);
+    // Takt, damit sich der Zustand "gelandet" nach SPIN_MS ändert
+    useEffect(() => {
+        const id = window.setInterval(() => setNow(serverNow()), 250);
+        return () => window.clearInterval(id);
+    }, []);
     return (
-        <div className={`lrVotes ${rise ? "rise" : ""}`}>
+        <div className={`lrCab ${landed ? "landed" : ""}`}>
+            <div className="lrLamps top" aria-hidden>
+                {Array.from({ length: 18 }, (_, k) => (
+                    <i key={k} style={{ ["--k" as string]: k }} />
+                ))}
+            </div>
+            <div className="lrReelWrap">
+                <div className="lrPointer" aria-hidden>
+                    ▼
+                </div>
+                <div className="lrWin" aria-hidden />
+                <div className="lrReel" style={{ transform, transition }}>
+                    {strip.map((c, i) => (
+                        <span key={i} className={`lrCell ${landed && i === target ? "hit" : ""}`}>
+                            {c}
+                        </span>
+                    ))}
+                </div>
+                <div className="lrPointerB" aria-hidden>
+                    ▲
+                </div>
+            </div>
+            <div className="lrLamps bottom" aria-hidden>
+                {Array.from({ length: 18 }, (_, k) => (
+                    <i key={k} style={{ ["--k" as string]: 17 - k }} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// Die drei Themen fliegen nacheinander herein (Zeitpunkte in ms nach Rundenstart), damit man sie kennenlernt, bevor man wählt
+const INTRO_AT = [1100, 1700, 2300];
+
+/** Drei Kategorien zur Abstimmung: fliegen mit Ton nacheinander herein; erst wenn eine Karte da ist, kann man sie wählen */
+function VoteCards({ cands, tally, myVote, canVote, onVote, votedCount, humans, intro = null }: { cands: CatInfo[]; tally: number[]; myVote: number | null; canVote: boolean; onVote: (c: number) => void; votedCount: number; humans: number; intro?: string | null }) {
+    const { tr } = useI18n();
+    const [t0] = useState(() => (intro ? Math.max(0, serverNow() - Date.parse(intro)) : 99999));
+    const [shown, setShown] = useState(() => INTRO_AT.filter((at) => at <= t0).length);
+    useEffect(() => {
+        const timers = INTRO_AT.map((at, i) => (at > t0 ? window.setTimeout(() => {
+            setShown(i + 1);
+            playFx("vote");
+        }, at - t0) : 0));
+        return () => timers.forEach((x) => x && window.clearTimeout(x));
+    }, [t0]);
+    return (
+        <div className="lrVotes">
             <div className="lrVoteHint">
-                {canVote ? tr("Stimme für eine Kategorie – die Mehrheit entscheidet (Taste 1, 2 oder 3)") : tr("Die Kategorie wird abgestimmt …")}
+                {canVote && shown >= 3 ? tr("Stimme für eine Kategorie – die Mehrheit entscheidet (Taste 1, 2 oder 3)") : tr("Die Themen kommen herein …")}
                 <b>
                     {votedCount}/{humans}
                 </b>
@@ -549,15 +575,18 @@ function VoteCards({ cands, tally, myVote, canVote, onVote, votedCount, humans, 
                 {cands.map((c, i) => {
                     const mineV = myVote === i + 1;
                     const cnt = Number(tally[i] ?? 0);
+                    const here = i < shown;
                     return (
                         <button
                             key={c.id}
                             type="button"
                             role="radio"
                             aria-checked={mineV}
-                            className={`lrVoteCard ${mineV ? "on" : ""}`}
-                            style={{ ["--h" as string]: hueOf(c.name) }}
-                            disabled={!canVote}
+                            aria-hidden={!here}
+                            tabIndex={here ? 0 : -1}
+                            className={`lrVoteCard ${here ? "in" : "pre"} ${mineV ? "on" : ""}`}
+                            style={{ ["--h" as string]: hueOf(c.name), ["--n" as string]: i }}
+                            disabled={!canVote || !here}
                             onClick={() => onVote(i + 1)}
                         >
                             <span className="lrVoteNo">{i + 1}</span>

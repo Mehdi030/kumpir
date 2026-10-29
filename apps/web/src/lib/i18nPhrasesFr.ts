@@ -293,6 +293,8 @@ export const PHRASES_FR: Record<string, string> = {
     "Bart & Brille": "Barbe & lunettes",
     "Outfit": "Tenue",
     "Der Ziegenbart ist für Achi reserviert.": "Le bouc est réservé à Achi.",
+    "Neuer Buchstabe, neue Themen …": "Nouvelle lettre, nouveaux thèmes …",
+    "Die Themen kommen herein …": "Les thèmes arrivent …",
     "Es müssen mindestens {n} Kategorien erlaubt bleiben.": "Au moins {n} catégories doivent rester autorisées.",
     "Roulette-Einstellungen": "Réglages de la roulette",
     "{n} Kategorien": "{n} catégories",

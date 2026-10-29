@@ -70,6 +70,7 @@ const internals = [
     ["_letters_start_vote", { p_lobby_id: fakeId }],
     ["_letters_results", { p_lobby_id: fakeId, p_seq: 1 }],
     ["_letters_cfg", { p_lobby_id: fakeId }],
+    ["_letters_next_letter", { p_lobby_id: fakeId }],
     ["_letters_letters", { p_off: [], p_need: 5 }],
     ["_award_roulette_achievements", { p_lobby_id: fakeId }],
     ["_letters_record_round", { p_lobby_id: fakeId }],

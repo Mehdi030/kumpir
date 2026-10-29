@@ -54,6 +54,7 @@ try {
         check(`Tabelle ${t} nicht lesbar für Clients`, !g.a && !g.b);
     }
 
+    const seenLetters = [letter];
     for (let round = 0; round < 3; round++) {
         let chosenWanted = null;
         if (round === 0) {
@@ -75,8 +76,11 @@ try {
             l = await tick(id);
             check("Mehrheit entscheidet", l.quiz_options?.cat?.id === chosenWanted, JSON.stringify(l.quiz_options?.cat));
         } else {
-            l = await tick(id); // reveal -> neue Abstimmung
-            check(`Abstimmung ${round + 1}: drei neue, verschiedene Kategorien`, l.quiz_state === "vote" && (l.quiz_options?.cands ?? []).length === 3, `${l.quiz_state}`);
+            l = await tick(id); // reveal -> Roulette dreht erneut (neuer Buchstabe) + neue Abstimmung
+            check(`Runde ${round + 1}: Roulette dreht neu, drei neue verschiedene Kategorien`, l.quiz_state === "spin" && (l.quiz_options?.cands ?? []).length === 3, `${l.quiz_state}`);
+            const nl = String(l.quiz_options?.letter ?? "");
+            check(`Runde ${round + 1}: neuer Buchstabe (${nl}), bisher ${seenLetters.join("")}`, /^[A-Z]$/.test(nl) && !seenLetters.includes(nl) && (l.quiz_options?.letters ?? []).join("") === [...seenLetters, nl].join(""));
+            seenLetters.push(nl);
             cands = l.quiz_options?.cands ?? [];
             const played = l.quiz_options?.played ?? [];
             check("keine schon gespielte Kategorie dabei", cands.every((c) => !played.includes(c.id)) && new Set(cands.map((c) => c.id)).size === 3);
@@ -86,6 +90,7 @@ try {
         check(`Kategorie ${round + 1} läuft`, l.quiz_state === "question" && l.quiz_index === round + 1, `${l.quiz_state}/${l.quiz_index}`);
         const cat = l.quiz_options?.cat;
         const catId = cat.id;
+        const letter = String(l.quiz_options?.letter ?? ""); // Buchstabe DIESER Runde
         // Einwort-Begriffe (7–14 Buchstaben) bevorzugen: Tippfehler-Test bleibt eindeutig; sonst alles Mögliche
         const pick = (re) =>
             q(
@@ -228,7 +233,7 @@ try {
     check("ausgeschlossene Kategorien stehen nicht zur Wahl", (l.quiz_options?.cands ?? []).length === 3 && offOk(l.quiz_options), (l.quiz_options?.cands ?? []).map((c) => c.name).join(", "));
     let maxSub = 0;
     for (let round = 0; round < 2; round++) {
-        if (round > 0) { l = await tick(id2); check(`Abstimmung ${round + 1} ohne ausgeschlossene Kategorien`, l.quiz_state === "vote" && offOk(l.quiz_options)); }
+        if (round > 0) { l = await tick(id2); check(`Runde ${round + 1}: Roulette dreht neu, ohne ausgeschlossene Kategorien`, l.quiz_state === "spin" && offOk(l.quiz_options)); }
         await q("select public._letters_do_vote($1, $2, 1)", [id2, host]);
         await q("select public._letters_do_vote($1, $2, 1)", [id2, bot.player_id]);
         l = await tick(id2);

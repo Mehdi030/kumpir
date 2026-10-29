@@ -67,8 +67,12 @@ export const STYLES = `
 
 /* Abstimmung */
 .lrVotes{ width: 100%; display: grid; gap: 8px; margin-top: auto; }
-.lrVotes.rise{ animation: lrRise .8s cubic-bezier(.16,1,.3,1) .5s both; }
-@keyframes lrRise{ from{ opacity: 0; transform: translateY(60px); } }
+/* Die Themen kommen nacheinander hereingeflogen (aus der Tiefe, mit leichtem Überschwingen und Lichtblitz) */
+.lrVoteCard.pre{ opacity: 0; transform: translateY(70px) scale(.7) rotateX(55deg); pointer-events: none; }
+.lrVoteCard.in{ animation: lrFly .75s cubic-bezier(.2,1.35,.35,1) both; }
+.lrVoteCard.in::after{ content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%); background-size: 250% 100%; animation: lrShine .9s ease-out .15s both; }
+@keyframes lrFly{ 0%{ opacity: 0; transform: perspective(700px) translateY(80px) scale(.6) rotateX(60deg); } 55%{ opacity: 1; } 100%{ opacity: 1; transform: perspective(700px) none; } }
+@keyframes lrShine{ from{ background-position: 140% 0; opacity: 1; } to{ background-position: -40% 0; opacity: 0; } }
 .lrVoteHint{ display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 800; opacity: .92; }
 .lrVoteHint b{ color: #ffe08a; font-family: var(--font-display); font-size: 17px; }
 .lrVoteGrid{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
@@ -223,7 +227,7 @@ export const STYLES = `
   .lrSkip{ right: 70px; }
 }
 @media (prefers-reduced-motion: reduce){
-  .lrCell.hit, .lrW, .lrVotes.rise, .lrBig, .lrRollTitle, .lrFinal li, .lrCrown, .lrLamps i, .lrRing.hot .lrRingNum, .lrPod.done .lrFigure, .lrBadge, .lrGain, .lrScene{ animation: none !important; }
+  .lrCell.hit, .lrW, .lrVoteCard.in, .lrVoteCard.in::after, .lrBig, .lrRollTitle, .lrFinal li, .lrCrown, .lrLamps i, .lrRing.hot .lrRingNum, .lrPod.done .lrFigure, .lrBadge, .lrGain, .lrScene{ animation: none !important; }
   .lrW.go{ transition: none; }
 }
 `;
