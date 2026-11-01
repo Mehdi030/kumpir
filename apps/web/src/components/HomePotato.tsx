@@ -1,8 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { FireCanvas, type FireEmitter } from "@/components/FireCanvas";
+import type { FireEmitter } from "@/components/FireCanvas";
+
+const FireCanvas = dynamic(() => import("@/components/FireCanvas").then((m) => m.FireCanvas), { ssr: false });
 
 /**
  * Die Kumpir über der Startseiten-Karte: wirkt ruhig/statisch, lebt aber durch kleine Gesten.

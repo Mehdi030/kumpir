@@ -1,16 +1,19 @@
 "use client";
 
 import { AchievementRecap } from "@/components/AchievementRecap";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Suspense, useEffect } from "react";
 import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
-import { HomeSideDrawers } from "@/components/HomeSideDrawers";
 import { HomePotato } from "@/components/HomePotato";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { PwaSetup } from "@/components/PwaSetup";
 import { useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
+
+// Seitenlaschen (Statistik, Freunde, Offene Lobbys) brauchen nicht für den ersten Eindruck – sie kommen nach, sobald die Seite steht
+const HomeSideDrawers = dynamic(() => import("@/components/HomeSideDrawers").then((m) => m.HomeSideDrawers), { ssr: false });
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
