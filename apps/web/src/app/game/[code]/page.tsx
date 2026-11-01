@@ -1309,6 +1309,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         [mePlayerId, lobby, kickBusyId, code, rpcHostKickDuringRound, showToast]
     );
 
+    // Erfolgs-Abzeichen fürs Siegerpodest und die Endwertung (Migration 137): erst holen, wenn das Spiel zu Ende ist
+    const [badges, setBadges] = useState<Record<string, { icon: string; title: string; n: number }>>({});
+    const badgeLobbyId = lobby?.phase === "finished" ? lobby.id : null;
+    useEffect(() => {
+        if (!badgeLobbyId) return;
+        let alive = true;
+        void supabase.rpc("get_lobby_badges", { p_lobby_id: badgeLobbyId }).then(({ data }) => {
+            if (!alive || !Array.isArray(data)) return;
+            setBadges(Object.fromEntries((data as { player_id: string; icon: string; title: string; n: number }[]).map((b) => [b.player_id, b])));
+        });
+        return () => {
+            alive = false;
+        };
+    }, [badgeLobbyId, supabase]);
+
     // Wer das Spiel verlässt oder zurückkommt, wird allen kurz gemeldet (Wunsch Mehdi 2026-10-14)
     const seenPlayersRef = useRef<{ phase: string; names: Map<string, string> } | null>(null);
     useEffect(() => {
@@ -1919,6 +1934,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     }
                     mePlayerId={mePlayerId}
                     highlights={highlights}
+                    badges={badges}
                     loggedIn={!!user}
                     ranked={players.filter((p) => !p.is_bot).length >= 2}
                     spectator={isSpectator}

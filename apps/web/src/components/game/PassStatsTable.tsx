@@ -17,6 +17,8 @@ export type PassStatsRow = {
     /** Song-Treffer im Match (Migration 109): Titel + Künstler / nur Titel */
     both?: number;
     titlesOnly?: number;
+    /** höchster Erfolg (Migration 137) */
+    badge?: { icon: string; title: string } | null;
 };
 
 const MEDAL = ["🥇", "🥈", "🥉"];
@@ -78,6 +80,7 @@ export function PassStatsTable({ rows, title, pointsLabel, hideTimes = false }: 
                                 <PlayerAvatar seed={r.name} config={r.avatarConfig} mood={r.out ? "out" : "normal"} size={30} className="pstAvatar" />
                                 <span className="pstNameText" title={r.name}>
                                     {r.name}
+                                    {r.badge ? <span title={r.badge.title} style={{ marginLeft: 5 }}>{r.badge.icon}</span> : null}
                                     {r.isMe ? <em> ({tr("du")})</em> : null}
                                 </span>
                             </span>
