@@ -117,6 +117,11 @@ export function FireCanvas({
         let last = performance.now();
         let clock = 0;
         const frame = 1000 / fps;
+        // Automatische Drosselung auf schwachen Geräten: braucht ein Bild im Schnitt zu lange oder kommen zu wenige Bilder, gibt es weniger Flammen
+        let qual = 1;
+        let winWork = 0;
+        let winGap = 0;
+        let winN = 0;
         const rnd = Math.random;
 
         const spawn = (e: FireEmitter, spark: boolean) => {
@@ -150,13 +155,14 @@ export function FireCanvas({
             if (elapsed < frame) return;
             const dt = Math.min(0.06, elapsed / 1000);
             last = now;
+            const workStart = performance.now();
             clock += dt;
             const { emitters: ems, density: dens } = cfg.current;
 
             ems.forEach((e, i) => {
                 const a = acc.get(i) ?? { f: 0, s: 0 };
-                a.f += e.rate * dens * dt;
-                a.s += (e.sparks ?? 0) * dens * dt;
+                a.f += e.rate * dens * qual * dt;
+                a.s += (e.sparks ?? 0) * dens * qual * dt;
                 while (a.f >= 1) {
                     a.f -= 1;
                     spawn(e, false);
@@ -210,6 +216,14 @@ export function FireCanvas({
             }
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = "source-over";
+            winWork += performance.now() - workStart;
+            winGap += Math.min(elapsed, frame * 3);
+            if (++winN >= 90) {
+                if ((winWork / winN > 6 || winGap / winN > frame * 1.7) && qual > 0.3) qual = Math.max(0.3, qual * 0.7);
+                winWork = 0;
+                winGap = 0;
+                winN = 0;
+            }
         };
         raf = requestAnimationFrame(tick);
         return () => {

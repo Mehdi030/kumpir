@@ -25,7 +25,7 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
  *   panel = Inhalt der aufklappbaren Seitenlasche links (components/HomeSideDrawers.tsx, Wunsch Mehdi 2026-10-25)
  *   card = Kasten in der Karte (alt)
  */
-export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "dock" | "chip" | "panel" }) {
+export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "panel" }) {
     const { tr } = useI18n();
     const { user, loading: authLoading } = useAuth();
     const { stats, unlocked, catalog, loading: statsLoading } = useAchievements(AUTH_DISABLED ? null : user?.id ?? null);
@@ -43,30 +43,8 @@ export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "doc
         [tr("Beste Serie"), String(stats?.best_survival_streak ?? 0)],
     ];
 
-    if (variant === "chip") {
-        return (
-            <>
-                <button type="button" className="homeChip" onClick={() => setOpen(true)} title={tr("Ganze Statistik anzeigen")}>
-                    <span className="homeChipIcon" aria-hidden>
-                        📊
-                    </span>
-                    <span className="homeChipText">
-                        <b>{tr("Statistik")}</b>
-                        <span>
-                            {statsLoading ? "…" : tr("{n} Runden · {w} Siege", { n: stats?.games_played ?? 0, w: stats?.wins ?? 0 })}
-                        </span>
-                    </span>
-                    <span className="homeChipArrow" aria-hidden>
-                        ›
-                    </span>
-                </button>
-                {open ? <StatsModal onClose={() => setOpen(false)} quick={quick} /> : null}
-            </>
-        );
-    }
-
     return (
-        <div className={`statsSectionCard ${variant === "dock" ? "statsDock" : ""}`}>
+        <div className="statsSectionCard">
             <div className="statsSectionHead">
                 <button type="button" className="statsHeadBtn" onClick={() => setOpen(true)} title={tr("Ganze Statistik anzeigen")}>
                     📊 {tr("Deine Statistik")} <span className="statsHeadArrow">›</span>
@@ -85,7 +63,7 @@ export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "doc
                     <StatBox label={tr("Rundensiege")} value={String(stats?.wins ?? 0)} />
                     <StatBox label={tr("Beste Serie")} value={String(stats?.best_survival_streak ?? 0)} />
                     <StatBox label={tr("Erfolge")} value={`${unlocked.length}/${catalog.length}`} />
-                    {variant === "dock" || variant === "panel" ? (
+                    {variant === "panel" ? (
                         <>
                             <StatBox label={tr("Weitergaben")} value={String(stats?.total_passes ?? 0)} />
                             <StatBox label={tr("Schnellste")} value={fastest} />
@@ -109,17 +87,6 @@ export function HomeStatsSection({ variant = "card" }: { variant?: "card" | "doc
                 .statsGrid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
                 .statsMoreBtn{ justify-self: center; margin-top: 12px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; font: inherit; font-weight: 800; font-size: 13.5px; padding: 8px 18px; border-radius: 999px; cursor: pointer; }
                 .statsMoreBtn:hover{ background: rgba(255,255,255,.16); }
-                /* Leiste links (gegenüber der Freunde-Leiste, gleiche Breite/Optik) */
-                .statsDock{
-                  position: fixed; z-index: 5; margin: 0; left: 24px; top: 96px;
-                  width: clamp(240px, calc((100vw - var(--homeW, 860px)) / 2 - 56px), 400px);
-                  padding: 18px; border-radius: 26px; gap: 4px;
-                  background: rgba(20,8,4,.5); border: 1px solid var(--glass-line);
-                  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 18px 50px rgba(0,0,0,.25);
-                  animation: kmRise .7s var(--ease-out) .2s backwards;
-                }
-                .statsDock .statsHeadBtn{ font-size: 20px; font-family: var(--font-display); }
-                .statsDock .statsGrid{ grid-template-columns: 1fr 1fr; gap: 10px; }
             `}</style>
         </div>
     );
