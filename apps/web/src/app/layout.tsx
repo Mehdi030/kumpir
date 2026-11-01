@@ -13,6 +13,7 @@ import { PresencePing } from "@/components/PresencePing";
 import { Notifications } from "@/components/Notifications";
 import { UiFx } from "@/components/UiFx";
 import { Embers } from "@/components/Embers";
+import { ErrorReporter } from "@/components/ErrorReporter";
 import { Analytics } from "@vercel/analytics/next"
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://kumpir-web.vercel.app";
@@ -83,6 +84,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LocaleSync />
         <AudioUnlock />
         <PwaSetup />
+        <ErrorReporter />
         </body>
         </html>
     );

@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "@/components/AuthProvider";
 import { Spinner } from "@/components/Spinner";
 import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
+import { AdminClientErrors } from "@/components/admin/AdminClientErrors";
 import { HomeButton } from "@/components/BackButton";
 import { dateLocale, tk, useI18n } from "@/lib/i18n";
 
@@ -279,6 +280,7 @@ export default function AdminStatsPage() {
 
                             {/* Song-Bekanntheit, Balance aus echten Spielen, Weg der Spieler (Migration 076) */}
                             <AdminAnalytics />
+                            <AdminClientErrors />
                         </div>
                     )}
                 </section>

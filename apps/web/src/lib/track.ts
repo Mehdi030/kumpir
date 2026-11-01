@@ -25,7 +25,10 @@ export type TrackEvent =
     | "install_click"
     | "lang_en"
     | "lang_fr"
-    | "register_success";
+    | "register_success"
+    | "client_error"
+    | "challenge_created"
+    | "challenge_played";
 
 type Props = Record<string, string | number | boolean>;
 

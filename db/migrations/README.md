@@ -1,3 +1,4 @@
+| 138 | [`138_client_errors.sql`](138_client_errors.sql) | **Fehler-Meldekanal**: Ereignis `client_error` (kurze Browser-Fehlermeldung, anonym), `admin_client_errors()` für /admin/stats; Whitelist um lang_fr, challenge_* ergänzt | Empfohlen |
 # 📦 KUMPIR — Migrationen
 
 Hier liegen Schema-Änderungen, die in Supabase noch ausgeführt werden müssen.

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { HomeButton } from "@/components/BackButton";
+import { reportClientError } from "@/components/ErrorReporter";
 import { useI18n } from "@/lib/i18n";
 
 export default function GlobalError({
@@ -14,6 +15,7 @@ export default function GlobalError({
     const { tr } = useI18n();
     useEffect(() => {
         console.error("Unhandled app error:", error);
+        reportClientError(`Absturz-Seite: ${error.message}`);
     }, [error]);
 
     return (
