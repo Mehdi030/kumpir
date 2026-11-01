@@ -3,7 +3,10 @@
  * Baut die Begriffs-Listen für den Modus "Roulette" (Buchstabe + Kategorie) -> db/scripts/data/word-lists.json
  * Quelle: Wikidata (öffentliche SPARQL-Abfrage, deutsche Bezeichnungen). Nur BEKANNTE Begriffe: je Kategorie ein
  * Mindest-Wert an Sprachversionen der Wikipedia-Seite (sitelinks) – damit keine Nonames auftauchen.
- * Dazu handgepflegte Listen (Rapper, Tiere, Obst & Gemüse).
+ * Dazu handgepflegte Listen (Rapper, Tiere, Obst & Gemüse, Automarken; Erweiterungen in data/word-extras.mjs).
+ * Damit möglichst viel Richtiges erkannt wird: niedrige Mindest-Werte (viele Einträge), Zweitnamen/Kurzformen aus Wikidata
+ * (altLabel), mehrere Schreibweisen je Person (Vor-+Nachname, Nachname, letzte zwei Namensteile) und ein Gewicht (Bekanntheit =
+ * Anzahl Sprachversionen), nach dem die Bots nur aus dem bekannteren Teil der Liste tippen.
  *
  * Aufruf: node db/scripts/build-word-lists.mjs
  * Danach laden: node db/scripts/load-word-lists.mjs
@@ -11,22 +14,23 @@
 import { writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { TIERE_EXTRA, OBST_GEMUESE_EXTRA, AUTOMARKEN_EXTRA, RAPPER_EXTRA } from "./data/word-extras.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** kind: "person" = Vor- ODER Nachname zählt für den Buchstaben; "thing" = nur der Anfang des Namens (ohne Artikel/Vereinskürzel) */
 const WD = [
-    { name: "Länder", kind: "thing", min: 60, where: "?item wdt:P31 wd:Q3624078. FILTER NOT EXISTS { ?item wdt:P576 ?end }" },
-    { name: "Hauptstädte", kind: "thing", min: 60, where: "?c wdt:P31 wd:Q3624078. FILTER NOT EXISTS { ?c wdt:P576 ?e } ?c wdt:P36 ?item." },
-    { name: "Städte", kind: "thing", min: 70, where: "?item wdt:P31 wd:Q1549591." },
-    { name: "Schauspieler", kind: "person", min: 45, where: "VALUES ?occ { wd:Q33999 wd:Q10800557 wd:Q10798782 } ?item wdt:P106 ?occ. ?item wdt:P31 wd:Q5.", limit: 3500 },
-    { name: "Sänger", kind: "person", min: 55, where: "VALUES ?occ { wd:Q177220 wd:Q488205 } ?item wdt:P106 ?occ. ?item wdt:P31 wd:Q5.", limit: 2500 },
-    { name: "Bands", kind: "thing", min: 45, where: "?item wdt:P31 wd:Q215380.", limit: 1500 },
-    { name: "Fußballspieler", kind: "person", min: 60, where: "?item wdt:P106 wd:Q937857. ?item wdt:P31 wd:Q5.", limit: 2500 },
-    { name: "Fußballvereine", kind: "thing", min: 55, where: "?item wdt:P31 wd:Q476028.", limit: 1200 },
-    { name: "Flüsse", kind: "thing", min: 45, where: "?item wdt:P31 wd:Q4022.", limit: 600 },
-    { name: "Serien", kind: "thing", min: 50, where: "?item wdt:P31 wd:Q5398426.", limit: 800 },
+    { name: "Länder", kind: "thing", min: 25, where: "?item wdt:P31 wd:Q3624078. FILTER NOT EXISTS { ?item wdt:P576 ?end }" },
+    { name: "Hauptstädte", kind: "thing", min: 25, where: "?c wdt:P31 wd:Q3624078. FILTER NOT EXISTS { ?c wdt:P576 ?e } ?c wdt:P36 ?item." },
+    { name: "Städte", kind: "thing", min: 40, where: "?item wdt:P31 wd:Q1549591.", limit: 4000 },
+    { name: "Schauspieler", kind: "person", min: 28, where: "VALUES ?occ { wd:Q33999 wd:Q10800557 wd:Q10798782 } ?item wdt:P106 ?occ. ?item wdt:P31 wd:Q5.", limit: 7000 },
+    { name: "Sänger", kind: "person", min: 28, where: "VALUES ?occ { wd:Q177220 wd:Q488205 } ?item wdt:P106 ?occ. ?item wdt:P31 wd:Q5.", limit: 5000 },
+    { name: "Bands", kind: "thing", min: 25, where: "?item wdt:P31 wd:Q215380.", limit: 3000 },
+    { name: "Fußballspieler", kind: "person", min: 30, where: "?item wdt:P106 wd:Q937857. ?item wdt:P31 wd:Q5.", limit: 6000 },
+    { name: "Fußballvereine", kind: "thing", min: 22, where: "?item wdt:P31 wd:Q476028.", limit: 3000 },
+    { name: "Flüsse", kind: "thing", min: 25, where: "?item wdt:P31 wd:Q4022.", limit: 2500 },
+    { name: "Serien", kind: "thing", min: 25, where: "?item wdt:P31 wd:Q5398426.", limit: 3000 },
 ];
 
 /** Deutsche Rapper (Künstlernamen) – bekannte, handgepflegt (Wikidata kennt viele Straßenrapper nicht) */
@@ -94,52 +98,121 @@ async function sparql(where, min, limit) {
     return [];
 }
 
-/** Schlüssel (Schreibweisen), unter denen ein Begriff gefunden wird */
-function keysOf(label, kind) {
-    const keys = new Set();
-    const n = norm(label);
-    if (!n) return [];
-    keys.add(n);
-    if (kind === "person") {
-        const parts = n.split(" ");
-        if (parts.length > 1) keys.add(parts[parts.length - 1]); // Nachname
-    } else {
-        const stripped = n.replace(STOP_PREFIX, "").replace(STOP_PREFIX, "");
-        if (stripped && stripped !== n) keys.add(stripped);
+/** Zweitnamen/Kurzformen (altLabel, deutsch + englisch) für viele Wikidata-Einträge auf einmal: id -> [Namen] */
+async function fetchAliases(ids) {
+    const map = new Map();
+    for (let i = 0; i < ids.length; i += 120) {
+        const part = ids.slice(i, i + 120);
+        const q = `SELECT ?item ?alt WHERE { VALUES ?item { ${part.map((x) => "wd:" + x).join(" ")} } ?item skos:altLabel ?alt. FILTER(LANG(?alt) = "de" || LANG(?alt) = "en") }`;
+        for (let a = 0; a < 3; a++) {
+            try {
+                const r = await fetch("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q), {
+                    headers: { "User-Agent": "KumpirGameBot/1.0 (private game; contact via repo owner)", Accept: "application/sparql-results+json" },
+                });
+                if (r.ok) {
+                    for (const b of (await r.json()).results.bindings) {
+                        const id = b.item.value.split("/").pop();
+                        const arr = map.get(id) ?? [];
+                        arr.push(b.alt.value);
+                        map.set(id, arr);
+                    }
+                    break;
+                }
+            } catch {
+                /* nochmal */
+            }
+            await sleep(4000 * (a + 1));
+        }
+        await sleep(800);
+        if ((i / 120) % 10 === 9) process.stdout.write(`${i + 120}/${ids.length} `);
     }
+    return map;
+}
+
+/** Schlüssel (Schreibweisen), unter denen ein Begriff gefunden wird */
+function keysOf(label, kind, aliases = []) {
+    const keys = new Set();
+    const addName = (name, full) => {
+        const n = norm(name);
+        if (!n) return;
+        keys.add(n);
+        if (kind === "person") {
+            const parts = n.split(" ");
+            if (full && parts.length > 1) keys.add(parts[parts.length - 1]); // Nachname
+            if (full && parts.length > 2) {
+                keys.add(parts[0] + " " + parts[parts.length - 1]); // Vor- + Nachname ohne Zweitnamen
+                keys.add(parts.slice(-2).join(" ")); // letzte zwei Namensteile ("van Damme", "dos Santos")
+            }
+        } else {
+            const stripped = n.replace(STOP_PREFIX, "").replace(STOP_PREFIX, "");
+            if (stripped && stripped !== n) keys.add(stripped);
+        }
+    };
+    addName(label, true);
+    for (const a of aliases) addName(a, false);
     return [...keys].filter((k) => /^[a-z]/.test(k) && k.length >= 2);
 }
 
 const out = {};
-const addAll = (name, kind, labels) => {
+/** items: { label, w, aliases[] }. Gleiche Schreibweise nur einmal (höchstes Gewicht, Zweitnamen zusammengelegt). */
+const addAll = (name, kind, items) => {
     const seen = new Map();
-    for (const l of labels) {
-        if (!l || /^Q\d+$/.test(l) || !/[A-Za-zÄÖÜäöü]/.test(l.slice(0, 1))) continue;
+    for (const it of items) {
+        const l = it.label;
+        if (!l || /^Q[0-9]+$/.test(l) || !/[A-Za-zÄÖÜäöü]/.test(l.slice(0, 1))) continue;
         if (l.length > 48) continue;
         const k = norm(l);
-        if (!k || seen.has(k)) continue;
-        seen.set(k, l);
+        if (!k) continue;
+        const prev = seen.get(k);
+        if (prev) {
+            prev.w = Math.max(prev.w, it.w ?? 0);
+            prev.aliases = [...new Set([...prev.aliases, ...(it.aliases ?? [])])];
+        } else seen.set(k, { label: l, w: it.w ?? 0, aliases: [...(it.aliases ?? [])] });
     }
     out[name] = { kind, terms: [...seen.values()] };
     console.log(`${name}: ${out[name].terms.length} Begriffe`);
 };
+/** "Name=Kurzform/Zweitname" (Handlisten) -> { label, w, aliases } */
+const hand = (list, w) =>
+    list.map((e) => {
+        const [label, rest] = e.split("=");
+        return { label: label.trim(), w, aliases: rest ? rest.split("/").map((x) => x.trim()).filter(Boolean) : [] };
+    });
+const plain = (list, w) => list.map((label) => ({ label, w, aliases: [] }));
 
+const wdRows = new Map(); // Kategorie -> Zeilen
 for (const c of WD) {
     process.stdout.write(`Wikidata ${c.name} … `);
     const rows = await sparql(c.where, c.min, c.limit);
-    addAll(c.name, c.kind, rows.map((r) => r.label));
+    wdRows.set(c.name, rows);
+    console.log(rows.length, "Zeilen");
     await sleep(2500);
 }
-addAll("Rapper", "thing", RAPPER);
-addAll("Automarken", "thing", AUTOMARKEN);
-for (const [cat, extra] of Object.entries(ALIASES)) if (out[cat]) addAll(cat, out[cat].kind, [...out[cat].terms, ...extra]);
-addAll("Tiere", "thing", TIERE);
-addAll("Obst & Gemüse", "thing", OBST_GEMUESE);
+// Zweitnamen für alle Treffer
+{
+    const ids = [...new Set([...wdRows.values()].flat().map((r) => r.id))];
+    process.stdout.write(`Zweitnamen für ${ids.length} Einträge … `);
+    const aliasMap = await fetchAliases(ids);
+    console.log("fertig,", aliasMap.size, "mit Zweitnamen");
+    for (const c of WD) {
+        const items = (wdRows.get(c.name) ?? []).map((r) => ({
+            label: r.label,
+            w: r.sl,
+            aliases: (aliasMap.get(r.id) ?? []).filter((a) => a.length >= 3 && a.length <= 40 && /^[A-Za-zÄÖÜäöü0-9]/.test(a)).slice(0, 8),
+        }));
+        addAll(c.name, c.kind, items);
+    }
+}
+addAll("Rapper", "thing", [...hand(RAPPER, 100), ...hand(RAPPER_EXTRA, 60)]);
+addAll("Automarken", "thing", [...plain(AUTOMARKEN, 100), ...hand(AUTOMARKEN_EXTRA, 60)]);
+for (const [cat, extra] of Object.entries(ALIASES)) if (out[cat]) addAll(cat, out[cat].kind, [...out[cat].terms, ...plain(extra, 90)]);
+addAll("Tiere", "thing", [...plain(TIERE, 100), ...plain(TIERE_EXTRA, 60)]);
+addAll("Obst & Gemüse", "thing", [...plain(OBST_GEMUESE, 100), ...plain(OBST_GEMUESE_EXTRA, 60)]);
 
 // Schlüssel berechnen
 const result = {};
 for (const [name, v] of Object.entries(out)) {
-    result[name] = { kind: v.kind, terms: v.terms.map((label) => ({ label, keys: keysOf(label, v.kind) })).filter((t) => t.keys.length) };
+    result[name] = { kind: v.kind, terms: v.terms.map((t) => ({ label: t.label, w: t.w, keys: keysOf(t.label, v.kind, t.aliases) })).filter((t) => t.keys.length) };
 }
 writeFileSync(resolve(__dirname, "data/word-lists.json"), JSON.stringify(result));
 const total = Object.values(result).reduce((a, v) => a + v.terms.length, 0);

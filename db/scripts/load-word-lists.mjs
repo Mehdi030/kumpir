@@ -31,17 +31,18 @@ try {
             [name, v.kind],
         );
         const id = rows[0].id;
-        await db.query("delete from public.word_terms where category_id = $1", [id]);
+        await db.query("delete from public.word_terms where category_id = $1 and source = 'list'", [id]); // per Einspruch gemerkte Begriffe bleiben
         const labels = [];
         const keys = [];
-        for (const t of v.terms) for (const k of t.keys) { labels.push(t.label); keys.push(k); }
+        const weights = [];
+        for (const t of v.terms) for (const k of t.keys) { labels.push(t.label); keys.push(k); weights.push(Math.round(t.w ?? 0)); }
         for (let i = 0; i < labels.length; i += 2000) {
             await db.query(
-                `insert into public.word_terms (category_id, label, key_norm, initial)
-                 select $1, x.label, x.n, left(x.n, 1) from (select t.label, public._ans_norm(t.k) as n from unnest($2::text[], $3::text[]) as t(label, k)) x
+                `insert into public.word_terms (category_id, label, key_norm, initial, weight)
+                 select $1, x.label, x.n, left(x.n, 1), x.w from (select t.label, public._ans_norm(t.k) as n, t.w from unnest($2::text[], $3::text[], $4::int[]) as t(label, k, w)) x
                  where x.n ~ '^[a-z]' and length(x.n) >= 2
                  on conflict do nothing`,
-                [id, labels.slice(i, i + 2000), keys.slice(i, i + 2000)],
+                [id, labels.slice(i, i + 2000), keys.slice(i, i + 2000), weights.slice(i, i + 2000)],
             );
         }
         const [{ n, l }] = (await db.query("select count(*)::int n, count(distinct label)::int l from public.word_terms where category_id = $1", [id])).rows;
