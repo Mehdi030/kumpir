@@ -15,6 +15,9 @@ export type FinishRow = PassStatsRow;
 
 export type FinishHighlight = { label: string; icon: string; name: string; value: string };
 
+/** Ergebnis einer angenommenen Herausforderung (Migration 139) */
+export type ChallengeResult = { creator: string; target: number; score: number; won: boolean; tie: boolean; rank: number };
+
 type ToastItem = React.ComponentProps<typeof ToastStack>["toasts"];
 
 type Props = {
@@ -31,6 +34,11 @@ type Props = {
     /** höchster Erfolg je Spieler (Migration 137), Schlüssel = player_id */
     badges?: Record<string, { icon: string; title: string; n: number }>;
     loggedIn: boolean;
+    /** Ergebnis, wenn dieses Spiel eine angenommene Herausforderung war */
+    challenge?: ChallengeResult | null;
+    /** Quiz-Spiel beendet: Link zum Herausfordern erzeugen und teilen (nur wenn gesetzt, erscheint der Knopf) */
+    onChallenge?: () => void;
+    challengeBusy?: boolean;
     /** Mind. 2 Menschen -> zählt für Bestenliste/Statistik (Migration 075). */
     ranked: boolean;
     /** Nur zugeschaut (nicht mitgespielt): keine Rematch-/Lobby-Knöpfe. */
@@ -48,7 +56,7 @@ type Props = {
  * links Sieger + Highlights + Knöpfe, rechts EINE Wertung mit Punkten und schnellster/langsamster Abgabe
  * (bei mehreren Runden: Gesamtpunkte und die besten Werte über alle Runden). Auf dem Handy untereinander.
  */
-export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shareRows, highlights, badges = {}, loggedIn, ranked, spectator, quizMode = false, busy, onRematch, onLobby, toasts }: Props) {
+export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shareRows, highlights, badges = {}, loggedIn, challenge = null, onChallenge, challengeBusy = false, ranked, spectator, quizMode = false, busy, onRematch, onLobby, toasts }: Props) {
     const { t, tr } = useI18n();
     const [shareMsg, setShareMsg] = useState("");
     const [shareBusy, setShareBusy] = useState(false);
@@ -120,6 +128,12 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
                 <h1 className={`finWinner ${podium.length >= 2 ? "finWinnerSlim" : ""}`}>{winnerName}</h1>
                 <div className="finSub">{isSeries ? t("fin.winsMatch") : t("fin.winsRound")}</div>
                 {me ? <div className="finMe">{t("fin.me", { place: me.place, score: me.score })}</div> : null}
+                {challenge ? (
+                    <div className={`finChallenge ${challenge.won ? "won" : challenge.tie ? "tie" : "lost"}`} role="status">
+                        ⚔️ {tr("Herausforderung von {name}", { name: challenge.creator })}: <b>{challenge.score}</b> : {challenge.target} –{" "}
+                        {challenge.won ? tr("geschafft! 🎉") : challenge.tie ? tr("Gleichstand!") : tr("knapp daneben – nochmal?")}
+                    </div>
+                ) : null}
             </header>
 
             <div className="finLeft">
@@ -155,6 +169,11 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
                             </button>
                         </>
                     )}
+                    {onChallenge && !spectator ? (
+                        <button type="button" className="btn btnSecondary" onClick={onChallenge} disabled={challengeBusy} title={tr("Link teilen: Freunde spielen allein gegen Bots und versuchen, deine Punkte zu schlagen")}>
+                            {challengeBusy ? <Spinner size={14} label={tr("Lade…")} /> : `⚔️ ${tr("Freunde herausfordern")}`}
+                        </button>
+                    ) : null}
                     <button type="button" className="btn btnSecondary finShareBtn" onClick={() => void shareResult()} disabled={shareBusy} title={t("fin.share")} aria-label={t("fin.share")}>
                         {shareBusy ? <Spinner size={14} label={t("fin.shareBusy")} /> : "📤"}
                     </button>
@@ -202,6 +221,9 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
         .finSub{ font-size: 14px; opacity: .8; font-weight: 600; }
         .finMe{ margin-top: 6px; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); font-size: 14px; }
         .finMe b{ font-weight: 800; }
+        .finChallenge{ margin-top: 8px; padding: 8px 16px; border-radius: 14px; font-size: 14px; font-weight: 700; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25); max-width: 100%; }
+        .finChallenge.won{ background: rgba(60,200,120,.25); border-color: rgba(120,240,170,.7); }
+        .finChallenge.lost{ background: rgba(200,70,50,.25); border-color: rgba(255,150,130,.6); }
         .finRight{ animation: finIn .7s .1s cubic-bezier(.16,1,.3,1) both; min-width: 0; }
 
         .finTiles{ display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; animation: finIn .7s .2s cubic-bezier(.16,1,.3,1) both; }

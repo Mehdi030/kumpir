@@ -1,3 +1,4 @@
+| 139 | [`139_challenges.sql`](139_challenges.sql) | **Freunde herausfordern**: `challenges`/`challenge_results`, `rpc_challenge_create/attach/submit`, `get_challenge` – Link `/challenge/CODE`, Solo gegen Bots, Punkte schlagen (Buzzer, Zeitreise, Roulette) | Empfohlen |
 | 138 | [`138_client_errors.sql`](138_client_errors.sql) | **Fehler-Meldekanal**: Ereignis `client_error` (kurze Browser-Fehlermeldung, anonym), `admin_client_errors()` für /admin/stats; Whitelist um lang_fr, challenge_* ergänzt | Empfohlen |
 # 📦 KUMPIR — Migrationen
 

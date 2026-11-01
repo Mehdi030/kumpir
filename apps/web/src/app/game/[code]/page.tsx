@@ -35,7 +35,7 @@ import { playFx } from "@/lib/gameFx";
 import type { SeriesRow } from "@/components/game/SeriesTable";
 import { fmtNum, trNow, useI18n } from "@/lib/i18n";
 import { track } from "@/lib/track";
-import { FinishScreen, type FinishHighlight } from "@/components/game/FinishScreen";
+import { FinishScreen, type ChallengeResult, type FinishHighlight } from "@/components/game/FinishScreen";
 import { SummaryTable } from "@/components/game/SummaryTable";
 
 // Ein pass_attempt ohne Timeout konnte für immer "pending" hängen bleiben,
@@ -77,6 +77,8 @@ type LobbyPhase = "waiting" | "lobby" | "topic_vote" | "countdown" | "running" |
 type LobbyState = {
     id: string;
     code: string;
+    /** Herausforderung, zu der dieses Solo-Spiel gehört (Migration 139) */
+    challenge_code?: string | null;
 
     phase: LobbyPhase;
     /** Host hat die Lobby gesperrt oder ein Match läuft (Beitritt nicht möglich). */
@@ -741,6 +743,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     missed_songs: (raw.missed_songs as string[] | null) ?? [],
 
                     game_mode: (raw.game_mode as string | null) ?? "original",
+                    challenge_code: (raw.challenge_code as string | null) ?? null,
                     pass_direction: (raw.pass_direction as number | null) ?? 1,
                     series_total: (raw.series_total as number | null) ?? 1,
                     series_index: (raw.series_index as number | null) ?? 1,
@@ -1308,6 +1311,50 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         },
         [mePlayerId, lobby, kickBusyId, code, rpcHostKickDuringRound, showToast]
     );
+
+    // Herausforderung (Migration 139): Ergebnis am Ende speichern + vergleichen; Link zum Herausfordern erzeugen
+    const [challengeResult, setChallengeResult] = useState<ChallengeResult | null>(null);
+    const [challengeBusy, setChallengeBusy] = useState(false);
+    const challengeLobbyId = lobby?.phase === "finished" && lobby.challenge_code ? lobby.id : null;
+    useEffect(() => {
+        if (!challengeLobbyId || !mePlayerId) return;
+        let alive = true;
+        void supabase.rpc("rpc_challenge_submit", { p_lobby_id: challengeLobbyId, p_player_id: mePlayerId }).then(({ data }) => {
+            if (!alive || !data) return;
+            setChallengeResult(data as ChallengeResult);
+        });
+        return () => {
+            alive = false;
+        };
+    }, [challengeLobbyId, mePlayerId, supabase]);
+    const createChallenge = useCallback(async () => {
+        if (challengeBusy || !lobby || !mePlayerId) return;
+        setChallengeBusy(true);
+        try {
+            const { data, error } = await supabase.rpc("rpc_challenge_create", { p_lobby_id: lobby.id, p_player_id: mePlayerId });
+            if (error || !data) return showToast(`❌ ${errorText(error?.message ?? "")}`, 2600);
+            track("challenge_created");
+            const url = `${window.location.origin}/challenge/${String(data)}`;
+            const text = trNow("Schlag meine Punkte bei Kumpir! ⚔️");
+            const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
+            if (typeof nav.share === "function") {
+                try {
+                    await nav.share({ title: "Kumpir", text, url });
+                    return;
+                } catch (e) {
+                    if (e instanceof Error && e.name === "AbortError") return;
+                }
+            }
+            try {
+                await navigator.clipboard.writeText(url);
+                showToast(trNow("🔗 Link kopiert – schick ihn deinen Freunden!"), 3200);
+            } catch {
+                showToast(url, 6000);
+            }
+        } finally {
+            setChallengeBusy(false);
+        }
+    }, [challengeBusy, lobby, mePlayerId, supabase, showToast]);
 
     // Erfolgs-Abzeichen fürs Siegerpodest und die Endwertung (Migration 137): erst holen, wenn das Spiel zu Ende ist
     const [badges, setBadges] = useState<Record<string, { icon: string; title: string; n: number }>>({});
@@ -1935,6 +1982,9 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     mePlayerId={mePlayerId}
                     highlights={highlights}
                     badges={badges}
+                    challenge={challengeResult}
+                    onChallenge={quizMode && !isSpectator ? () => void createChallenge() : undefined}
+                    challengeBusy={challengeBusy}
                     loggedIn={!!user}
                     ranked={players.filter((p) => !p.is_bot).length >= 2}
                     spectator={isSpectator}

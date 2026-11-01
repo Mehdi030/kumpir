@@ -45,9 +45,10 @@ npm test          # Vitest, alle Unit-Tests
 npm run lint      # ESLint
 npm run build     # Next-Production-Build
 npx tsc --noEmit  # TypeScript strict check
+npm run e2e       # Browser-Tests der Hauptwege (Playwright; lokal z. B. E2E_CHANNEL=msedge, langer Spiel-Test mit E2E_FLOW=1)
 ```
 
-CI läuft auf jedem Push/PR (siehe `.github/workflows/ci.yml`) und checkt alle vier.
+CI läuft auf jedem Push/PR (siehe `.github/workflows/ci.yml`) und checkt Typen, Lint, Tests, Build und die Browser-Tests.
 
 ---
 

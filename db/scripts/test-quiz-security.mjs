@@ -62,6 +62,7 @@ const internals = [
     ["_award_live_song_achievements", { p_user_id: fakeId, p_lobby_id: fakeId, p_match_id: fakeId, p_ms: 1, p_combo: 9 }],
     ["_next_alive", { p_lobby_id: fakeId, p_from: fakeId, p_dir: 1 }],
     ["_away_tick", {}],
+    ["_challenge_score", { p_lobby_id: fakeId, p_player_id: fakeId }],
     ["_letters_spin", { p_lobby_id: fakeId }],
     ["_letters_reveal", { p_lobby_id: fakeId }],
     ["_letters_begin_category", { p_lobby_id: fakeId }],
@@ -102,6 +103,9 @@ const pub = [
     ["rpc_letters_appeal", { p_code: "ZZZZ", p_player_id: fakeId, p_text: "x" }],
     ["set_letters_config", { p_lobby_id: fakeId, p_me_player_id: fakeId, p_cfg: { cats: 3, secs: 45, off: [] } }],
     ["rpc_letters_appeal_vote", { p_code: "ZZZZ", p_player_id: fakeId, p_owner: fakeId, p_text: "x", p_yes: true }],
+    ["rpc_challenge_create", { p_lobby_id: fakeId, p_player_id: fakeId }],
+    ["rpc_challenge_attach", { p_code: "ZZZZZZ", p_lobby_id: fakeId, p_player_id: fakeId }],
+    ["rpc_challenge_submit", { p_lobby_id: fakeId, p_player_id: fakeId }],
 ];
 for (const [fn, args] of pub) {
     const r = await rest(`rpc/${fn}`, { method: "POST", body: JSON.stringify(args) });

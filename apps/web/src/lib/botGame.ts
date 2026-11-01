@@ -30,6 +30,10 @@ export async function startBotGame(opts: {
     roundSeconds: number;
     seriesTotal: 1 | 3 | 5;
     topicFilter: string[]; // leer = alle Playlists
+    /** Roulette-Einstellungen (Anzahl Kategorien, Zeit, ausgeschaltete) – z. B. aus einer Herausforderung */
+    lettersCfg?: { cats?: number; secs?: number; off?: string[] } | null;
+    /** Code einer Herausforderung (Migration 139): die Lobby wird damit verknüpft, das Ergebnis am Ende verglichen */
+    challenge?: string;
 }): Promise<string> {
     const supabase = getSupabaseClient();
     const lineup = botLineup(opts.bots, opts.skill);
@@ -70,6 +74,13 @@ export async function startBotGame(opts: {
     }
     if (opts.seriesTotal !== 1) {
         await supabase.rpc("set_lobby_series", { p_lobby_id: lobby.id, p_me_player_id: me, p_total: opts.seriesTotal });
+    }
+    if (opts.lettersCfg && opts.mode === "letters") {
+        await supabase.rpc("set_letters_config", { p_lobby_id: lobby.id, p_me_player_id: me, p_cfg: { cats: 3, secs: 45, off: [], ...opts.lettersCfg } });
+    }
+    if (opts.challenge) {
+        const c = await supabase.rpc("rpc_challenge_attach", { p_code: opts.challenge, p_lobby_id: lobby.id, p_player_id: me });
+        if (c.error) throw new Error(c.error.message);
     }
     for (const b of lineup) {
         const { error: bErr } = await supabase.rpc("rpc_add_bot", { p_lobby_id: lobby.id, p_me_player_id: me, p_bot_name: b.name, p_skill: b.skill });

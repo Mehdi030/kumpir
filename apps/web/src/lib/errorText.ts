@@ -17,6 +17,7 @@ const TEXT: [RegExp, string][] = [
     [/empty_answer/, tk("Bitte erst etwas eingeben.")],
     [/letters_too_many/, tk("Mehr als 60 Begriffe pro Kategorie gehen nicht.")],
     [/letters_too_few_categories/, tk("Zu wenige Kategorien erlaubt – so kann das Roulette nicht starten.")],
+    [/challenge_not_found|challenge_attach_failed/, tk("Diese Herausforderung gibt es nicht mehr oder ist abgelaufen.")],
     [/letters_too_few_terms/, tk("Mindestens 8 Begriffe pro eigener Kategorie nötig.")],
     [/letters_name_taken/, tk("Diesen Namen gibt es schon – such dir einen anderen aus.")],
     [/letters_bad_config/, tk("Diese Roulette-Einstellung gibt es nicht.")],

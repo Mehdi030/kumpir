@@ -106,3 +106,7 @@ db/backups/
 .vercel
 .env*
 db/scripts/data/fairness-report.json
+
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/
