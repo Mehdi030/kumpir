@@ -293,6 +293,7 @@ export const PHRASES_FR: Record<string, string> = {
     "Bart & Brille": "Barbe & lunettes",
     "Outfit": "Tenue",
     "Der Ziegenbart ist für Achi reserviert.": "Le bouc est réservé à Achi.",
+    "🤖 {name} ist kurz weg – ein Bot spielt weiter": "🤖 {name} est absent – un bot joue à sa place",
     "Kurze Zündschnur": "Mèche courte",
     "Normale Zündschnur": "Mèche normale",
     "Lange Zündschnur": "Mèche longue",

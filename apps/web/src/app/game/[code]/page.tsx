@@ -54,6 +54,7 @@ const PLAYER_COLUMNS = [
     "seat_index",
     "ready",
     "is_bot",
+    "was_human",
     "last_pass_at",
     "pass_count",
     "clutch_pass_count",
@@ -160,6 +161,7 @@ type Player = {
     is_alive: boolean;
     ready?: boolean;
     is_bot?: boolean;
+    was_human?: boolean;
     status?: string;
 
     // optional stats (safe)
@@ -1317,7 +1319,11 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         // beim ersten Laden und bei Phasenwechseln (Endstand zeigt auch Gegangene) nichts melden
         if (!prev || prev.phase !== lobby.phase) return;
         if (lobby.phase !== "running" && lobby.phase !== "quiz" && lobby.phase !== "countdown") return;
-        for (const [id, name] of prev.names) if (!cur.has(id) && id !== mePlayerId) showToast(trNow("👋 {name} hat das Spiel verlassen", { name }), 3200);
+        for (const [id, name] of prev.names)
+            if (!cur.has(id) && id !== mePlayerId) {
+                const away = players.some((p) => p.player_id === id && p.was_human);
+                showToast(away ? trNow("🤖 {name} ist kurz weg – ein Bot spielt weiter", { name }) : trNow("👋 {name} hat das Spiel verlassen", { name }), 3200);
+            }
         for (const [id, name] of cur) if (!prev.names.has(id) && id !== mePlayerId) showToast(trNow("➕ {name} ist wieder dabei", { name }), 3200);
     }, [players, lobby, mePlayerId, showToast]);
 

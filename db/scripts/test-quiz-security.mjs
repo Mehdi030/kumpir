@@ -61,6 +61,7 @@ const internals = [
     ["_teams_decided", { p_lobby_id: fakeId }],
     ["_award_live_song_achievements", { p_user_id: fakeId, p_lobby_id: fakeId, p_match_id: fakeId, p_ms: 1, p_combo: 9 }],
     ["_next_alive", { p_lobby_id: fakeId, p_from: fakeId, p_dir: 1 }],
+    ["_away_tick", {}],
     ["_letters_spin", { p_lobby_id: fakeId }],
     ["_letters_reveal", { p_lobby_id: fakeId }],
     ["_letters_begin_category", { p_lobby_id: fakeId }],
