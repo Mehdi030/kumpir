@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLeaderboard, type LeaderboardCategory, type LeaderboardEntry } from "@/hooks/useLeaderboard";
 import { Spinner } from "@/components/Spinner";
 import { SeasonBoard } from "@/components/SeasonBoard";
+import { ModeBoard, type BoardMode } from "@/components/ModeBoard";
 import { ProfileFolder } from "@/components/profile/ProfileFolder";
 import { HomeButton } from "@/components/BackButton";
 import { tk, useI18n } from "@/lib/i18n";
@@ -48,8 +49,16 @@ const CATEGORIES: Array<{ key: LeaderboardCategory; label: string; icon: string;
     },
 ];
 
+const BOARDS: Array<{ key: "original" | BoardMode; label: string; icon: string }> = [
+    { key: "original", label: tk("Original-Tisch"), icon: "🥔" },
+    { key: "buzzer", label: tk("Buzzer-Arena"), icon: "🔔" },
+    { key: "year", label: tk("Zeitreise"), icon: "⏳" },
+    { key: "letters", label: tk("Roulette"), icon: "🎰" },
+];
+
 export default function LeaderboardPage() {
     const { tr } = useI18n();
+    const [board, setBoard] = useState<"original" | BoardMode>("original");
     const [category, setCategory] = useState<LeaderboardCategory>("wins");
     const { rows, loading, error } = useLeaderboard(category, 25);
 
@@ -82,7 +91,20 @@ export default function LeaderboardPage() {
 
                 <SeasonBoard />
 
+                {/* Modus-Switcher: jeder Modus hat seine eigene Liste */}
+                <div className="pillSeg" style={{ flexWrap: "wrap", marginTop: 14 }} role="tablist" aria-label={tr("Modus")}>
+                    {BOARDS.map((b) => (
+                        <button key={b.key} type="button" role="tab" aria-selected={board === b.key} className={`pillSegBtn ${board === b.key ? "pillSegActive" : ""}`} onClick={() => setBoard(b.key)}>
+                            {b.icon} {tr(b.label)}
+                        </button>
+                    ))}
+                </div>
+
+                {board !== "original" ? <ModeBoard mode={board} /> : null}
+
                 {/* Kategorie-Switcher */}
+                {board === "original" ? (
+                <>
                 <div className="pillSeg" style={{ flexWrap: "wrap", marginTop: 14 }}>
                     {CATEGORIES.map((c) => (
                         <button
@@ -138,6 +160,8 @@ export default function LeaderboardPage() {
                         </table>
                     </div>
                 )}
+                </>
+                ) : null}
             </ProfileFolder>
         </main>
     );
