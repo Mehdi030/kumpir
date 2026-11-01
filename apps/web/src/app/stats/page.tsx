@@ -10,6 +10,7 @@ import { Spinner } from "@/components/Spinner";
 import { AccountStats } from "@/components/profile/AccountStats";
 import { ProfileFolder } from "@/components/profile/ProfileFolder";
 import { RouletteStats } from "@/components/profile/RouletteStats";
+import { ModeStats } from "@/components/profile/ModeStats";
 import { HomeButton } from "@/components/BackButton";
 import { seasonKey, type ProfileStats } from "@/lib/profileStats";
 import { fmtNum, trNow, useI18n } from "@/lib/i18n";
@@ -112,6 +113,7 @@ export default function StatsPage() {
                             <Spinner size={24} label={tr("Lade Statistik…")} />
                         </div>
                     ) : null}
+                    <ModeStats userId={user.id} />
                     <RouletteStats userId={user.id} />
             </ProfileFolder>
             <style>{`

@@ -20,6 +20,8 @@ const db = new pg.Client({
 });
 await db.connect();
 const q = async (sql, a = []) => (await db.query(sql, a)).rows;
+// Spielzähler der Modi vor dem Test merken und danach zurücksetzen (Testspiele sollen die Beliebtheit der Modi nicht verfälschen)
+const playsBefore = new Map((await q("select mode, plays from public.mode_plays")).map((r) => [r.mode, r.plays]));
 let failed = 0;
 const check = (name, ok, detail = "") => {
     console.log(`${ok ? "✅" : "❌"} ${name}${detail ? "  – " + detail : ""}`);
@@ -274,6 +276,10 @@ try {
         await q("delete from public.roulette_rounds where lobby_id = $1", [id2]).catch(() => {});
         await q("delete from public.roulette_matches where lobby_id = $1", [id2]).catch(() => {});
         await q("delete from public.lobbies where id = $1", [id2]).catch(() => {});
+    }
+    for (const r of await q("select mode from public.mode_plays")) {
+        if (playsBefore.has(r.mode)) await q("update public.mode_plays set plays = $2 where mode = $1", [r.mode, playsBefore.get(r.mode)]).catch(() => {});
+        else await q("delete from public.mode_plays where mode = $1", [r.mode]).catch(() => {});
     }
     await db.end();
 }
