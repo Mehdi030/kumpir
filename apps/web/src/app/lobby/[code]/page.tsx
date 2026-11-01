@@ -216,6 +216,24 @@ export default function LobbyPage() {
     );
     const [visibility, setVisibility] = useLiveSetting(serverVisibility, sendVisibility, showError, reload);
 
+    // Erfolgs-Abzeichen: der höchste Erfolg jedes angemeldeten Spielers steht neben dem Namen (Migration 137)
+    const [badges, setBadges] = useState<Record<string, { icon: string; title: string; n: number }>>({});
+    const humanKey = players.filter((p) => !p.is_bot).map((p) => p.player_id).sort().join(",");
+    const lobbyIdForBadges = lobby?.id;
+    useEffect(() => {
+        if (!lobbyIdForBadges || !humanKey) return;
+        let alive = true;
+        void getSupabaseClient()
+            .rpc("get_lobby_badges", { p_lobby_id: lobbyIdForBadges })
+            .then(({ data }) => {
+                if (!alive || !Array.isArray(data)) return;
+                setBadges(Object.fromEntries((data as { player_id: string; icon: string; title: string; n: number }[]).map((b) => [b.player_id, b])));
+            });
+        return () => {
+            alive = false;
+        };
+    }, [lobbyIdForBadges, humanKey]);
+
     // Roulette-Einstellungen (Host): Anzahl Kategorien, Zeit, erlaubte Kategorien
     const lettersCfg = useMemo(() => lettersCfgOf(lobby?.letters_cfg), [lobby?.letters_cfg]);
     const [letterCats, setLetterCats] = useState<string[]>([]);
@@ -624,6 +642,11 @@ export default function LobbyPage() {
                                                 {p.is_bot && p.bot_skill ? (
                                                     <span style={{ opacity: 0.8, fontSize: 11, marginLeft: 6 }} title={tr(["", "Anfänger", "Mittel", "Profi"][p.bot_skill] ?? "")}>
                                                         {"★".repeat(p.bot_skill)}
+                                                    </span>
+                                                ) : null}
+                                                {badges[p.player_id] ? (
+                                                    <span style={{ marginLeft: 6, fontSize: 13 }} title={`${badges[p.player_id].title} · ${tr("{n} Erfolge", { n: badges[p.player_id].n })}`}>
+                                                        {badges[p.player_id].icon}
                                                     </span>
                                                 ) : null}
                                                 {isMe ? <span style={{ opacity: 0.6 }}> ({tr("du")})</span> : null}

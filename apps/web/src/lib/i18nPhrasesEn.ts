@@ -293,6 +293,7 @@ export const PHRASES_EN: Record<string, string> = {
     "Bart & Brille": "Beard & glasses",
     "Outfit": "Outfit",
     "Der Ziegenbart ist für Achi reserviert.": "The goatee is reserved for Achi.",
+    "{n} Erfolge": "{n} achievements",
     "Original-Tisch": "Original table",
     "Buzzer-Arena": "Buzzer arena",
     "Zeitreise": "Time travel",
