@@ -2,16 +2,33 @@
 
 import React from "react";
 import type { Toast } from "@/hooks/useToastStack";
+import type { RealtimeStatus } from "@/hooks/useLobbyRealtime";
+import { ConnectionPill } from "@/components/ConnectionPill";
 
 type Props = {
     toasts: Toast[];
     /** Render toasts inline (no fixed positioning). Default: false (fixed bottom-center). */
     inline?: boolean;
+    /** Live-Verbindung: wird nur bei Problemen (neu verbinden / offline) oben als Hinweis gezeigt */
+    connection?: RealtimeStatus;
 };
 
-export function ToastStack({ toasts, inline = false }: Props) {
-    if (!toasts.length) return null;
+export function ToastStack({ toasts, inline = false, connection }: Props) {
+    const issue = !inline && (connection === "reconnecting" || connection === "offline");
+    if (!toasts.length && !issue) return null;
 
+    return (
+        <>
+            {issue ? (
+                <div style={{ position: "fixed", top: 10, left: "50%", transform: "translateX(-50%)", zIndex: 1001, pointerEvents: "none" }}>
+                    <ConnectionPill status={connection} onlyOnIssue />
+                </div>
+            ) : null}
+            {toasts.length ? renderToasts() : null}
+        </>
+    );
+
+    function renderToasts() {
     return (
         <div
             aria-live="polite"
@@ -63,4 +80,5 @@ export function ToastStack({ toasts, inline = false }: Props) {
       `}</style>
         </div>
     );
+    }
 }

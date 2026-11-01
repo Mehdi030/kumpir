@@ -2032,7 +2032,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     mePlayerId={mePlayerId && players.some((p) => p.player_id === mePlayerId) ? mePlayerId : null}
                     onToast={(m, ms) => showToast(m, ms ?? 2200)}
                 />
-                <ToastStack toasts={toasts} />
+                <ToastStack toasts={toasts} connection={realtimeStatus} />
                 {achBurst}
             </>
         );
@@ -2087,7 +2087,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                         </>
                     )}
                 </div>
-                <ToastStack toasts={toasts} />
+                <ToastStack toasts={toasts} connection={realtimeStatus} />
             </main>
         );
     }
@@ -2224,7 +2224,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 aria-hidden
             />
 
-            <ToastStack toasts={toasts} />
+            <ToastStack toasts={toasts} connection={realtimeStatus} />
 
             <div className="hud">
                 <div className="hudInner">
