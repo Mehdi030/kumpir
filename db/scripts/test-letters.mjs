@@ -49,6 +49,8 @@ try {
     let cands = l.quiz_options?.cands ?? [];
     check("ein Buchstabe und drei verschiedene Kategorien zur Abstimmung", /^[A-Z]$/.test(letter) && cands.length === 3 && new Set(cands.map((c) => c.id)).size === 3, `${letter} ${cands.map((c) => c.name).join(", ")}`);
     check("3 Kategorien = 3 Fragen", l.quiz_total === 3);
+    check("Karten haben Schwierigkeit (lvl 1–3) und Anzahl (n)", cands.every((c) => [1, 2, 3].includes(c.lvl) && c.n >= 6), JSON.stringify(cands.map((c) => [c.name, c.n, c.lvl])));
+    check("keine Kategorie außerhalb des Allgemeinwissens (Flüsse/Rapper aus)", cands.every((c) => !["Flüsse", "Rapper"].includes(c.name)));
 
     // keine Punkte-Lecks: Eingaben/Wortlisten sind für Clients nicht lesbar
     for (const t of ["word_terms", "letters_entries", "word_categories"]) {
@@ -138,6 +140,7 @@ try {
         check("Ergebnisse aufsteigend (Letzter zuerst)", asc, res.map((r) => `${r.name}:${r.points}`).join(" "));
         check("Bots haben Begriffe", res.filter((r) => r.name.startsWith("Bot")).every((r) => r.points >= 1));
         check("Auflösung enthält Schreibweise + Begriff und die Show-Dauer", (me?.valid ?? []).every((v) => v.t && v.l) && l.quiz_reveal?.last === (round === 2), `last=${l.quiz_reveal?.last}`);
+        check("Auflösung nennt bekannte Begriffe, die keiner getippt hat (missed)", Array.isArray(l.quiz_reveal?.missed) && l.quiz_reveal.missed.length <= 5 && !l.quiz_reveal.missed.some((m) => (l.quiz_reveal.results ?? []).some((r) => r.valid.some((v) => v.l === m))), JSON.stringify(l.quiz_reveal?.missed));
         check("Wörter-Karte steht 13 s (rote Wörter vorhanden) – Einspruch möglich", l.quiz_reveal?.mapSecs === 13, String(l.quiz_reveal?.mapSecs));
 
         // ---- Einspruch ----
@@ -222,6 +225,22 @@ try {
     await cfg({ cats: 2, secs: 30, off: [...off, "Gibtsnicht"] });
     const [c1] = await q("select letters_cfg from public.lobbies where id = $1", [id2]);
     check("Einstellungen gespeichert (unbekannte Kategorie verworfen)", c1.letters_cfg.cats === 2 && c1.letters_cfg.secs === 30 && c1.letters_cfg.off.length === 6, JSON.stringify(c1.letters_cfg));
+
+    // eigene Kategorien
+    const custom = (items) => q("select public.set_letters_custom($1, $2, $3::jsonb)", [id2, host, JSON.stringify(items)]);
+    const words = ["Pausenbrot", "Pausenhof", "Pizzaecke", "Pudding", "Pfannkuchen", "Popcorn", "Pommes", "Paprikachips", "Pralinen", "Plätzchen", "Pfeffernuss", "Pistazien"];
+    const cfail = async (items) => { try { await custom(items); return ""; } catch (e) { return e.message; } };
+    check("eigene Kategorie: zu wenige Begriffe abgelehnt", /letters_too_few_terms/.test(await cfail([{ name: "Zu klein", terms: ["a1", "b2"] }])));
+    check("eigene Kategorie: vergebener Name abgelehnt", /letters_name_taken/.test(await cfail([{ name: "Tiere", terms: words }])));
+    await custom([{ name: "Pausensnacks", terms: words }]);
+    const [cc] = await q("select letters_cfg from public.lobbies where id = $1", [id2]);
+    check("eigene Kategorie gespeichert (nur Name + Anzahl öffentlich, Einstellungen bleiben)", cc.letters_cfg.custom?.[0]?.name === "Pausensnacks" && cc.letters_cfg.custom[0].n === words.length && cc.letters_cfg.cats === 2 && !JSON.stringify(cc.letters_cfg).includes("Pudding"), JSON.stringify(cc.letters_cfg));
+    await q("update public.lobbies set quiz_options = jsonb_build_object('letter', 'P', 'played', '[]'::jsonb) where id = $1", [id2]);
+    let seenCustom = 0;
+    for (let i = 0; i < 25; i++) { const cs = await q("select public._letters_pick_cands($1) c", [id2]); if (cs[0].c.some((c) => c.name === "Pausensnacks")) seenCustom++; }
+    check("eigene Kategorie kommt mit Vorrang zur Abstimmung (25 Ziehungen)", seenCustom >= 8, String(seenCustom));
+    await custom([]);
+    await q("update public.lobbies set quiz_options = null where id = $1", [id2]);
 
     // zwei Menschen (wegen "gewertet") – der Host mit Konto, ein Bot kurz als Mensch
     const [bot] = await q("select player_id from public.players where lobby_id = $1 and is_bot order by seat_index limit 1", [id2]);

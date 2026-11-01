@@ -22,7 +22,7 @@ import { GAME_MODES, gameModeInfo } from "@/lib/gameModes";
 import { SwipeStat } from "@/components/lobby/SwipeStat";
 import { Collapse } from "@/components/ui/Collapse";
 import { RouletteSettings } from "@/components/lobby/RouletteSettings";
-import { lettersCfgOf, type LettersCfg } from "@/lib/rouletteCats";
+import { lettersCfgOf, type CustomItem, type LettersCfg } from "@/lib/rouletteCats";
 import { PlaylistPicker, usePlaylists } from "@/components/PlaylistPicker";
 import { kickPlayerAction, setLobbyLockAction, transferHostAction } from "@/actions/hostActions";
 
@@ -231,6 +231,14 @@ export default function LobbyPage() {
             alive = false;
         };
     }, [mode, letterCats.length]);
+    const saveLettersCustom = useCallback(
+        async (items: CustomItem[]) => {
+            const err = await rpc("set_letters_custom", { p_items: items });
+            await reload();
+            return err;
+        },
+        [rpc, reload]
+    );
     const saveLettersCfg = useCallback(
         async (next: LettersCfg) => {
             const err = await rpc("set_letters_config", { p_cfg: next });
@@ -514,7 +522,7 @@ export default function LobbyPage() {
                         <InviteActions code={code} disabled={isRunning} />
 
                         {mode === "letters" ? (
-                            <RouletteSettings cfg={lettersCfg} categories={letterCats} canEdit={canEdit} onSave={saveLettersCfg} onError={showError} />
+                            <RouletteSettings cfg={lettersCfg} categories={letterCats} canEdit={canEdit} onSave={saveLettersCfg} onSaveCustom={saveLettersCustom} onError={showError} />
                         ) : null}
                         <div className="lobbyPl" hidden={mode === "letters"}>
                             <button type="button" className="lobbyPlHead" onClick={() => setPlOpen((v) => !v)} aria-expanded={plOpen}>

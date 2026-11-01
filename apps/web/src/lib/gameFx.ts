@@ -260,6 +260,19 @@ export function playRankHit(level: number) {
     vibrate(lv > 0.7 ? [30, 40, 60] : 18);
 }
 
+/** Herzschlag bei Zeitdruck (lub-dub, dazu ein leichter heller Ton): urgency 0 (ruhig) bis 1 (kurz vor Schluss, lauter und höher). */
+export function playHeartbeat(urgency: number) {
+    if (isMuted()) return;
+    unlockGameFx();
+    const u = Math.max(0, Math.min(1, urgency));
+    const g = 0.28 + 0.22 * u;
+    tone(62 + 16 * u, 140, { type: "sine", gain: g, decay: 0.92 });
+    tone(52 + 14 * u, 170, { type: "sine", gain: g * 0.8, delayMs: 150, decay: 0.92 });
+    // leichter Ton obendrauf (wird mit der Zeit etwas höher und deutlicher)
+    tone(660 + 420 * u, 90, { type: "triangle", gain: 0.035 + 0.05 * u, delayMs: 150, decay: 0.9 });
+    vibrate(u > 0.6 ? [20, 60, 20] : 12);
+}
+
 /** Kleine Erfolgs-Melodie (Fanfare) für den ersten Platz. */
 export function playFanfare() {
     if (isMuted()) return;

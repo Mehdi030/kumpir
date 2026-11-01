@@ -87,6 +87,9 @@ export const STYLES = `
 .lrVoteCheck{ position: absolute; top: 8px; right: 10px; font-weight: 900; color: #ffd23f; animation: lrPop .3s cubic-bezier(.2,1.6,.4,1); }
 .lrVoteIcon{ width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; font-size: 34px; line-height: 1; background: rgba(0,0,0,.28); box-shadow: inset 0 0 0 2px hsla(var(--h), 90%, 80%, .35); }
 .lrVoteName{ font-family: var(--font-display); font-size: clamp(18px, 2.4vw, 26px); line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
+.lrLvl{ display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 900; letter-spacing: .3px; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.25); }
+.lrLvl i{ font-style: normal; letter-spacing: 1px; font-size: 9px; }
+.lrLvl.l1{ color: #8dffb8; } .lrLvl.l2{ color: #ffe08a; } .lrLvl.l3{ color: #ff9d94; }
 .lrVoteDots{ display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; min-height: 14px; }
 .lrVoteDots i{ width: 14px; height: 14px; border-radius: 50%; background: #ffd23f; box-shadow: 0 0 8px rgba(255,210,63,.7); animation: lrPop .35s cubic-bezier(.2,1.6,.4,1); }
 .lrVoteDots em{ font-style: normal; opacity: .4; }
@@ -189,6 +192,11 @@ export const STYLES = `
 .lrSoFar li{ padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 800; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
 .lrSoFar li span{ opacity: .6; margin-right: 3px; }
 .lrSoFar li b{ color: #ffe08a; margin-left: 4px; }
+.lrFinalWrap{ display: grid; align-content: center; gap: 16px; min-height: 0; overflow: auto; }
+.lrMissed{ display: grid; gap: 8px; justify-items: center; text-align: center; padding: 10px 14px; border-radius: 18px; background: rgba(255,210,63,.1); border: 1px solid rgba(255,210,63,.4); width: min(620px, 100%); margin: 0 auto; }
+.lrMissed b{ font-size: 13.5px; color: #ffe08a; }
+.lrMissedList{ display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.lrMissedList i{ font-style: normal; font-weight: 800; font-size: 14px; padding: 4px 11px; border-radius: 999px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25); animation: lrWPop .5s cubic-bezier(.2,1.5,.4,1) both; animation-delay: calc(var(--i) * 90ms + .3s); }
 .lrFinal{ list-style: none; margin: 0 auto; padding: 8px 0; display: grid; gap: 8px; width: min(620px, 100%); align-content: center; overflow: auto; }
 .lrFinal li{ display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 18px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); animation: lrWPop .5s cubic-bezier(.2,1.5,.4,1) both; animation-delay: calc(var(--i) * 70ms); }
 .lrFinal li.first{ background: linear-gradient(160deg, rgba(255,210,63,.32), rgba(255,140,40,.14)); border-color: #ffd23f; box-shadow: 0 0 30px rgba(255,210,63,.3); }
@@ -198,6 +206,10 @@ export const STYLES = `
 .lrFinalPts{ font-family: var(--font-display); font-weight: 900; font-size: 26px; color: #ffe08a; }
 .lrFinalPts small{ font-size: 12px; opacity: .7; margin-left: 3px; font-family: inherit; }
 
+/* Zeitdruck: roter Rand pulsiert im Herzschlag-Takt */
+.lrMain.pressure::after{ content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 20; animation: lrHeart 1s ease-in-out infinite; }
+.lrMain.panic::after{ animation-duration: .52s; }
+@keyframes lrHeart{ 0%, 100%{ box-shadow: inset 0 0 70px 4px rgba(255,40,40,.12); } 14%{ box-shadow: inset 0 0 120px 24px rgba(255,40,40,.45); } 28%{ box-shadow: inset 0 0 80px 8px rgba(255,40,40,.18); } 42%{ box-shadow: inset 0 0 105px 16px rgba(255,40,40,.34); } }
 @media (max-width: 640px){
   .lrMain{ gap: 2px; padding-top: 10px; }
   .lrHead{ gap: 6px; }
@@ -227,6 +239,7 @@ export const STYLES = `
   .lrSkip{ right: 70px; }
 }
 @media (prefers-reduced-motion: reduce){
+  .lrMain.pressure::after{ animation: none !important; }
   .lrCell.hit, .lrW, .lrVoteCard.in, .lrVoteCard.in::after, .lrBig, .lrRollTitle, .lrFinal li, .lrCrown, .lrLamps i, .lrRing.hot .lrRingNum, .lrPod.done .lrFigure, .lrBadge, .lrGain, .lrScene{ animation: none !important; }
   .lrW.go{ transition: none; }
 }

@@ -200,6 +200,12 @@ export function VoteCards({ cands, tally, myVote, canVote, onVote, votedCount, h
                                 {CAT_ICON[c.name] ?? "🎯"}
                             </span>
                             <b className="lrVoteName">{c.name}</b>
+                            {c.lvl ? (
+                                <span className={`lrLvl l${c.lvl}`} title={tr("Etwa {n} bekannte Begriffe mit diesem Buchstaben", { n: c.n ?? 0 })}>
+                                    <i aria-hidden>{"●".repeat(c.lvl)}</i>
+                                    {c.lvl === 1 ? tr("leicht") : c.lvl === 2 ? tr("mittel") : tr("schwer")}
+                                </span>
+                            ) : null}
                             <span className="lrVoteDots" aria-label={`${cnt}`}>
                                 {Array.from({ length: cnt }, (_, k) => (
                                     <i key={k} />

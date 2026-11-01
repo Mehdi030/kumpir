@@ -14,7 +14,24 @@ import { INTRO_S, PLACE_S, ROLL_S } from "@/components/quiz/rouletteShared";
  * oben – je höher, desto mehr Konfetti und Effekte; Platz 1 mit Fanfare und Konfetti-Feuerwerk. Der Takt kommt von der Server-Uhr,
  * wer später dazukommt, sieht gleich den passenden Platz. "Überspringen" zeigt sofort die fertige Liste (nur bei mir).
  */
-export function RankShow({ title, subtitle, rows, startMs, players, mePlayerId, ptsLabel }: { title: string; subtitle: string; rows: { playerId: string; name: string; points: number }[]; startMs: number; players: QuizPlayer[]; mePlayerId: string | null; ptsLabel: string }) {
+/** "Hättest du's gewusst?": bekannte Begriffe zum Buchstaben, die keiner getippt hat */
+export function MissedBox({ missed }: { missed: string[] }) {
+    const { tr } = useI18n();
+    return (
+        <div className="lrMissed">
+            <b>💡 {tr("Hättest du's gewusst? Das hätte noch gepasst:")}</b>
+            <span className="lrMissedList">
+                {missed.map((m, i) => (
+                    <i key={m} style={{ ["--i" as string]: i }}>
+                        {m}
+                    </i>
+                ))}
+            </span>
+        </div>
+    );
+}
+
+export function RankShow({ title, subtitle, rows, startMs, players, mePlayerId, ptsLabel, missed = [] }: { title: string; subtitle: string; rows: { playerId: string; name: string; points: number }[]; startMs: number; players: QuizPlayer[]; mePlayerId: string | null; ptsLabel: string; missed?: string[] }) {
     const { tr } = useI18n();
     const [skipped, setSkipped] = useState(false);
     const [burst, setBurst] = useState<{ id: number; level: number; winner: boolean } | null>(null);
@@ -82,6 +99,7 @@ export function RankShow({ title, subtitle, rows, startMs, players, mePlayerId, 
             </div>
 
             {finished ? (
+                <div className="lrFinalWrap">
                 <ol className="lrFinal">
                     {[...rows].reverse().map((r, i) => {
                         const pl = players.find((x) => x.player_id === r.playerId);
@@ -100,6 +118,8 @@ export function RankShow({ title, subtitle, rows, startMs, players, mePlayerId, 
                         );
                     })}
                 </ol>
+                {missed.length ? <MissedBox missed={missed} /> : null}
+                </div>
             ) : (
                 <>
                     <div className="lrStage">

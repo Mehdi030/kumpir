@@ -20,7 +20,7 @@ export type LobbyRow = {
     /** 'public' = im Hauptmenü unter "Offene Lobbys" sichtbar (Migration 104) */
     privacy?: string | null;
     /** Roulette-Einstellungen des Hosts (Migration 130) */
-    letters_cfg?: { cats?: number; secs?: number; off?: string[] } | null;
+    letters_cfg?: { cats?: number; secs?: number; off?: string[]; custom?: { name: string; n: number }[] } | null;
 };
 
 export type PlayerRow = {

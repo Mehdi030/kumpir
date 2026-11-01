@@ -14,7 +14,7 @@ export const PLACE_S = 2.2;
 export const ROLL_S = 0.9;
 export const showSeconds = (n: number) => INTRO_S + PLACE_S * n + 1.5;
 
-export type CatInfo = { id: string; name: string };
+export type CatInfo = { id: string; name: string; /** Anzahl bekannter Begriffe zum Buchstaben */ n?: number; /** 1 leicht, 2 mittel, 3 schwer */ lvl?: number };
 export type ValidItem = { t: string; l: string };
 export type ResultRow = { playerId: string; name: string; points: number; valid: ValidItem[]; bad: string[]; dup: string[] };
 export type Word = { key: string; text: string; pid: string; kind: "plain" | "ok" | "bad" | "dup"; mine: boolean };

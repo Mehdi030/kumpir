@@ -27,7 +27,7 @@ await db.query("begin");
 try {
     for (const [name, v] of Object.entries(lists)) {
         const { rows } = await db.query(
-            "insert into public.word_categories (name, kind) values ($1, $2) on conflict (name) do update set kind = excluded.kind, active = true returning id",
+            "insert into public.word_categories (name, kind) values ($1, $2) on conflict (name) where owner_lobby is null do update set kind = excluded.kind, active = true returning id",
             [name, v.kind],
         );
         const id = rows[0].id;
@@ -48,6 +48,8 @@ try {
         const [{ n, l }] = (await db.query("select count(*)::int n, count(distinct label)::int l from public.word_terms where category_id = $1", [id])).rows;
         console.log(`${name}: ${l} Begriffe (${n} Schreibweisen)`);
     }
+    // Kategorien, die nicht (mehr) in der Datei stehen, werden ausgeschaltet (kommen nicht mehr zur Wahl, ihre Begriffe bleiben gespeichert)
+    await db.query("update public.word_categories set active = false where owner_lobby is null and name <> all($1::text[])", [Object.keys(lists)]);
     await db.query("commit");
 } catch (e) {
     await db.query("rollback");

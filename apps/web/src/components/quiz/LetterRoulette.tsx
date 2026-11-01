@@ -5,12 +5,12 @@ import { useI18n } from "@/lib/i18n";
 import { gameModeInfo } from "@/lib/gameModes";
 import { serverNow } from "@/lib/serverClock";
 import { AudioControl } from "@/components/AudioControl";
-import { playFx } from "@/lib/gameFx";
+import { playFx, playHeartbeat } from "@/lib/gameFx";
 import { useQuiz, type QuizLobby, type QuizPlayer } from "@/components/quiz/useQuiz";
 import { STYLES } from "@/components/quiz/letterRouletteStyles";
 import { Podia, SlotReel, TimerRing, VoteCards } from "@/components/quiz/RouletteParts";
 import { WordMap } from "@/components/quiz/WordMap";
-import { RankShow } from "@/components/quiz/RankShow";
+import { MissedBox, RankShow } from "@/components/quiz/RankShow";
 import { MAP_S_DEFAULT, showSeconds, type Appeal, type CatInfo, type ResultRow, type Word } from "@/components/quiz/rouletteShared";
 
 /**
@@ -33,7 +33,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
     const idx = Math.max(0, lobby.quiz_index);
     const total = Math.max(1, lobby.quiz_total || 3); // Anzahl Kategorien (Host-Einstellung)
     const me = players.find((p) => p.player_id === mePlayerId) ?? null;
-    const reveal = lobby.quiz_reveal as { letter?: string; category?: string; index?: number; last?: boolean; mapSecs?: number; results?: ResultRow[] } | null;
+    const reveal = lobby.quiz_reveal as { letter?: string; category?: string; index?: number; last?: boolean; mapSecs?: number; missed?: string[]; results?: ResultRow[] } | null;
     const MAP_S = Number(reveal?.mapSecs ?? MAP_S_DEFAULT);
     const rows = useMemo(() => reveal?.results ?? [], [reveal]);
     const humans = players.filter((p) => !p.is_bot).length;
@@ -76,6 +76,24 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
     const inputRef = useRef<HTMLInputElement | null>(null);
     const canType = state === "question" && !!me;
     const iAmDone = !!me && (q.status?.done ?? []).includes(me.player_id);
+    // Zeitdruck: in den letzten 10 Sekunden schlägt ein Herzschlag (immer schneller) und der Rand pulsiert rot
+    const pressure = state === "question" && !iAmDone && q.left <= 10 && q.left > 0;
+    const panic = pressure && q.left <= 3.5;
+    const leftRef = useRef(q.left);
+    useEffect(() => {
+        leftRef.current = q.left;
+    });
+    useEffect(() => {
+        if (!pressure) return;
+        let t = 0;
+        const beat = () => {
+            const l = leftRef.current;
+            playHeartbeat(Math.max(0, Math.min(1, (10 - l) / 10)));
+            t = window.setTimeout(beat, l > 6 ? 1000 : l > 3.5 ? 760 : 520);
+        };
+        beat();
+        return () => window.clearTimeout(t);
+    }, [pressure]);
     const doneSet = useMemo(() => new Set(q.status?.done ?? []), [q.status]);
     useEffect(() => {
         if (canType) inputRef.current?.focus();
@@ -150,7 +168,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
     const mine = rows.find((r) => r.playerId === mePlayerId) ?? null;
 
     return (
-        <main className="fullH lrMain">
+        <main className={`fullH lrMain ${pressure ? "pressure" : ""} ${panic ? "panic" : ""}`}>
             <div className="lrTopRight">
                 <AudioControl />
             </div>
@@ -274,6 +292,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                     />
                     {appealOpen && myBadCount > 0 ? <div className="lrAppealHint">⚖️ {tr("Zu Unrecht rot? Tippe auf dein rotes Wort – die anderen stimmen ab.")}</div> : null}
                     {appealOpen && openOthers > 0 ? <div className="lrAppealHint vote">👍👎 {tr("Gilt das Wort? Stimme bei den Einsprüchen ab.")}</div> : null}
+                    {reveal.missed?.length ? <MissedBox missed={reveal.missed} /> : null}
                     <div className="lrLegend">
                         <span className="ok">✓ {tr("erkannt")}</span>
                         <span className="bad">✗ {tr("nicht erkannt")}</span>
@@ -304,6 +323,7 @@ export function LetterRoulette({ lobby, players, mePlayerId, onToast }: { lobby:
                     players={players}
                     mePlayerId={mePlayerId}
                     ptsLabel={showStage === 2 ? tr("Punkte") : tr("Begriffe")}
+                    missed={showStage === 1 ? reveal?.missed ?? [] : []}
                 />
             ) : null}
 
