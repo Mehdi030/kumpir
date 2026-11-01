@@ -119,6 +119,10 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
     const logNote = (e: { a: string | null; ok: boolean; pts: number }) =>
         e.ok ? `+${pts(e.pts)}` : e.pts < 0 ? "−1" : "±0";
 
+    // Die letzte FALSCHE Antwort dieses Songs sehen alle groß in der Mitte (bis jemand neu buzzert)
+    const lastTry = (lobby.quiz_log ?? []).filter((e) => e.seq === lobby.quiz_seq).slice(-1)[0] ?? null;
+    const wrongTry = state === "question" && lastTry && !lastTry.ok ? lastTry : null;
+
     const songPlaying = state === "question" || state === "buzzed" || state === "reveal";
     const ringState = state === "buzzed" ? "answer" : state === "reveal" ? "reveal" : "ask";
     const R = 118;
@@ -219,6 +223,11 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
                     ) : (
                         <div className="bzTitle">{tr("Gleich geht's los …")}</div>
                     )}
+                    {wrongTry ? (
+                        <div className="bzWrongAll" key={`w:${lobby.quiz_seq}:${(lobby.quiz_log ?? []).length}`}>
+                            ❌ <b>{nameOf(wrongTry.p)}</b>: {wrongTry.a ? `„${wrongTry.a}“` : tr("keine Eingabe")} {wrongTry.pts < 0 ? "· −1" : ""}
+                        </div>
+                    ) : null}
                     {feedback && state === "question" ? (
                         <div className="bzBad" key={feedback.nonce}>
                             {feedback.text}
@@ -340,6 +349,9 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
         .bzWin{ padding: 8px 16px; border-radius: 14px; background: rgba(125,255,169,.16); border: 1px solid rgba(125,255,169,.5); font-weight: 850; font-size: 18px; }
         .bzWin b{ color: #7dffa9; }
         .bzGoalWin{ padding: 9px 16px; border-radius: 14px; font-weight: 950; background: linear-gradient(90deg, rgba(255,210,63,.3), rgba(255,140,40,.25)); border: 1px solid #ffd23f; color: #ffe08a; animation: bzPop .5s ease-out; }
+        .bzWrongAll{ padding: 8px 14px; border-radius: 14px; font-weight: 850; font-size: 16px; background: rgba(130,24,20,.6); border: 1px solid rgba(255,100,88,.7); color: #ffd6d1; max-width: 100%; overflow-wrap: anywhere; animation: bzShake .5s ease-out; }
+        .bzWrongAll b{ color: #fff; }
+        @keyframes bzShake{ 0%{ transform: translateX(0); opacity: 0; } 20%{ transform: translateX(-8px); opacity: 1; } 40%{ transform: translateX(7px); } 60%{ transform: translateX(-4px); } 80%{ transform: translateX(2px); } 100%{ transform: none; } }
         .bzBad{ color: #ffb3a6; font-weight: 850; animation: bzIn .25s ease-out; }
 
         .bzButton{ width: 170px; height: 170px; border-radius: 50%; border: 6px solid rgba(255,255,255,.35); cursor: pointer; display: grid; place-content: center; gap: 0; color: #fff;

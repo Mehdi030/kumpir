@@ -22,9 +22,9 @@ const ROUND_SPEEDS: Record<
     RoundSpeed,
     { label: string; seconds: number; hint: string; variant: "fast" | "normal" | "calm" }
 > = {
-    fast: { label: tk("⚡ Blitz"), seconds: 25, hint: tk("Schnell, hoher Druck."), variant: "fast" },
-    normal: { label: tk("🎯 Standard"), seconds: 35, hint: tk("Ausgewogenes Tempo."), variant: "normal" },
-    calm: { label: tk("🧊 Casual"), seconds: 50, hint: tk("Entspannt, mehr Zeit."), variant: "calm" },
+    fast: { label: tk("⚡ Blitz"), seconds: 25, hint: tk("Kurze Zündschnur"), variant: "fast" },
+    normal: { label: tk("🎯 Standard"), seconds: 35, hint: tk("Normale Zündschnur"), variant: "normal" },
+    calm: { label: tk("🧊 Casual"), seconds: 50, hint: tk("Lange Zündschnur"), variant: "calm" },
 };
 
 function randomHostName() {

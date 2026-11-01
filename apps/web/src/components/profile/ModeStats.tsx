@@ -8,7 +8,9 @@ type ModeData = { matches: number; wins: number; practice: number; hits: number;
 type Stats = Partial<Record<"buzzer" | "year", ModeData>>;
 
 /** Eigene Auswertung für Buzzer und Jahr raten (Migration 133): Spiele, Siege, Trefferquote, Bestwert, Ø-Platz – gewertet nur mit mindestens 2 Menschen. */
-export function ModeStats({ userId }: { userId: string }) {
+export type OriginalStats = { rounds: number; wins: number; passes: number; clutch: number; fastestMs: number | null; bestStreak: number };
+
+export function ModeStats({ userId, original }: { userId: string; original?: OriginalStats | null }) {
     const { tr } = useI18n();
     const [d, setD] = useState<Stats | null>(null);
     useEffect(() => {
@@ -27,9 +29,41 @@ export function ModeStats({ userId }: { userId: string }) {
         { key: "year", icon: "📅", title: tr("Jahr raten"), hit: tr("Volltreffer") },
     ];
     const shown = modes.filter((m) => d?.[m.key]);
-    if (!shown.length) return null;
+    const hasOriginal = !!original && (original.rounds > 0 || original.passes > 0);
+    if (!shown.length && !hasOriginal) return null;
     return (
         <section className="msStat" aria-label={tr("Modus-Statistik")}>
+            {hasOriginal ? (
+                <div className="msCard">
+                    <h2>🥔 {tr("Original")}</h2>
+                    <div className="msBoxes">
+                        <div>
+                            <small>{tr("Runden")}</small>
+                            <b>{original!.rounds}</b>
+                        </div>
+                        <div>
+                            <small>{tr("Rundensiege")}</small>
+                            <b>{original!.wins}</b>
+                        </div>
+                        <div>
+                            <small>{tr("Weitergaben")}</small>
+                            <b>{original!.passes}</b>
+                        </div>
+                        <div>
+                            <small>{tr("Rettungen in letzter Sekunde")}</small>
+                            <b>{original!.clutch}</b>
+                        </div>
+                        <div>
+                            <small>{tr("Schnellste Weitergabe")}</small>
+                            <b>{original!.fastestMs ? `${(original!.fastestMs / 1000).toFixed(2).replace(".", ",")} s` : "–"}</b>
+                        </div>
+                        <div>
+                            <small>{tr("Beste Serie")}</small>
+                            <b>{original!.bestStreak}</b>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
             {shown.map((m) => {
                 const x = d![m.key]!;
                 const acc = x.answers > 0 ? Math.round((x.hits / x.answers) * 100) : 0;

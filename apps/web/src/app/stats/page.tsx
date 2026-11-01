@@ -113,7 +113,10 @@ export default function StatsPage() {
                             <Spinner size={24} label={tr("Lade Statistik…")} />
                         </div>
                     ) : null}
-                    <ModeStats userId={user.id} />
+                    <ModeStats
+                        userId={user.id}
+                        original={stats ? { rounds: stats.games_played ?? 0, wins: stats.wins ?? 0, passes: stats.total_passes ?? 0, clutch: stats.total_clutch_passes ?? 0, fastestMs: stats.fastest_pass_ms ?? null, bestStreak: stats.best_survival_streak ?? 0 } : null}
+                    />
                     <RouletteStats userId={user.id} />
             </ProfileFolder>
             <style>{`

@@ -194,6 +194,26 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
                         ) : (
                             <div className="ytClosest">{tr("Diesmal hat keiner getippt.")}</div>
                         )}
+                        {results.length > 1 && trueYear != null ? (
+                            <ul className="ytDist" aria-label={tr("Abstand zum richtigen Jahr")}>
+                                {[...results]
+                                    .sort((a, b) => Math.abs(Number(a.answer) - trueYear) - Math.abs(Number(b.answer) - trueYear))
+                                    .map((r) => {
+                                        const d = Math.abs(Number(r.answer) - trueYear);
+                                        return (
+                                            <li key={r.playerId} className={d === 0 ? "exact" : ""} style={{ ["--w" as string]: `${Math.max(5, 100 - d * 7)}%` }}>
+                                                <span className="ytDistName">{nameOf(r.playerId)}</span>
+                                                <i aria-hidden>
+                                                    <b />
+                                                </i>
+                                                <em>
+                                                    {r.answer} · {d === 0 ? "🎯" : `±${d}`}
+                                                </em>
+                                            </li>
+                                        );
+                                    })}
+                            </ul>
+                        ) : null}
                         {tieInfo ? (
                             <div className="ytTie">
                                 <b>{tr("⚖️ Monats-Entscheid")}</b>
@@ -442,6 +462,13 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
         .ytKick{ font-size: 12px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .7; }
         .ytSong{ font-family: var(--font-display); font-weight: 900; font-size: clamp(24px, 3.8vw, 38px); overflow-wrap: anywhere; }
         .ytArtist{ font-weight: 850; opacity: .9; }
+        .ytDist{ list-style: none; margin: 6px auto 0; padding: 0; display: grid; gap: 5px; width: min(440px, 100%); }
+        .ytDist li{ display: grid; grid-template-columns: minmax(70px, 1fr) 2fr auto; gap: 8px; align-items: center; font-size: 13px; font-weight: 800; }
+        .ytDistName{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+        .ytDist i{ height: 8px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
+        .ytDist i b{ display: block; height: 100%; width: var(--w); border-radius: 999px; background: linear-gradient(90deg, #ff9d2e, #ffd23f); transition: width .8s cubic-bezier(.22,1,.36,1); }
+        .ytDist li.exact i b{ background: linear-gradient(90deg, #4ade80, #bbf7d0); }
+        .ytDist em{ font-style: normal; font-variant-numeric: tabular-nums; opacity: .9; }
         .ytClosest{ margin-top: 2px; padding: 5px 14px; border-radius: 999px; background: rgba(91,231,196,.14); border: 1px solid rgba(91,231,196,.45); font-weight: 850; font-size: 14px; }
 
         .ytPanel{ border-radius: 22px; padding: 10px 12px 12px; background: rgba(7,24,32,.55); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: grid; gap: 8px; }
