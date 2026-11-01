@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { HomeFriends } from "@/components/HomeFriends";
 import { HomeStatsSection } from "@/components/HomeStatsSection";
+import { OpenLobbies, useOpenLobbies } from "@/components/OpenLobbies";
 import { useFriendsStatus } from "@/hooks/useFriendsStatus";
 import { useI18n } from "@/lib/i18n";
 
@@ -16,7 +17,10 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
  */
 export function HomeSideDrawers() {
     const { user } = useAuth();
-    const [active, setActive] = useState<"stats" | "friends" | null>(null);
+    const [active, setActive] = useState<"stats" | "friends" | "lobbies" | null>(null);
+    // Offene Lobbys: eigene Lasche, die nur erscheint, wenn es welche gibt (Wunsch Mehdi 2026-11-01)
+    const lobbies = useOpenLobbies();
+    const lobbyCount = lobbies?.length ?? 0;
     const close = useCallback(() => setActive(null), []);
     useEffect(() => {
         if (!active) return;
@@ -46,7 +50,22 @@ export function HomeSideDrawers() {
                     onToggle={() => setActive(active === "friends" ? null : "friends")}
                     onClose={close}
                 >
-                    <HomeFriends inModal withOpenLobbies />
+                    <HomeFriends inModal />
+                </Drawer>
+            ) : null}
+            {lobbyCount > 0 ? (
+                <Drawer
+                    key="lobbies"
+                    side="right"
+                    slot="low"
+                    icon="🎮"
+                    label="Offene Lobbys"
+                    badge={String(lobbyCount)}
+                    open={active === "lobbies"}
+                    onToggle={() => setActive(active === "lobbies" ? null : "lobbies")}
+                    onClose={close}
+                >
+                    <OpenLobbies variant="inline" list={lobbies} />
                 </Drawer>
             ) : null}
             <style>{STYLES}</style>
@@ -54,13 +73,13 @@ export function HomeSideDrawers() {
     );
 }
 
-function Drawer({ side, icon, label, badge, open, onToggle, onClose, children }: { side: "left" | "right"; icon: string; label: string; badge?: string; open: boolean; onToggle: () => void; onClose: () => void; children: ReactNode }) {
+function Drawer({ side, slot = "mid", icon, label, badge, open, onToggle, onClose, children }: { side: "left" | "right"; slot?: "mid" | "low"; icon: string; label: string; badge?: string; open: boolean; onToggle: () => void; onClose: () => void; children: ReactNode }) {
     const { tr } = useI18n();
     // Inhalt erst beim ersten Aufklappen laden (spart Anfragen), danach bleibt er stehen
     const [loaded, setLoaded] = useState(false);
-    const id = `sd-${side}`;
+    const id = `sd-${side}-${slot}`;
     return (
-        <aside className={`sd ${side} ${open ? "open" : ""}`}>
+        <aside className={`sd ${side} ${slot} ${open ? "open" : ""}`}>
             <button type="button" className="sdTab" onClick={() => {
                     setLoaded(true);
                     onToggle();
@@ -99,6 +118,8 @@ const STYLES = `
 .sd.left .sdTab:hover, .sd.left .sdTab:focus-visible{ transform: translateY(-50%) translateX(4px); background: linear-gradient(180deg, rgba(120,40,10,.9), rgba(60,16,6,.9)); }
 .sd.right .sdTab:hover, .sd.right .sdTab:focus-visible{ transform: translateY(-50%) translateX(-4px); background: linear-gradient(180deg, rgba(120,40,10,.9), rgba(60,16,6,.9)); }
 .sd.open .sdTab{ opacity: 0; pointer-events: none; }
+.sd.low .sdTab{ top: calc(50% + 118px); animation: sdPop .7s cubic-bezier(.2,1.4,.4,1) both, sdBreath 3.4s ease-in-out .7s infinite; }
+@keyframes sdPop{ from{ opacity: 0; margin-right: -40px; } }
 @keyframes sdBreath{ 0%, 100%{ box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18), 0 0 0 0 rgba(255,170,50,0); } 50%{ box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18), 0 0 18px 2px rgba(255,170,50,.4); } }
 .sdTabIcon{ font-size: 20px; line-height: 1; }
 .sdTabLabel{ writing-mode: vertical-rl; font-family: var(--font-display); font-weight: 800; font-size: 13px; letter-spacing: 1.4px; text-transform: uppercase; opacity: .92; }

@@ -5,22 +5,18 @@ import Link from "next/link";
 import { Suspense, useEffect } from "react";
 import { AuthMini } from "@/components/AuthMini";
 import { LobbyExitNotice } from "@/components/LobbyExitNotice";
-import { OpenLobbies } from "@/components/OpenLobbies";
 import { HomeSideDrawers } from "@/components/HomeSideDrawers";
 import { HomePotato } from "@/components/HomePotato";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { PwaSetup } from "@/components/PwaSetup";
 import { useI18n } from "@/lib/i18n";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { track } from "@/lib/track";
 
 const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 
 export default function Home() {
     const { t, tr } = useI18n();
-    // Statistik links und Freunde rechts als eingeklappte Laschen am Rand, die sich weich aufklappen (Wunsch Mehdi 2026-10-25) –
-    // auf allen Bildschirmen, so bleibt die Karte frei und das Hauptmenü passt immer auf einen Bildschirm.
-    const wide = useMediaQuery("(min-width: 900px)");
+    // Statistik, Freunde und offene Lobbys stehen als eingeklappte Laschen am Rand (components/HomeSideDrawers.tsx)
     useEffect(() => {
         track("home_view");
     }, []);
@@ -79,8 +75,6 @@ export default function Home() {
                         ))}
                     </div>
 
-                    {/* Schmal: offene Lobbys direkt in der Karte, nur wenn es welche gibt (breit stehen sie in der Freunde-Lasche) */}
-                    {!wide ? <OpenLobbies variant="inline" /> : null}
                     <PwaSetup showHint />
                 </section>
 

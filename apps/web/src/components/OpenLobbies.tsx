@@ -35,7 +35,7 @@ function joinHref(code: string) {
 }
 
 /** Offene Lobbys laden (alle 12 s, nur wenn der Tab sichtbar ist). */
-function useOpenLobbies() {
+export function useOpenLobbies() {
     const [list, setList] = useState<OpenLobby[] | null>(null);
     const load = useCallback(async () => {
         const { data, error } = await getSupabaseClient().rpc("get_public_lobbies");
@@ -89,9 +89,10 @@ function LobbyRow({ l, i }: { l: OpenLobby; i: number }) {
  *  - variant "side": eigener Block in der Freunde-Leiste (breite Bildschirme), auch ohne Lobby sichtbar
  *  - variant "inline": schmale Bildschirme, nur wenn es wirklich offene Lobbys gibt
  */
-export function OpenLobbies({ variant = "side" }: { variant?: "side" | "inline" }) {
+export function OpenLobbies({ variant = "side", list: given }: { variant?: "side" | "inline"; list?: OpenLobby[] | null }) {
     const { tr } = useI18n();
-    const list = useOpenLobbies();
+    const own = useOpenLobbies();
+    const list = given !== undefined ? given : own;
     const [showAll, setShowAll] = useState(false);
 
     if (list === null) return null;
