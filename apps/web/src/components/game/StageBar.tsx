@@ -144,7 +144,7 @@ export function StageBar({
         @keyframes sbGlow{ from{ transform: scale(.85); } to{ transform: scale(1.2); } }
         .sbFuseFoot{ display: flex; align-items: baseline; justify-content: center; gap: 4px 12px; flex-wrap: wrap; text-align: center; }
         .sbGoal{ font-size: 11.5px; font-weight: 850; color: #ffe08a; opacity: .95; }
-        .sbFuseLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; opacity: .7; }
+        .sbFuseLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; opacity: .85; }
         .stageBar.hot .sbFuseLabel{ color: hsl(var(--hh) 90% 72%); opacity: 1; }
         .stageBar.crit .sbFuseLabel{ color: hsl(var(--hh) 95% 74%); opacity: 1; }
         .sbNote{ font-size: 11px; font-weight: 900; padding: 1px 9px; border-radius: 999px; background: rgba(255,255,255,.12); }

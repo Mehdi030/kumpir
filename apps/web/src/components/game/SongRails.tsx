@@ -31,7 +31,7 @@ export function SongRails({ missed, guessed }: { missed: string[]; guessed: stri
         .srRail.guessed .srChip{ background: rgba(14,86,52,.5); border-color: rgba(80,220,140,.5); color: #d4f8e2; }
         .srRail.guessed .srChip.newest{ background: rgba(20,120,70,.6); border-color: #5fe39a; color: #fff; box-shadow: 0 0 16px rgba(70,230,140,.28); }
         .srChip.more{ background: rgba(255,255,255,.08) !important; border-color: rgba(255,255,255,.16) !important; color: rgba(255,255,255,.7) !important; box-shadow: none !important; text-align: center; }
-        .srEmpty{ font-size: 12.5px; font-weight: 700; opacity: .45; padding: 4px 6px; }
+        .srEmpty{ font-size: 12.5px; font-weight: 700; opacity: .85; padding: 4px 6px; }
         @keyframes srIn{ from{ opacity: 0; transform: translateY(-8px) scale(.96); } }
 
         /* breit: je eine Spalte links und rechts neben dem Tisch */

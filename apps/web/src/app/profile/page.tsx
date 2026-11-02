@@ -94,7 +94,7 @@ export default function ProfilePage() {
             <style>{`
             .profHead{ display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; }
             .profWho{ flex:1; min-width:180px; }
-            .profKicker{ font-size: 11px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .7; }
+            .profKicker{ font-size: 11px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .85; }
             .profName{ font-size: clamp(30px,6vw,46px) !important; margin: 2px 0 0 !important; overflow-wrap: anywhere; }
             .profUser{ font-size:14px; font-weight:700; opacity:.85; margin-top:2px; }
             .profMail{ font-size:13px; opacity:.8; margin-top:2px; word-break:break-all; }

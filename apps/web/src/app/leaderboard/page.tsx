@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLeaderboard, type LeaderboardCategory, type LeaderboardEntry } from "@/hooks/useLeaderboard";
-import { Spinner } from "@/components/Spinner";
+import { Skeleton } from "@/components/Skeleton";
 import { SeasonBoard } from "@/components/SeasonBoard";
 import { ModeBoard, type BoardMode } from "@/components/ModeBoard";
 import { ProfileFolder } from "@/components/profile/ProfileFolder";
@@ -121,9 +121,7 @@ export default function LeaderboardPage() {
                 {error ? <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>{error}</div> : null}
 
                 {loading ? (
-                    <div style={{ display: "grid", placeItems: "center", padding: 24 }}>
-                        <Spinner size={24} label={tr("Lade…")} />
-                    </div>
+                    <Skeleton kind="rows" count={7} label={tr("Lade…")} />
                 ) : rows.length === 0 ? (
                     <div className="fieldHelp" style={{ marginTop: 16, textAlign: "center", padding: 24 }}>
                         {tr("Noch keine Daten. Spiel mit einem Konto ein paar Runden – dann tauchst du hier auf.")}

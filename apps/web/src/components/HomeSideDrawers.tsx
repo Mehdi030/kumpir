@@ -146,11 +146,16 @@ const STYLES = `
 .sdPanel .statsHeadBtn{ font-size: 20px; font-family: var(--font-display); }
 
 @media (max-width: 520px){
-  .sdTab{ width: 30px; padding: 11px 0 12px; gap: 6px; }
+  .sdTab{ width: 38px; padding: 12px 0 14px; gap: 6px; }
   .sdTabIcon{ font-size: 17px; }
   .sdTabLabel{ font-size: 11px; letter-spacing: 1px; }
   .sdPanel{ top: 64px; max-height: calc(100dvh - 84px); }
   .sd.left .sdPanel{ left: 10px; } .sd.right .sdPanel{ right: 10px; }
+}
+/* Touch: Treffer-Fläche mindestens 44 px – die Lasche bekommt unsichtbar mehr Rand, der ✕-Knopf wird größer */
+@media (pointer: coarse){
+  .sdTab::after{ content: ""; position: absolute; inset: -8px -10px; }
+  .sdClose{ width: 44px; height: 44px; font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce){
   .sdTab{ animation: none; }

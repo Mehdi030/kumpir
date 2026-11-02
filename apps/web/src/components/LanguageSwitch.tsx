@@ -23,7 +23,7 @@ export function LanguageSwitch() {
             {opt("fr", "FR")}
             <style>{`
         .langSwitch{ display:inline-flex; border-radius:999px; border:1px solid rgba(255,255,255,.28); overflow:hidden; background:rgba(255,255,255,.08); }
-        .langOpt{ border:0; background:transparent; color:#fff; font-weight:800; font-size:12px; padding:6px 10px; cursor:pointer; opacity:.75; }
+        .langOpt{ border:0; background:transparent; color:#fff; font-weight:800; font-size:12px; padding:6px 10px; cursor:pointer; opacity: .85; }
         .langOpt:hover{ opacity:1; }
         .langOptOn{ background:rgba(255,255,255,.9); color:#2b0f04; opacity:1; }
       `}</style>

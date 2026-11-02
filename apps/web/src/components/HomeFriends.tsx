@@ -426,7 +426,7 @@ const STYLES = `
 .frAvatarDot{ position:absolute; right:-1px; bottom:-1px; width:14px; height:14px; border-radius:999px; background:#34d399; border:2.5px solid #1f3d33; box-shadow:0 0 8px #34d399; }
 .frInfo{ min-width:0; display:grid; gap:2px; }
 .frName{ font-family:var(--font-display); font-size:17px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.frStatus{ font-size:12.5px; font-weight:700; opacity:.72; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.frStatus{ font-size:12.5px; font-weight:700; opacity: .85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .frStatus.on{ opacity:1; color:#a7f3d0; }
 .frActions{ display:flex; gap:6px; align-items:center; }
 .frRemove{ border:0; background:transparent; color:rgba(255,255,255,.45); font:inherit; font-size:13px; cursor:pointer; padding:6px 8px; border-radius:8px; }

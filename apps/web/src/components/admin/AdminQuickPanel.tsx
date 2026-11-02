@@ -590,7 +590,7 @@ const STYLES = `
 .aqRow.sel{ border-color:#ffd23f; background:rgba(255,210,63,.18); }
 .aqInfo{ min-width:0; display:grid; }
 .aqName{ font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.aqSub{ font-size:11.5px; opacity:.75; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.aqSub{ font-size:11.5px; opacity: .85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .aqGo{ opacity:.6; flex:none; }
 .aqTag{ margin-left:6px; font-size:10px; font-weight:900; padding:1px 6px; border-radius:999px; background:rgba(255,255,255,.2); }
 .aqTag.bad{ background:rgba(255,90,70,.45); }
@@ -610,10 +610,10 @@ const STYLES = `
 .aqCardWho{ display:grid; gap:2px; min-width:0; }
 .aqCardWho b{ font-size:20px; font-family: var(--font-display); overflow-wrap:anywhere; line-height:1.1; }
 .aqCardWho span{ font-weight:700; opacity:.9; }
-.aqCardWho small{ opacity:.75; font-size:12px; }
+.aqCardWho small{ opacity: .85; font-size:12px; }
 .aqCardActions{ display:flex; gap:6px; flex-wrap:wrap; }
 .aqTabs{ display:flex; gap:4px; padding:3px; border-radius:999px; background:rgba(0,0,0,.28); }
-.aqTabs button{ flex:1; border:0; background:transparent; color:#fff; font:inherit; font-weight:800; font-size:12px; padding:6px 4px; border-radius:999px; cursor:pointer; opacity:.8; }
+.aqTabs button{ flex:1; border:0; background:transparent; color:#fff; font:inherit; font-weight:800; font-size:12px; padding:6px 4px; border-radius:999px; cursor:pointer; opacity: .85; }
 .aqTabs button.on{ background:#ffd23f; color:#2b0f04; opacity:1; }
 .aqCardBody{ overflow:auto; max-height:46vh; min-height:70px; }
 .aqMatches{ list-style:none; margin:0; padding:0; display:grid; gap:5px; }
@@ -622,10 +622,10 @@ const STYLES = `
 .aqPlace.p1{ background:rgba(255,210,63,.4); color:#fff3c4; }
 .aqMatchMain{ display:grid; min-width:0; line-height:1.25; }
 .aqMatchMain b{ font-size:12.5px; }
-.aqMatchMain small{ font-size:11.5px; opacity:.78; overflow-wrap:anywhere; }
+.aqMatchMain small{ font-size:11.5px; opacity: .85; overflow-wrap:anywhere; }
 .aqFacts{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
 .aqFacts div{ display:grid; gap:1px; padding:7px 9px; border-radius:11px; background:rgba(255,255,255,.08); }
-.aqFacts span{ font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; opacity:.65; }
+.aqFacts span{ font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; opacity: .85; }
 .aqFacts b{ font-size:13px; overflow-wrap:anywhere; }
 @media (max-width: 800px){
   /* schmal: Karte liegt über dem Menü */

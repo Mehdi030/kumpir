@@ -59,7 +59,7 @@ export function TableStylePicker() {
         .tsSwatch{ flex: none; width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); box-shadow: 0 2px 6px rgba(0,0,0,.4); }
         .tsText{ display: grid; line-height: 1.15; min-width: 0; flex: 1; }
         .tsText b{ font-size: 14px; font-weight: 900; }
-        .tsText small{ font-size: 11px; opacity: .65; }
+        .tsText small{ font-size: 11px; opacity: .85; }
         .tsCheck{ color: #ffd23f; font-weight: 900; }
         @media (prefers-reduced-motion: reduce){ .tsPop{ animation: none; } }
       `}</style>

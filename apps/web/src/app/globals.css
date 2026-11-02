@@ -1442,6 +1442,11 @@ body::after{
     color: #fff;
 }
 .playerChipState.on { background: #22c55e; border-color: #d9ffe6; box-shadow: 0 0 12px rgba(34,197,94,.8); }
+/* Touch-Geräte: kleine Knöpfe und Auswahl-Pillen bekommen mindestens 40 px Höhe (Wunsch Mehdi 2026-11-02: Treffer-Flächen) */
+@media (pointer: coarse) {
+    .btnSmall, .playerChipKick, .pillSegBtn, .rsPill, .rsCat, .hostStepper button { min-height: 40px; }
+    .btnSmall, .playerChipKick { min-width: 40px; }
+}
 .playerChipActions { display: flex; gap: 6px; justify-content: center; }
 .playerChipActions:empty { display: none; }
 .playerChipKick {
@@ -1884,7 +1889,7 @@ body::after{
 .homeStepIcon{ font-size: 28px; line-height: 1; margin-bottom: 8px; }
 .homeStepTitle{ font-weight: 800; font-size: 15px; margin-bottom: 4px; }
 .homeStepText{ font-size: 13px; line-height: 1.45; color: rgba(255, 255, 255, .78); }
-.homeFooter{ text-align: center; font-size: 11px; opacity: .45; padding-top: 4px; }
+.homeFooter{ text-align: center; font-size: 11px; opacity: .85; padding-top: 4px; }
 .homeFooter a{ color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 @media (max-width: 720px){
     .homeSteps{ grid-template-columns: 1fr; }
@@ -2181,7 +2186,7 @@ textarea:focus-visible{
 .publicToggle.on{ background: rgba(34,197,94,.16); border-color: rgba(134,239,172,.6); }
 .publicToggleText{ display: grid; gap: 1px; min-width: 0; flex: 1; }
 .publicToggleText b{ font-size: 15px; font-weight: 900; }
-.publicToggleText span{ font-size: 12px; font-weight: 600; opacity: .8; line-height: 1.25; }
+.publicToggleText span{ font-size: 12px; font-weight: 600; opacity: .85; line-height: 1.25; }
 .publicSwitch{ flex: none; width: 46px; height: 26px; border-radius: 999px; background: rgba(255,255,255,.22); position: relative; transition: background .2s; }
 .publicSwitch span{ position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); transition: transform .2s; }
 .publicToggle.on .publicSwitch{ background: #22c55e; }
@@ -2193,9 +2198,9 @@ textarea:focus-visible{
 
 /* Mit Konto: fester Spielername (Beitreten, Lobby hosten) – ändern nur in den Einstellungen */
 .accountName{ display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 10px 14px; border-radius: 16px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); }
-.accountNameLabel{ font-size: 12px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; opacity: .75; }
+.accountNameLabel{ font-size: 12px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; opacity: .85; }
 .accountNameValue{ font-size: 18px; font-weight: 900; }
-.accountNameLink{ margin-left: auto; font-size: 12.5px; font-weight: 700; opacity: .8; color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.accountNameLink{ margin-left: auto; font-size: 12.5px; font-weight: 700; opacity: .85; color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .accountNameLink:hover{ opacity: 1; }
 @media (max-width: 640px){ .hostMain .accountName{ display: none; } }
 
@@ -2213,9 +2218,9 @@ textarea:focus-visible{
 .modeTile.quiz.on{ background: linear-gradient(160deg, rgba(255,210,63,.2), rgba(167,139,250,.18)); }
 .modeTileIcon{ font-size: 28px; line-height: 1; }
 .modeTileName{ display: flex; align-items: center; gap: 6px; font-weight: 900; font-size: 15px; }
-.modeTileNew{ font-size: 9.5px; font-weight: 950; padding: 2px 6px; border-radius: 999px; background: #ffd23f; color: #2a1200; letter-spacing: .5px; }
+.modeTileNew{ font-size: 10.5px; font-weight: 950; padding: 2px 6px; border-radius: 999px; background: #ffd23f; color: #2a1200; letter-spacing: .5px; }
 .modeTileGoal{ font-size: 12px; font-weight: 900; color: #ffe08a; line-height: 1.25; margin-top: 2px; }
-.modeTileDesc{ font-size: 12px; font-weight: 600; opacity: .78; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.modeTileDesc{ font-size: 12px; font-weight: 600; opacity: .85; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .modeTileRules{ display: none; }
 .modeTileSteps{ display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 .modeTileSteps span{ display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; padding: 4px 10px 4px 7px; border-radius: 999px; background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.14); line-height: 1.2; }

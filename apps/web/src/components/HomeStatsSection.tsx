@@ -172,7 +172,7 @@ function StatsModal({ onClose, quick }: { onClose: () => void; quick: [string, s
                 .stClose:hover{ background: rgba(255,255,255,.18); }
                 .stQuick{ display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
                 .stQuickBox{ padding: 12px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); display: grid; gap: 4px; text-align: center; }
-                .stQuickLabel{ font-size: 10.5px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; opacity: .7; }
+                .stQuickLabel{ font-size: 10.5px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; opacity: .85; }
                 .stQuickValue{ font-size: 22px; font-weight: 950; }
                 .stProfileLink{ justify-self: end; font-weight: 900; color: #ffe08a; text-decoration: none; }
                 @keyframes stFade{ from{ opacity: 0; } to{ opacity: 1; } }

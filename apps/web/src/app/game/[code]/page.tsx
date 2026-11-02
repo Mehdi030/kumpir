@@ -1735,7 +1735,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 </div>
 
                 <style>{`
-          .kicker{font-size:12px;font-weight:950;letter-spacing:2.2px;opacity:.78;text-transform:uppercase;animation:${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};}
+          .kicker{font-size:12px;font-weight:950;letter-spacing:2.2px;opacity: .85;text-transform:uppercase;animation:${reduceMotion ? "none" : "fadeUp 700ms cubic-bezier(.2,.9,.2,1) both"};}
           .headline{margin-top:10px;font-family:var(--font-display);font-size:clamp(36px,4.8vw,70px);font-weight:800;letter-spacing:-0.6px;position:relative;display:inline-block;text-shadow:0 24px 80px rgba(0,0,0,0.35);animation:${reduceMotion ? "none" : "heroIn 900ms cubic-bezier(.16,1,.3,1) both"};}
           .headlineGlow{position:absolute;inset:-30px -60px;background:radial-gradient(circle at 40% 35%, rgba(255,214,10,0.25), rgba(255,149,0,0.18), rgba(255,45,85,0.06), transparent 70%);filter:blur(18px);opacity:.9;pointer-events:none;animation:${reduceMotion ? "none" : "glowFloat 4.2s ease-in-out infinite"};}
           .topicGrid{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;}
@@ -1768,7 +1768,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
           .bottomLeft{display:flex;align-items:center;gap:10px;min-width:220px;}
           .brandMark{width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(0,0,0,0.18));border:1px solid rgba(255,255,255,0.14);box-shadow:0 10px 30px rgba(0,0,0,0.22);}
           .bottomTitle{font-weight:1000;letter-spacing:1.2px;font-size:12px;text-transform:uppercase;opacity:.9;}
-          .bottomSub{font-weight:850;opacity:.78;font-size:12px;margin-top:2px;}
+          .bottomSub{font-weight:850;opacity: .85;font-size:12px;margin-top:2px;}
           .barWrap{flex:1;min-width:180px;position:relative;}
           .barTrack{height:12px;border-radius:999px;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.12);overflow:hidden;}
           .barFill{height:100%;background:linear-gradient(90deg, rgba(255,214,10,0.95), rgba(255,149,0,0.95), rgba(255,45,85,0.80));filter:saturate(120%);}

@@ -741,7 +741,7 @@ export function PlayerRing({
         .ringNarrow .seatName{ font-size: 13px; padding: 3px 5px 3px 9px; gap: 5px; max-width: 130px; bottom: calc(100% + var(--seat) * .32 + 4px); border-radius: 12px; }
         .ringNarrow .seatMe{ display:none; }
         .ringNarrow .seatPts{ font-size: 12px; padding: 1px 6px; }
-        .ringNarrow .seatBadge{ font-size: 9.5px; padding: 2px 7px; letter-spacing: .8px; }
+        .ringNarrow .seatBadge{ font-size: 10.5px; padding: 2px 7px; letter-spacing: .8px; }
 
         /* Explosion */
         .seatBoom{ position:absolute; inset:-34px; display:grid; place-items:center; pointer-events:none; }

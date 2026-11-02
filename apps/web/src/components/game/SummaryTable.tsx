@@ -157,7 +157,7 @@ export function SummaryTable({
         .sumCard{ border-radius: 22px; padding: 14px; background: rgba(30,8,8,.42); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0,0,0,.28); text-align: left; }
         .sumScroll{ overflow-x: auto; }
         .sumTable{ width: 100%; border-collapse: separate; border-spacing: 0 5px; font-size: 14.5px; }
-        .sumTable th{ font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; opacity: .7; padding: 0 8px 2px; text-align: center; white-space: nowrap; }
+        .sumTable th{ font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; opacity: .85; padding: 0 8px 2px; text-align: center; white-space: nowrap; }
         .sumTable th.l, .sumTable td.l{ text-align: left; }
         .sumTable th.cur{ color: #ffe08a; opacity: 1; }
         .sumTable td{ padding: 6px 8px; text-align: center; background: rgba(255,255,255,.07); white-space: nowrap; font-weight: 700; }
@@ -170,7 +170,7 @@ export function SummaryTable({
         .sumName{ display: flex; align-items: center; gap: 8px; min-width: 0; }
         .sumAvatar{ width: 30px; height: 30px; flex: none; border-radius: 50%; background: rgba(255,255,255,.1); }
         .sumNameText{ font-weight: 800; white-space: normal; overflow-wrap: anywhere; line-height: 1.15; max-width: 200px; }
-        .sumNameText em{ font-style: normal; font-weight: 700; opacity: .7; font-size: 12px; }
+        .sumNameText em{ font-style: normal; font-weight: 700; opacity: .85; font-size: 12px; }
         .sumTable td.tot{ font-size: 18px; font-weight: 900; color: #ffe08a; }
         .sumChip{ display:inline-block; min-width: 30px; padding: 2px 8px; border-radius: 999px; font-size: 13px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.14); }
         .sumChip.p1{ background: rgba(255,214,10,.22); border-color: rgba(255,214,10,.55); }
@@ -179,7 +179,7 @@ export function SummaryTable({
         .sumTime{ font-variant-numeric: tabular-nums; border-radius: 999px; padding: 2px 8px; }
         .sumTime.best{ background: rgba(52,211,153,.22); color: #a7f3d0; font-weight: 900; box-shadow: inset 0 0 0 1.5px rgba(52,211,153,.75); }
         .sumTime.worst{ background: rgba(255,90,70,.2); color: #fecaca; font-weight: 900; box-shadow: inset 0 0 0 1.5px rgba(255,90,70,.75); }
-        .sumHint{ margin-top: 6px; font-size: 11.5px; font-weight: 700; opacity: .75; text-align: center; }
+        .sumHint{ margin-top: 6px; font-size: 11.5px; font-weight: 700; opacity: .85; text-align: center; }
         .sumHint .b{ color: #a7f3d0; } .sumHint .w{ color: #fecaca; }
         @media (max-width: 560px){
           .sumTable{ font-size: 13px; }

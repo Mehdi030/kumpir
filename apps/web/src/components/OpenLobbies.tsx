@@ -153,9 +153,9 @@ const STYLES = `
 .olName b{ font-size: 14px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .olCode{ flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; font-weight: 900; letter-spacing: 1px;
   padding: 1px 6px; border-radius: 6px; background: var(--lc); color: var(--lf); }
-.olText > span:last-child{ font-size: 11.5px; font-weight: 700; opacity: .8; }
+.olText > span:last-child{ font-size: 11.5px; font-weight: 700; opacity: .85; }
 .olGo{ flex: none; font-size: 12px; font-weight: 900; color: var(--lf); background: var(--lc); padding: 5px 9px; border-radius: 10px; }
 .olMore{ justify-self: start; padding: 5px 10px; border-radius: 10px; border: 1px solid rgba(255,224,138,.55); background: rgba(0,0,0,.2); color: #fff3cf; font-weight: 900; font-size: 12px; cursor: pointer; }
-.olNone{ font-size: 12.5px; font-weight: 700; opacity: .75; line-height: 1.35; }
+.olNone{ font-size: 12.5px; font-weight: 700; opacity: .85; line-height: 1.35; }
 @media (prefers-reduced-motion: reduce){ .olBox.has, .olDot, .olRow{ animation: none; } }
 `;

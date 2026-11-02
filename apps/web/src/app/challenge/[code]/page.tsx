@@ -203,11 +203,11 @@ export default function ChallengePage({ params }: { params: Promise<{ code: stri
         .chCard[data-mode="buzzer"] .chMode{ background: rgba(220,50,40,.4); border-color: rgba(255,150,130,.7); }
         .chCard[data-mode="year"] .chMode{ background: rgba(40,150,200,.4); border-color: rgba(140,210,245,.7); }
         .chScore{ margin: 6px 0; padding: 16px 12px 14px; border-radius: 20px; background: radial-gradient(ellipse at 50% 0%, rgba(255,214,10,.28), rgba(255,255,255,.06) 70%); border: 1px solid rgba(255,224,138,.5); box-shadow: 0 0 40px rgba(255,214,10,.18); }
-        .chScoreLabel{ font-size: 11.5px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .8; }
+        .chScoreLabel{ font-size: 11.5px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .85; }
         .chScoreNum{ font-family: var(--font-display); font-size: clamp(64px, 18vw, 92px); font-weight: 900; line-height: 1; color: #ffe08a; text-shadow: 0 0 30px rgba(255,214,10,.65), 0 6px 0 rgba(120,60,0,.5); font-variant-numeric: tabular-nums; }
         .chGo{ width: 100%; margin-top: 4px; }
         .chList{ display: grid; gap: 4px; margin-top: 8px; text-align: left; }
-        .chListHead{ font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; opacity: .7; margin-bottom: 2px; }
+        .chListHead{ font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; opacity: .85; margin-bottom: 2px; }
         .chRow{ display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.07); font-weight: 700; font-size: 14px; }
         .chRow.beat{ background: rgba(60,200,120,.2); border: 1px solid rgba(120,240,170,.5); }
         .chSkel{ display: grid; gap: 14px; padding: 20px 4px; justify-items: center; }

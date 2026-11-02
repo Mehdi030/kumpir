@@ -7,6 +7,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useAchievements } from "@/hooks/useAchievements";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Spinner } from "@/components/Spinner";
+import { Skeleton } from "@/components/Skeleton";
 import { AccountStats } from "@/components/profile/AccountStats";
 import { ProfileFolder } from "@/components/profile/ProfileFolder";
 import { RouletteStats } from "@/components/profile/RouletteStats";
@@ -109,9 +110,7 @@ export default function StatsPage() {
                     {data ? (
                         <AccountStats data={data} username={name} season={season} onSeasonChange={setSeason} seasonLoading={loading} />
                     ) : loading ? (
-                        <div style={{ display: "grid", placeItems: "center", padding: 30 }}>
-                            <Spinner size={24} label={tr("Lade Statistik…")} />
-                        </div>
+                        <Skeleton kind="card" label={tr("Lade Statistik…")} />
                     ) : null}
                     <ModeStats
                         userId={user.id}
@@ -122,7 +121,7 @@ export default function StatsPage() {
             <style>{`
                 .stQuick{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 8px; }
                 .stQuickBox{ padding: 12px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); display: grid; gap: 4px; text-align: center; }
-                .stQuickLabel{ font-size: 10.5px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; opacity: .7; }
+                .stQuickLabel{ font-size: 10.5px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; opacity: .85; }
                 .stQuickValue{ font-size: 22px; font-weight: 950; }
             `}</style>
         </main>

@@ -437,7 +437,7 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
         .ytHead{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 64px 0 128px; min-height: 40px; }
         @media (max-width: 640px){ .ytHead{ padding-left: 52px; } }
         .ytTie{ display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: center; align-items: center; margin-top: 4px; padding: 6px 12px; border-radius: 14px; background: rgba(255,255,255,.08); font-size: 13px; font-weight: 700; }
-        .ytTie b{ font-size: 12px; letter-spacing: .6px; text-transform: uppercase; opacity: .8; }
+        .ytTie b{ font-size: 12px; letter-spacing: .6px; text-transform: uppercase; opacity: .85; }
         .ytTie span.win{ color: #ffe08a; font-weight: 900; }
         .ytMonth{ display: grid; gap: 14px; justify-items: center; padding: 14px 6px 10px; animation: ytIn .35s cubic-bezier(.16,1,.3,1); }
         .ytMonthWho{ display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
@@ -459,7 +459,7 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
         @keyframes ytIn{ from{ opacity: 0; transform: translateY(8px); } }
         .ytQ{ font-family: var(--font-display); font-weight: 900; font-size: clamp(20px, 3.2vw, 32px); }
         .ytHint{ opacity: .8; font-weight: 750; font-size: 14px; }
-        .ytKick{ font-size: 12px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .7; }
+        .ytKick{ font-size: 12px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .85; }
         .ytSong{ font-family: var(--font-display); font-weight: 900; font-size: clamp(24px, 3.8vw, 38px); overflow-wrap: anywhere; }
         .ytArtist{ font-weight: 850; opacity: .9; }
         .ytDist{ list-style: none; margin: 6px auto 0; padding: 0; display: grid; gap: 5px; width: min(440px, 100%); }
@@ -473,7 +473,7 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
 
         .ytPanel{ border-radius: 22px; padding: 10px 12px 12px; background: rgba(7,24,32,.55); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: grid; gap: 8px; }
         .ytWait{ display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
-        .ytChip{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 4px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); font-size: 12.5px; font-weight: 800; opacity: .75; }
+        .ytChip{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 4px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); font-size: 12.5px; font-weight: 800; opacity: .85; }
         .ytChip.done{ opacity: 1; background: rgba(91,231,196,.16); border-color: rgba(91,231,196,.55); }
         .ytChip img{ border-radius: 50%; }
         .ytChipName{ max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -483,7 +483,7 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
         .ytAxis{ position: absolute; left: ${PAD - 8}px; right: ${PAD - 8}px; bottom: 30px; height: 6px; border-radius: 999px; background: linear-gradient(90deg, rgba(91,231,196,.35), rgba(91,231,196,.9), rgba(91,231,196,.35)); box-shadow: 0 0 14px rgba(91,231,196,.4); }
         .ytTick{ position: absolute; bottom: 30px; width: 2px; height: 14px; margin-left: -1px; background: rgba(255,255,255,.4); transform: translateY(4px); pointer-events: none; }
         .ytTick.major{ height: 20px; background: rgba(255,255,255,.8); }
-        .ytTick em{ position: absolute; top: 26px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 12px; font-weight: 850; opacity: .8; white-space: nowrap; }
+        .ytTick em{ position: absolute; top: 26px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 12px; font-weight: 850; opacity: .85; white-space: nowrap; }
 
         .ytTok{ position: absolute; width: 74px; margin-left: -37px; display: grid; justify-items: center; gap: 1px; z-index: 5; transition: left .08s linear; pointer-events: none; }
         .ytTok img{ border-radius: 50%; background: rgba(255,255,255,.12); box-shadow: 0 0 0 3px rgba(255,255,255,.35), 0 6px 14px rgba(0,0,0,.4); }

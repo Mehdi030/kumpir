@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { fmtNum, useI18n } from "@/lib/i18n";
 import { catIcon } from "@/lib/rouletteCats";
+import { FormStrip, StatRing } from "@/components/profile/StatRing";
 
 type RouletteStatsData = {
     matches: number;
@@ -57,6 +58,11 @@ export function RouletteStats({ userId }: { userId: string }) {
     return (
         <section className="rsStat" aria-label={tr("Roulette")}>
             <h2>🎰 {tr("Roulette")}</h2>
+            <div className="rsRings">
+                <StatRing value={d.matches > 0 ? (d.wins / d.matches) * 100 : 0} label={tr("Siegquote")} sub={`${d.wins} / ${d.matches}`} tone="gold" />
+                <StatRing value={acc} label={tr("Trefferquote")} sub={`${d.words} / ${attempts}`} tone="green" />
+            </div>
+            <FormStrip places={[...d.recent].reverse().map((r) => r.place)} label={tr("Letzte Runden")} />
             <div className="rsStatBoxes">
                 {boxes.map(([l, v]) => (
                     <div key={l} className="rsStatBox">
@@ -119,15 +125,16 @@ const CSS = `
 .rsStat{ margin-top: 18px; padding: 16px; border-radius: 22px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.14); display: grid; gap: 12px; }
 .rsStat h2{ margin: 0; font-size: 22px; }
 .rsStat h3{ margin: 6px 0 0; font-size: 13px; font-weight: 900; letter-spacing: 1.2px; text-transform: uppercase; opacity: .7; }
+.rsRings{ display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; padding: 4px 0; }
 .rsStatEmpty{ margin: 0; opacity: .75; font-weight: 700; }
 .rsStatBoxes{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
 .rsStatBox{ padding: 12px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); text-align: center; display: grid; gap: 4px; }
-.rsStatLabel{ font-size: 10.5px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; opacity: .7; }
+.rsStatLabel{ font-size: 10.5px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; opacity: .85; }
 .rsStatValue{ font-size: 24px; font-weight: 950; }
-.rsStatNote{ margin: 0; font-size: 12.5px; font-weight: 700; opacity: .65; }
+.rsStatNote{ margin: 0; font-size: 12.5px; font-weight: 700; opacity: .85; }
 .rsBest{ display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 18px; background: linear-gradient(160deg, rgba(255,210,63,.25), rgba(255,140,40,.08)); border: 1px solid rgba(255,210,63,.5); }
 .rsBest > div{ display: grid; gap: 1px; }
-.rsBest small{ font-size: 10.5px; font-weight: 900; letter-spacing: 1.2px; text-transform: uppercase; opacity: .75; }
+.rsBest small{ font-size: 10.5px; font-weight: 900; letter-spacing: 1.2px; text-transform: uppercase; opacity: .85; }
 .rsBest b{ font-size: 20px; }
 .rsBest span:not(.rsBestLetter){ font-size: 13px; font-weight: 800; opacity: .85; }
 .rsBestLetter{ flex: none; width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center; font-family: var(--font-display); font-weight: 900; font-size: 34px; color: #2a1200; background: linear-gradient(160deg, #fff0a8, #ffc22e 60%, #ff9d2e); }
@@ -135,7 +142,7 @@ const CSS = `
 .rsCatList li{ display: grid; grid-template-columns: minmax(110px, 1.1fr) minmax(60px, 1.2fr) auto; gap: 10px; align-items: center; font-size: 13.5px; font-weight: 800; }
 .rsCatBar{ height: 9px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
 .rsCatBar i{ display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #ffd23f, #ff9d2e); }
-.rsCatNum{ font-size: 12px; opacity: .8; text-align: right; white-space: nowrap; }
+.rsCatNum{ font-size: 12px; opacity: .85; text-align: right; white-space: nowrap; }
 .rsCatNum small{ opacity: .7; }
 @media (max-width: 560px){ .rsCatList li{ grid-template-columns: 1fr auto; } .rsCatBar{ grid-column: 1 / -1; order: 3; } }
 .rsRecent li{ display: grid; grid-template-columns: 30px 1fr auto 34px; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 12px; background: rgba(255,255,255,.05); font-size: 13.5px; font-weight: 800; }

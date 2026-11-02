@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useI18n } from "@/lib/i18n";
+import { StatRing } from "@/components/profile/StatRing";
 
 type ModeData = { matches: number; wins: number; practice: number; hits: number; answers: number; bestTotal: number; avgPlace: number | null };
 type Stats = Partial<Record<"buzzer" | "year", ModeData>>;
@@ -36,6 +37,9 @@ export function ModeStats({ userId, original }: { userId: string; original?: Ori
             {hasOriginal ? (
                 <div className="msCard">
                     <h2>🥔 {tr("Original")}</h2>
+                    <div className="msRings">
+                        <StatRing value={original!.rounds > 0 ? (original!.wins / original!.rounds) * 100 : 0} label={tr("Siegquote")} sub={`${original!.wins} / ${original!.rounds}`} tone="gold" />
+                    </div>
                     <div className="msBoxes">
                         <div>
                             <small>{tr("Runden")}</small>
@@ -72,6 +76,10 @@ export function ModeStats({ userId, original }: { userId: string; original?: Ori
                         <h2>
                             {m.icon} {m.title}
                         </h2>
+                        <div className="msRings">
+                            <StatRing value={x.matches > 0 ? (x.wins / x.matches) * 100 : 0} label={tr("Siegquote")} sub={`${x.wins} / ${x.matches}`} tone="gold" />
+                            <StatRing value={acc} label={tr("Trefferquote")} sub={`${x.hits} / ${x.answers}`} tone="green" />
+                        </div>
                         <div className="msBoxes">
                             <div>
                                 <small>{tr("Spiele")}</small>
@@ -108,9 +116,10 @@ export function ModeStats({ userId, original }: { userId: string; original?: Ori
                 .msCard h2{ margin: 0; font-size: 20px; }
                 .msBoxes{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
                 .msBoxes > div{ padding: 9px 6px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); text-align: center; display: grid; gap: 3px; }
-                .msBoxes small{ font-size: 10px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; opacity: .7; }
+                .msBoxes small{ font-size: 10px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; opacity: .85; }
                 .msBoxes b{ font-size: 20px; font-weight: 950; }
-                .msNote{ margin: 0; font-size: 12.5px; font-weight: 700; opacity: .65; }
+                .msRings{ display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; padding: 4px 0 2px; }
+                .msNote{ margin: 0; font-size: 12.5px; font-weight: 700; opacity: .85; }
             `}</style>
         </section>
     );

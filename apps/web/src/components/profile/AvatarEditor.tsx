@@ -225,7 +225,7 @@ export function AvatarEditor({
         .avEdPanel{ display: grid; gap: 8px; margin-top: 10px; animation: avTabIn .32s cubic-bezier(.22,1,.36,1); }
         @keyframes avTabIn{ from{ opacity: 0; transform: translateY(6px); } }
         .avEdField{ display: grid; grid-template-columns: 112px minmax(0,1fr); align-items: center; gap: 10px; }
-        .avEdLabel{ font-size: 11.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; opacity: .8; line-height: 1.2; }
+        .avEdLabel{ font-size: 11.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; opacity: .85; line-height: 1.2; }
         .avEdChoices{ display: flex; gap: 6px; min-width: 0; }
         .avEdChoices.swatches, .avEdChoices.pills{ flex-wrap: wrap; }
         .avEdChoices.thumbs{ overflow-x: auto; padding: 2px 2px 6px; scroll-snap-type: x proximity; scrollbar-width: thin; }
@@ -238,7 +238,7 @@ export function AvatarEditor({
         .avEdThumb.on{ border-color: #ffd23f; background: rgba(255,210,63,.18); }
         .avEdPill{ border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.07); color: #fff; font: inherit; font-size: 12.5px; font-weight: 800; padding: 5px 11px; border-radius: 999px; cursor: pointer; }
         .avEdPill.on{ background: rgba(255,210,63,.95); border-color: transparent; color: #2b1600; }
-        .avEdAuto{ flex: none; border: 1px dashed rgba(255,255,255,.4); background: transparent; color: #fff; font: inherit; font-size: 11.5px; font-weight: 800; padding: 0 10px; border-radius: 999px; cursor: pointer; opacity: .8; min-height: 24px; }
+        .avEdAuto{ flex: none; border: 1px dashed rgba(255,255,255,.4); background: transparent; color: #fff; font: inherit; font-size: 11.5px; font-weight: 800; padding: 0 10px; border-radius: 999px; cursor: pointer; opacity: .85; min-height: 24px; }
         .avEdChoices.swatches .avEdAuto{ width: 24px; height: 24px; padding: 0; border-radius: 50%; background: repeating-linear-gradient(45deg, rgba(255,255,255,.25) 0 3px, transparent 3px 6px); }
         .avEdChoices.thumbs .avEdAuto{ width: 52px; height: 52px; border-radius: 14px; }
         .avEdAuto.on{ border-style: solid; border-color: #ffd23f; opacity: 1; box-shadow: 0 0 0 2px rgba(255,210,63,.35); }

@@ -75,7 +75,7 @@ export function ProfileFolder({ active, label, children }: { active: ProfileTabK
         .profTabIcon{ font-size: 22px; flex: none; }
         .profTabText{ display: grid; min-width: 0; line-height: 1.15; }
         .profTabText b{ font-size: 14.5px; font-weight: 900; }
-        .profTabText small{ font-size: 11px; opacity: .72; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .profTabText small{ font-size: 11px; opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         @keyframes profTabIn{ from{ opacity: 0; transform: translateX(-24px); } }
 
         /* schmal: Reiter oben über der Karte */

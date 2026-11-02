@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useAchievements } from "@/hooks/useAchievements";
 import { Spinner } from "@/components/Spinner";
+import { Skeleton } from "@/components/Skeleton";
 import { TIER_STYLE } from "@/lib/achievements";
 import { ProfileFolder } from "@/components/profile/ProfileFolder";
 import { HomeButton } from "@/components/BackButton";
@@ -102,9 +103,7 @@ export default function AchievementsPage() {
                 ) : null}
 
                 {loading ? (
-                    <div style={{ display: "grid", placeItems: "center", padding: 20 }}>
-                        <Spinner size={20} label={tr("Lade Erfolge…")} />
-                    </div>
+                    <Skeleton kind="grid" count={8} label={tr("Lade Erfolge…")} />
                 ) : (
                     <div className="achievementsGrid" style={{ marginTop: 16 }}>
                         {catalog.map((a) => {

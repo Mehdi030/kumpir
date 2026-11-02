@@ -309,13 +309,13 @@ export function AdminAnalyticsView({ data, days, onDays }: { data: AdminAnalytic
         .aaBox{ padding:16px; border-radius:18px; background: rgba(0,0,0,.2); border:1px solid rgba(255,255,255,.14); display:grid; gap:10px; min-width:0; }
         .aaBox h2{ margin:0; font-size:17px; }
         .aaBox h3{ margin:8px 0 0; font-size:14px; }
-        .aaHint{ margin:0; font-size:12px; opacity:.8; line-height:1.45; }
+        .aaHint{ margin:0; font-size:12px; opacity: .85; line-height:1.45; }
         .aaErr{ padding:12px; border-radius:14px; background: rgba(255,80,80,.18); font-weight:700; }
         .aaFilters{ display:flex; gap:14px; flex-wrap:wrap; font-size:13px; align-items:center; }
         .aaFilters select{ background: rgba(0,0,0,.3); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:10px; padding:4px 8px; }
         .aaScroll{ overflow-x:auto; max-height: 460px; overflow-y:auto; }
         .aaTable{ width:100%; border-collapse:collapse; font-size:13px; }
-        .aaTable th{ text-align:left; font-size:11px; letter-spacing:.5px; text-transform:uppercase; opacity:.7; padding:6px 8px; position:sticky; top:0; background: rgba(40,10,6,.95); }
+        .aaTable th{ text-align:left; font-size:11px; letter-spacing:.5px; text-transform:uppercase; opacity: .85; padding:6px 8px; position:sticky; top:0; background: rgba(40,10,6,.95); }
         .aaTable td{ padding:7px 8px; border-top:1px solid rgba(255,255,255,.08); vertical-align:top; }
         .aaTable td small{ display:block; opacity:.7; }
         .aaTable .r{ text-align:right; white-space:nowrap; }

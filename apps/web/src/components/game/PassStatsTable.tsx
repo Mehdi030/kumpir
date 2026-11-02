@@ -115,7 +115,7 @@ export function PassStatsTable({ rows, title, pointsLabel, hideTimes = false }: 
         .pstSong{ font-weight: 800; font-variant-numeric: tabular-nums; opacity: .9; }
         .pstSong.top{ color: #ffe08a; opacity: 1; }
         .pstTable.noTimes .pstRow{ grid-template-columns: 30px minmax(0,1fr) 80px; }
-        .pstHead{ background: none; padding-top: 0; padding-bottom: 0; font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; opacity: .65; }
+        .pstHead{ background: none; padding-top: 0; padding-bottom: 0; font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; opacity: .85; }
         .pstRow.first{ background: rgba(255,214,10,.14); border: 1px solid rgba(255,214,10,.38); }
         .pstRow.me{ box-shadow: inset 0 0 0 2px rgba(34,211,238,.6); }
         .pstRow .r{ text-align: right; }
@@ -123,14 +123,14 @@ export function PassStatsTable({ rows, title, pointsLabel, hideTimes = false }: 
         .pstName{ display: flex; align-items: center; gap: 8px; min-width: 0; }
         .pstAvatar{ width: 30px; height: 30px; flex: none; border-radius: 50%; background: rgba(255,255,255,.1); }
         .pstNameText{ font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
-        .pstNameText em{ font-style: normal; font-weight: 700; opacity: .7; font-size: 12px; }
+        .pstNameText em{ font-style: normal; font-weight: 700; opacity: .85; font-size: 12px; }
         .pstPts{ font-weight: 800; color: #ffe08a; }
         .pstTime{ font-variant-numeric: tabular-nums; border-radius: 999px; padding: 2px 8px; justify-self: end; }
         .pstTime.best{ background: rgba(52,211,153,.22); color: #a7f3d0; font-weight: 900; box-shadow: inset 0 0 0 1.5px rgba(52,211,153,.75); }
         .pstTime.best::before{ content: "⚡ "; }
         .pstTime.worst{ background: rgba(255,90,70,.2); color: #fecaca; font-weight: 900; box-shadow: inset 0 0 0 1.5px rgba(255,90,70,.75); }
         .pstTime.worst::before{ content: "🐢 "; }
-        .pstLegend{ display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 8px; font-size: 11.5px; font-weight: 700; opacity: .8; }
+        .pstLegend{ display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 8px; font-size: 11.5px; font-weight: 700; opacity: .85; }
         .pstLegend .best{ color: #a7f3d0; }
         .pstLegend .worst{ color: #fecaca; }
         @media (max-width: 560px){

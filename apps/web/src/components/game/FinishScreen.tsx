@@ -215,7 +215,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
         .finWinnerSlim{ font-size: clamp(22px, 3.4vw, 34px); margin-top: 10px; }
         .finLeft{ display: grid; gap: 12px; align-content: center; }
         .finHero{ grid-column: 1 / -1; text-align: center; display: grid; justify-items: center; gap: 2px; animation: finIn .7s cubic-bezier(.16,1,.3,1) both; }
-        .finKicker{ font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .8; }
+        .finKicker{ font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .85; }
         .finWinnerAvatar{ position: relative; width: 104px; height: 104px; margin: 4px 0; border-radius: 50%; display: grid; place-items: center;
           background: radial-gradient(circle at 40% 35%, rgba(255,226,122,.55), rgba(255,178,26,.25) 70%); box-shadow: 0 0 0 5px rgba(255,214,10,.35), 0 16px 40px rgba(0,0,0,.35); animation: finBob 3s ease-in-out infinite; }
         .finTrophy{ position: absolute; right: -6px; bottom: -4px; font-size: 32px; filter: drop-shadow(0 4px 8px rgba(0,0,0,.4)); }
@@ -231,12 +231,13 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
         .finTiles{ display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; animation: finIn .7s .2s cubic-bezier(.16,1,.3,1) both; }
         .finTile{ border-radius: 16px; padding: 8px; text-align: center; background: rgba(30,8,8,.36); border: 1px solid rgba(255,255,255,.14); display: grid; justify-items: center; min-width: 0; }
         .finTileIcon{ font-size: 20px; }
-        .finTileLabel{ font-size: 9.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; opacity: .65; }
+        .finTileLabel{ font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; opacity: .85; }
         .finTileName{ font-size: 14.5px; font-weight: 800; max-width: 100%; overflow-wrap: anywhere; line-height: 1.15; }
         .finTileValue{ font-size: 13px; font-weight: 800; color: #ffe08a; }
 
         .finActions{ display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
         .finShareBtn{ padding-left: 14px; padding-right: 14px; }
+        .finFoot, .finSub, .finKicker{ text-shadow: 0 1px 3px rgba(40,10,0,.55); }
         .finFoot{ display: grid; gap: 4px; justify-items: center; text-align: center; font-size: 12.5px; font-weight: 600; opacity: .85; }
         .finFoot .ok{ color: #a7f3d0; }
         .finAccountLink{ color: #2b0f04; background: #ffd23f; padding: 3px 10px; border-radius: 999px; font-weight: 800; text-decoration: none; }

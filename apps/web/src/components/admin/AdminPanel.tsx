@@ -1001,10 +1001,10 @@ button.admTile{ cursor:pointer; }
 button.admTile:hover{ background: rgba(255,255,255,.14); }
 .admTileVal{ font-size:24px; font-weight:800; font-family: var(--font-display); color:#ffe08a; }
 .admTileVal.warn{ color:#ff9b8a; }
-.admTileLabel{ font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; opacity:.75; }
-.admTileSub{ font-size:11px; opacity:.7; margin-top:2px; }
+.admTileLabel{ font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; opacity: .85; }
+.admTileSub{ font-size:11px; opacity: .85; margin-top:2px; }
 .admHint{ font-size:13px; opacity:.85; line-height:1.45; margin:0; }
-.admSmall{ font-size:12px; opacity:.78; }
+.admSmall{ font-size:12px; opacity: .85; }
 .admRow{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .admRow .input{ flex:1 1 220px; min-width:0; }
 .admSelect{ background: rgba(0,0,0,.3); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:12px; padding:9px 10px; font-weight:700; }
@@ -1059,7 +1059,7 @@ button.admMini:hover, a.admMini:hover{ background: rgba(255,255,255,.14); }
 .admMiniMain{ display:grid; min-width:0; flex:1; line-height:1.2; }
 .admMiniMain b, .admMiniMain small{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .admMiniMain b{ font-size:13.5px; }
-.admMiniMain small{ font-size:11.5px; opacity:.72; }
+.admMiniMain small{ font-size:11.5px; opacity: .85; }
 .admCodeSm{ font-size:15px; }
 @media (max-width:560px){ .admUser{ grid-template-columns: 38px 1fr; } .admUserMeta{ grid-column: 2; justify-items:start; } }
 `;

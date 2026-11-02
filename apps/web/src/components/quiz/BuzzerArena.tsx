@@ -298,7 +298,7 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
         @media (max-width: 640px){ .bzHead{ padding-left: 52px; } }
         /* Protokoll: breit links neben der Bühne, schmal als kleine Liste unter der Bühne */
         .bzLog{ display: grid; gap: 6px; width: min(520px, 100%); margin: 0 auto; }
-        .bzLogHead{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; opacity: .7; }
+        .bzLogHead{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; opacity: .85; }
         .bzLog ul{ list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
         .bzLog li{ display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 12px; border: 1px solid; animation: bzLogIn .4s cubic-bezier(.16,1,.3,1); }
         .bzLog li.ok{ background: rgba(20,110,64,.5); border-color: rgba(90,230,150,.6); }
@@ -342,7 +342,7 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
         @keyframes bzIn{ from{ opacity: 0; transform: translateY(10px) scale(.98); } }
         .bzTitle{ font-family: var(--font-display); font-weight: 900; font-size: clamp(22px, 3.4vw, 34px); overflow-wrap: anywhere; }
         .bzSub{ opacity: .85; font-weight: 750; }
-        .bzKick{ font-size: 12px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .7; }
+        .bzKick{ font-size: 12px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; opacity: .85; }
         .bzSong{ font-family: var(--font-display); font-weight: 900; font-size: clamp(26px, 4vw, 42px); overflow-wrap: anywhere; animation: bzPop .45s ease-out; }
         @keyframes bzPop{ 0%{ transform: scale(.85); opacity: 0; } 70%{ transform: scale(1.05); opacity: 1; } 100%{ transform: scale(1); } }
         .bzArtist{ font-weight: 850; opacity: .9; }
@@ -357,7 +357,7 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
         .bzButton{ width: 170px; height: 170px; border-radius: 50%; border: 6px solid rgba(255,255,255,.35); cursor: pointer; display: grid; place-content: center; gap: 0; color: #fff;
           background: radial-gradient(circle at 35% 30%, #ff8a6b, #e0261b 60%, #9c120b); box-shadow: 0 12px 0 #6d0b06, 0 22px 44px rgba(0,0,0,.45); transition: transform .08s, box-shadow .08s; }
         .bzButton span{ font-family: var(--font-display); font-weight: 900; font-size: 38px; line-height: 1; }
-        .bzButton small{ font-size: 11px; font-weight: 800; opacity: .8; letter-spacing: 1px; text-transform: uppercase; }
+        .bzButton small{ font-size: 11px; font-weight: 800; opacity: .85; letter-spacing: 1px; text-transform: uppercase; }
         .bzButton:hover:not(:disabled){ filter: brightness(1.08); }
         .bzButton:active:not(:disabled){ transform: translateY(9px); box-shadow: 0 3px 0 #6d0b06, 0 8px 20px rgba(0,0,0,.45); }
         .bzForm{ display: flex; gap: 8px; width: min(420px, 100%); }
@@ -407,7 +407,7 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
           .bzSong{ font-size: 22px; }
           .bzWin{ font-size: 15px; padding: 5px 12px; }
           .bzScore{ font-size: 16px; }
-          .bzName{ font-size: 9.5px; }
+          .bzName{ font-size: 10.5px; }
           .bzStage{ gap: 6px; padding: 0; }
           .bzPodia{ min-height: calc(var(--base) + var(--H) + 74px); gap: 3px; }
           .bzForm{ flex-direction: column; }

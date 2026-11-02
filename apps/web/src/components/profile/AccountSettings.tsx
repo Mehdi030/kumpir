@@ -124,7 +124,7 @@ export function AccountSettings({ profile, api, onRefresh }: Props) {
         .setWarn{ padding:10px 12px; border-radius:12px; background: rgba(255,210,63,.16); border:1px solid rgba(255,210,63,.4); font-size:14px; font-weight:600; }
         .setGroup{ display:grid; gap:10px; padding:14px; border-radius:16px; background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); }
         .setGroup h3{ margin:0; font-size:15px; }
-        .setHint{ font-size:12px; opacity:.78; line-height:1.4; }
+        .setHint{ font-size:12px; opacity: .85; line-height:1.4; }
         .setRow{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
         .setRow .input{ flex:1 1 200px; min-width:0; }
         .setOk{ color:#8df0a6 !important; }
@@ -202,10 +202,10 @@ export function NameSection({ profile, api, onRefresh }: { profile: Profile; api
             <Note msg={msg} />
             <style>{`
         .nameSec{ display: grid; gap: 6px; }
-        .nameSecLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; opacity: .7; }
+        .nameSecLabel{ font-size: 11px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; opacity: .85; }
         .nameSecRow{ display: flex; gap: 8px; align-items: center; }
         .nameSecInput{ flex: 1; min-width: 0; font-size: 18px !important; font-weight: 800 !important; }
-        .nameSecHint{ font-size: 12px; opacity: .72; }
+        .nameSecHint{ font-size: 12px; opacity: .85; }
       `}</style>
         </form>
     );

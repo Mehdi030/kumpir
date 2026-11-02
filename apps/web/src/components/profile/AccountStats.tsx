@@ -4,6 +4,7 @@ import { useState } from "react";
 import { fmtSeconds, seasonKey, seasonLabel, strongestPlaylist, titleRate, type ProfileStats } from "@/lib/profileStats";
 import { renderRecapCard } from "@/lib/recapCard";
 import { shareOrDownloadPng } from "@/lib/resultCard";
+import { Skeleton } from "@/components/Skeleton";
 import { Spinner } from "@/components/Spinner";
 import { dateLocale, useI18n } from "@/lib/i18n";
 
@@ -156,7 +157,7 @@ export function AccountStats({ data, username, season, onSeasonChange, seasonLoa
                     </div>
                 </div>
                 {seasonLoading ? (
-                    <Spinner size={18} label={tr("Lade…")} />
+                    <Skeleton kind="card" label={tr("Lade…")} />
                 ) : recap.rounds === 0 ? (
                     <div className="accNote">{tr("In diesem Monat noch keine Runde gespielt.")}</div>
                 ) : (
@@ -278,18 +279,18 @@ const STYLES = `
 .accTileVal{ font-size:22px; font-weight:800; font-family: var(--font-display); color:#ffe08a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .accTile.strong{ background: rgba(255,210,63,.14); border-color: rgba(255,210,63,.45); }
 .accTile.strong .accTileVal{ font-size:26px; }
-.accTileLabel{ font-size:11px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; opacity:.75; margin-top:2px; }
+.accTileLabel{ font-size:11px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; opacity: .85; margin-top:2px; }
 .accNote{ font-size:13px; opacity:.8; }
 .accBox{ padding:16px; border-radius:18px; background: rgba(0,0,0,.18); border:1px solid rgba(255,255,255,.12); display:grid; gap:12px; }
 .accH2{ margin:0; font-size:17px; }
-.accH2 small{ font-size:12px; font-weight:600; opacity:.7; margin-left:6px; }
+.accH2 small{ font-size:12px; font-weight:600; opacity: .85; margin-left:6px; }
 .accStrong{ font-size:15px; }
 .accLists{ display:grid; gap:10px; }
 .accListHead{ display:flex; justify-content:space-between; gap:10px; font-size:14px; }
 .accListHead span{ opacity:.85; font-weight:700; }
 .accBar{ height:8px; border-radius:999px; background: rgba(255,255,255,.12); overflow:hidden; margin-top:4px; }
 .accBar span{ display:block; height:100%; border-radius:999px; background: linear-gradient(90deg, #ffd23f, #ff9f1c); }
-.accListSub{ font-size:12px; opacity:.75; margin-top:3px; }
+.accListSub{ font-size:12px; opacity: .85; margin-top:3px; }
 .accRecap{ background: rgba(255,210,63,.12); border-color: rgba(255,210,63,.35); }
 .accRecapHead{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 .accTabs{ display:inline-flex; border-radius:999px; border:1px solid rgba(255,255,255,.28); overflow:hidden; }
@@ -304,12 +305,12 @@ const STYLES = `
 .accHist li{ display:grid; grid-template-columns: 52px 1fr auto; gap:10px; align-items:center; padding:10px 12px; border-radius:14px; background: rgba(255,255,255,.07); }
 .accHist li.first{ background: rgba(255,214,10,.14); border:1px solid rgba(255,214,10,.35); }
 .accHistPlace{ font-size:20px; font-weight:800; font-family: var(--font-display); text-align:center; }
-.accHistPlace small{ font-size:12px; opacity:.7; font-weight:700; }
+.accHistPlace small{ font-size:12px; opacity: .85; font-weight:700; }
 .accHistMain{ min-width:0; }
 .accHistTop{ display:flex; gap:8px; align-items:center; min-width:0; }
 .accHistTop b{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
 .accBadge{ flex:none; font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px; background: rgba(255,255,255,.18); }
-.accHistSub{ font-size:12px; opacity:.75; margin-top:2px; }
+.accHistSub{ font-size:12px; opacity: .85; margin-top:2px; }
 .accHistRight{ text-align:right; display:grid; font-size:14px; }
 .accHistRight b{ color:#ffe08a; }
 .accHistRight small{ opacity:.8; }

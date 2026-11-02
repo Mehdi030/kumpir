@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Spinner } from "@/components/Spinner";
+import { Skeleton } from "@/components/Skeleton";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useI18n } from "@/lib/i18n";
 
@@ -30,11 +30,7 @@ export function ModeBoard({ mode }: { mode: BoardMode }) {
 
     const loading = !res || res.mode !== mode;
     if (loading) {
-        return (
-            <div style={{ display: "grid", placeItems: "center", padding: 24 }}>
-                <Spinner size={24} label={tr("Lade…")} />
-            </div>
-        );
+        return <Skeleton kind="rows" count={7} label={tr("Lade…")} />;
     }
     if (res.error) return <div className="fieldHelp fieldHelpError" style={{ marginTop: 10 }}>{res.error}</div>;
     if (!res.rows.length) {

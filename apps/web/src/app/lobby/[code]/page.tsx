@@ -581,29 +581,29 @@ export default function LobbyPage() {
                 .codeBox:hover:not(:disabled){ background: rgba(255,255,255,.14); border-color: #ffd23f; }
                 .codeBox:active:not(:disabled){ transform: scale(.99); }
                 .codeBox:disabled{ cursor: default; opacity: .75; }
-                .codeLabel{ font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .7; }
+                .codeLabel{ font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .85; }
                 .codeValue{ font-family: var(--font-display); font-size: clamp(44px, 12vw, 64px); font-weight: 800; letter-spacing: .18em; padding-left: .18em; line-height: 1.05; color: #ffd23f; text-shadow: 0 4px 0 rgba(120,50,0,.55), 0 10px 26px rgba(0,0,0,.35); }
-                .codeHint{ font-size: 12px; opacity: .72; min-height: 16px; }
+                .codeHint{ font-size: 12px; opacity: .85; min-height: 16px; }
                 .lobbyStats{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
                 @media (max-width: 620px){ .lobbyStats{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
                 @media (max-width: 520px){ .lobbyStat{ padding: 10px 4px; } .lobbyStatIcon{ font-size: 22px; } .lobbyStatLabel{ font-size: 9.5px; letter-spacing: .4px; } }
                 .lobbyGoal{ text-align: center; padding: 7px 14px; border-radius: 14px; background: rgba(255,210,63,.12); border: 1px solid rgba(255,210,63,.4); font-size: 14px; font-weight: 750; }
                 .lobbyGoal b{ color: #ffe08a; font-weight: 900; }
-                .lobbyStatsHint{ margin-top: -6px; text-align: center; font-size: 12.5px; font-weight: 700; opacity: .7; }
+                .lobbyStatsHint{ margin-top: -6px; text-align: center; font-size: 12.5px; font-weight: 700; opacity: .85; }
                 .swStat.vis-locked{ background: rgba(239,68,68,.16); border-color: rgba(252,165,165,.5); }
                 .lobbyPl{ border-radius: 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); overflow: hidden; }
                 .lobbyPlHead{ width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: transparent; border: 0; color: #fff; font: inherit; font-weight: 900; cursor: pointer; text-align: left; }
                 .lobbyPlHead:hover{ background: rgba(255,255,255,.06); }
-                .lobbyPlCount{ margin-left: auto; font-size: 12.5px; font-weight: 800; opacity: .75; }
+                .lobbyPlCount{ margin-left: auto; font-size: 12.5px; font-weight: 800; opacity: .85; }
                 .lobbyPlArrow{ transition: transform .3s ease; }
                 .lobbyPlArrow.open{ transform: rotate(180deg); }
                 .lobbyPlBody{ padding: 0 14px 14px; display: grid; gap: 8px; }
-                .lobbyPlHint{ font-size: 12.5px; font-weight: 700; opacity: .72; }
+                .lobbyPlHint{ font-size: 12.5px; font-weight: 700; opacity: .85; }
                 .lobbyStat{ display: grid; justify-items: center; gap: 2px; padding: 12px 8px; border-radius: 20px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); text-align: center; min-width: 0; }
                 .lobbyStatIcon{ font-size: 26px; line-height: 1.1; }
                 .lobbyStatValue{ font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 28px); font-weight: 800; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
                 .lobbyStatValue small{ font-size: .62em; opacity: .7; }
-                .lobbyStatLabel{ font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; opacity: .7; }
+                .lobbyStatLabel{ font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; opacity: .85; }
                 .lobbyChips{ display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
                 .lobbyChips .pillChip{ font-size: 13px; padding: 7px 12px; opacity: 1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
               `}</style>
