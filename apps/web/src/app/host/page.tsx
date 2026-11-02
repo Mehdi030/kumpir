@@ -142,6 +142,8 @@ export default function HostPage() {
 
     // Kategorie: mit Freunden (Lobby + Code) oder direkt gegen Bots (ein Klick, sofort Spiel)
     const [category, setCategory] = useState<"friends" | "bots">("friends");
+    // Zwei Schritte (Wunsch Mehdi 2026-11-02): 1 = Modus wählen, 2 = Feinheiten (Name, Spieler, Tempo, Playlists) + Start
+    const [step, setStep] = useState<1 | 2>(1);
     useEffect(() => {
         if (new URLSearchParams(window.location.search).get("modus") === "bots") setCategory("bots");
     }, []);
@@ -415,7 +417,32 @@ export default function HostPage() {
 
                     <div className="hostGrid" style={{ gridTemplateColumns: "1fr" }}>
                         <div className="panel hostPanel">
+                            <ol className="hostStepper" aria-label={tr("Schritte")}>
+                                <li className={step === 1 ? "on" : "done"}>
+                                    <button type="button" onClick={() => setStep(1)}>
+                                        <b>1</b> {tr("Modus")}
+                                    </button>
+                                </li>
+                                <li className={step === 2 ? "on" : ""}>
+                                    <button type="button" onClick={() => activeMode && setStep(2)} disabled={!activeMode}>
+                                        <b>2</b> {tr("Feinschliff")}
+                                    </button>
+                                </li>
+                            </ol>
+
+                            {step === 2 && activeMode ? (
+                                <button type="button" className="hostSummary" onClick={() => setStep(1)} title={tr("Modus ändern")}>
+                                    <span className="hostSummaryIcon" aria-hidden>{activeMode.icon}</span>
+                                    <span className="hostSummaryText">
+                                        <b>{tr(activeMode.label)}</b>
+                                        <small>🎯 {tr(activeMode.goal)}</small>
+                                    </span>
+                                    <span className="hostSummaryEdit">✎ {tr("Ändern")}</span>
+                                </button>
+                            ) : null}
+
                             {/* Obere Reihe: lauter gleich große Kästen (Name, Spieler/Bots, Runden bzw. Stärke, Tempo) */}
+                            {step === 2 ? (
                             <div className="hostRow hostTop">
                                 {nameFromAccount ? (
                                     hostName ? <AccountNameNote name={hostName} /> : null
@@ -573,11 +600,19 @@ export default function HostPage() {
                                     </div>
                                 ) : null}
                             </div>
+                            ) : null}
 
-                            {/* Mitte: die drei Modi, füllt den restlichen Platz */}
-                            {modeCard}
+                            {/* Schritt 1: die Modi als große Kacheln */}
+                            {step === 1 ? (
+                                <div className="hostStepIn">
+                                    {modeCard}
+                                    <button type="button" className="btn btnPrimary btnXL btnGlow hostNext" onClick={() => setStep(2)} disabled={!activeMode}>
+                                        {tr("Weiter")} →
+                                    </button>
+                                </div>
+                            ) : null}
 
-                            {category === "friends" ? (
+                            {step === 2 ? (category === "friends" ? (
                                 <>
                                     {createError ? <div className="fieldHelp fieldHelpError hostErr">{createError}</div> : null}
 
@@ -631,12 +666,34 @@ export default function HostPage() {
                                         </button>
                                     </div>
                                 </>
-                            )}
+                            )) : null}
                         </div>
                     </div>
                 </section>
 
             </div>
+            <style>{`
+        .hostStepper{ list-style: none; display: flex; gap: 8px; margin: 0 0 12px; padding: 0; justify-content: center; }
+        .hostStepper li{ flex: 0 1 190px; }
+        .hostStepper button{ width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px; border-radius: 999px; font: inherit; font-weight: 800; font-size: 14px; color: #fff; cursor: pointer;
+          background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2); opacity: .7; transition: all .2s ease; }
+        .hostStepper button b{ width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: rgba(255,255,255,.2); }
+        .hostStepper li.on button{ opacity: 1; background: linear-gradient(180deg, #ffe08a, #ffb81f); color: #2b1300; border-color: #fff; box-shadow: 0 6px 18px rgba(255,184,31,.35); }
+        .hostStepper li.on button b{ background: rgba(0,0,0,.18); }
+        .hostStepper li.done button{ opacity: .95; }
+        .hostStepper button:disabled{ cursor: default; opacity: .4; }
+        .hostStepIn{ display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: clamp(8px, 1.5vh, 14px); animation: hostStepIn .5s cubic-bezier(.16,1,.3,1) both; }
+        .hostNext{ align-self: center; flex: none; min-width: min(320px, 100%); }
+        .hostSummary{ width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 12px; border-radius: 16px; font: inherit; color: #fff; cursor: pointer; text-align: left;
+          background: linear-gradient(90deg, rgba(255,214,10,.2), rgba(255,255,255,.07)); border: 1px solid rgba(255,224,138,.5); animation: hostStepIn .4s ease both; }
+        .hostSummaryIcon{ font-size: 30px; }
+        .hostSummaryText{ display: grid; flex: 1; min-width: 0; }
+        .hostSummaryText small{ opacity: .8; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .hostSummaryEdit{ font-size: 13px; font-weight: 800; opacity: .85; white-space: nowrap; }
+        .hostPanel > .hostRow, .hostPanel > div:not(.hostStepIn){ animation: hostStepIn .5s cubic-bezier(.16,1,.3,1) both; }
+        @keyframes hostStepIn{ from{ opacity: 0; transform: translateY(12px); } }
+        @media (prefers-reduced-motion: reduce){ .hostStepIn, .hostSummary, .hostPanel > .hostRow{ animation: none; } }
+      `}</style>
         </main>
     );
 }

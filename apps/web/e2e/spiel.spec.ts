@@ -6,9 +6,11 @@ test.skip(!process.env.E2E_FLOW, "nur mit E2E_FLOW=1 (schreibt in die echte Date
 
 test("Solo gegen Bots im Roulette: Lobby startet, Roulette dreht", async ({ page }) => {
     await page.goto("/host?modus=bots");
+    // Schritt 1: Modus wählen, Schritt 2: Name + Start
+    await page.getByText(/Roulette/).first().click();
+    await page.getByRole("button", { name: /Weiter/ }).click();
     const name = page.getByLabel("Dein Name");
     if (await name.count()) await name.fill("Playwright");
-    await page.getByText(/Roulette/).first().click();
     await page.getByRole("button", { name: /Gegen \d Bots? spielen/ }).first().click();
     await page.waitForURL(/\/game\/[A-Z0-9]{4}/, { timeout: 30_000 });
     // Das Roulette zeigt Buchstabe + Kategorien (oder die Dreh-Szene)

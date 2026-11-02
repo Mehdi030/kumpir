@@ -40,7 +40,7 @@ function CountUp({ to, delayS }: { to: number; delayS: number }) {
  * Siegerpodest am Ende (Wunsch Mehdi 2026-11-02): Bühne mit Scheinwerfern, drei Sockel aus Gold/Silber/Bronze,
  * die Plätze 3 → 2 → 1 treten nacheinander auf (mit Ton), Punkte zählen hoch, der Sieger bekommt Krone und Funkeln.
  */
-export function PodiumStage({ people }: { people: PodiumPerson[] }) {
+export function PodiumStage({ people, mode = "original" }: { people: PodiumPerson[]; mode?: string }) {
     const { tr } = useI18n();
     const top = [...people].sort((a, b) => a.place - b.place).slice(0, 3);
 
@@ -59,7 +59,7 @@ export function PodiumStage({ people }: { people: PodiumPerson[] }) {
     const order = top.length >= 3 ? [top[1], top[0], top[2]] : [top[1], top[0]];
 
     return (
-        <div className="pdStage" role="img" aria-label={top.map((p) => `${p.place}. ${p.name}`).join(", ")}>
+        <div className="pdStage" data-mode={mode} role="img" aria-label={top.map((p) => `${p.place}. ${p.name}`).join(", ")}>
             <div className="pdBeam b1" aria-hidden />
             <div className="pdBeam b2" aria-hidden />
             <div className="pdBeam b3" aria-hidden />
@@ -92,6 +92,7 @@ export function PodiumStage({ people }: { people: PodiumPerson[] }) {
                                 </div>
                             </div>
                             <div className="pdBlock">
+                                {mode === "buzzer" ? <span className="pdBuzz" aria-hidden /> : null}
                                 <span className="pdNo">{p.place}</span>
                                 <span className="pdPts">
                                     <CountUp to={p.points} delayS={at + 0.2} /> {tr("P.")}
@@ -101,6 +102,13 @@ export function PodiumStage({ people }: { people: PodiumPerson[] }) {
                     );
                 })}
             </div>
+            {mode === "year" ? (
+                <div className="pdTimeline" aria-hidden>
+                    {["1970", "1980", "1990", "2000", "2010", "2020"].map((y) => (
+                        <span key={y}>{y}</span>
+                    ))}
+                </div>
+            ) : null}
             <div className="pdFloor" aria-hidden />
             <style>{`
         .pdStage{ position: relative; width: min(640px, 100%); margin: 6px auto 0; padding: 22px 8px 0; isolation: isolate; }
@@ -144,6 +152,28 @@ export function PodiumStage({ people }: { people: PodiumPerson[] }) {
         .pdNo{ font-family: var(--font-display); font-size: 40px; font-weight: 900; line-height: 1; text-shadow: 0 1px 0 rgba(255,255,255,.5), 0 -1px 1px rgba(0,0,0,.25); }
         .pdStep.p3 .pdNo{ font-size: 30px; } .pdStep.p2 .pdNo{ font-size: 34px; }
         .pdPts{ font-size: 13px; font-weight: 900; letter-spacing: .3px; font-variant-numeric: tabular-nums; }
+        /* ---- Modus-Looks (Wunsch Mehdi 2026-11-02): das Podest passt zum gespielten Spiel ---- */
+        /* Roulette: Spielautomat – Lampenkranz um jeden Sockel, Ziffern wie auf Walzen */
+        .pdStage[data-mode="letters"] .pdBlock{ border-radius: 14px 14px 4px 4px; border: 3px solid #1d0b2e; box-shadow: inset 0 2px 0 rgba(255,255,255,.4), inset 0 -18px 28px rgba(0,0,0,.28), 0 0 0 2px rgba(255,214,10,.55), 0 18px 30px rgba(0,0,0,.4); }
+        .pdStage[data-mode="letters"] .pdBlock::after{ content: ""; position: absolute; left: 6px; right: 6px; top: 5px; height: 6px;
+          background: radial-gradient(circle, #fff7c2 0 2px, transparent 2.6px) 0 0 / 14px 6px repeat-x; filter: drop-shadow(0 0 3px #ffd23f); animation: pdLamps 1.1s steps(2) infinite; }
+        @keyframes pdLamps{ 50%{ background-position: 7px 0; opacity: .75; } }
+        .pdStage[data-mode="letters"] .pdNo{ background: rgba(20,6,34,.82); color: #ffe08a; text-shadow: 0 0 10px rgba(255,214,10,.8); padding: 0 12px; border-radius: 8px; margin-top: 8px; box-shadow: inset 0 3px 8px rgba(0,0,0,.6); }
+        .pdStage[data-mode="letters"] .pdPlaque{ background: rgba(34,10,52,.7); border-color: rgba(255,214,10,.6); }
+        /* Buzzer: Game-Show-Pult – roter Buzzer oben auf jedem Sockel, Leuchtstreifen vorn */
+        .pdStage[data-mode="buzzer"] .pdBlock{ border-radius: 10px 10px 3px 3px; overflow: visible; }
+        .pdStage[data-mode="buzzer"] .pdBuzz{ position: absolute; top: -9px; left: 50%; width: 38px; height: 16px; transform: translateX(-50%); border-radius: 50% / 70% 70% 30% 30%;
+          background: radial-gradient(ellipse at 50% 30%, #ff9a8c, #e5301f 55%, #8c1008); box-shadow: 0 3px 0 #5a0a05, 0 0 14px rgba(255,70,50,.7); animation: pdBuzz 2.4s ease-in-out infinite; }
+        @keyframes pdBuzz{ 0%,100%{ box-shadow: 0 3px 0 #5a0a05, 0 0 8px rgba(255,70,50,.4); } 50%{ box-shadow: 0 3px 0 #5a0a05, 0 0 20px rgba(255,90,70,.95); } }
+        .pdStage[data-mode="buzzer"] .pdBlock::after{ content: ""; position: absolute; left: 10%; right: 10%; bottom: 8px; height: 4px; border-radius: 4px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); opacity: .7; }
+        .pdStage[data-mode="buzzer"] .pdNo{ margin-top: 8px; }
+        .pdStage[data-mode="buzzer"] .pdStep{ gap: 16px; }
+        .pdStage[data-mode="buzzer"] .pdBlock::before{ display: none; }
+        /* Zeitreise: Zeitleiste unter dem Podest, Sockel mit Skalenstrichen */
+        .pdTimeline{ display: flex; justify-content: space-between; margin: 10px 4px 0; padding-top: 6px; font-size: 11px; font-weight: 800; letter-spacing: .5px; opacity: .85;
+          border-top: 2px solid rgba(255,255,255,.5); background: repeating-linear-gradient(90deg, rgba(255,255,255,.5) 0 1px, transparent 1px 12px) 0 0 / 100% 6px no-repeat; }
+        .pdStage[data-mode="year"] .pdBlock::after{ content: ""; position: absolute; inset: auto 0 0 0; height: 34%; background: repeating-linear-gradient(90deg, rgba(0,0,0,.2) 0 2px, transparent 2px 10px); }
+        .pdStage[data-mode="year"] .pdFloor{ bottom: 18px; }
         @media (max-width: 899px){
           .pdStage{ padding-top: 30px; }
           .pdStep.p1 .pdBlock{ height: 104px; } .pdStep.p2 .pdBlock{ height: 76px; } .pdStep.p3 .pdBlock{ height: 54px; }

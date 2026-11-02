@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { errorText } from "@/lib/errorText";
@@ -1312,6 +1312,21 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         [mePlayerId, lobby, kickBusyId, code, rpcHostKickDuringRound, showToast]
     );
 
+    // Phasenwechsel: Inhalt blendet weich ein (CSS in motion.css, Klasse am body); beim ersten Laden nicht
+    const lastPhaseRef = useRef<string | null>(null);
+    const phaseNow = lobby?.phase ?? null;
+    useLayoutEffect(() => {
+        const prev = lastPhaseRef.current;
+        lastPhaseRef.current = phaseNow;
+        if (!prev || !phaseNow || prev === phaseNow) return;
+        const b = document.body;
+        b.classList.remove("kpPhaseSwap");
+        void b.offsetWidth;
+        b.classList.add("kpPhaseSwap");
+        const t = window.setTimeout(() => b.classList.remove("kpPhaseSwap"), 700);
+        return () => window.clearTimeout(t);
+    }, [phaseNow]);
+
     // Herausforderung (Migration 139): Ergebnis am Ende speichern + vergleichen; Link zum Herausfordern erzeugen
     const [challengeResult, setChallengeResult] = useState<ChallengeResult | null>(null);
     const [challengeBusy, setChallengeBusy] = useState(false);
@@ -1989,6 +2004,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     ranked={players.filter((p) => !p.is_bot).length >= 2}
                     spectator={isSpectator}
                     quizMode={quizMode}
+                    gameMode={lobby.game_mode ?? "original"}
                     busy={endActionBusy}
                     onRematch={() => void doRematch()}
                     onLobby={() => void doLobby()}

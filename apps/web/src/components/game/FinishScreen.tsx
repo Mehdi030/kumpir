@@ -45,6 +45,8 @@ type Props = {
     spectator: boolean;
     /** Quiz-Modi (Buzzer, Jahr raten): keine Abgabezeiten und keine Titel-Spalten im Endstand */
     quizMode?: boolean;
+    /** Spielmodus (original | buzzer | year | letters) – bestimmt den Look des Podests */
+    gameMode?: string;
     busy: "reset" | "rematch" | null;
     onRematch: () => void;
     onLobby: () => void;
@@ -56,7 +58,7 @@ type Props = {
  * links Sieger + Highlights + Knöpfe, rechts EINE Wertung mit Punkten und schnellster/langsamster Abgabe
  * (bei mehreren Runden: Gesamtpunkte und die besten Werte über alle Runden). Auf dem Handy untereinander.
  */
-export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shareRows, highlights, badges = {}, loggedIn, challenge = null, onChallenge, challengeBusy = false, ranked, spectator, quizMode = false, busy, onRematch, onLobby, toasts }: Props) {
+export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shareRows, highlights, badges = {}, loggedIn, challenge = null, onChallenge, challengeBusy = false, ranked, spectator, quizMode = false, gameMode = "original", busy, onRematch, onLobby, toasts }: Props) {
     const { t, tr } = useI18n();
     const [shareMsg, setShareMsg] = useState("");
     const [shareBusy, setShareBusy] = useState(false);
@@ -118,7 +120,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
             <header className="finHero">
                 <div className="finKicker">{isSeries ? t("fin.match", { n: totalRounds }) : t("fin.round")}</div>
                 {podium.length >= 2 ? (
-                    <PodiumStage people={podium.map((r) => ({ id: r.id, name: r.name, place: r.place, points: r.points, avatarConfig: r.avatarConfig, isMe: r.isMe, badge: badges[r.id] ?? null }))} />
+                    <PodiumStage mode={gameMode} people={podium.map((r) => ({ id: r.id, name: r.name, place: r.place, points: r.points, avatarConfig: r.avatarConfig, isMe: r.isMe, badge: badges[r.id] ?? null }))} />
                 ) : (
                     <div className="finWinnerAvatar" aria-hidden>
                         <PlayerAvatar seed={winnerName} config={rows.find((r) => r.place === 1)?.avatarConfig} size={96} />

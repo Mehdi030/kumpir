@@ -635,24 +635,29 @@ export default function LobbyPage() {
                                             className={`playerChip ${isHostRow ? "playerChipHost" : ""} ${p.ready ? "playerChipReady" : "playerChipNotReady"}`}
                                         >
                                             <span className="playerChipSeat">{idx + 1}</span>
-                                            <PlayerAvatar seed={p.name} config={p.avatar_config} size={34} className="playerChipAvatar" />
+                                            <div className="playerChipAvWrap">
+                                                {isHostRow ? <span className="playerChipHostBadge" title={tr("Host")}>👑</span> : null}
+                                                <PlayerAvatar seed={p.name} config={p.avatar_config} size={62} className="playerChipAvatar" />
+                                                <span className={`playerChipState ${p.ready ? "on" : ""}`} title={p.ready ? tr("bereit") : tr("noch nicht bereit")}>
+                                                    {p.ready ? "✓" : "…"}
+                                                </span>
+                                            </div>
                                             <span className="playerChipName">
                                                 {p.is_bot ? "🤖 " : ""}
                                                 {p.name}
+                                                {isMe ? <span style={{ opacity: 0.6 }}> ({tr("du")})</span> : null}
+                                            </span>
+                                            <span className="playerChipMeta">
                                                 {p.is_bot && p.bot_skill ? (
-                                                    <span style={{ opacity: 0.8, fontSize: 11, marginLeft: 6 }} title={tr(["", "Anfänger", "Mittel", "Profi"][p.bot_skill] ?? "")}>
-                                                        {"★".repeat(p.bot_skill)}
-                                                    </span>
+                                                    <span title={tr(["", "Anfänger", "Mittel", "Profi"][p.bot_skill] ?? "")}>{"★".repeat(p.bot_skill)}</span>
                                                 ) : null}
                                                 {badges[p.player_id] ? (
-                                                    <span style={{ marginLeft: 6, fontSize: 13 }} title={`${badges[p.player_id].title} · ${tr("{n} Erfolge", { n: badges[p.player_id].n })}`}>
-                                                        {badges[p.player_id].icon}
+                                                    <span className="playerChipBadge" title={`${badges[p.player_id].title} · ${tr("{n} Erfolge", { n: badges[p.player_id].n })}`}>
+                                                        {badges[p.player_id].icon} <small>{badges[p.player_id].title}</small>
                                                     </span>
                                                 ) : null}
-                                                {isMe ? <span style={{ opacity: 0.6 }}> ({tr("du")})</span> : null}
-                                                {isHostRow ? <span className="playerChipHostBadge">👑</span> : null}
                                             </span>
-                                            <span className="playerChipState">{p.ready ? "✅" : "⏳"}</span>
+                                            <div className="playerChipActions">
                                             {p.is_bot && amIHost ? (
                                                 <button
                                                     type="button"
@@ -686,6 +691,7 @@ export default function LobbyPage() {
                                                     </button>
                                                 </>
                                             ) : null}
+                                            </div>
                                         </div>
                                     );
                                 })}

@@ -1353,71 +1353,104 @@ body::after{
    auch 12 Spieler auf einen Blick passen statt scrollen zu müssen. */
 .playerGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 9px;
-    margin-top: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 190px));
+    justify-content: center;
+    gap: 12px;
+    margin-top: 10px;
 }
+/* Spielerkarte (Wunsch Mehdi 2026-11-02): großer Avatar mit Bereit-Haken, Name darunter, Host-Krone obendrauf */
 .playerChip {
+    position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
-    padding: 11px 14px;
-    border-radius: 14px;
-    background: rgba(0,0,0,0.16);
-    border: 1px solid rgba(255,255,255,0.08);
+    gap: 6px;
+    padding: 16px 10px 12px;
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(0,0,0,0.18));
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 10px 22px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.12);
     min-width: 0;
+    text-align: center;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
+.playerChip:hover { transform: translateY(-2px); }
 .playerChipHost {
-    border-color: rgba(255,255,255,0.16);
+    border-color: rgba(255,214,10,0.55);
 }
 .playerChipNotReady {
-    background: rgba(120,120,128,0.22);
-    border-color: rgba(160,160,170,0.28);
+    background: linear-gradient(180deg, rgba(120,120,128,0.24), rgba(0,0,0,0.2));
 }
 .playerChipReady {
-    background: rgba(34,197,94,0.38);
+    background: linear-gradient(180deg, rgba(34,197,94,0.34), rgba(10,70,36,0.3));
     border-color: rgba(52,220,110,0.75);
-    box-shadow: 0 0 18px rgba(34,197,94,0.45), inset 0 0 14px rgba(52,220,110,0.18);
+    box-shadow: 0 0 18px rgba(34,197,94,0.4), inset 0 0 14px rgba(52,220,110,0.16);
     animation: playerChipReadyGlow 2.4s ease-in-out infinite;
 }
 @keyframes playerChipReadyGlow {
-    0%, 100% { box-shadow: 0 0 14px rgba(34,197,94,0.35), inset 0 0 10px rgba(52,220,110,0.14); }
-    50% { box-shadow: 0 0 26px rgba(34,197,94,0.65), inset 0 0 18px rgba(52,220,110,0.26); }
+    0%, 100% { box-shadow: 0 0 14px rgba(34,197,94,0.32), inset 0 0 10px rgba(52,220,110,0.12); }
+    50% { box-shadow: 0 0 26px rgba(34,197,94,0.6), inset 0 0 18px rgba(52,220,110,0.24); }
 }
 @media (prefers-reduced-motion: reduce) {
     .playerChipReady { animation: none; }
 }
 .playerChipSeat {
-    flex-shrink: 0;
-    width: 24px;
-    text-align: center;
-    opacity: 0.55;
-    font-size: 14px;
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    opacity: 0.5;
+    font-size: 12px;
     font-weight: 800;
 }
+.playerChipAvWrap { position: relative; padding-top: 6px; }
+.playerChipAvatar { display: block; width: 62px; height: 62px; border-radius: 50%; background: rgba(255,255,255,.12); box-shadow: 0 0 0 3px rgba(255,255,255,.22), 0 8px 16px rgba(0,0,0,.28); }
+.playerChipHost .playerChipAvatar { box-shadow: 0 0 0 3px rgba(255,214,10,.7), 0 0 22px rgba(255,214,10,.35); }
+.playerChipReady .playerChipAvatar { box-shadow: 0 0 0 3px rgba(80,230,130,.85), 0 0 20px rgba(60,220,120,.4); }
 .playerChipName {
-    flex: 1;
     min-width: 0;
-    font-size: 16px;
+    max-width: 100%;
+    font-size: 15px;
     font-weight: 900;
     line-height: 1.2;
-    /* Lange Namen (auch Bots) ganz zeigen: umbrechen statt abschneiden (Wunsch Mehdi 2026-10-12) */
     overflow-wrap: anywhere;
 }
-.playerChipAvatar { flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.1); }
+.playerChipMeta { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; min-height: 0; font-size: 12px; font-weight: 800; color: #ffe08a; }
+.playerChipBadge { padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); color: #fff; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.playerChipBadge small { font-size: 10.5px; font-weight: 700; opacity: .85; }
 .playerChipHostBadge {
-    margin-left: 6px;
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-8deg);
+    font-size: 24px;
+    filter: drop-shadow(0 3px 5px rgba(0,0,0,.45));
+    z-index: 1;
 }
 .playerChipState {
-    flex-shrink: 0;
-    font-size: 19px;
+    position: absolute;
+    right: -4px;
+    bottom: -2px;
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 900;
+    background: rgba(70,70,80,.92);
+    border: 2px solid rgba(255,255,255,.4);
+    color: #fff;
 }
+.playerChipState.on { background: #22c55e; border-color: #d9ffe6; box-shadow: 0 0 12px rgba(34,197,94,.8); }
+.playerChipActions { display: flex; gap: 6px; justify-content: center; }
+.playerChipActions:empty { display: none; }
 .playerChipKick {
     flex-shrink: 0;
-    padding: 6px 10px !important;
-    font-size: 16px !important;
-    min-height: 34px;
+    padding: 5px 10px !important;
+    font-size: 15px !important;
+    min-height: 32px;
 }
+
 
 /* Admin-Variante: Zeile statt Chip, mehr Platz für Host-/Kick-Buttons */
 .playerGridAdmin {
