@@ -110,3 +110,5 @@ db/scripts/data/fairness-report.json
 # Playwright
 apps/web/test-results/
 apps/web/playwright-report/
+apps/web/AGENTS.md
+apps/web/CLAUDE.md
