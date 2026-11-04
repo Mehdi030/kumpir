@@ -27,13 +27,13 @@ function CountUp({ to, delayS }: { to: number; delayS: number }) {
         const dur = 900;
         const tick = (now: number) => {
             const k = Math.max(0, Math.min(1, (now - t0) / dur));
-            setV(Math.round(to * (1 - Math.pow(1 - k, 3))));
+            setV(Math.round(to * (1 - Math.pow(1 - k, 3)) * 100) / 100);
             if (k < 1) raf = requestAnimationFrame(tick);
         };
         raf = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf);
     }, [to, delayS]);
-    return <>{v}</>;
+    return <>{String(Number.isInteger(to) ? Math.round(v) : v).replace(".", ",")}</>;
 }
 
 /**

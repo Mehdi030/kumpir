@@ -150,12 +150,13 @@ try {
         const results = async () => (await q("select quiz_reveal from public.lobbies where id = $1", [id]))[0].quiz_reveal.results.find((r) => r.playerId === host);
         const pts = async () => Number((await q("select song_points from public.players where lobby_id = $1 and player_id = $2", [id, host]))[0].song_points);
         if (round === 0) {
-            // allein unter Bots: Einspruch gilt sofort
-            const before = await pts();
-            const w = me.bad[0];
-            await appeal(w);
-            const r = await results();
-            check("Einspruch (nur Bots dabei): sofort angenommen, +1 Punkt", (await pts()) === before + 1 && r.points === me.points + 1 && r.valid.some((v) => v.t === w) && !r.bad.includes(w), JSON.stringify(r.bad));
+            // allein unter Bots (141): Unsinn wird abgelehnt, nur ein Beinahe-Treffer (Tippfehler) zählt
+            const before0 = await pts();
+            const junk = me.bad.find((x) => /xq/i.test(x)) ?? me.bad[0];
+            await appeal(junk);
+            const rj = await results();
+            check("Einspruch (nur Bots dabei): Unsinn wird abgelehnt, keine Punkte", (await pts()) === before0 && rj.bad.includes(junk), JSON.stringify(rj.bad));
+            const w = me.bad.find((x) => x !== junk) ?? me.bad[0];
             let err = "";
             try { await appeal(w); } catch (e) { err = e.message; }
             check("derselbe Einspruch nicht doppelt", !err || /appeal_not_possible/.test(err), err);
@@ -199,7 +200,7 @@ try {
     const rows = await q("select name, place, song_points from public.series_results where lobby_id = $1 order by place", [id]);
     check("Wertung mit Plätzen vorhanden", rows.length === 3 && rows[0].place === 1, JSON.stringify(rows));
     const [mine] = await q("select song_points from public.players where lobby_id = $1 and player_id = $2", [id, host]);
-    check("Summe der drei Kategorien = 12 Punkte + 2 angenommene Einsprüche", Number(mine.song_points) === 14, String(mine.song_points));
+    check("Summe der drei Kategorien = 12 Punkte + 1 angenommener Einspruch", Number(mine.song_points) === 13, String(mine.song_points));
 } catch (e) {
     console.error("FEHLER:", e.message);
     failed++;
@@ -220,11 +221,13 @@ try {
     check("Einstellungen: 6 Kategorien gibt es nicht", /letters_bad_config/.test(await fails({ cats: 6, secs: 45, off: [] })));
     check("Einstellungen: 50 Sekunden gibt es nicht", /letters_bad_config/.test(await fails({ cats: 3, secs: 50, off: [] })));
     const all = (await q("select name from public.word_categories where active order by name")).map((r) => r.name);
-    check("Einstellungen: zu wenige Kategorien übrig wird abgelehnt", /letters_too_few_categories/.test(await fails({ cats: 3, secs: 45, off: all.slice(0, all.length - 3) })));
-    const off = ["Länder", "Hauptstädte", "Städte", "Schauspieler", "Sänger", "Bands"];
+    check("Genau fünf Kategorien sind aktiv", all.length === 5, all.join(", "));
+    check("Einstellungen: 4 Kategorien pro Spiel gehen mit fünf nicht", /letters_too_few_categories/.test(await fails({ cats: 4, secs: 45, off: [] })));
+    check("Einstellungen: zu wenige Kategorien übrig wird abgelehnt", /letters_too_few_categories/.test(await fails({ cats: 3, secs: 45, off: all.slice(0, 1) })));
+    const off = ["Fußballspieler"];
     await cfg({ cats: 2, secs: 30, off: [...off, "Gibtsnicht"] });
     const [c1] = await q("select letters_cfg from public.lobbies where id = $1", [id2]);
-    check("Einstellungen gespeichert (unbekannte Kategorie verworfen)", c1.letters_cfg.cats === 2 && c1.letters_cfg.secs === 30 && c1.letters_cfg.off.length === 6, JSON.stringify(c1.letters_cfg));
+    check("Einstellungen gespeichert (unbekannte Kategorie verworfen)", c1.letters_cfg.cats === 2 && c1.letters_cfg.secs === 30 && c1.letters_cfg.off.length === 1, JSON.stringify(c1.letters_cfg));
 
     // eigene Kategorien
     const custom = (items) => q("select public.set_letters_custom($1, $2, $3::jsonb)", [id2, host, JSON.stringify(items)]);

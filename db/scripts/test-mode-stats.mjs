@@ -49,7 +49,7 @@ try {
         matchIds.push(id);
         const r = rows[0];
         const expectHits = mode === "buzzer" ? 2 : 1;
-        check(`${mode}: Spiel festgehalten (${twoHumans ? "gewertet" : "Übung"})`, !!r && r.mode === mode && r.ranked === twoHumans && r.hits === expectHits && r.answers === 3 && r.total === 12, JSON.stringify(r));
+        check(`${mode}: Spiel festgehalten (${twoHumans ? "gewertet" : "Übung"})`, !!r && r.mode === mode && r.ranked === twoHumans && r.hits === expectHits && r.answers === 3 && Number(r.total) === 12, JSON.stringify(r));
     }
     // Auswertung wie ein angemeldeter Client
     await db.query("begin");

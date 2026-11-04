@@ -84,7 +84,7 @@ export function PassStatsTable({ rows, title, pointsLabel, hideTimes = false }: 
                                     {r.isMe ? <em> ({tr("du")})</em> : null}
                                 </span>
                             </span>
-                            <span className="r pstPts">{r.points}</span>
+                            <span className="r pstPts">{String(Math.round(r.points * 100) / 100).replace(".", ",")}</span>
                             {songs ? (
                                 <>
                                     <span className={`r pstSong ${maxBoth > 0 && r.both === maxBoth ? "top" : ""}`}>{r.both ?? 0}</span>

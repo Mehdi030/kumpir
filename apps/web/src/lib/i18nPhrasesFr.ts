@@ -293,6 +293,8 @@ export const PHRASES_FR: Record<string, string> = {
     "Bart & Brille": "Barbe & lunettes",
     "Outfit": "Tenue",
     "Der Ziegenbart ist für Achi reserviert.": "Le bouc est réservé à Achi.",
+    "Leider falsch: −{n} Punkt, und du bist für diesen Song raus.": "Faux : −{n} point, et tu es éliminé pour ce morceau.",
+    "Titel richtig: 1 Punkt, Titel + Künstler: 1,25. Nur der Künstler: 0,25. Falsch: −0,5. Du hast 7 Sekunden zum Tippen.": "Titre juste : 1 point, titre + artiste : 1,25. Seulement l'artiste : 0,25. Faux : −0,5. Tu as 7 secondes pour taper.",
     "Siegquote": "Taux de victoire",
     "Feinschliff": "Réglages",
     "Modus ändern": "Changer de mode",

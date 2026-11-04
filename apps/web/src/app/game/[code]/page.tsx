@@ -1919,7 +1919,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                   const sl = mine.map((r) => num(r.slowest_ms)).filter((x): x is number => x != null);
                   return { id: e.id, name: e.name, place: i + 1, points: e.total, fastestMs: f.length ? Math.min(...f) : null, slowestMs: sl.length ? Math.max(...sl) : null, isMe: e.id === mePlayerId, avatarConfig: players.find((p) => p.player_id === e.id)?.avatar_config ?? null };
               })
-            : ranking.map((r) => ({ id: r.player_id, name: r.name, place: r.place, points: r.score, fastestMs: num(r.fastest), slowestMs: num(r.slowest), isMe: r.player_id === mePlayerId, out: !r.is_alive, avatarConfig: r.avatar_config ?? null }));
+            : ranking.map((r) => ({ id: r.player_id, name: r.name, place: r.place, points: quizMode ? r.songPoints : r.score, fastestMs: num(r.fastest), slowestMs: num(r.slowest), isMe: r.player_id === mePlayerId, out: !r.is_alive, avatarConfig: r.avatar_config ?? null }));
         // Song-Treffer (🎯 Titel + Künstler, 🎵 nur Titel) an jede Zeile hängen
         const finRowsSongs = quizMode ? finRows : finRows.map((r) => ({ ...r, both: answerStats[r.id]?.both ?? 0, titlesOnly: answerStats[r.id]?.titles ?? 0 }));
         const nameOfId = (id: string) => finRows.find((r) => r.id === id)?.name ?? "…";
@@ -1935,7 +1935,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
         if (bestCombo) highlights.push({ icon: "🔥", label: tr("Längste Serie"), name: nameOfId(bestCombo.playerId), value: tr("{n} in Folge", { n: bestCombo.bestCombo }) });
         const quickEar = [...statList].filter((s) => s.fastestMs != null).sort((a, b) => a.fastestMs! - b.fastestMs!)[0];
         if (quickEar) highlights.push({ icon: "👂", label: tr("Schnellstes Ohr"), name: nameOfId(quickEar.playerId), value: fmtMs(quickEar.fastestMs) });
-        if (bestSong) highlights.push({ icon: "🎵", label: tr("Song-Profi"), name: bestSong.name, value: tr("{n} Song-Punkte", { n: fmtNum(Math.round(bestSong.songPoints * 2) / 2, Number.isInteger(bestSong.songPoints) ? 0 : 1) }) });
+        if (bestSong) highlights.push({ icon: "🎵", label: tr("Song-Profi"), name: bestSong.name, value: tr("{n} Song-Punkte", { n: fmtNum(Math.round(bestSong.songPoints * 100) / 100, Number.isInteger(bestSong.songPoints) ? 0 : (bestSong.songPoints * 10) % 1 === 0 ? 1 : 2) }) });
         if (fastRow) highlights.push({ icon: "⚡", label: tr("Schnellste Abgabe"), name: fastRow.name, value: fmtMs(fastRow.fastestMs) });
         if (slowRow && slowRow.slowestMs !== fastRow?.fastestMs) highlights.push({ icon: "🐢", label: tr("Langsamste Abgabe"), name: slowRow.name, value: fmtMs(slowRow.slowestMs) });
 
@@ -1944,7 +1944,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                 ? { place: mySeriesRank, score: seriesRanked.find((e) => e.id === mePlayerId)?.total ?? 0 }
                 : null
             : myRankRow
-              ? { place: myRankRow.rank, score: myRankRow.row.score }
+              ? { place: myRankRow.rank, score: quizMode ? myRankRow.row.songPoints : myRankRow.row.score }
               : null;
 
         const doRematch = async () => {
@@ -1992,7 +1992,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     shareRows={
                         isSeries
                             ? seriesRanked.map((e, i) => ({ place: i + 1, name: e.name, score: e.total, isMe: e.id === mePlayerId }))
-                            : ranking.map((r) => ({ place: r.place, name: r.name, score: r.score, isMe: r.player_id === mePlayerId }))
+                            : ranking.map((r) => ({ place: r.place, name: r.name, score: quizMode ? r.songPoints : r.score, isMe: r.player_id === mePlayerId }))
                     }
                     mePlayerId={mePlayerId}
                     highlights={highlights}

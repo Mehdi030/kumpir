@@ -143,7 +143,7 @@ export default function ChallengePage({ params }: { params: Promise<{ code: stri
                         </p>
                         <div className="chScore">
                             <div className="chScoreLabel">{tr("Punkte zum Schlagen")}</div>
-                            <div className="chScoreNum">{c.score}</div>
+                            <div className="chScoreNum">{String(Number(c.score)).replace(".", ",")}</div>
                         </div>
 
                         {c.expired ? (
@@ -174,7 +174,7 @@ export default function ChallengePage({ params }: { params: Promise<{ code: stri
                                         <span>
                                             {medal[i] ?? i + 1} {r.name}
                                         </span>
-                                        <b>{r.score}</b>
+                                        <b>{String(Number(r.score)).replace(".", ",")}</b>
                                     </div>
                                 ))}
                             </div>

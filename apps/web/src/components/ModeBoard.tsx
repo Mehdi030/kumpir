@@ -63,7 +63,7 @@ export function ModeBoard({ mode }: { mode: BoardMode }) {
                             {showAcc ? (
                                 <td style={{ padding: "12px 8px", opacity: 0.85 }}>{r.answers ? `${Math.round(((r.hits ?? 0) / r.answers) * 100)} %` : "—"}</td>
                             ) : null}
-                            <td style={{ padding: "12px 8px", opacity: 0.85 }}>{r.points}</td>
+                            <td style={{ padding: "12px 8px", opacity: 0.85 }}>{String(Number(r.points)).replace(".", ",")}</td>
                             <td style={{ padding: "12px 8px", textAlign: "right", fontWeight: 950, fontSize: 15 }}>{r.wins}</td>
                         </tr>
                     ))}

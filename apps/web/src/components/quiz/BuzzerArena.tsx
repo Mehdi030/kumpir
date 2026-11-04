@@ -105,7 +105,7 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
             const res = await q.answer(a);
             if (res && !res.correct)
                 setFeedback({
-                    text: Number(res.points) < 0 ? tr("Leider falsch: −1 Punkt, und du bist für diesen Song raus.") : tr("Leider falsch – du bist für diesen Song raus."),
+                    text: Number(res.points) < 0 ? tr("Leider falsch: −{n} Punkt, und du bist für diesen Song raus.", { n: pts(-Number(res.points)) }) : tr("Leider falsch – du bist für diesen Song raus."),
                     nonce: Date.now(),
                     seq: lobby.quiz_seq,
                 });
@@ -117,7 +117,7 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
     // Protokoll: wer hat gebuzzert, richtig (grün) oder falsch (rot) – neueste zuerst
     const log = useMemo(() => [...(lobby.quiz_log ?? [])].reverse().slice(0, 8), [lobby.quiz_log]);
     const logNote = (e: { a: string | null; ok: boolean; pts: number }) =>
-        e.ok ? `+${pts(e.pts)}` : e.pts < 0 ? "−1" : "±0";
+        e.ok ? `+${pts(e.pts)}` : e.pts < 0 ? `−${pts(-e.pts)}` : "±0";
 
     // Die letzte FALSCHE Antwort dieses Songs sehen alle groß in der Mitte (bis jemand neu buzzert)
     const lastTry = (lobby.quiz_log ?? []).filter((e) => e.seq === lobby.quiz_seq).slice(-1)[0] ?? null;
@@ -225,7 +225,7 @@ export function BuzzerArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
                     )}
                     {wrongTry ? (
                         <div className="bzWrongAll" key={`w:${lobby.quiz_seq}:${(lobby.quiz_log ?? []).length}`}>
-                            ❌ <b>{nameOf(wrongTry.p)}</b>: {wrongTry.a ? `„${wrongTry.a}“` : tr("keine Eingabe")} {wrongTry.pts < 0 ? "· −1" : ""}
+                            ❌ <b>{nameOf(wrongTry.p)}</b>: {wrongTry.a ? `„${wrongTry.a}“` : tr("keine Eingabe")} {wrongTry.pts < 0 ? `· −${pts(-wrongTry.pts)}` : ""}
                         </div>
                     ) : null}
                     {feedback && state === "question" ? (

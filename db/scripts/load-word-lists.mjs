@@ -5,7 +5,7 @@
  * stehen, bleiben unberührt. Normalisiert wird in der Datenbank (public._ans_norm), damit Suche und Liste dasselbe nutzen.
  * Aufruf: node db/scripts/load-word-lists.mjs
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -49,7 +49,10 @@ try {
         console.log(`${name}: ${l} Begriffe (${n} Schreibweisen)`);
     }
     // Kategorien, die nicht (mehr) in der Datei stehen, werden ausgeschaltet (kommen nicht mehr zur Wahl, ihre Begriffe bleiben gespeichert)
-    await db.query("update public.word_categories set active = false where owner_lobby is null and name <> all($1::text[])", [Object.keys(lists)]);
+    // Welche Kategorien zur Wahl stehen, steht in data/active-categories.json (Wunsch Mehdi 2026-11-04: nur fünf Allgemeinwissen-Kategorien)
+    const activeFile = resolve(__dirname, "data/active-categories.json");
+    const active = existsSync(activeFile) ? JSON.parse(readFileSync(activeFile, "utf8")) : Object.keys(lists);
+    await db.query("update public.word_categories set active = (name = any($1::text[])) where owner_lobby is null", [active]);
     await db.query("commit");
 } catch (e) {
     await db.query("rollback");

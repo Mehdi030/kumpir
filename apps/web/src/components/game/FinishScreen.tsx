@@ -132,7 +132,7 @@ export function FinishScreen({ isSeries, totalRounds, winnerName, me, rows, shar
                 {me ? <div className="finMe">{t("fin.me", { place: me.place, score: me.score })}</div> : null}
                 {challenge ? (
                     <div className={`finChallenge ${challenge.won ? "won" : challenge.tie ? "tie" : "lost"}`} role="status">
-                        ⚔️ {tr("Herausforderung von {name}", { name: challenge.creator })}: <b>{challenge.score}</b> : {challenge.target} –{" "}
+                        ⚔️ {tr("Herausforderung von {name}", { name: challenge.creator })}: <b>{String(Number(challenge.score)).replace(".", ",")}</b> : {String(Number(challenge.target)).replace(".", ",")} –{" "}
                         {challenge.won ? tr("geschafft! 🎉") : challenge.tie ? tr("Gleichstand!") : tr("knapp daneben – nochmal?")}
                     </div>
                 ) : null}

@@ -293,6 +293,8 @@ export const PHRASES_EN: Record<string, string> = {
     "Bart & Brille": "Beard & glasses",
     "Outfit": "Outfit",
     "Der Ziegenbart ist für Achi reserviert.": "The goatee is reserved for Achi.",
+    "Leider falsch: −{n} Punkt, und du bist für diesen Song raus.": "Wrong: −{n} point, and you are out for this song.",
+    "Titel richtig: 1 Punkt, Titel + Künstler: 1,25. Nur der Künstler: 0,25. Falsch: −0,5. Du hast 7 Sekunden zum Tippen.": "Title right: 1 point, title + artist: 1.25. Only the artist: 0.25. Wrong: −0.5. You have 7 seconds to type.",
     "Siegquote": "Win rate",
     "Feinschliff": "Fine-tuning",
     "Modus ändern": "Change mode",

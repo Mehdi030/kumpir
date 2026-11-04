@@ -66,7 +66,7 @@ export const GAME_MODES: GameModeInfo[] = [
         ],
         rules: [
             { icon: "🔔", text: tk("Ein Song läuft. Wer ihn erkennt, drückt den Buzzer (Leertaste) – wer zuerst drückt, darf antworten.") },
-            { icon: "✍️", text: tk("Titel richtig: 2 Punkte. Nur der Künstler richtig: 1 Punkt. Du hast 7 Sekunden zum Tippen.") },
+            { icon: "✍️", text: tk("Titel richtig: 1 Punkt, Titel + Künstler: 1,25. Nur der Künstler: 0,25. Falsch: −0,5. Du hast 7 Sekunden zum Tippen.") },
             { icon: "🔒", text: tk("Falsch oder zu langsam? Dann bist du für diesen Song raus, die anderen dürfen weiter buzzern.") },
             { icon: "🏁", text: tk("Wer zuerst 10 Punkte hat, gewinnt sofort. Nach 20 Songs gewinnt, wer vorn liegt.") },
         ],

@@ -60,7 +60,7 @@ type Status = {
     answered: string[];
 };
 
-export const pts = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace(".", ","));
+export const pts = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
 
 function secondsLeft(endsAt: string | null): number {
     const t = endsAt ? Date.parse(endsAt) : NaN;

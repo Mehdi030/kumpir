@@ -152,7 +152,7 @@ function paintPodium(ctx: CanvasRenderingContext2D, W: number, top: ResultCardRo
         ctx.font = `900 ${place === 1 ? 110 : place === 2 ? 90 : 72}px ${font}`;
         ctx.fillText(String(r.place), cx, topY + (place === 1 ? 128 : place === 2 ? 108 : 90));
         ctx.font = `800 36px ${font}`;
-        ctx.fillText(`${r.score} ${pts}`, cx, base - 28);
+        ctx.fillText(`${String(r.score).replace(".", ",")} ${pts}`, cx, base - 28);
 
         // Avatar (Anfangsbuchstabe im Ring), Namensschild
         const rad = place === 1 ? 92 : 72;
@@ -278,7 +278,7 @@ export async function renderResultCard(input: ResultCardInput): Promise<Blob> {
         ctx.fillText(fit(ctx, r.name, 520), 200, y + rowH / 2 + 8);
         ctx.textAlign = "right";
         ctx.fillStyle = "#ffe08a";
-        ctx.fillText(`${r.score} ${input.labels.pts}`, W - 112, y + rowH / 2 + 8);
+        ctx.fillText(`${String(r.score).replace(".", ",")} ${input.labels.pts}`, W - 112, y + rowH / 2 + 8);
         y += rowH;
     }
 

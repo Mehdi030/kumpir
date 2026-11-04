@@ -34,7 +34,7 @@ export type LettersCfg = { cats: number; secs: number; off: string[]; /** eigene
 /** Eintrag zum Speichern der eigenen Kategorien: neu (name + terms) oder bestehende behalten (keep) */
 export type CustomItem = { name: string; terms?: string[]; keep?: boolean };
 export const LETTERS_DEFAULT: LettersCfg = { cats: 3, secs: 45, off: [], custom: [] };
-export const LETTERS_CATS = [1, 2, 3, 4, 5];
+export const LETTERS_CATS = [1, 2, 3]; // mit fünf Kategorien gehen höchstens 3 pro Spiel (der Server verlangt Anzahl + 2 erlaubte)
 export const LETTERS_SECS = [30, 45, 60, 90];
 
 export function lettersCfgOf(raw: { cats?: number; secs?: number; off?: string[]; custom?: CustomCat[] } | null | undefined): LettersCfg {

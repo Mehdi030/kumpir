@@ -1,3 +1,6 @@
+| 142 | [`142_roulette_close_plural_swap.sql`](142_roulette_close_plural_swap.sql) | **Roulette-Prüfung**: Mehrzahl (Hund→Hunde) und Buchstabendreher zählen | Empfohlen |
+| 141 | [`141_roulette_five_categories.sql`](141_roulette_five_categories.sql) | **Roulette**: nur 5 Allgemeinwissen-Kategorien (Länder, Städte, Tiere, Fußballspieler, Obst & Gemüse), strengere Tippfehler-Regel (`_letters_close`/`_letters_match`), Einspruch allein nur bei Beinahe-Treffer | Empfohlen |
+| 140 | [`140_buzzer_scoring_fairness.sql`](140_buzzer_scoring_fairness.sql) | **Buzzer mit Kommazahlen**: Künstler 0,25 / Titel 1 / beides 1,25, falsch −0,5; Summen (Statistik, Bestenliste, Herausforderungen) behalten Kommastellen; Bots antworten nach Stärke; Gleichstand am Ende per Zufall statt Sitzplatz | Empfohlen |
 | 139 | [`139_challenges.sql`](139_challenges.sql) | **Freunde herausfordern**: `challenges`/`challenge_results`, `rpc_challenge_create/attach/submit`, `get_challenge` – Link `/challenge/CODE`, Solo gegen Bots, Punkte schlagen (Buzzer, Zeitreise, Roulette) | Empfohlen |
 | 138 | [`138_client_errors.sql`](138_client_errors.sql) | **Fehler-Meldekanal**: Ereignis `client_error` (kurze Browser-Fehlermeldung, anonym), `admin_client_errors()` für /admin/stats; Whitelist um lang_fr, challenge_* ergänzt | Empfohlen |
 # 📦 KUMPIR — Migrationen

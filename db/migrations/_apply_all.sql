@@ -26067,3 +26067,556 @@ GRANT EXECUTE ON FUNCTION public.rpc_challenge_attach(text, uuid, uuid) TO anon,
 GRANT EXECUTE ON FUNCTION public.rpc_challenge_submit(uuid, uuid) TO anon, authenticated;
 
 COMMIT;
+
+
+-- >>> 140_buzzer_scoring_fairness.sql <<<
+-- ============================================================
+-- 140: Buzzer-Wertung mit Kommazahlen + Fairness (Wunsch Mehdi, 2026-11-04)
+-- ============================================================
+-- * Buzzer: Künstler richtig = 0,25 Punkte, Titel richtig = 1 Punkt, Titel + Künstler = 1,25 (vorher 1 / 2 / 2).
+--   Falsche Antwort: -0,5 (nie unter 0). Ziel bleibt 10 Punkte (höchstens 20 Songs).
+-- * Alle Summen (Statistik, Bestenliste, Herausforderungen) behalten die Kommastellen statt zu runden.
+-- * Bots antworten je nach Stärke mit Künstler, Titel oder beidem.
+-- * Gleichstand am Ende (gleiche Punkte, gleicher Tiebreak, gleiche Weitergaben): Zufall statt "kleinster Sitzplatz".
+-- ============================================================
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public._quiz_do_answer(p_lobby_id uuid, p_player_id uuid, p_answer text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE l public.lobbies%ROWTYPE; s public.quiz_secret%ROWTYPE;
+        v_score numeric; v_title text; v_artist text; v_feat text[]; v_pts numeric := 0; v_clean text; v_pen numeric;
+BEGIN
+  SELECT * INTO l FROM public.lobbies WHERE id = p_lobby_id FOR UPDATE;
+  IF l.phase <> 'quiz' THEN RAISE EXCEPTION 'quiz_not_running'; END IF;
+  IF l.game_mode <> 'buzzer' THEN RAISE EXCEPTION 'quiz_wrong_action'; END IF;
+  IF l.quiz_state <> 'buzzed' OR l.quiz_picker IS DISTINCT FROM p_player_id THEN RAISE EXCEPTION 'quiz_not_your_turn'; END IF;
+  v_clean := left(trim(coalesce(p_answer, '')), 60);
+  IF v_clean = '' THEN RAISE EXCEPTION 'empty_answer'; END IF;
+  SELECT * INTO s FROM public.quiz_secret WHERE lobby_id = p_lobby_id;
+  SELECT title, artist, feat_artists INTO v_title, v_artist, v_feat FROM public.song_pool WHERE id = s.song_id;
+  v_score := public._score_song_answer(v_title, v_artist, v_feat, v_clean);
+
+  IF v_score <= 0 THEN
+    INSERT INTO public.quiz_answers (lobby_id, seq, player_id, answer, tries, answered_at)
+    VALUES (p_lobby_id, l.quiz_seq, p_player_id, v_clean, 1, now())
+    ON CONFLICT (lobby_id, seq, player_id) DO UPDATE SET answer = excluded.answer, tries = quiz_answers.tries + 1, answered_at = now();
+    -- falsch: -1 Punkt (nicht unter 0), für diesen Song raus, die anderen dürfen weiter buzzern
+    v_pen := public._quiz_penalty(p_lobby_id, p_player_id);
+    PERFORM public._quiz_log_add(p_lobby_id, l.quiz_seq, p_player_id, v_clean, false, v_pen);
+    UPDATE public.lobbies SET quiz_state = 'question', quiz_locked = array_append(quiz_locked, p_player_id), quiz_picker = NULL,
+           quiz_ends_at = greatest(coalesce((quiz_options ->> 'qend')::timestamptz, now()), now() + interval '5 seconds'),
+           quiz_rev = quiz_rev + 1 WHERE id = p_lobby_id;
+    IF NOT EXISTS (SELECT 1 FROM public.players WHERE lobby_id = p_lobby_id AND player_id = p_player_id AND is_bot) THEN
+      INSERT INTO public.answer_misses (lobby_id, song_id, player_id, answer) VALUES (p_lobby_id, s.song_id, p_player_id, v_clean);
+    END IF;
+    IF coalesce(array_length(public._quiz_eligible(p_lobby_id), 1), 0) = 0 THEN PERFORM public._quiz_reveal(p_lobby_id); END IF;
+    RETURN jsonb_build_object('correct', false, 'points', v_pen);
+  END IF;
+
+  -- 140: Künstler allein 0,25 – Titel 1 – Titel + Künstler 1,25 (vorher 1 / 2 / 2): ein Spiel nur mit Künstler-Raten ist nicht mehr nach 10 Zügen vorbei
+  v_pts := CASE WHEN v_score >= 1.5 THEN 1.25 WHEN v_score >= 1 THEN 1 ELSE 0.25 END;
+  INSERT INTO public.quiz_answers (lobby_id, seq, player_id, answer, correct, points, tries, answered_at)
+  VALUES (p_lobby_id, l.quiz_seq, p_player_id, v_clean, true, v_pts, 1, now())
+  ON CONFLICT (lobby_id, seq, player_id) DO UPDATE SET answer = excluded.answer, correct = true, points = excluded.points,
+     tries = quiz_answers.tries + 1, answered_at = now();
+  UPDATE public.players SET song_points = coalesce(song_points, 0) + v_pts WHERE lobby_id = p_lobby_id AND player_id = p_player_id;
+  PERFORM public._quiz_log_add(p_lobby_id, l.quiz_seq, p_player_id, v_clean, true, v_pts);
+  -- Treffer für die Song-Statistik: nur Menschen
+  IF v_score >= 1 AND s.song_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM public.players WHERE lobby_id = p_lobby_id AND player_id = p_player_id AND coalesce(is_bot, false)) THEN
+    UPDATE public.song_pool SET hits = hits + 1 WHERE id = s.song_id;
+  END IF;
+  PERFORM public._quiz_reveal(p_lobby_id);
+  RETURN jsonb_build_object('correct', true, 'points', v_pts, 'half', v_score < 1);
+END $function$;
+
+CREATE OR REPLACE FUNCTION public._quiz_penalty(p_lobby_id uuid, p_player uuid)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE v_old numeric; v_pen numeric;
+BEGIN
+  SELECT coalesce(song_points, 0) INTO v_old FROM public.players WHERE lobby_id = p_lobby_id AND player_id = p_player;
+  v_pen := least(0.5, coalesce(v_old, 0));
+  IF v_pen > 0 THEN
+    UPDATE public.players SET song_points = song_points - v_pen WHERE lobby_id = p_lobby_id AND player_id = p_player;
+  END IF;
+  RETURN -v_pen;
+END $function$;
+
+CREATE OR REPLACE FUNCTION public._quiz_bot_tick()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE r record; v_m int; v_seed text; v_delay numeric; v_ok boolean; v_el numeric; s public.quiz_secret%ROWTYPE; v_answer text; v_year int; v_range int;
+BEGIN
+  FOR r IN
+    SELECT l.id AS lobby_id, l.game_mode, l.quiz_state, l.quiz_seq, l.quiz_index, l.quiz_started_at, l.quiz_picker, l.quiz_locked, l.quiz_options,
+           p.player_id, coalesce(p.bot_skill, 2) AS skill
+    FROM public.lobbies l JOIN public.players p ON p.lobby_id = l.id AND p.is_bot AND p.status = 'active'
+    WHERE l.phase = 'quiz' AND l.quiz_state IN ('question', 'buzzed', 'month')
+  LOOP
+    BEGIN
+      v_seed := r.player_id::text || ':' || r.quiz_seq || ':' || r.quiz_state || ':' || r.quiz_index;
+      v_el := extract(epoch FROM now() - r.quiz_started_at);
+      v_ok := (abs(hashtext('ok' || v_seed)) % 1000) / 1000.0 < (CASE r.skill WHEN 1 THEN 0.45 WHEN 3 THEN 0.85 ELSE 0.65 END);
+      v_delay := CASE r.skill WHEN 1 THEN 6 WHEN 3 THEN 1.5 ELSE 3.5 END + (abs(hashtext('d' || v_seed)) % 1000) / 1000.0 * CASE r.skill WHEN 1 THEN 5 WHEN 3 THEN 2.5 ELSE 4.5 END;
+      IF r.game_mode = 'buzzer' THEN v_delay := v_delay * 2.2 + 2; END IF;
+
+      IF r.quiz_state = 'buzzed' THEN
+        IF r.quiz_picker = r.player_id AND v_el > 1.5 THEN
+          SELECT * INTO s FROM public.quiz_secret WHERE lobby_id = r.lobby_id;
+          -- 140: Anfänger nennen meist nur den Künstler (0,25), Profis den Titel oder beides (1 / 1,25)
+          SELECT CASE WHEN abs(hashtext('t' || v_seed)) % 100 < (CASE r.skill WHEN 1 THEN 35 WHEN 3 THEN 60 ELSE 50 END) THEN title
+                      WHEN abs(hashtext('t' || v_seed)) % 100 < (CASE r.skill WHEN 1 THEN 35 WHEN 3 THEN 80 ELSE 55 END) THEN trim(split_part(split_part(artist, ',', 1), '&', 1)) || ' ' || title
+                      ELSE trim(split_part(split_part(artist, ',', 1), '&', 1)) END
+            INTO v_answer FROM public.song_pool WHERE id = s.song_id;
+          PERFORM public._quiz_do_answer(r.lobby_id, r.player_id, v_answer);
+        END IF;
+      ELSIF r.quiz_state = 'month' AND r.game_mode = 'year' AND v_el >= 1.5 + (abs(hashtext('m' || v_seed)) % 1000) / 1000.0 * 4
+            AND (r.quiz_options -> 'tie' -> 'players') ? r.player_id::text
+            AND NOT EXISTS (SELECT 1 FROM public.quiz_answers WHERE lobby_id = r.lobby_id AND seq = r.quiz_seq AND player_id = r.player_id AND month IS NOT NULL) THEN
+        SELECT * INTO s FROM public.quiz_secret WHERE lobby_id = r.lobby_id;
+        v_m := ((coalesce(s.month, 6) - 1 + (abs(hashtext('mo' || v_seed)) % (2 * (CASE r.skill WHEN 1 THEN 5 WHEN 3 THEN 1 ELSE 3 END) + 1)) - (CASE r.skill WHEN 1 THEN 5 WHEN 3 THEN 1 ELSE 3 END) + 24) % 12) + 1;
+        PERFORM public._quiz_do_choose(r.lobby_id, r.player_id, v_m::text);
+      ELSIF r.quiz_state = 'question' AND v_el >= v_delay THEN
+        IF r.game_mode = 'buzzer' THEN
+          IF v_ok AND NOT (r.player_id = ANY (r.quiz_locked)) THEN PERFORM public._quiz_do_buzz(r.lobby_id, r.player_id); END IF;
+        ELSIF r.game_mode = 'year'
+              AND NOT EXISTS (SELECT 1 FROM public.quiz_answers WHERE lobby_id = r.lobby_id AND seq = r.quiz_seq AND player_id = r.player_id) THEN
+          SELECT * INTO s FROM public.quiz_secret WHERE lobby_id = r.lobby_id;
+          v_range := CASE r.skill WHEN 1 THEN 7 WHEN 3 THEN 2 ELSE 4 END;
+          v_year := coalesce(s.year, 2020) + (abs(hashtext('y' || v_seed)) % (2 * v_range + 1)) - v_range;
+          v_year := greatest(coalesce((r.quiz_options ->> 'yearMin')::int, 1900), least(coalesce((r.quiz_options ->> 'yearMax')::int, 2100), v_year));
+          PERFORM public._quiz_do_choose(r.lobby_id, r.player_id, v_year::text);
+        END IF;
+      END IF;
+    EXCEPTION WHEN others THEN NULL;
+    END;
+  END LOOP;
+END $function$;
+
+CREATE OR REPLACE FUNCTION public._finish_round(p_lobby_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_idx int; v_total int; v_winner uuid; v_n int;
+  v_season text := to_char(now(), 'YYYY-MM');
+  v_ranked boolean := public._lobby_human_count(p_lobby_id) >= 2;
+  r record;
+begin
+  select series_index, series_total into v_idx, v_total from public.lobbies where id = p_lobby_id;
+
+  select player_id into v_winner
+  from public.players
+  where lobby_id = p_lobby_id and status = 'active' and is_alive = true
+  limit 1;
+
+  select count(*) into v_n from public.players where lobby_id = p_lobby_id and status = 'active';
+
+
+  delete from public.series_results where lobby_id = p_lobby_id and set_index = v_idx;
+
+  insert into public.series_results
+    (lobby_id, set_index, player_id, name, place, arena_points, song_points, rounds_survived, passes, clutch, is_bot, fastest_ms, slowest_ms)
+  select p_lobby_id, v_idx, t.player_id, t.name, t.place,
+         (case when v_n > 1 then round(100.0 * (v_n - t.place) / (v_n - 1)) else 100 end)::int
+           + round(t.song_points * (case when public._is_quiz_mode((select game_mode from public.lobbies where id = p_lobby_id)) then 5 else 15 end))::int + t.tempo * 5,
+         t.song_points, t.rounds_survived, t.passes, t.clutch, t.is_bot, t.fastest_ms, t.slowest_ms
+  from (
+    select p.player_id, p.name,
+           row_number() over (
+             order by (case when p.is_alive then 1 else 0 end) desc,
+                      p.eliminated_at_round desc nulls last,
+                      p.song_points desc, p.tiebreak desc, p.pass_count desc, hashtext(p.lobby_id::text || p.player_id::text)
+           )::int as place,
+           coalesce(p.song_points, 0) as song_points,
+           coalesce(p.eliminated_at_round, (select round_number from public.lobbies where id = p_lobby_id), 0) as rounds_survived,
+           coalesce(p.pass_count, 0) as passes,
+           coalesce(p.clutch_pass_count, 0) as clutch,
+           coalesce(p.tempo_pass_count, 0) as tempo,
+           coalesce(p.is_bot, false) as is_bot,
+           p.fastest_pass_ms as fastest_ms,
+           p.slowest_pass_ms::int as slowest_ms
+    from public.players p
+    where p.lobby_id = p_lobby_id and p.status = 'active'
+  ) t;
+
+  -- Saison-Punkte nur für eingeloggte Spieler und nur, wenn mind. 2 Menschen mitspielen (075).
+  if v_ranked then
+    for r in
+      select p.user_id, sr.arena_points, sr.place
+      from public.series_results sr
+      join public.players p on p.lobby_id = sr.lobby_id and p.player_id = sr.player_id
+      where sr.lobby_id = p_lobby_id and sr.set_index = v_idx and p.user_id is not null
+    loop
+      insert into public.season_points (user_id, season, arena_points, sets_played, set_wins)
+      values (r.user_id, v_season, r.arena_points, 1, case when r.place = 1 then 1 else 0 end)
+      on conflict (user_id, season) do update
+        set arena_points = public.season_points.arena_points + excluded.arena_points,
+            sets_played = public.season_points.sets_played + 1,
+            set_wins = public.season_points.set_wins + excluded.set_wins,
+            updated_at = now();
+    end loop;
+  end if;
+
+  -- Konto-Verlauf (076). Darf das Rundenende niemals blockieren.
+  begin
+    perform public._record_round_history(p_lobby_id);
+  exception when others then
+    raise warning 'record_round_history: %', sqlerrm;
+  end;
+
+  if v_idx < v_total then
+    -- Lebenslange Stats pro Durchgang mitzählen, bevor die Spielerwerte
+    -- für den nächsten Durchgang zurückgesetzt werden.
+    if v_ranked then
+      begin
+        perform public.aggregate_player_stats(p_lobby_id);
+      exception when others then
+        null;
+      end;
+    end if;
+
+    update public.lobbies
+    set phase = 'set_summary', explode_at = null, current_song_id = null,
+        current_attempt_id = null,
+        holder_player_id = v_winner,
+        countdown_started_at = now(), countdown_ends_at = now() + interval '12 seconds',
+        last_activity_at = now()
+    where id = p_lobby_id;
+  else
+    update public.lobbies
+    set phase = 'finished', explode_at = null, current_song_id = null,
+        current_attempt_id = null,
+        holder_player_id = v_winner,
+        last_activity_at = now()
+    where id = p_lobby_id;
+  end if;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public._quiz_finish(p_lobby_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE v_top uuid; v_mode text; v_run timestamptz;
+BEGIN
+  SELECT game_mode, run_started_at INTO v_mode, v_run FROM public.lobbies WHERE id = p_lobby_id;
+  -- Gleichstand: Jahr raten = mehr Volltreffer (5 P.), dann mehr Treffer ±1, ±2; Buzzer = mehr richtige Antworten
+  UPDATE public.players p SET tiebreak = CASE WHEN v_mode = 'letters'
+      -- 132: Roulette – bei gleichen Punkten gewinnt, wer weniger falsche Wörter hatte
+      THEN 1000 - (SELECT count(*) FROM public.letters_entries e WHERE e.lobby_id = p.lobby_id AND e.player_id = p.player_id AND NOT coalesce(e.valid, false) AND NOT e.dup)::int
+      ELSE coalesce((
+      SELECT CASE WHEN v_mode = 'year'
+                  THEN sum(CASE WHEN a.points >= 5 THEN 100 WHEN a.points >= 3 THEN 10 WHEN a.points >= 2 THEN 1 ELSE 0 END)
+                  ELSE count(*) FILTER (WHERE a.correct) END
+      FROM public.quiz_answers a WHERE a.lobby_id = p.lobby_id AND a.player_id = p.player_id), 0) END
+   WHERE p.lobby_id = p_lobby_id AND p.status = 'active';
+  SELECT player_id INTO v_top FROM public.players WHERE lobby_id = p_lobby_id AND status = 'active'
+    ORDER BY coalesce(song_points, 0) DESC, tiebreak DESC, hashtext(lobby_id::text || player_id::text) LIMIT 1;
+  UPDATE public.lobbies SET quiz_state = NULL, quiz_ends_at = NULL, quiz_picker = NULL, quiz_rev = quiz_rev + 1 WHERE id = p_lobby_id;
+  PERFORM public._finish_round(p_lobby_id);
+  -- 133: Buzzer / Jahr raten – Spiel für die Modus-Statistik im Profil festhalten
+  IF v_mode IN ('buzzer', 'year') THEN PERFORM public._quiz_record_match(p_lobby_id, v_mode, v_run); END IF;
+  UPDATE public.lobbies SET holder_player_id = v_top WHERE id = p_lobby_id;
+END $function$;
+
+-- Summen mit Kommastellen
+ALTER TABLE public.quiz_mode_matches ALTER COLUMN total TYPE numeric(7,2);
+CREATE OR REPLACE FUNCTION public._quiz_record_match(p_lobby_id uuid, p_mode text, p_run timestamptz) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE v_humans int;
+BEGIN
+  IF p_run IS NULL THEN RETURN; END IF;
+  v_humans := public._lobby_human_count(p_lobby_id);
+  INSERT INTO public.quiz_mode_matches (user_id, lobby_id, run_key, mode, place, total, humans, ranked, hits, answers)
+  SELECT p.user_id, p_lobby_id, p_run, p_mode,
+         coalesce((SELECT sr.place FROM public.series_results sr WHERE sr.lobby_id = p_lobby_id AND sr.player_id = p.player_id ORDER BY sr.set_index DESC LIMIT 1), 99),
+         round(coalesce(p.song_points, 0), 2), v_humans, v_humans >= 2,
+         (SELECT count(*) FROM public.quiz_answers a WHERE a.lobby_id = p_lobby_id AND a.player_id = p.player_id AND (CASE WHEN p_mode = 'year' THEN a.points >= 5 ELSE a.correct END))::int,
+         (SELECT count(*) FROM public.quiz_answers a WHERE a.lobby_id = p_lobby_id AND a.player_id = p.player_id)::int
+    FROM public.players p
+   WHERE p.lobby_id = p_lobby_id AND p.status = 'active' AND p.user_id IS NOT NULL AND NOT coalesce(p.is_bot, false)
+  ON CONFLICT DO NOTHING;
+END $$;
+REVOKE ALL ON FUNCTION public._quiz_record_match(uuid, text, timestamptz) FROM PUBLIC;
+
+ALTER TABLE public.challenges ALTER COLUMN score TYPE numeric(7,2);
+ALTER TABLE public.challenge_results ALTER COLUMN score TYPE numeric(7,2);
+DROP FUNCTION IF EXISTS public._challenge_score(uuid, uuid);
+CREATE FUNCTION public._challenge_score(p_lobby_id uuid, p_player_id uuid) RETURNS numeric
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+  SELECT CASE WHEN coalesce(l.series_total, 1) > 1
+              THEN round(coalesce((SELECT sum(sr.song_points) FROM public.series_results sr WHERE sr.lobby_id = l.id AND sr.player_id = p_player_id), 0), 2)
+              ELSE round(coalesce((SELECT p.song_points FROM public.players p WHERE p.lobby_id = l.id AND p.player_id = p_player_id), 0), 2) END
+    FROM public.lobbies l WHERE l.id = p_lobby_id;
+$$;
+REVOKE ALL ON FUNCTION public._challenge_score(uuid, uuid) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION public.rpc_challenge_submit(p_lobby_id uuid, p_player_id uuid) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE l public.lobbies%ROWTYPE; c public.challenges%ROWTYPE; v_name text; v_user uuid; v_score numeric; v_rank int;
+BEGIN
+  IF NOT public._verify_session(p_lobby_id, p_player_id) THEN RAISE EXCEPTION 'bad_session'; END IF;
+  SELECT * INTO l FROM public.lobbies WHERE id = p_lobby_id;
+  IF NOT FOUND OR l.challenge_code IS NULL OR l.phase <> 'finished' THEN RETURN NULL; END IF;
+  SELECT * INTO c FROM public.challenges WHERE code = l.challenge_code;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  SELECT name, user_id INTO v_name, v_user FROM public.players WHERE lobby_id = p_lobby_id AND player_id = p_player_id AND NOT coalesce(is_bot, false);
+  IF v_name IS NULL THEN RETURN NULL; END IF;
+  v_score := public._challenge_score(p_lobby_id, p_player_id);
+  INSERT INTO public.challenge_results (lobby_id, code, user_id, name, score) VALUES (p_lobby_id, c.code, v_user, v_name, v_score) ON CONFLICT (lobby_id) DO NOTHING;
+  SELECT score INTO v_score FROM public.challenge_results WHERE lobby_id = p_lobby_id;
+  SELECT 1 + count(*) INTO v_rank FROM public.challenge_results WHERE code = c.code AND score > v_score;
+  RETURN jsonb_build_object('code', c.code, 'creator', c.creator_name, 'target', c.score, 'score', v_score, 'won', v_score > c.score, 'tie', v_score = c.score, 'rank', v_rank);
+END $$;
+REVOKE ALL ON FUNCTION public.rpc_challenge_submit(uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rpc_challenge_submit(uuid, uuid) TO anon, authenticated;
+
+COMMIT;
+
+
+-- >>> 141_roulette_five_categories.sql <<<
+-- ============================================================
+-- 141: Roulette – fünf Allgemeinwissen-Kategorien + strengere, nachvollziehbare Prüfung (Wunsch Mehdi, 2026-11-04)
+-- ============================================================
+-- * Aktive Kategorien: Länder, Städte, Tiere, Fußballspieler, Obst & Gemüse (alles andere ist ausgeschaltet, aber noch in der Datenbank;
+--   db/scripts/data/active-categories.json steuert das beim Neuladen der Listen). Mehr als 3 Kategorien pro Spiel gehen mit 5 nicht (cats + 2 nötig).
+-- * Tippfehler-Toleranz (_letters_close): bis 4 Buchstaben exakt, 5 Buchstaben nur Buchstabendreher, 6–9: 1 Fehler, 10–15: 2, ab 16: 3.
+--   Vorher galt schon bei 4 Buchstaben 1 Fehler – "Hose" zählte als "Hase".
+-- * _letters_match: die eine Stelle, an der ein Wort gegen die Liste geprüft wird (auch für Tests).
+-- * Einspruch ohne andere Menschen wird nur noch angenommen, wenn das Wort einem Begriff der Liste sehr nah kommt (vorher: immer).
+-- ============================================================
+BEGIN;
+
+-- Tippfehler-Regel für Roulette (strenger als _ans_close, das bei Song-Titeln bleibt)
+CREATE OR REPLACE FUNCTION public._letters_close(p_term text, p_typed text) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE ca text; cb text; v_len int; i int;
+BEGIN
+  IF coalesce(p_term, '') = '' OR coalesce(p_typed, '') = '' THEN RETURN false; END IF;
+  ca := replace(p_term, ' ', ''); cb := replace(p_typed, ' ', '');
+  IF ca = cb THEN RETURN true; END IF;
+  v_len := length(ca);
+  IF v_len <= 4 THEN RETURN false; END IF;
+  IF v_len = 5 THEN
+    -- nur zwei vertauschte Nachbarbuchstaben ("Tigre" statt "Tiger")
+    IF length(cb) <> 5 THEN RETURN false; END IF;
+    FOR i IN 1..4 LOOP
+      IF substr(ca, 1, i - 1) || substr(ca, i + 1, 1) || substr(ca, i, 1) || substr(ca, i + 2) = cb THEN RETURN true; END IF;
+    END LOOP;
+    RETURN false;
+  END IF;
+  RETURN levenshtein(ca, cb) <= CASE WHEN v_len <= 9 THEN 1 WHEN v_len <= 15 THEN 2 ELSE 3 END;
+END $$;
+
+-- Genau eine Prüfstelle: welcher Begriff der Kategorie passt zur Eingabe (und zum Buchstaben)? NULL = keiner.
+CREATE OR REPLACE FUNCTION public._letters_match(p_cat uuid, p_letter text, p_norm text) RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+  SELECT t.label FROM public.word_terms t
+   WHERE t.category_id = p_cat AND t.initial = left(p_norm, 1) AND abs(length(t.key_norm) - length(p_norm)) <= 3
+     AND (t.key_norm = p_norm OR public._letters_close(t.key_norm, p_norm))
+     AND EXISTS (SELECT 1 FROM public.word_terms q WHERE q.category_id = p_cat AND q.label = t.label AND q.initial = lower(p_letter))
+   ORDER BY (t.key_norm = p_norm) DESC, abs(length(t.key_norm) - length(p_norm)) LIMIT 1
+$$;
+REVOKE ALL ON FUNCTION public._letters_close(text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public._letters_match(uuid, text, text) FROM PUBLIC;
+
+-- Großzügigere Prüfung nur für Einsprüche ohne andere Menschen: ein Fehler mehr als bei _letters_close (ab 5 Buchstaben)
+CREATE OR REPLACE FUNCTION public._letters_match_loose(p_cat uuid, p_letter text, p_norm text) RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+  SELECT t.label FROM public.word_terms t
+   WHERE t.category_id = p_cat AND t.initial = left(p_norm, 1) AND abs(length(t.key_norm) - length(p_norm)) <= 3 AND length(p_norm) >= 5
+     AND levenshtein(replace(t.key_norm, ' ', ''), replace(p_norm, ' ', '')) <= CASE WHEN length(p_norm) <= 9 THEN 2 WHEN length(p_norm) <= 15 THEN 3 ELSE 4 END
+     AND EXISTS (SELECT 1 FROM public.word_terms q WHERE q.category_id = p_cat AND q.label = t.label AND q.initial = lower(p_letter))
+   ORDER BY levenshtein(replace(t.key_norm, ' ', ''), replace(p_norm, ' ', '')) LIMIT 1
+$$;
+REVOKE ALL ON FUNCTION public._letters_match_loose(uuid, text, text) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION public._letters_reveal(p_lobby_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE l public.lobbies%ROWTYPE; v_letter char(1); v_cat uuid; v_cat_name text; b record; v_n int; v_frac numeric; v_wrong int; v_results jsonb; v_players int; v_secs numeric; v_map int; v_missed jsonb;
+BEGIN
+  SELECT * INTO l FROM public.lobbies WHERE id = p_lobby_id FOR UPDATE;
+  v_letter := lower(l.quiz_options ->> 'letter');
+  v_cat := (l.quiz_options -> 'cat' ->> 'id')::uuid;
+  v_cat_name := l.quiz_options -> 'cat' ->> 'name';
+
+  -- Bots (132): tippen wie Menschen unterschiedlicher Stärke. Anfänger kennen nur den bekannteren Teil der Liste (obere 35 %) und
+  -- vertippen sich ab und zu (rotes Wort), Mittel 65 %, Profis die ganze Liste. Angenommene Einsprüche (source 'appeal') nutzen sie nie.
+  FOR b IN SELECT player_id, coalesce(bot_skill, 2) AS skill FROM public.players WHERE lobby_id = p_lobby_id AND status = 'active' AND is_bot LOOP
+    v_n := CASE b.skill WHEN 1 THEN 2 + floor(random() * 4)::int WHEN 3 THEN 7 + floor(random() * 6)::int ELSE 4 + floor(random() * 5)::int END;
+    v_frac := CASE b.skill WHEN 1 THEN 0.35 WHEN 3 THEN 1.0 ELSE 0.65 END;
+    v_wrong := CASE b.skill WHEN 1 THEN 1 + floor(random() * 2)::int WHEN 3 THEN (random() < 0.2)::int ELSE (random() < 0.5)::int END;
+    INSERT INTO public.letters_entries (lobby_id, seq, player_id, text, norm, label, valid)
+    SELECT p_lobby_id, l.quiz_seq, b.player_id, x.label, x.key_norm, x.label, true FROM (
+      SELECT d.label, d.key_norm, row_number() OVER (ORDER BY d.weight DESC, d.label) AS rn, count(*) OVER () AS cnt FROM (
+        SELECT DISTINCT ON (t.label) t.label, t.key_norm, t.weight FROM public.word_terms t
+         WHERE t.category_id = v_cat AND t.initial = v_letter AND t.source = 'list' ORDER BY t.label, t.weight DESC, random()
+      ) d
+    ) x WHERE x.rn <= greatest(v_n, ceil(x.cnt * v_frac)) ORDER BY random() LIMIT v_n
+    ON CONFLICT DO NOTHING;
+    IF v_wrong > 0 THEN
+      INSERT INTO public.letters_entries (lobby_id, seq, player_id, text, norm, label, valid)
+      SELECT p_lobby_id, l.quiz_seq, b.player_id, m.txt, public._ans_norm(m.txt), NULL, false FROM (
+        SELECT left(t.label, 2) || 'q' || substr(t.label, 4) AS txt FROM (
+          SELECT DISTINCT label FROM public.word_terms WHERE category_id = v_cat AND initial = v_letter AND source = 'list' AND length(label) >= 5
+        ) t ORDER BY random() LIMIT v_wrong
+      ) m WHERE length(public._ans_norm(m.txt)) >= 2
+      ON CONFLICT DO NOTHING;
+    END IF;
+  END LOOP;
+
+  -- Menschen: jede Eingabe gegen die Liste prüfen (exakt oder mit kleinem Tippfehler). Der Begriff muss zum Buchstaben passen:
+  -- mindestens eine seiner Schreibweisen (bei Personen Vor- oder Nachname, bei Vereinen mit/ohne "FC" …) beginnt damit.
+  UPDATE public.letters_entries e
+     SET label = m.label, valid = (m.label IS NOT NULL)
+    FROM public.letters_entries e2
+    LEFT JOIN LATERAL (SELECT public._letters_match(v_cat, v_letter, e2.norm) AS label) m ON true
+   WHERE e.lobby_id = p_lobby_id AND e.seq = l.quiz_seq AND e.valid IS NULL
+     AND e2.lobby_id = e.lobby_id AND e2.seq = e.seq AND e2.player_id = e.player_id AND e2.norm = e.norm;
+
+  -- derselbe Begriff zweimal (z. B. "Bayern" und "Bayern München") zählt nur einmal
+  UPDATE public.letters_entries e SET valid = false, dup = true
+    FROM (SELECT lobby_id, seq, player_id, norm, row_number() OVER (PARTITION BY player_id, label ORDER BY created_at, norm) AS rn
+            FROM public.letters_entries WHERE lobby_id = p_lobby_id AND seq = l.quiz_seq AND valid) d
+   WHERE e.lobby_id = d.lobby_id AND e.seq = d.seq AND e.player_id = d.player_id AND e.norm = d.norm AND d.rn > 1;
+
+  -- Punkte = richtige, verschiedene Begriffe
+  UPDATE public.players p SET song_points = coalesce(p.song_points, 0) + c.n
+    FROM (SELECT player_id, count(*) AS n FROM public.letters_entries WHERE lobby_id = p_lobby_id AND seq = l.quiz_seq AND valid GROUP BY player_id) c
+   WHERE p.lobby_id = p_lobby_id AND p.player_id = c.player_id;
+
+  v_results := public._letters_results(p_lobby_id, l.quiz_seq);
+  -- 134: "Hättest du's gewusst?" – bekannte Begriffe zum Buchstaben, die niemand getippt hat (die bekanntesten zuerst)
+  SELECT coalesce(jsonb_agg(m.label ORDER BY m.weight DESC), '[]'::jsonb) INTO v_missed FROM (
+    SELECT d.label, d.weight FROM (
+      SELECT DISTINCT ON (t.label) t.label, t.weight FROM public.word_terms t
+       WHERE t.category_id = v_cat AND t.initial = v_letter AND t.source = 'list' ORDER BY t.label, t.weight DESC
+    ) d
+    WHERE NOT EXISTS (SELECT 1 FROM public.letters_entries e WHERE e.lobby_id = p_lobby_id AND e.seq = l.quiz_seq AND e.valid AND e.label = d.label)
+    ORDER BY d.weight DESC, d.label LIMIT 5
+  ) m;
+  SELECT count(*)::int INTO v_players FROM public.players WHERE lobby_id = p_lobby_id AND status = 'active';
+
+  -- Dauer: Wörter-Karte 7 s + Wertungs-Show (Trommelwirbel 1 s + 2,2 s je Platz + 1,5 s für den Sieger); nach der letzten Kategorie zusätzlich die Gesamtwertung
+  -- 129: haben Menschen rote Wörter, bleibt die Wörter-Karte länger stehen (Einspruch möglich)
+  v_map := CASE WHEN EXISTS (SELECT 1 FROM public.letters_entries e JOIN public.players p ON p.lobby_id = e.lobby_id AND p.player_id = e.player_id
+                              WHERE e.lobby_id = p_lobby_id AND e.seq = l.quiz_seq AND NOT coalesce(e.valid, false) AND NOT e.dup AND NOT coalesce(p.is_bot, false))
+                THEN 13 ELSE 7 END;
+  v_secs := v_map + (1 + 2.2 * v_players + 1.5) + CASE WHEN l.quiz_index >= l.quiz_total THEN (1 + 2.2 * v_players + 1.5) ELSE 0 END + 3;
+  UPDATE public.lobbies
+     SET quiz_state = 'reveal',
+         quiz_reveal = jsonb_build_object('letter', upper(v_letter), 'category', v_cat_name, 'index', l.quiz_index, 'last', l.quiz_index >= l.quiz_total, 'mapSecs', v_map, 'missed', v_missed, 'results', v_results),
+         quiz_started_at = now(), quiz_ends_at = now() + least(v_secs, 100) * interval '1 second',
+         quiz_rev = quiz_rev + 1, last_activity_at = now()
+   WHERE id = p_lobby_id;
+END $function$;
+
+CREATE OR REPLACE FUNCTION public._letters_appeal_eval(p_lobby_id uuid, p_seq integer, p_owner uuid, p_norm text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE a public.letters_appeals%ROWTYPE; v_others int; v_cat uuid; v_letter text;
+BEGIN
+  SELECT * INTO a FROM public.letters_appeals WHERE lobby_id = p_lobby_id AND seq = p_seq AND owner_id = p_owner AND norm = p_norm FOR UPDATE;
+  IF NOT FOUND OR a.status <> 'open' THEN RETURN; END IF;
+  SELECT count(*) INTO v_others FROM public.players
+   WHERE lobby_id = p_lobby_id AND status = 'active' AND NOT coalesce(is_bot, false) AND player_id <> p_owner;
+  SELECT (quiz_options -> 'cat' ->> 'id')::uuid, lower(quiz_options ->> 'letter') INTO v_cat, v_letter FROM public.lobbies WHERE id = p_lobby_id;
+  -- 141: Ohne andere Menschen entscheidet niemand per Abstimmung – dann zählt der Einspruch nur, wenn das Wort einem echten Begriff
+  -- der Liste sehr nah kommt (Tippfehler). Vorher wurde ALLES angenommen: so konnte man sich allein beliebig Punkte geben.
+  IF (v_others = 0 AND public._letters_match_loose(v_cat, v_letter, p_norm) IS NOT NULL) OR (v_others > 0 AND cardinality(a.yes) * 2 > v_others) THEN
+    UPDATE public.letters_appeals SET status = 'accepted' WHERE lobby_id = p_lobby_id AND seq = p_seq AND owner_id = p_owner AND norm = p_norm;
+    UPDATE public.letters_entries SET valid = true, dup = false, label = a.text
+     WHERE lobby_id = p_lobby_id AND seq = p_seq AND player_id = p_owner AND norm = p_norm AND NOT coalesce(valid, false);
+    IF FOUND THEN
+      UPDATE public.players SET song_points = coalesce(song_points, 0) + 1 WHERE lobby_id = p_lobby_id AND player_id = p_owner;
+      UPDATE public.lobbies SET quiz_reveal = jsonb_set(quiz_reveal, '{results}', public._letters_results(p_lobby_id, p_seq)) WHERE id = p_lobby_id;
+      IF v_others > 0 AND p_norm ~ '^[a-z]' AND length(p_norm) >= 3 THEN
+        INSERT INTO public.word_terms (category_id, label, key_norm, initial, weight, source)
+        SELECT (l.quiz_options -> 'cat' ->> 'id')::uuid, a.text, p_norm, left(p_norm, 1), 5, 'appeal'
+          FROM public.lobbies l WHERE l.id = p_lobby_id AND l.quiz_options -> 'cat' ->> 'id' IS NOT NULL
+        ON CONFLICT DO NOTHING;
+      END IF;
+    END IF;
+  ELSIF v_others = 0 OR cardinality(a.no) * 2 >= v_others THEN
+    UPDATE public.letters_appeals SET status = 'rejected' WHERE lobby_id = p_lobby_id AND seq = p_seq AND owner_id = p_owner AND norm = p_norm;
+  END IF;
+END $function$;
+
+CREATE OR REPLACE FUNCTION public._letters_cfg(p_lobby_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT jsonb_build_object(
+           'cats', least(coalesce((letters_cfg ->> 'cats')::int, 3), 3),
+           'secs', coalesce((letters_cfg ->> 'secs')::int, 45),
+           'off', coalesce(letters_cfg -> 'off', '[]'::jsonb))
+    FROM public.lobbies WHERE id = p_lobby_id
+$function$;
+
+-- Kategorien
+UPDATE public.word_categories SET active = (name IN ('Länder', 'Städte', 'Tiere', 'Fußballspieler', 'Obst & Gemüse')) WHERE owner_lobby IS NULL;
+-- Lobbys mit mehr als 3 Kategorien oder ausgeschalteten alten Kategorien zurücksetzen
+UPDATE public.lobbies SET letters_cfg = jsonb_set(jsonb_set(letters_cfg, '{cats}', to_jsonb(least(coalesce((letters_cfg ->> 'cats')::int, 3), 3))), '{off}', '[]'::jsonb) WHERE letters_cfg IS NOT NULL;
+
+COMMIT;
+
+
+-- >>> 142_roulette_close_plural_swap.sql <<<
+-- ============================================================
+-- 142: Roulette-Prüfung – Mehrzahl und Buchstabendreher (Wunsch Mehdi, 2026-11-04)
+-- ============================================================
+-- _letters_close (141) erweitert:
+--   * Mehrzahl: Hund -> Hunde, Bär -> Bären, Löwe -> Löwen, Kiwi -> Kiwis (Endungen s, n, e, en, er, nen; ab 3 Buchstaben)
+--   * Buchstabendreher ab 5 Buchstaben (Berlni, Elefnat) zählen wie ein Tippfehler, auch wenn Levenshtein 2 sagt
+-- Alles andere bleibt: bis 4 Buchstaben exakt, 5 nur Dreher, 6–9: ein Fehler, 10–15: zwei, ab 16: drei.
+-- ============================================================
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public._letters_close(p_term text, p_typed text) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE ca text; cb text; v_len int; i int;
+BEGIN
+  IF coalesce(p_term, '') = '' OR coalesce(p_typed, '') = '' THEN RETURN false; END IF;
+  ca := replace(p_term, ' ', ''); cb := replace(p_typed, ' ', '');
+  IF ca = cb THEN RETURN true; END IF;
+  v_len := length(ca);
+  -- Mehrzahl (die Listen enthalten die Einzahl)
+  IF v_len >= 3 AND length(cb) > v_len AND length(cb) <= v_len + 3 AND left(cb, v_len) = ca AND substr(cb, v_len + 1) IN ('s', 'n', 'e', 'en', 'er', 'nen') THEN RETURN true; END IF;
+  IF v_len <= 4 THEN RETURN false; END IF;
+  -- zwei vertauschte Nachbarbuchstaben
+  IF length(cb) = v_len THEN
+    FOR i IN 1..v_len - 1 LOOP
+      IF substr(ca, 1, i - 1) || substr(ca, i + 1, 1) || substr(ca, i, 1) || substr(ca, i + 2) = cb THEN RETURN true; END IF;
+    END LOOP;
+  END IF;
+  IF v_len = 5 THEN RETURN false; END IF;
+  RETURN levenshtein(ca, cb) <= CASE WHEN v_len <= 9 THEN 1 WHEN v_len <= 15 THEN 2 ELSE 3 END;
+END $$;
+REVOKE ALL ON FUNCTION public._letters_close(text, text) FROM PUBLIC;
+
+COMMIT;
