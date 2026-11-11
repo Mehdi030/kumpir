@@ -308,7 +308,7 @@ export default function HostPage() {
             const code = await startBotGame({
                 name: cleanName,
                 userId: user?.id ?? null,
-                bots: botCount,
+                bots: mode === "battle" ? Math.max(2, botCount) : botCount, // Hit oder Flop: Jury + zwei Duellanten
                 skill: botSkill,
                 speed: roundSpeed,
                 mode: mode ?? "original",

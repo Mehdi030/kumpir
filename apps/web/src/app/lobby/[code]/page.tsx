@@ -22,6 +22,8 @@ import { GAME_MODES, gameModeInfo } from "@/lib/gameModes";
 import { SwipeStat } from "@/components/lobby/SwipeStat";
 import { Collapse } from "@/components/ui/Collapse";
 import { RouletteSettings } from "@/components/lobby/RouletteSettings";
+import { BattleSettings } from "@/components/lobby/BattleSettings";
+import type { BattleCriterion } from "@/lib/battle";
 import { lettersCfgOf, type CustomItem, type LettersCfg } from "@/lib/rouletteCats";
 import { PlaylistPicker, usePlaylists } from "@/components/PlaylistPicker";
 import { kickPlayerAction, setLobbyLockAction, transferHostAction } from "@/actions/hostActions";
@@ -249,6 +251,14 @@ export default function LobbyPage() {
             alive = false;
         };
     }, [mode, letterCats.length]);
+    const saveBattleCfg = useCallback(
+        async (next: BattleCriterion) => {
+            const err = await rpc("set_battle_config", { p_cfg: { criterion: next } });
+            await reload();
+            return err;
+        },
+        [rpc, reload]
+    );
     const saveLettersCustom = useCallback(
         async (items: CustomItem[]) => {
             const err = await rpc("set_letters_custom", { p_items: items });
@@ -328,7 +338,7 @@ export default function LobbyPage() {
         return !!row?.ready;
     }, [players, mePlayerId]);
 
-    const MIN_PLAYERS = 2;
+    const MIN_PLAYERS = mode === "battle" ? 3 : 2; // Hit oder Flop: Jury + zwei Duellanten
     // Der Host muss NICHT mehr selbst "Bereit" klicken, um starten zu können --
     // sobald alle ANDEREN aktiven Spieler bereit sind, reicht das. Der Host
     // sitzt eh am Start-Button, ein zusätzlicher Klick auf "Bereit" davor war
@@ -539,10 +549,13 @@ export default function LobbyPage() {
 
                         <InviteActions code={code} disabled={isRunning} />
 
+                        {mode === "battle" ? (
+                            <BattleSettings criterion={(lobby?.battle_cfg?.criterion as BattleCriterion | undefined) ?? "hit"} canEdit={canEdit} onSave={saveBattleCfg} onError={showError} />
+                        ) : null}
                         {mode === "letters" ? (
                             <RouletteSettings cfg={lettersCfg} categories={letterCats} canEdit={canEdit} onSave={saveLettersCfg} onSaveCustom={saveLettersCustom} onError={showError} />
                         ) : null}
-                        <div className="lobbyPl" hidden={mode === "letters"}>
+                        <div className="lobbyPl" hidden={mode === "letters" || mode === "battle"}>
                             <button type="button" className="lobbyPlHead" onClick={() => setPlOpen((v) => !v)} aria-expanded={plOpen}>
                                 <span>🎵 {tr("Playlists")}</span>
                                 <span className="lobbyPlCount">

@@ -1998,7 +1998,7 @@ function GamePageInner({ onSpectator }: { onSpectator: (v: boolean) => void }) {
                     highlights={highlights}
                     badges={badges}
                     challenge={challengeResult}
-                    onChallenge={quizMode && !isSpectator ? () => void createChallenge() : undefined}
+                    onChallenge={quizMode && !isSpectator && lobby.game_mode !== "battle" ? () => void createChallenge() : undefined}
                     challengeBusy={challengeBusy}
                     loggedIn={!!user}
                     ranked={players.filter((p) => !p.is_bot).length >= 2}

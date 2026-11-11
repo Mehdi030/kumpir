@@ -9,7 +9,7 @@ import { tk } from "@/lib/i18nMark";
  *  year     – Zeitreise: alle ziehen ihre Figur auf einer Zeitleiste zum Erscheinungsjahr des Songs.
  *  letters  – Roulette: ein Buchstabe + Kategorien (per Abstimmung), jeder tippt so viele passende Begriffe wie möglich (Anzahl/Zeit/Kategorien stellt der Host ein).
  */
-export type GameModeKey = "original" | "buzzer" | "year" | "letters";
+export type GameModeKey = "original" | "buzzer" | "year" | "letters" | "battle";
 
 export type GameModeInfo = {
     key: GameModeKey;
@@ -109,6 +109,26 @@ export const GAME_MODES: GameModeInfo[] = [
             { icon: "⌨️", text: tk("Pro Kategorie hast du begrenzte Zeit (Standard 45 Sekunden, der Host kann sie in der Lobby ändern): tippe so viele Begriffe mit diesem Anfangsbuchstaben ein wie möglich (Enter = abgeben). Du siehst nur deine eigenen Eingaben.") },
             { icon: "✅", text: tk("Danach werden alle Eingaben geprüft: erkannte werden grün, nicht erkannte rot, doppelte zählen nur einmal. Kleine Tippfehler sind okay. Zu Unrecht rot? Dann legst du Einspruch ein, die anderen stimmen ab.") },
             { icon: "📊", text: tk("Die Rangliste läuft von unten nach oben – wer die meisten richtigen Begriffe hatte, kommt zuletzt. Nach allen Kategorien gewinnt die Gesamtsumme.") },
+        ],
+    },
+    {
+        key: "battle",
+        icon: "🔥",
+        label: tk("Hit oder Flop"),
+        desc: tk("Song-Battle: Zwei treten mit einem Song-Ausschnitt gegeneinander an, die Jury entscheidet, wer krasser ist."),
+        goal: tk("Wer die meisten Duelle gewinnt, siegt"),
+        kind: "quiz",
+        isNew: true,
+        steps: [
+            { icon: "🎵", text: tk("Song und Stelle auswählen") },
+            { icon: "⚖️", text: tk("Die Jury hört beide Ausschnitte") },
+            { icon: "🏆", text: tk("Sieger des Duells: +1 Punkt") },
+        ],
+        rules: [
+            { icon: "👥", text: tk("Mindestens 3 Spieler. In jedem Duell ist einer die Jury, zwei treten gegeneinander an – reihum, am Ende war jeder einmal Jury.") },
+            { icon: "🎵", text: tk("Die zwei Duellanten suchen einen Song aus der Datenbank (oder schreiben nur den Namen) und legen eine 8-Sekunden-Stelle fest. Danach steht die Wahl fest.") },
+            { icon: "⚖️", text: tk("Beide Ausschnitte laufen nacheinander. Die Jury entscheidet nach dem Prinzip, das der Host eingestellt hat: Hit-Faktor, Nostalgie, Sound oder Reime.") },
+            { icon: "🏁", text: tk("Wer ein Duell gewinnt, bekommt 1 Punkt. Nach allen Duellen gewinnt, wer die meisten Punkte hat.") },
         ],
     },
 ];
