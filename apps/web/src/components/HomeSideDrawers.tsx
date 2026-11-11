@@ -118,7 +118,10 @@ const STYLES = `
 .sd.left .sdTab:hover, .sd.left .sdTab:focus-visible{ transform: translateY(-50%) translateX(4px); background: linear-gradient(180deg, rgba(120,40,10,.9), rgba(60,16,6,.9)); }
 .sd.right .sdTab:hover, .sd.right .sdTab:focus-visible{ transform: translateY(-50%) translateX(-4px); background: linear-gradient(180deg, rgba(120,40,10,.9), rgba(60,16,6,.9)); }
 .sd.open .sdTab{ opacity: 0; pointer-events: none; }
-.sd.low .sdTab{ top: calc(50% + 118px); animation: sdPop .7s cubic-bezier(.2,1.4,.4,1) both, sdBreath 3.4s ease-in-out .7s infinite; }
+/* Offene Lobbys: Lasche hängt UNTER der Freunde-Lasche (deren Unterkante liegt bei 50 % + halbe Höhe), mit Abstand – früher lag sie darüber (Wunsch Mehdi 2026-11-11) */
+.sd.low .sdTab{ top: calc(50% + 84px); animation: sdPop .7s cubic-bezier(.2,1.4,.4,1) both, sdBreath 3.4s ease-in-out .7s infinite; }
+.sd.right.low .sdTab{ transform: translateX(4px); }
+.sd.right.low .sdTab:hover, .sd.right.low .sdTab:focus-visible{ transform: translateX(-4px); }
 @keyframes sdPop{ from{ opacity: 0; margin-right: -40px; } }
 @keyframes sdBreath{ 0%, 100%{ box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18), 0 0 0 0 rgba(255,170,50,0); } 50%{ box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18), 0 0 18px 2px rgba(255,170,50,.4); } }
 .sdTabIcon{ font-size: 20px; line-height: 1; }
