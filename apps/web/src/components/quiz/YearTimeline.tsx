@@ -7,6 +7,7 @@ import { SongRound } from "@/components/game/SongRound";
 import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { AudioControl } from "@/components/AudioControl";
 import { pts, useQuiz, type QuizLobby, type QuizPlayer, type RevealResult } from "@/components/quiz/useQuiz";
+import { YearReveal } from "@/components/quiz/YearReveal";
 
 const PAD = 30; // Platz links/rechts, damit Figuren am Rand nicht abgeschnitten werden
 const LANE = 62; // Höhe einer Figuren-Reihe
@@ -147,7 +148,6 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
     const noGuess = state === "reveal" ? players.filter((p) => !answeredIds.has(p.player_id)) : [];
     const ranked = useMemo(() => [...players].sort((a, b) => Number(b.song_points ?? 0) - Number(a.song_points ?? 0) || a.name.localeCompare(b.name)), [players]);
     const gainOf = (id: string) => (state === "reveal" ? results.find((r) => r.playerId === id) : undefined);
-    const closest = state === "reveal" && trueYear != null && results.length ? [...results].sort((a, b) => Math.abs(Number(a.answer) - trueYear) - Math.abs(Number(b.answer) - trueYear))[0] : null;
     const trackH = 78 + lanesUsed * LANE + 56;
     const tieInfo = useMemo(() => {
         const t = reveal?.tie as { players?: string[]; picks?: Record<string, number>; winners?: string[] } | undefined;
@@ -185,51 +185,8 @@ export function YearTimeline({ lobby, players, mePlayerId, onToast }: { lobby: Q
                             {String(reveal.artist ?? "")} ·{" "}
                             {tr("erschienen {y}", { y: reveal.month ? `${monthName(Number(reveal.month), true)} ${trueYear ?? "?"}` : (trueYear ?? "?") })}
                         </div>
-                        {closest ? (
-                            <div className="ytClosest">
-                                {Math.abs(Number(closest.answer) - (trueYear ?? 0)) === 0
-                                    ? tr("🎯 {name} liegt genau richtig!", { name: nameOf(closest.playerId) })
-                                    : tr("Am nächsten dran: {name} (±{n})", { name: nameOf(closest.playerId), n: Math.abs(Number(closest.answer) - (trueYear ?? 0)) })}
-                            </div>
-                        ) : (
-                            <div className="ytClosest">{tr("Diesmal hat keiner getippt.")}</div>
-                        )}
-                        {results.length > 1 && trueYear != null ? (
-                            <ul className="ytDist" aria-label={tr("Abstand zum richtigen Jahr")}>
-                                {[...results]
-                                    .sort((a, b) => Math.abs(Number(a.answer) - trueYear) - Math.abs(Number(b.answer) - trueYear))
-                                    .map((r) => {
-                                        const d = Math.abs(Number(r.answer) - trueYear);
-                                        return (
-                                            <li key={r.playerId} className={d === 0 ? "exact" : ""} style={{ ["--w" as string]: `${Math.max(5, 100 - d * 7)}%` }}>
-                                                <span className="ytDistName">{nameOf(r.playerId)}</span>
-                                                <i aria-hidden>
-                                                    <b />
-                                                </i>
-                                                <em>
-                                                    {r.answer} · {d === 0 ? "🎯" : `±${d}`}
-                                                </em>
-                                            </li>
-                                        );
-                                    })}
-                            </ul>
-                        ) : null}
-                        {tieInfo ? (
-                            <div className="ytTie">
-                                <b>{tr("⚖️ Monats-Entscheid")}</b>
-                                {tieInfo.players.map((id) => {
-                                    const m = tieInfo.picks[id];
-                                    const win = tieInfo.winners.includes(id);
-                                    const off = m != null && reveal?.month != null ? Math.abs(m - Number(reveal.month)) : null;
-                                    return (
-                                        <span key={id} className={win ? "win" : ""}>
-                                            {nameOf(id)}: {m != null ? monthName(m) : "–"}
-                                            {off != null ? (off === 0 ? " 🎯" : ` (±${off})`) : ""}
-                                            {win ? " 🏅 +1" : ""}
-                                        </span>
-                                    );
-                                })}
-                            </div>
+                        {trueYear != null ? (
+                            <YearReveal players={players} results={results} trueYear={trueYear} trueMonth={reveal.month != null ? Number(reveal.month) : null} tie={tieInfo} mePlayerId={mePlayerId} monthName={monthName} />
                         ) : null}
                     </>
                 ) : state === "month" ? (
