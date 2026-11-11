@@ -12,6 +12,7 @@ import { errorText } from "@/lib/errorText";
 import { playFanfare } from "@/lib/gameFx";
 import { criterionInfo, type BattleDuel, type BattlePick, type BattleReveal } from "@/lib/battle";
 import { playClip, previewUrlOf } from "@/lib/battleClip";
+import { coverUrlOf } from "@/lib/battleCover";
 import { gameModeInfo } from "@/lib/gameModes";
 
 type SongRow = { id: string; title: string; artist: string; year: number | null; vs: number };
@@ -68,6 +69,31 @@ function Replay({ pick, seconds, label }: { pick: BattlePick | undefined; second
         <button type="button" className="btn btnSecondary btnSmall btReplay" onClick={() => void click()}>
             {on ? "⏹" : "▶"} {label}
         </button>
+    );
+}
+
+/** Cover eines gewählten Songs: fliegt beim Erscheinen ein (A von unten, B von rechts), danach klein unter dem Duellanten. */
+function Cover({ pick, side, state }: { pick: BattlePick; side: "a" | "b"; state: "on" | "won" | "lost" | "" }) {
+    const key = `${pick.title}|${pick.artist ?? ""}`;
+    const [got, setGot] = useState<{ k: string; u: string | null } | null>(null);
+    const [broken, setBroken] = useState<string | null>(null);
+    useEffect(() => {
+        let alive = true;
+        void coverUrlOf(pick.title, pick.artist).then((u) => {
+            if (alive) setGot({ k: key, u });
+        });
+        return () => {
+            alive = false;
+        };
+    }, [key, pick.title, pick.artist]);
+    const url = got && got.k === key && broken !== got.u ? got.u : null;
+    return (
+        <div className={`btCover ${side} ${state}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- Cover kommen von iTunes, Größe schon passend */}
+            <div className="btCoverArt">{url ? <img src={url} alt="" onError={() => setBroken(url)} /> : <span aria-hidden>💿</span>}</div>
+            <b title={pick.title}>{pick.title}</b>
+            {pick.artist ? <span>{pick.artist}</span> : null}
+        </div>
     );
 }
 
@@ -281,13 +307,11 @@ export function BattleArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
         const pick = duel.picks[side];
         const won = reveal?.winner === side;
         const lost = reveal && reveal.winner && reveal.winner !== side;
-        const showSong = state === "reveal" || state === "judge" || (playing && (playing === side || (playing === "b" && side === "a")));
         return (
-            <div className={`btCard ${side} ${playing === side ? "on" : ""} ${won ? "won" : ""} ${lost ? "lost" : ""} ${mePlayerId === id ? "me" : ""}`}>
-                <span className="btSide">{side.toUpperCase()}</span>
+            <div className={`btCard ${side} ${playing === side ? "on" : ""} ${pick && state === "pick" ? "picked" : ""} ${won ? "won" : ""} ${lost ? "lost" : ""} ${mePlayerId === id ? "me" : ""}`}>
                 {won ? <span className="btCrown">👑</span> : null}
                 <div className="btAvatar">
-                    <PlayerAvatar seed={p?.name ?? id} config={p?.avatar_config ?? null} size={72} />
+                    <PlayerAvatar seed={p?.name ?? id} config={p?.avatar_config ?? null} size={84} />
                 </div>
                 <b className="btName">{p?.name ?? "…"}</b>
                 {playing === side ? (
@@ -298,22 +322,14 @@ export function BattleArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
                         <i />
                         <i />
                     </span>
+                ) : state === "pick" ? (
+                    <span className={`btStatus ${pick ? "ok" : ""}`}>{pick ? `✅ ${tr("hat gewählt")}` : tr("sucht noch …")}</span>
                 ) : null}
-                <div className="btSong">
-                    {pick && showSong ? (
-                        <>
-                            <b>{pick.title}</b>
-                            {pick.artist ? <span>{pick.artist}</span> : pick.free ? <span>{tr("nur der Name – ohne Ton")}</span> : null}
-                        </>
-                    ) : state === "pick" ? (
-                        <span className={pick ? "ok" : ""}>{pick ? `✅ ${tr("hat gewählt")}` : tr("sucht noch …")}</span>
-                    ) : (
-                        <span>…</span>
-                    )}
-                </div>
             </div>
         );
     };
+    const coverState = (side: "a" | "b") => (reveal?.winner === side ? "won" : reveal && reveal.winner ? "lost" : playing === side ? "on" : "");
+    const gavelClass = state === "reveal" ? "bang" : state === "judge" ? "raised" : "";
 
     return (
         <main className="fullH btMain">
@@ -337,21 +353,29 @@ export function BattleArena({ lobby, players, mePlayerId, onToast }: { lobby: Qu
             </div>
 
             <section className="btStage" aria-live="polite">
-                <div className="btJury">
-                    <span className="btJuryIcon" aria-hidden>
-                        ⚖️
-                    </span>
-                    <div>
-                        <small>{tr("Jury")}</small>
-                        <b>{nameOf(duel.jury)}</b>
+                <div className="btBench">
+                    <div className="btJudgeFig">
+                        <div className={`btJudgeAvatar ${iAmJury ? "me" : ""}`}>
+                            <PlayerAvatar seed={nameOf(duel.jury)} config={by.get(duel.jury)?.avatar_config ?? null} size={104} />
+                        </div>
+                        <span className={`btGavel ${gavelClass}`} aria-hidden>
+                            🔨
+                        </span>
+                    </div>
+                    <div className="btDesk">
+                        <span className="btDeskPlate">
+                            ⚖️ {tr("Jury")}: <b>{nameOf(duel.jury)}</b>
+                        </span>
                     </div>
                 </div>
-                <div className="btVsRow">
+                <div className="btDuel">
                     {card("a")}
+                    {card("b")}
                     <div className="btVs" aria-hidden>
                         VS
                     </div>
-                    {card("b")}
+                    <div className="btSlot a">{duel.picks.a ? <Cover key={`a${lobby.quiz_seq}`} pick={duel.picks.a} side="a" state={coverState("a")} /> : <div className="btSlotEmpty">?</div>}</div>
+                    <div className="btSlot b">{duel.picks.b ? <Cover key={`b${lobby.quiz_seq}`} pick={duel.picks.b} side="b" state={coverState("b")} /> : <div className="btSlotEmpty">?</div>}</div>
                 </div>
                 <p className="btRole">{role}</p>
                 <p className="btQuestion">{tr(crit.hint)}</p>
@@ -444,32 +468,61 @@ const CSS = `
 .btBar{ height: 7px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
 .btBarFill{ height: 100%; transform-origin: left; background: linear-gradient(90deg, #ffd23f, #ff9d2e); transition: transform .25s linear; }
 .btBarFill.hot{ background: linear-gradient(90deg, #ff6a4d, #ff2d55); }
-.btStage{ display: grid; justify-items: center; gap: 8px; margin-top: 4px; }
-.btJury{ display: flex; align-items: center; gap: 10px; padding: 6px 16px; border-radius: 999px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.22); }
-.btJury small{ display: block; font-size: 10.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; opacity: .8; }
-.btJury b{ font-size: 15px; }
-.btJuryIcon{ font-size: 26px; }
-.btVsRow{ display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: 10px; width: min(760px, 100%); }
-.btVs{ align-self: center; font-family: var(--font-display); font-weight: 900; font-size: 30px; color: #ffd23f; text-shadow: 0 0 18px rgba(255,160,40,.9); }
-.btCard{ position: relative; display: grid; justify-items: center; align-content: start; gap: 6px; padding: 18px 10px 12px; border-radius: 22px; min-width: 0;
-  background: linear-gradient(180deg, rgba(255,255,255,.1), rgba(0,0,0,.2)); border: 2px solid rgba(255,255,255,.16); transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease, opacity .3s ease; }
+.btStage{ display: grid; justify-items: center; gap: 6px; margin-top: 2px; }
+/* Richterbank: Jury groß in der Mitte hinter dem Pult, Hammer in der Hand */
+.btBench{ position: relative; display: grid; justify-items: center; width: min(360px, 100%); }
+.btJudgeFig{ position: relative; z-index: 1; margin-bottom: -34px; }
+.btJudgeAvatar{ border-radius: 50%; padding: 4px; background: radial-gradient(circle at 38% 32%, rgba(255,246,214,.8), rgba(255,200,80,.3) 72%); box-shadow: 0 0 0 4px rgba(255,214,10,.65), 0 0 36px rgba(255,214,10,.35); }
+.btJudgeAvatar.me{ box-shadow: 0 0 0 4px rgba(34,211,238,.85), 0 0 36px rgba(34,211,238,.4); }
+.btGavel{ position: absolute; right: -44px; bottom: 0; font-size: 46px; transform-origin: 85% 85%; transform: rotate(-30deg); filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+.btGavel.raised{ animation: btGavelWait 1.6s ease-in-out infinite; }
+.btGavel.bang{ animation: btBang .6s cubic-bezier(.3,0,.2,1) both; }
+@keyframes btGavelWait{ 0%,100%{ transform: rotate(-52deg); } 50%{ transform: rotate(-40deg); } }
+@keyframes btBang{ 0%{ transform: rotate(-60deg); } 45%{ transform: rotate(18deg); } 60%{ transform: rotate(8deg); } 100%{ transform: rotate(-30deg); } }
+.btDesk{ position: relative; z-index: 2; width: 100%; padding: 14px 12px 10px; border-radius: 16px 16px 10px 10px; text-align: center;
+  background: linear-gradient(180deg, #8a5a2b, #5a3512 60%, #3d230b); border: 2px solid #b98146; box-shadow: 0 12px 24px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,220,160,.35); }
+.btDeskPlate{ display: inline-block; padding: 3px 14px; border-radius: 8px; background: linear-gradient(180deg, #f6d27a, #c9993c); color: #3a2407; font-weight: 800; font-size: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,.6); }
+.btDeskPlate b{ font-weight: 900; }
+/* Duellanten: links steht A und schaut nach rechts, rechts steht B und schaut nach links */
+.btDuel{ position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 190px)); column-gap: 26px; row-gap: 6px; justify-content: center; align-items: end; width: 100%; margin-top: 4px; perspective: 700px; }
+.btVs{ position: absolute; left: 50%; top: 52px; transform: translateX(-50%); font-family: var(--font-display); font-weight: 900; font-size: 30px; color: #ffd23f; text-shadow: 0 0 18px rgba(255,160,40,.9); }
+.btCard{ position: relative; display: grid; justify-items: center; align-content: end; gap: 4px; padding: 6px 6px 4px; min-width: 0; transition: transform .45s cubic-bezier(.34,1.56,.64,1), opacity .3s ease; }
 .btCard.a{ --c: #ff9d2e; } .btCard.b{ --c: #4cc3ff; }
-.btCard.on{ transform: translateY(-6px) scale(1.03); border-color: var(--c); box-shadow: 0 0 34px color-mix(in srgb, var(--c) 60%, transparent); }
-.btCard.won{ border-color: #ffd23f; box-shadow: 0 0 44px rgba(255,210,63,.6); transform: translateY(-4px) scale(1.04); }
+.btAvatar{ border-radius: 50%; padding: 3px; background: radial-gradient(circle at 38% 32%, rgba(255,246,214,.7), rgba(255,200,80,.25) 72%); box-shadow: 0 0 0 3px var(--c), 0 10px 22px rgba(0,0,0,.4); transition: transform .45s ease, box-shadow .3s ease; }
+.btCard.a .btAvatar{ transform: rotateY(26deg); }
+.btCard.b .btAvatar{ transform: rotateY(-26deg); }
+.btCard.on, .btCard.picked{ transform: scale(1.12); z-index: 2; }
+.btCard.on .btAvatar{ box-shadow: 0 0 0 3px var(--c), 0 0 34px color-mix(in srgb, var(--c) 70%, transparent); }
+.btCard.picked{ animation: btGrow .7s cubic-bezier(.34,1.56,.64,1); }
+@keyframes btGrow{ 0%{ transform: scale(1); } 45%{ transform: scale(1.22); } 100%{ transform: scale(1.12); } }
+.btCard.won{ transform: scale(1.14); } .btCard.won .btAvatar{ box-shadow: 0 0 0 4px #ffd23f, 0 0 44px rgba(255,210,63,.65); }
 .btCard.lost{ opacity: .55; }
-.btCard.me{ outline: 2px dashed rgba(34,211,238,.7); outline-offset: 3px; }
-.btSide{ position: absolute; top: 8px; left: 12px; font-family: var(--font-display); font-weight: 900; font-size: 20px; color: var(--c); }
-.btCrown{ position: absolute; top: -22px; left: 50%; transform: translateX(-50%) rotate(-8deg); font-size: 34px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
-.btAvatar{ border-radius: 50%; padding: 3px; background: radial-gradient(circle at 38% 32%, rgba(255,246,214,.7), rgba(255,200,80,.25) 72%); box-shadow: 0 0 0 3px var(--c); }
+.btCard.me .btName{ color: #7ee8f6; }
+.btCrown{ position: absolute; top: -26px; left: 50%; transform: translateX(-50%) rotate(-8deg); font-size: 34px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); z-index: 3; }
 .btName{ font-size: 16px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btSong{ display: grid; gap: 2px; min-height: 40px; align-content: center; text-align: center; font-size: 13px; width: 100%; }
-.btSong b{ font-size: 15px; overflow-wrap: anywhere; }
-.btSong span{ opacity: .85; font-weight: 700; overflow-wrap: anywhere; }
-.btSong span.ok{ color: #8dffb8; opacity: 1; }
+.btStatus{ font-size: 12.5px; font-weight: 800; opacity: .85; min-height: 18px; }
+.btStatus.ok{ color: #8dffb8; opacity: 1; }
 .btEq{ display: flex; gap: 3px; align-items: flex-end; height: 22px; }
 .btEq i{ width: 5px; border-radius: 3px; background: var(--c); animation: btEq .8s ease-in-out infinite; }
 .btEq i:nth-child(2){ animation-delay: .12s; } .btEq i:nth-child(3){ animation-delay: .24s; } .btEq i:nth-child(4){ animation-delay: .36s; } .btEq i:nth-child(5){ animation-delay: .48s; }
 @keyframes btEq{ 0%,100%{ height: 5px; } 50%{ height: 22px; } }
+/* Cover: nebeneinander auf einer Höhe unter den Duellanten */
+.btSlot{ width: 100%; min-height: 190px; display: grid; justify-items: center; align-content: start; }
+.btSlotEmpty{ width: 118px; height: 118px; border-radius: 16px; display: grid; place-items: center; font-size: 34px; font-weight: 900; color: rgba(255,255,255,.35); border: 2px dashed rgba(255,255,255,.25); }
+.btCover{ display: grid; justify-items: center; gap: 3px; text-align: center; width: 100%; transition: opacity .3s ease, transform .3s ease; }
+.btCover.a{ animation: btFlyUp .85s cubic-bezier(.2,1.25,.35,1) both; }
+.btCover.b{ animation: btFlyRight .85s cubic-bezier(.2,1.25,.35,1) both; }
+@keyframes btFlyUp{ from{ opacity: 0; transform: translateY(170px) scale(.35) rotate(-12deg); } 60%{ opacity: 1; } }
+@keyframes btFlyRight{ from{ opacity: 0; transform: translateX(260px) scale(.35) rotate(12deg); } 60%{ opacity: 1; } }
+.btCoverArt{ width: 118px; height: 118px; border-radius: 14px; overflow: hidden; display: grid; place-items: center; font-size: 46px; background: linear-gradient(135deg, #3b2a55, #1b1030); box-shadow: 0 12px 26px rgba(0,0,0,.5); border: 2px solid rgba(255,255,255,.25); }
+.btCoverArt img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.btCover.a .btCoverArt{ border-color: #ff9d2e; } .btCover.b .btCoverArt{ border-color: #4cc3ff; }
+.btCover.on .btCoverArt{ transform: scale(1.1); box-shadow: 0 0 30px rgba(255,214,10,.55), 0 12px 26px rgba(0,0,0,.5); animation: btSpin 8s linear infinite; }
+.btCover.won .btCoverArt{ border-color: #ffd23f; box-shadow: 0 0 40px rgba(255,210,63,.7); transform: scale(1.12); }
+.btCover.lost{ opacity: .5; }
+@keyframes btSpin{ 0%,100%{ rotate: -2deg; } 50%{ rotate: 2deg; } }
+.btCover b{ font-size: 13px; line-height: 1.2; overflow-wrap: anywhere; max-width: 100%; }
+.btCover span{ font-size: 11.5px; opacity: .8; font-weight: 700; overflow-wrap: anywhere; max-width: 100%; }
 .btRole{ margin: 0; font-weight: 800; text-align: center; font-size: 14px; }
 .btQuestion{ margin: 0; font-size: 12.5px; font-weight: 700; opacity: .85; text-align: center; }
 .btPanel{ display: grid; justify-items: center; width: min(760px, 100%); margin: 0 auto; }
@@ -514,9 +567,12 @@ const CSS = `
 .btScoreName{ max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btScore b{ color: #ffe08a; font-size: 15px; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px){
-  .btVsRow{ gap: 6px; } .btVs{ font-size: 20px; }
-  .btCard{ padding: 16px 6px 10px; } .btAvatar img{ width: 52px !important; height: 52px !important; }
+  .btDuel{ grid-template-columns: repeat(2, minmax(0, 132px)); column-gap: 14px; } .btVs{ font-size: 20px; top: 36px; }
+  .btAvatar img{ width: 58px !important; height: 58px !important; }
+  .btJudgeAvatar img{ width: 80px !important; height: 80px !important; } .btGavel{ font-size: 36px; right: -32px; }
+  .btSlot{ min-height: 160px; }
+  .btCoverArt, .btSlotEmpty{ width: 96px; height: 96px; font-size: 36px; }
   .btJudgeRow{ grid-template-columns: 1fr; }
 }
-@media (prefers-reduced-motion: reduce){ .btEq i, .btResult{ animation: none; } .btCard{ transition: none; } }
+@media (prefers-reduced-motion: reduce){ .btEq i, .btResult, .btCover, .btCard.picked, .btGavel, .btCover.on .btCoverArt{ animation: none; } .btCard{ transition: none; } }
 `;

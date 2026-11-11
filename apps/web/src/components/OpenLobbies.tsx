@@ -96,7 +96,6 @@ export function OpenLobbies({ variant = "side", list: given }: { variant?: "side
     const [showAll, setShowAll] = useState(false);
 
     if (list === null) return null;
-    if (!list.length && variant === "inline") return null;
 
     const shown = showAll ? list : list.slice(0, 3);
     return (

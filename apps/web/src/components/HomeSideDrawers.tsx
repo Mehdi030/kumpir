@@ -18,7 +18,7 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_GUEST_ONLY === "1";
 export function HomeSideDrawers() {
     const { user } = useAuth();
     const [active, setActive] = useState<"stats" | "friends" | "lobbies" | null>(null);
-    // Offene Lobbys: eigene Lasche, die nur erscheint, wenn es welche gibt (Wunsch Mehdi 2026-11-01)
+    // Offene Lobbys: eigene Lasche, immer da (Wunsch Mehdi 2026-11-11); sie leuchtet grün, sobald es offene Lobbys gibt, und ist sonst gedämpft
     const lobbies = useOpenLobbies();
     const lobbyCount = lobbies?.length ?? 0;
     const close = useCallback(() => setActive(null), []);
@@ -53,33 +53,34 @@ export function HomeSideDrawers() {
                     <HomeFriends inModal />
                 </Drawer>
             ) : null}
-            {lobbyCount > 0 ? (
+            {(
                 <Drawer
                     key="lobbies"
                     side="right"
                     slot="low"
+                    tone={lobbyCount > 0 ? "hot" : "idle"}
                     icon="🎮"
                     label="Offene Lobbys"
-                    badge={String(lobbyCount)}
+                    badge={lobbyCount > 0 ? String(lobbyCount) : undefined}
                     open={active === "lobbies"}
                     onToggle={() => setActive(active === "lobbies" ? null : "lobbies")}
                     onClose={close}
                 >
                     <OpenLobbies variant="inline" list={lobbies} />
                 </Drawer>
-            ) : null}
+            )}
             <style>{STYLES}</style>
         </>
     );
 }
 
-function Drawer({ side, slot = "mid", icon, label, badge, open, onToggle, onClose, children }: { side: "left" | "right"; slot?: "mid" | "low"; icon: string; label: string; badge?: string; open: boolean; onToggle: () => void; onClose: () => void; children: ReactNode }) {
+function Drawer({ side, slot = "mid", tone, icon, label, badge, open, onToggle, onClose, children }: { side: "left" | "right"; slot?: "mid" | "low"; tone?: "hot" | "idle"; icon: string; label: string; badge?: string; open: boolean; onToggle: () => void; onClose: () => void; children: ReactNode }) {
     const { tr } = useI18n();
     // Inhalt erst beim ersten Aufklappen laden (spart Anfragen), danach bleibt er stehen
     const [loaded, setLoaded] = useState(false);
     const id = `sd-${side}-${slot}`;
     return (
-        <aside className={`sd ${side} ${slot} ${open ? "open" : ""}`}>
+        <aside className={`sd ${side} ${slot} ${tone ?? ""} ${open ? "open" : ""}`}>
             <button type="button" className="sdTab" onClick={() => {
                     setLoaded(true);
                     onToggle();
@@ -121,6 +122,11 @@ const STYLES = `
 /* Offene Lobbys: Lasche hängt UNTER der Freunde-Lasche (deren Unterkante liegt bei 50 % + halbe Höhe), mit Abstand – früher lag sie darüber (Wunsch Mehdi 2026-11-11) */
 .sd.low .sdTab{ top: calc(50% + 84px); animation: sdPop .7s cubic-bezier(.2,1.4,.4,1) both, sdBreath 3.4s ease-in-out .7s infinite; }
 .sd.right.low .sdTab{ transform: translateX(4px); }
+/* ohne offene Lobbys gedämpft, mit offenen Lobbys grün und leuchtend */
+.sd.low.idle .sdTab{ background: linear-gradient(180deg, rgba(64,52,52,.72), rgba(34,28,28,.8)); opacity: .82; animation: sdPop .7s cubic-bezier(.2,1.4,.4,1) both; }
+.sd.low.hot .sdTab{ background: linear-gradient(180deg, rgba(18,120,66,.92), rgba(8,72,40,.95)); border-color: rgba(120,255,175,.7); animation: sdPop .7s cubic-bezier(.2,1.4,.4,1) both, sdBreathGreen 2.6s ease-in-out .7s infinite; }
+.sd.low.hot .sdTab:hover, .sd.low.hot .sdTab:focus-visible{ background: linear-gradient(180deg, rgba(26,150,84,.96), rgba(10,90,50,.97)); }
+@keyframes sdBreathGreen{ 0%, 100%{ box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.2), 0 0 0 0 rgba(60,255,150,0); } 50%{ box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.2), 0 0 22px 3px rgba(60,255,150,.55); } }
 .sd.right.low .sdTab:hover, .sd.right.low .sdTab:focus-visible{ transform: translateX(-4px); }
 @keyframes sdPop{ from{ opacity: 0; margin-right: -40px; } }
 @keyframes sdBreath{ 0%, 100%{ box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18), 0 0 0 0 rgba(255,170,50,0); } 50%{ box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18), 0 0 18px 2px rgba(255,170,50,.4); } }
@@ -161,7 +167,7 @@ const STYLES = `
   .sdClose{ width: 44px; height: 44px; font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce){
-  .sdTab{ animation: none; }
+  .sdTab, .sd.low.hot .sdTab, .sd.low.idle .sdTab{ animation: none; }
   .sdPanel, .sd.open .sdPanel, .sdBody > *, .sd.open .sdBody > *{ transition: none !important; clip-path: none !important; }
 }
 `;
