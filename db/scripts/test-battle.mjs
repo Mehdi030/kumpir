@@ -160,6 +160,65 @@ try {
     const pts2 = await pointsOf(id2);
     check("Mit Bots wurden Punkte vergeben (3 Duelle, keine Zeitüberschreitung)", Object.values(pts2).reduce((a, b) => a + b, 0) === 3, JSON.stringify(pts2));
 
+    // ---------- 2b) Wie Bots bewerten und wählen (Migration 144) ----------
+    const [{ top, low, oldest, newest }] = await q(`select
+        (select id from public.song_pool where preview_url is not null and archived_from is null order by (hits + 1.0) / (plays + 3.0) desc, plays desc limit 1) top,
+        (select id from public.song_pool where preview_url is not null and archived_from is null order by (hits + 1.0) / (plays + 3.0) asc, plays asc limit 1) low,
+        (select id from public.song_pool where preview_url is not null and archived_from is null and release_year is not null order by release_year asc limit 1) oldest,
+        (select id from public.song_pool where preview_url is not null and archived_from is null and release_year is not null order by release_year desc limit 1) newest`);
+    const avgScore = async (song, crit) => Number((await q("select avg(public._battle_song_score($1::uuid, $2, 'geschmack' || g::text))::float a from generate_series(1, 30) g", [song, crit]))[0].a);
+    check("Hit-Faktor: bekannter Song bekommt einen höheren Wert als ein unbekannter", (await avgScore(top, "hit")) > (await avgScore(low, "hit")) + 0.1, `${(await avgScore(top, "hit")).toFixed(2)} vs ${(await avgScore(low, "hit")).toFixed(2)}`);
+    check("Nostalgie: der älteste Song schlägt den neuesten", (await avgScore(oldest, "nostalgia")) > (await avgScore(newest, "nostalgia")) + 0.1, `${(await avgScore(oldest, "nostalgia")).toFixed(2)} vs ${(await avgScore(newest, "nostalgia")).toFixed(2)}`);
+    check("Werte liegen immer zwischen 0 und 1", (await q("select min(v) >= 0 and max(v) <= 1 ok from (select public._battle_song_score(id, c, 't') v from public.song_pool, unnest(array['hit','nostalgia','sound','lyrics']) c limit 400) x"))[0].ok === true);
+    check("Unbekannter Song (nur Name) bekommt einen neutralen Wert", Number((await q("select public._battle_song_score(null, 'hit', 'x') v"))[0].v) >= 0.3);
+
+    const [{ code: code3, host_player_id: host3 }] = await q("select * from public.rpc_create_lobby('Mensch', 'private', 12, 60)");
+    const [{ id: id3 }] = await q("select id from public.lobbies where code = $1", [code3]);
+    ids.push(id3);
+    await q("select public.rpc_add_bot($1, $2, 'Bot 1', 3::smallint)", [id3, host3]);
+    await q("select public.rpc_add_bot($1, $2, 'Bot 2', 3::smallint)", [id3, host3]);
+    await q("update public.lobbies set created_at = now() + interval '2 hours', game_mode = 'battle', series_index = 1, series_total = 1, phase = 'quiz' where id = $1", [id3]);
+    await q("select public._quiz_begin($1)", [id3]);
+    const bots = (await q("select player_id from public.players where lobby_id = $1 and is_bot order by seat_index", [id3])).map((r) => r.player_id);
+    const judgeTrial = async (crit, a, b, seq) => {
+        const dd = (await lob(id3)).quiz_options.duel;
+        const pickJson = (x) => ({ songId: x, title: "t", artist: "k", start: 0, free: false });
+        await q("update public.lobbies set quiz_state = 'judge', quiz_seq = $2, quiz_options = jsonb_set(jsonb_set(jsonb_set(jsonb_set(quiz_options, '{duel,jury}', to_jsonb($3::text)), '{duel,crit}', to_jsonb($4::text)), '{duel,picks,a}', $5::jsonb), '{duel,picks,b}', $6::jsonb), quiz_reveal = null where id = $1",
+            [id3, seq, bots[0], crit, JSON.stringify(pickJson(a)), JSON.stringify(pickJson(b))]);
+        await q("select public._battle_bot_judge($1)", [id3]);
+        return (await lob(id3)).quiz_reveal.winner;
+    };
+    let aWins = 0, bWins = 0;
+    for (let t = 100; t < 110; t++) { if ((await judgeTrial("hit", top, low, t)) === "a") aWins++; if ((await judgeTrial("hit", low, top, t + 50)) === "b") bWins++; }
+    check("Profi-Jury (Hit-Faktor): der bekanntere Song gewinnt, egal ob er links oder rechts steht", aWins === 10 && bWins === 10, `${aWins}/10 und ${bWins}/10`);
+    let nostWins = 0;
+    for (let t = 200; t < 210; t++) if ((await judgeTrial("nostalgia", newest, oldest, t)) === "b") nostWins++;
+    check("Profi-Jury (Nostalgie): der ältere Song gewinnt meistens", nostWins >= 8, `${nostWins}/10`);
+    const pairs = await q("select a.id a, b.id b from (select id, row_number() over (order by random()) rn from public.song_pool where preview_url is not null and archived_from is null limit 40) a join (select id, row_number() over (order by random()) rn from public.song_pool where preview_url is not null and archived_from is null limit 40) b on a.rn = b.rn and a.id <> b.id");
+    let soundA = 0;
+    for (let t = 0; t < pairs.length; t++) if ((await judgeTrial("sound", pairs[t].a, pairs[t].b, 300 + t)) === "a") soundA++;
+    check("Beim Sound entscheidet der Geschmack: bei vielen Paaren gewinnen beide Seiten (nicht immer links)", soundA >= pairs.length * 0.2 && soundA <= pairs.length * 0.8, `links ${soundA} von ${pairs.length}`);
+    const t1 = [], t2 = [];
+    for (let t = 0; t < 3; t++) { t1.push(await judgeTrial("sound", pairs[0].a, pairs[0].b, 900 + t)); }
+    check("Derselbe Bot entscheidet dasselbe Paar immer gleich (fester Geschmack, kein Würfeln)", new Set(t1).size === 1, t1.join(","));
+    void t2;
+
+    // Duellanten: Profis wählen im Schnitt passendere Songs als Anfänger
+    const pickAvg = async (skill) => {
+        await q("update public.players set bot_skill = $2 where lobby_id = $1 and is_bot", [id3, skill]);
+        let sum = 0;
+        for (let t = 0; t < 14; t++) {
+            await q("update public.lobbies set quiz_state = 'pick', quiz_seq = $2, used_song_ids = '{}', quiz_options = jsonb_set(jsonb_set(quiz_options, '{duel,picks}', '{}'::jsonb), '{duel,crit}', '\"hit\"') where id = $1", [id3, 500 + t]);
+            await q("update public.lobbies set quiz_options = jsonb_set(jsonb_set(quiz_options, '{duel,a}', to_jsonb($2::text)), '{duel,b}', to_jsonb($3::text)) where id = $1", [id3, bots[0], bots[1]]);
+            await q("select public._battle_bot_pick($1, 'a')", [id3]);
+            const sid = (await lob(id3)).quiz_options.duel.picks.a?.songId;
+            sum += Number((await q("select public._battle_song_score($1::uuid, 'hit', $2) v", [sid, bots[0]]))[0].v);
+        }
+        return sum / 14;
+    };
+    const lowSkill = await pickAvg(1), highSkill = await pickAvg(3);
+    check("Profi-Bots wählen im Schnitt passendere Songs als Anfänger-Bots", highSkill > lowSkill + 0.03, `Profi ${highSkill.toFixed(2)} vs Anfänger ${lowSkill.toFixed(2)}`);
+
     // ---------- 3) Sicherheit ----------
     const [{ a1 }] = await q("select has_function_privilege('anon', 'public._battle_reveal(uuid, text)', 'execute') a1");
     check("_battle_reveal ist von außen gesperrt", a1 === false);
