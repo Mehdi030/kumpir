@@ -27159,8 +27159,8 @@ COMMIT;
 --   Nostalgie  : 50 % Alter (bis 18 Jahre alt = voller Wert), 30 % Bekanntheit, 20 % Geschmack
 --   Sound      : 25 % Bekanntheit, 15 % Beliebtheit, 60 % Geschmack  (Bots haben keine Ohren: Geschmack = fester Zufallswert je Bot + Song)
 --   Reime      : 25 % Bekanntheit, 75 % Geschmack                    (keine Textdaten vorhanden)
--- Die Jury (Bot) vergleicht die beiden Werte. Wie sehr sie den Daten folgt, hängt von der Stärke ab (Anfänger 50 %, Mittel 75 %,
--- Profi 92 %, der Rest ist Tagesform). Liegen die Werte fast gleichauf, entscheidet der Geschmack – nie einfach "A".
+-- Die Jury (Bot) vergleicht die beiden Werte. In der Jury sitzen NUR starke Bots (Wunsch Mehdi 2026-11-12): egal welche Stärke der Bot sonst
+-- hat, als Richter folgt er den Daten zu 92 % (der Rest ist Tagesform). Liegen die Werte fast gleichauf, entscheidet der Geschmack – nie einfach "A".
 -- Bot-Duellanten ziehen mehrere Songs (Anfänger 3, Mittel 6, Profi 12) und nehmen den, der zum Prinzip am besten passt.
 -- ============================================================
 BEGIN;
@@ -27188,15 +27188,14 @@ END $$;
 -- Bot-Jury: vergleicht die beiden Songs nach dem Prinzip des Duells
 CREATE OR REPLACE FUNCTION public._battle_bot_judge(p_lobby_id uuid) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
-DECLARE l public.lobbies%ROWTYPE; v_jury uuid; v_skill int; w numeric; v_crit text; v_score numeric[] := ARRAY[0, 0]; v_mood numeric[] := ARRAY[0, 0];
+DECLARE l public.lobbies%ROWTYPE; v_jury uuid; w numeric; v_crit text; v_score numeric[] := ARRAY[0, 0]; v_mood numeric[] := ARRAY[0, 0];
         i int; s text; v_song uuid; v_side text;
 BEGIN
   SELECT * INTO l FROM public.lobbies WHERE id = p_lobby_id FOR UPDATE;
   IF l.quiz_state <> 'judge' THEN RETURN; END IF;
   v_jury := (l.quiz_options -> 'duel' ->> 'jury')::uuid;
   v_crit := coalesce(l.quiz_options -> 'duel' ->> 'crit', 'hit');
-  SELECT coalesce(bot_skill, 2) INTO v_skill FROM public.players WHERE lobby_id = p_lobby_id AND player_id = v_jury;
-  w := CASE v_skill WHEN 1 THEN 0.50 WHEN 3 THEN 0.92 ELSE 0.75 END;
+  w := 0.92;   -- Jury = immer Profi-Niveau, unabhängig von der Stärke des Bots
   i := 0;
   FOREACH s IN ARRAY ARRAY['a', 'b'] LOOP
     i := i + 1;

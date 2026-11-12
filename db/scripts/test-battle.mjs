@@ -191,6 +191,11 @@ try {
     let aWins = 0, bWins = 0;
     for (let t = 100; t < 110; t++) { if ((await judgeTrial("hit", top, low, t)) === "a") aWins++; if ((await judgeTrial("hit", low, top, t + 50)) === "b") bWins++; }
     check("Profi-Jury (Hit-Faktor): der bekanntere Song gewinnt, egal ob er links oder rechts steht", aWins === 10 && bWins === 10, `${aWins}/10 und ${bWins}/10`);
+    await q("update public.players set bot_skill = 1 where lobby_id = $1 and is_bot", [id3]);
+    let weakOk = 0;
+    for (let t = 400; t < 410; t++) if ((await judgeTrial("hit", top, low, t)) === "a" && (await judgeTrial("hit", low, top, t + 50)) === "b") weakOk++;
+    check("Als Jury urteilt auch ein Anfänger-Bot wie ein Profi (nur starke Bots in der Jury)", weakOk === 10, `${weakOk}/10`);
+    await q("update public.players set bot_skill = 3 where lobby_id = $1 and is_bot", [id3]);
     let nostWins = 0;
     for (let t = 200; t < 210; t++) if ((await judgeTrial("nostalgia", newest, oldest, t)) === "b") nostWins++;
     check("Profi-Jury (Nostalgie): der ältere Song gewinnt meistens", nostWins >= 8, `${nostWins}/10`);
